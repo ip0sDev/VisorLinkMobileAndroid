@@ -94,4 +94,8 @@ class UserRepository(
         db.collection("users").document(currentUid)
             .collection("stickers").document(sticker.id).delete().await()
     }
+    suspend fun saveFcmToken(token: String) {
+        functions.getHttpsCallable("saveFcmToken")
+            .call(mapOf("token" to token)).await()
+    }
 }

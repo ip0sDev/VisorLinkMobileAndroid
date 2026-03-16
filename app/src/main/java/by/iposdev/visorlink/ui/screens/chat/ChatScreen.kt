@@ -42,6 +42,9 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import java.text.SimpleDateFormat
 import java.util.*
+import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.rememberHaptic
+import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -53,6 +56,8 @@ fun ChatScreen(
     onOpenStickers: (onSelect: (Sticker) -> Unit) -> Unit
 ) {
     val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid) })
+    val haptic = rememberHaptic()
+    val hapticEnabled by remember { mutableStateOf(true) } // подключим к настройкам ниже
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     var inputText by remember { mutableStateOf("") }
@@ -145,7 +150,11 @@ fun ChatScreen(
                         Spacer(Modifier.width(4.dp))
                         if (inputText.isNotBlank()) {
                             IconButton(
-                                onClick = { viewModel.sendText(inputText); inputText = "" },
+                                onClick = {
+                                    haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
+                                    viewModel.sendText(inputText)
+                                    inputText = ""
+                                },
                                 modifier = Modifier.size(48.dp)
                                     .background(MaterialTheme.colorScheme.primary, CircleShape)
                             ) {
@@ -234,6 +243,8 @@ private fun MessageBubble(
     onReact: (String) -> Unit
 ) {
     var showActions by remember { mutableStateOf(false) }
+    val haptic = rememberHaptic()
+    val hapticEnabled by remember { mutableStateOf(true) } // подключим к настройкам ниже
     val bubbleColor = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val textColor = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
     val bubbleShape = if (isMine)
@@ -250,7 +261,11 @@ private fun MessageBubble(
                 .widthIn(max = 280.dp)
                 .clip(bubbleShape)
                 .background(bubbleColor)
-                .combinedClickable(onClick = { showActions = !showActions }, onLongClick = onLongPress)
+                .combinedClickable(onClick = { showActions = !showActions }, // передай haptic через параметр или используй локально
+                    onLongClick = {
+                        haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                        onLongPress()
+                    })
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp)) {
                 message.replyData?.let { ReplyPreview(it, isMine) ; Spacer(Modifier.height(4.dp)) }
@@ -281,7 +296,10 @@ private fun MessageBubble(
             Row(modifier = Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 message.parsedReactions.forEach { reaction ->
                     Surface(
-                        onClick = { onReact(reaction.emoji) },
+                        onClick = {
+                            haptic.perform(HapticType.REACTION, hapticEnabled)
+                            onReact(reaction.emoji)
+                        },
                         shape = MaterialTheme.shapes.extraSmall,
                         color = if (currentUid in reaction.uids) MaterialTheme.colorScheme.primaryContainer
                         else MaterialTheme.colorScheme.surfaceVariant

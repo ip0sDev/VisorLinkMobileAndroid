@@ -7,11 +7,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.ui.VisorLinkNavGraph
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.VisorLinkTheme
-import org.koin.compose.viewmodel.koinViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 class MainActivity : ComponentActivity() {
@@ -22,10 +22,11 @@ class MainActivity : ComponentActivity() {
             val themeViewModel: ThemeViewModel = koinViewModel()
             val authViewModel: AuthViewModel = koinViewModel()
             val appTheme by themeViewModel.appTheme.collectAsState()
+            val themeMode by themeViewModel.themeMode.collectAsState()
 
             authViewModel.initPresenceIfLoggedIn()
 
-            VisorLinkTheme(appTheme = appTheme, darkTheme = isSystemInDarkTheme()) {
+            VisorLinkTheme(appTheme = appTheme, themeMode = themeMode) {
                 VisorLinkNavGraph(
                     authViewModel = authViewModel,
                     themeViewModel = themeViewModel

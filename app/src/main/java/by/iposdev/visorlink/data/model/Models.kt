@@ -114,3 +114,12 @@ enum class AppTheme {
     MATERIAL3_EXPRESSIVE,
     ONE_UI
 }
+enum class ThemeMode {
+    SYSTEM,  // следует системной теме
+    LIGHT,   // всегда светлая
+    DARK     // всегда тёмная
+}
+data class AppSettings(
+    val hapticFeedback: Boolean = true,
+    val notificationsEnabled: Boolean = true
+)

@@ -17,8 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ThemeMode
 
-// ── M3 Expressive colours ────────────────────────────────────────────────────
+// ── M3 Expressive ─────────────────────────────────────────────────────────────
 
 private val LightM3 = lightColorScheme(
     primary = Color(0xFF4F46E5),
@@ -31,6 +32,8 @@ private val LightM3 = lightColorScheme(
     onSecondaryContainer = Color(0xFF2E1065),
     tertiary = Color(0xFFDB2777),
     onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFCE7F3),
+    onTertiaryContainer = Color(0xFF831843),
     background = Color(0xFFFAFAFF),
     onBackground = Color(0xFF0F0A1E),
     surface = Color(0xFFFFFFFF),
@@ -38,6 +41,12 @@ private val LightM3 = lightColorScheme(
     surfaceVariant = Color(0xFFEEF0FF),
     onSurfaceVariant = Color(0xFF4A4660),
     outline = Color(0xFF79747E),
+    outlineVariant = Color(0xFFCAC4D0),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF5F4FF),
+    surfaceContainer = Color(0xFFEFEEFF),
+    surfaceContainerHigh = Color(0xFFE9E8FA),
+    surfaceContainerHighest = Color(0xFFE4E3F5),
 )
 
 private val DarkM3 = darkColorScheme(
@@ -51,6 +60,8 @@ private val DarkM3 = darkColorScheme(
     onSecondaryContainer = Color(0xFFEDE9FE),
     tertiary = Color(0xFFF472B6),
     onTertiary = Color(0xFF831843),
+    tertiaryContainer = Color(0xFF9D174D),
+    onTertiaryContainer = Color(0xFFFCE7F3),
     background = Color(0xFF0F0E17),
     onBackground = Color(0xFFE8E4FF),
     surface = Color(0xFF1A1825),
@@ -58,51 +69,82 @@ private val DarkM3 = darkColorScheme(
     surfaceVariant = Color(0xFF252336),
     onSurfaceVariant = Color(0xFFB0ACCC),
     outline = Color(0xFF6E6A84),
+    outlineVariant = Color(0xFF49454F),
+    surfaceContainerLowest = Color(0xFF0B0A14),
+    surfaceContainerLow = Color(0xFF1C1B2E),
+    surfaceContainer = Color(0xFF201F32),
+    surfaceContainerHigh = Color(0xFF2B293C),
+    surfaceContainerHighest = Color(0xFF353347),
 )
 
-// ── OneUI colours ────────────────────────────────────────────────────────────
+// ── OneUI 8.5 ─────────────────────────────────────────────────────────────────
+// Точные цвета реального One UI 8.5 (Galaxy S25 series)
 
 private val LightOneUI = lightColorScheme(
-    primary = Color(0xFF0381FE),
+    primary = Color(0xFF006FFD),          // Samsung синий
     onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFD6EAFF),
-    onPrimaryContainer = Color(0xFF00234A),
-    secondary = Color(0xFF007BFF),
+    primaryContainer = Color(0xFFD6E4FF),
+    onPrimaryContainer = Color(0xFF001C45),
+    secondary = Color(0xFF0381FE),
     onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFCCE5FF),
-    onSecondaryContainer = Color(0xFF00274D),
-    tertiary = Color(0xFF53B1FD),
+    secondaryContainer = Color(0xFFCCDFFF),
+    onSecondaryContainer = Color(0xFF00174A),
+    tertiary = Color(0xFF5B5EA6),
     onTertiary = Color(0xFFFFFFFF),
-    background = Color(0xFFF5F5F5),
+    tertiaryContainer = Color(0xFFE2E0FF),
+    onTertiaryContainer = Color(0xFF17175E),
+    error = Color(0xFFFF3B30),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    background = Color(0xFFF4F4F4),       // OneUI серый фон
     onBackground = Color(0xFF1A1A1A),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFECECEC),
-    onSurfaceVariant = Color(0xFF606060),
-    outline = Color(0xFFD0D0D0),
+    surfaceVariant = Color(0xFFEEEEEE),   // карточки OneUI
+    onSurfaceVariant = Color(0xFF49454F),
+    outline = Color(0xFFE0E0E0),
+    outlineVariant = Color(0xFFCAC4D0),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFF7F7F7),
+    surfaceContainer = Color(0xFFF2F2F2),
+    surfaceContainerHigh = Color(0xFFECECEC),
+    surfaceContainerHighest = Color(0xFFE6E6E6),
 )
 
 private val DarkOneUI = darkColorScheme(
-    primary = Color(0xFF5AC8FA),
-    onPrimary = Color(0xFF003A5C),
-    primaryContainer = Color(0xFF00527F),
-    onPrimaryContainer = Color(0xFFD6EAFF),
-    secondary = Color(0xFF53B1FD),
-    onSecondary = Color(0xFF00274D),
-    secondaryContainer = Color(0xFF003D6E),
-    onSecondaryContainer = Color(0xFFCCE5FF),
-    tertiary = Color(0xFF90D2FA),
-    onTertiary = Color(0xFF003A5C),
-    background = Color(0xFF121212),
+    primary = Color(0xFF5B9BFF),          // OneUI dark primary
+    onPrimary = Color(0xFF00285C),
+    primaryContainer = Color(0xFF003E8D),
+    onPrimaryContainer = Color(0xFFD6E4FF),
+    secondary = Color(0xFF63A0FF),
+    onSecondary = Color(0xFF002D6A),
+    secondaryContainer = Color(0xFF004498),
+    onSecondaryContainer = Color(0xFFCCDFFF),
+    tertiary = Color(0xFFC3C2FF),
+    onTertiary = Color(0xFF2D2D75),
+    tertiaryContainer = Color(0xFF44448D),
+    onTertiaryContainer = Color(0xFFE2E0FF),
+    error = Color(0xFFFF453A),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    background = Color(0xFF161616),       // OneUI тёмный фон
     onBackground = Color(0xFFE8E8E8),
-    surface = Color(0xFF1E1E1E),
+    surface = Color(0xFF1E1E1E),          // поверхность OneUI dark
     onSurface = Color(0xFFE8E8E8),
-    surfaceVariant = Color(0xFF2A2A2A),
-    onSurfaceVariant = Color(0xFFAAAAAA),
+    surfaceVariant = Color(0xFF2A2A2A),   // карточки dark
+    onSurfaceVariant = Color(0xFFCAC4D0),
     outline = Color(0xFF3A3A3A),
+    outlineVariant = Color(0xFF49454F),
+    surfaceContainerLowest = Color(0xFF0E0E0E),
+    surfaceContainerLow = Color(0xFF1A1A1A),
+    surfaceContainer = Color(0xFF212121),
+    surfaceContainerHigh = Color(0xFF2C2C2C),
+    surfaceContainerHighest = Color(0xFF373737),
 )
 
-// ── Shapes ───────────────────────────────────────────────────────────────────
+// ── Shapes ────────────────────────────────────────────────────────────────────
 
 val ShapesM3 = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
@@ -112,44 +154,67 @@ val ShapesM3 = Shapes(
     extraLarge = RoundedCornerShape(36.dp)
 )
 
+// OneUI 8.5 использует очень большие скруглённые углы для карточек
+// и почти прямоугольные — для мелких элементов
 val ShapesOneUI = Shapes(
-    extraSmall = RoundedCornerShape(4.dp),
-    small = RoundedCornerShape(8.dp),
-    medium = RoundedCornerShape(12.dp),
-    large = RoundedCornerShape(16.dp),
-    extraLarge = RoundedCornerShape(20.dp)
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(10.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(26.dp),
+    extraLarge = RoundedCornerShape(32.dp)
 )
 
-// ── Typography ───────────────────────────────────────────────────────────────
+// ── Typography ────────────────────────────────────────────────────────────────
 
 val TypographyM3 = Typography(
+    displayLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 57.sp, lineHeight = 64.sp),
     headlineLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 40.sp),
+    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 36.sp),
+    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
     titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp),
     titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 24.sp),
+    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
     bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
     bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
+    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp),
     labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
     labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp),
 )
 
+// OneUI 8.5: Samsung использует SamsungOne / SamsungSharpSans шрифт,
+// мы имитируем через FontWeight и spacing
 val TypographyOneUI = Typography(
-    headlineLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp),
+    displayLarge = TextStyle(fontWeight = FontWeight.Light, fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-0.25).sp),
+    headlineLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = 0.sp),
+    headlineMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 36.sp, letterSpacing = 0.sp),
+    headlineSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 32.sp, letterSpacing = 0.sp),
+    titleLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = 0.sp),
     titleMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
+    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
     bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
     bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
+    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
     labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
+    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
     labelSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
 )
 
-// ── Entry point ──────────────────────────────────────────────────────────────
+// ── Entry point ───────────────────────────────────────────────────────────────
 
 @Composable
 fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
     content: @Composable () -> Unit
 ) {
+    val systemDark = isSystemInDarkTheme()
+    val darkTheme = when (themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> systemDark
+    }
+
     val colorScheme = when (appTheme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
