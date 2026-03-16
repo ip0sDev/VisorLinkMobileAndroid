@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "18511020064",
+    "firebase_url": "https://visorlink-f9484-default-rtdb.europe-west1.firebasedatabase.app",
+    "project_id": "visorlink-f9484",
+    "storage_bucket": "visorlink-f9484.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:18511020064:android:eab57f5df1a7c9e3b97c45",
+        "android_client_info": {
+          "package_name": "by.iposdev.visorlink"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAy5ZY8tWAyWuJnwtDCMQA05HUAr4vf-b0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
