@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Запретить переименование и удаление полей в моделях данных
+-keepclassmembers class by.iposdev.visorlink.data.model.** { *; }
+
+# Если у вас есть другие папки с моделями, добавьте их тоже
+# Либо можно пометить все классы, используемые Firebase
+-keepattributes Signature
+-keepclassmembers class com.google.firebase.** { *; }
