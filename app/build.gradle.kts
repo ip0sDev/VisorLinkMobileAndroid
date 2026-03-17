@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
-
+    //
 android {
     namespace = "by.iposdev.visorlink"
     compileSdk = 36
@@ -12,8 +12,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
     }

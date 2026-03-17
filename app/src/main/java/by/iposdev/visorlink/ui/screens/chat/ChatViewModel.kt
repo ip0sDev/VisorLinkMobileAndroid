@@ -50,6 +50,11 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    // ВОТ ИСПРАВЛЕНИЕ: Вынесли stickers из блока init, теперь ChatScreen видит эту переменную!
+    val stickers: StateFlow<List<Sticker>> = userRepository.stickersFlow(currentUid)
+        .catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
     private var recorder: MediaRecorder? = null
     private var recordingFile: File? = null
     private var recordingStart = 0L

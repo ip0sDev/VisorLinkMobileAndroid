@@ -8,16 +8,17 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import by.iposdev.visorlink.MainActivity
-import by.iposdev.visorlink.R
 
 object NotificationHelper {
 
     private const val CHANNEL_MESSAGES = "messages"
     private const val CHANNEL_MESSAGES_NAME = "Messages"
+    private const val TAG = "NotificationHelper"
 
     fun createChannels(context: Context) {
         val channel = NotificationChannel(
@@ -28,9 +29,11 @@ object NotificationHelper {
             description = "New message notifications"
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 100, 50, 100)
+            enableLights(true)
         }
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(channel)
+        Log.d(TAG, "Notification channels created")
     }
 
     fun showMessageNotification(
@@ -38,19 +41,29 @@ object NotificationHelper {
         chatId: String,
         senderName: String,
         messagePreview: String,
-        notificationId: Int = System.currentTimeMillis().toInt()
+        notificationId: Int = (chatId.hashCode())
     ) {
+        // Проверяем разрешение
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) return
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.w(TAG, "POST_NOTIFICATIONS permission not granted")
+                return
+            }
         }
 
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("chatId", chatId)
+            putExtra("openChatId", chatId)
         }
+
         val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent,
+            context,
+            notificationId,
+            intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -63,8 +76,10 @@ object NotificationHelper {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setVibrate(longArrayOf(0, 100, 50, 100))
+            .setDefaults(NotificationCompat.DEFAULT_SOUND)
             .build()
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)
+        Log.d(TAG, "Notification shown for chat $chatId from $senderName")
     }
 }

@@ -3,7 +3,6 @@ package by.iposdev.visorlink.ui
 import androidx.compose.runtime.*
 import androidx.navigation.*
 import androidx.navigation.compose.*
-import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.Sticker
 import by.iposdev.visorlink.ui.screens.SettingsScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
@@ -25,7 +24,7 @@ fun VisorLinkNavGraph(
 ) {
     val navController = rememberNavController()
     val currentUser by authViewModel.currentUser.collectAsState()
-    var stickerCallback by remember { mutableStateOf<((Sticker) -> Unit)?>(null) }
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
     val start = if (currentUser != null) Screen.ChatList.route else Screen.Login.route
 
@@ -82,10 +81,9 @@ fun VisorLinkNavGraph(
                 onOpenOtherProfile = { uid ->
                     navController.navigate(Screen.OtherProfile.createRoute(uid))
                 },
-                onOpenStickers = { callback ->
-                    stickerCallback = callback
-                    navController.navigate(Screen.Stickers.route)
-                }
+                // ИСПРАВЛЕНИЕ: Передаем пустую заглушку, так как логика стикеров теперь внутри ChatScreen
+                onOpenStickers = { _ -> },
+                hapticEnabled = hapticEnabled
             )
         }
 
@@ -133,19 +131,10 @@ fun VisorLinkNavGraph(
             )
         }
 
+        // Полноэкранное управление стикерами (из профиля)
         composable(Screen.Stickers.route) {
             StickersScreen(
-                onNavigateBack = {
-                    stickerCallback = null
-                    navController.popBackStack()
-                },
-                onSelectSticker = stickerCallback?.let { cb ->
-                    { sticker ->
-                        cb(sticker)
-                        stickerCallback = null
-                        navController.popBackStack()
-                    }
-                }
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }
