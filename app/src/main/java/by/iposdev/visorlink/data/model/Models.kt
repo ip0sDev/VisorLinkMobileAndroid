@@ -12,7 +12,8 @@ data class UserProfile(
     val online: Boolean = false,
     val lastSeen: Timestamp? = null,
     val createdAt: Timestamp? = null,
-    val updatedAt: Timestamp? = null
+    val updatedAt: Timestamp? = null,
+    val fcmTokens: List<String> = emptyList()  // добавь это
 )
 
 data class Chat(

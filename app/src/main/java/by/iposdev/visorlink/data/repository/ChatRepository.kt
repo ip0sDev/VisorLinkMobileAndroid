@@ -27,7 +27,12 @@ class ChatRepository(
         val reg = db.collection("chats")
             .whereArrayContains("participants", uid)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    // Логируем но не крашим — права могут не быть готовы сразу
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
                 val chats = snap?.documents?.mapNotNull { doc ->
                     doc.toObject(Chat::class.java)?.copy(id = doc.id)
                 } ?: emptyList()
@@ -37,10 +42,27 @@ class ChatRepository(
     }
 
     fun messagesFlow(chatId: String): Flow<List<Message>> = callbackFlow {
+        // БЕЗОПАСНАЯ ПРОВЕРКА СУЩЕСТВОВАНИЯ
+        val chatExists = try {
+            db.collection("chats").document(chatId).get().await().exists()
+        } catch (e: Exception) {
+            false
+        }
+
+        if (!chatExists) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
         val reg = db.collection("chats").document(chatId)
             .collection("messages")
             .orderBy("createdAt", Query.Direction.ASCENDING)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
                 val messages = snap?.documents?.mapNotNull { doc ->
                     doc.toObject(Message::class.java)?.copy(id = doc.id)
                 } ?: emptyList()
@@ -63,8 +85,15 @@ class ChatRepository(
         val targetDoc = db.collection("users").document(targetUid).get().await()
         val targetUser = targetDoc.toObject(UserProfile::class.java)!!
         val chatId = getChatId(currentUserProfile.uid, targetUid)
-        val chatDoc = db.collection("chats").document(chatId).get().await()
-        if (!chatDoc.exists()) {
+
+        // БЕЗОПАСНАЯ ПРОВЕРКА
+        val chatExists = try {
+            db.collection("chats").document(chatId).get().await().exists()
+        } catch (e: Exception) {
+            false
+        }
+
+        if (!chatExists) {
             db.collection("chats").document(chatId).set(mapOf(
                 "participants" to listOf(currentUserProfile.uid, targetUid),
                 "participantData" to mapOf(
@@ -169,5 +198,12 @@ class ChatRepository(
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
         }
         ref.update("reactions", updated.map { it.toMap() }).await()
+    }
+    suspend fun chatExists(chatId: String): Boolean {
+        return try {
+            db.collection("chats").document(chatId).get().await().exists()
+        } catch (e: Exception) {
+            false
+        }
     }
 }

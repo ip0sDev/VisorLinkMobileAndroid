@@ -11,6 +11,7 @@ import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -23,7 +24,8 @@ data class ChatUiState(
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
     val error: String? = null,
-    val isRecording: Boolean = false
+    val isRecording: Boolean = false,
+    val isReady: Boolean = false  // чат существует и готов
 )
 
 class ChatViewModel(
@@ -46,21 +48,46 @@ class ChatViewModel(
     private var recordingStart = 0L
 
     init {
+        // Загружаем профиль собеседника сразу
+        viewModelScope.launch {
+            _uiState.update { it.copy(otherUser = userRepository.getUserProfile(otherUid)) }
+        }
+        // Получаем свой username
+        viewModelScope.launch {
+            userRepository.currentUserFlow().collect { currentUsername = it?.username ?: "" }
+        }
+        // Ждём готовности чата, потом запускаем listeners
+        viewModelScope.launch {
+            waitForChatAndStartListeners()
+        }
+    }
+
+    private suspend fun waitForChatAndStartListeners() {
+        // Ждём пока чат появится в Firestore (макс 10 сек)
+        var chatReady = false
+        repeat(20) {
+            if (chatReady) return@repeat
+            chatReady = chatRepository.chatExists(chatId)
+            if (!chatReady) delay(500)
+        }
+
+        if (!chatReady) {
+            _uiState.update { it.copy(error = "Failed to open chat. Please try again.") }
+            return
+        }
+
+        _uiState.update { it.copy(isReady = true) }
+
+        // Теперь безопасно запускаем listeners
         viewModelScope.launch {
             chatRepository.messagesFlow(chatId).collect { messages ->
                 _uiState.update { it.copy(messages = messages) }
             }
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(otherUser = userRepository.getUserProfile(otherUid)) }
-        }
-        viewModelScope.launch {
             chatRepository.onlineStatusFlow(otherUid).collect { (online, lastSeen) ->
                 _uiState.update { it.copy(isOnline = online, lastSeen = lastSeen) }
             }
-        }
-        viewModelScope.launch {
-            userRepository.currentUserFlow().collect { currentUsername = it?.username ?: "" }
         }
     }
 

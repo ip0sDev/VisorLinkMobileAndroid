@@ -1,28 +1,27 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-# Запретить переименование и удаление полей в моделях данных
+# Firebase Firestore — keep all data model classes
+-keep class by.iposdev.visorlink.data.model.** { *; }
 -keepclassmembers class by.iposdev.visorlink.data.model.** { *; }
 
-# Если у вас есть другие папки с моделями, добавьте их тоже
-# Либо можно пометить все классы, используемые Firebase
+# Firebase
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
 -keepattributes Signature
--keepclassmembers class com.google.firebase.** { *; }
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
+-keepattributes InnerClasses
+
+# Koin
+-keep class org.koin.** { *; }
+-keepclassmembers class * {
+    @org.koin.core.annotation.* <methods>;
+}
+
+# Kotlin coroutines
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
+}
+-keepclassmembers class kotlin.Metadata { *; }
+
+# Kotlin serialization
+-keepattributes RuntimeVisibleAnnotations
+-keepattributes RuntimeInvisibleAnnotations
