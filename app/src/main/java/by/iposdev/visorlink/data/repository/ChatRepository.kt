@@ -2,6 +2,7 @@ package by.iposdev.visorlink.data.repository
 
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.io.File
 
+private const val PAGE_SIZE = 20L
+
 class ChatRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
@@ -23,77 +26,95 @@ class ChatRepository(
     fun getChatId(uid1: String, uid2: String) =
         listOf(uid1, uid2).sorted().joinToString("_")
 
+    suspend fun chatExists(chatId: String): Boolean = try {
+        db.collection("chats").document(chatId).get().await().exists()
+    } catch (e: Exception) { false }
+
+    // ─── Chat list ────────────────────────────────────────────────────────────
+
     fun chatsFlow(uid: String): Flow<List<Chat>> = callbackFlow {
         val reg = db.collection("chats")
             .whereArrayContains("participants", uid)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snap, error ->
-                if (error != null) {
-                    // Логируем но не крашим — права могут не быть готовы сразу
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
+                if (error != null) { trySend(emptyList()); return@addSnapshotListener }
                 val chats = snap?.documents?.mapNotNull { doc ->
-                    doc.toObject(Chat::class.java)?.copy(id = doc.id)
+                    try { doc.toObject(Chat::class.java)?.copy(id = doc.id) }
+                    catch (e: Exception) { null }
                 } ?: emptyList()
                 trySend(chats)
             }
         awaitClose { reg.remove() }
     }
 
-    fun messagesFlow(chatId: String): Flow<List<Message>> = callbackFlow {
-        // БЕЗОПАСНАЯ ПРОВЕРКА СУЩЕСТВОВАНИЯ
-        val chatExists = try {
-            db.collection("chats").document(chatId).get().await().exists()
-        } catch (e: Exception) {
-            false
-        }
+    // ─── Messages (paginated) ─────────────────────────────────────────────────
 
-        if (!chatExists) {
-            trySend(emptyList())
-            close()
-            return@callbackFlow
-        }
-
+    /**
+     * Слушает последние PAGE_SIZE сообщений в реальном времени.
+     * Возвращает пару: список сообщений + последний документ (для пагинации).
+     */
+    fun latestMessagesFlow(
+        chatId: String,
+        onUpdate: (List<Message>, DocumentSnapshot?) -> Unit
+    ): Flow<Unit> = callbackFlow {
         val reg = db.collection("chats").document(chatId)
             .collection("messages")
-            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(PAGE_SIZE)
             .addSnapshotListener { snap, error ->
-                if (error != null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
-                }
-                val messages = snap?.documents?.mapNotNull { doc ->
-                    doc.toObject(Message::class.java)?.copy(id = doc.id)
-                } ?: emptyList()
-                trySend(messages)
+                if (error != null || snap == null) return@addSnapshotListener
+                val messages = snap.documents
+                    .mapNotNull { doc ->
+                        try { doc.toObject(Message::class.java)?.copy(id = doc.id) }
+                        catch (e: Exception) { null }
+                    }
+                    .reversed() // отображаем старые первыми
+                val lastDoc = snap.documents.lastOrNull()
+                onUpdate(messages, lastDoc)
+                trySend(Unit)
             }
         awaitClose { reg.remove() }
     }
 
-    fun onlineStatusFlow(uid: String): Flow<Pair<Boolean, com.google.firebase.Timestamp?>> = callbackFlow {
-        val reg = db.collection("users").document(uid)
-            .addSnapshotListener { snap, _ ->
-                val online = snap?.getBoolean("online") ?: false
-                val lastSeen = snap?.getTimestamp("lastSeen")
-                trySend(Pair(online, lastSeen))
+    suspend fun loadOlderMessages(
+        chatId: String,
+        startAfterDoc: DocumentSnapshot
+    ): Pair<List<Message>, DocumentSnapshot?> {
+        val snap = db.collection("chats").document(chatId)
+            .collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .startAfter(startAfterDoc)
+            .limit(PAGE_SIZE)
+            .get().await()
+
+        val messages = snap.documents
+            .mapNotNull { doc ->
+                try { doc.toObject(Message::class.java)?.copy(id = doc.id) }
+                catch (e: Exception) { null }
             }
-        awaitClose { reg.remove() }
+            .reversed()
+        val newLastDoc = snap.documents.lastOrNull()
+        val hasMore = snap.documents.size >= PAGE_SIZE
+        return Pair(messages, if (hasMore) newLastDoc else null)
     }
+
+    // ─── Online status (теперь из RTDB через PresenceManager, этот метод устарел)
+    // Оставляем пустышку для совместимости, реальная логика в PresenceManager
+
+    fun onlineStatusFlow(uid: String): Flow<Pair<Boolean, com.google.firebase.Timestamp?>> = callbackFlow {
+        trySend(Pair(false, null))
+        awaitClose {}
+    }
+
+    // ─── Create / find chat ───────────────────────────────────────────────────
 
     suspend fun findOrCreateChat(currentUserProfile: UserProfile, targetUid: String): String {
         val targetDoc = db.collection("users").document(targetUid).get().await()
-        val targetUser = targetDoc.toObject(UserProfile::class.java)!!
+        val targetUser = targetDoc.toObject(UserProfile::class.java)
+            ?: throw Exception("User not found")
         val chatId = getChatId(currentUserProfile.uid, targetUid)
-
-        // БЕЗОПАСНАЯ ПРОВЕРКА
-        val chatExists = try {
-            db.collection("chats").document(chatId).get().await().exists()
-        } catch (e: Exception) {
-            false
-        }
-
-        if (!chatExists) {
+        val chatDoc = db.collection("chats").document(chatId).get().await()
+        if (!chatDoc.exists()) {
             db.collection("chats").document(chatId).set(mapOf(
                 "participants" to listOf(currentUserProfile.uid, targetUid),
                 "participantData" to mapOf(
@@ -114,6 +135,8 @@ class ChatRepository(
         return chatId
     }
 
+    // ─── Send messages ────────────────────────────────────────────────────────
+
     suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
         val batch = db.batch()
@@ -125,6 +148,7 @@ class ChatRepository(
             "createdAt" to FieldValue.serverTimestamp(),
             "deleted" to false,
             "reactions" to emptyList<Any>(),
+            "readBy" to listOf(currentUid),  // ← v2
             "replyTo" to replyTo?.toMap()
         ))
         batch.update(db.collection("chats").document(chatId), mapOf(
@@ -139,8 +163,10 @@ class ChatRepository(
         val ref = storage.reference.child("chats/$chatId/$fileName")
         ref.putFile(uri).await()
         val url = ref.downloadUrl.await().toString()
-        sendExtra(chatId, mapOf("type" to MessageType.IMAGE, "url" to url,
-            "fileName" to (uri.lastPathSegment ?: "image")), "📷 Image", senderUsername, replyTo)
+        sendExtra(chatId, mapOf(
+            "type" to MessageType.IMAGE, "url" to url,
+            "fileName" to (uri.lastPathSegment ?: "image")
+        ), "📷 Image", senderUsername, replyTo)
     }
 
     suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?) {
@@ -148,17 +174,21 @@ class ChatRepository(
         val ref = storage.reference.child(path)
         ref.putFile(Uri.fromFile(file)).await()
         val url = ref.downloadUrl.await().toString()
-        sendExtra(chatId, mapOf("type" to MessageType.VOICE, "url" to url,
-            "duration" to durationSec), "🎤 Voice message", senderUsername, replyTo)
+        sendExtra(chatId, mapOf(
+            "type" to MessageType.VOICE, "url" to url, "duration" to durationSec
+        ), "🎤 Voice message", senderUsername, replyTo)
     }
 
     suspend fun sendSticker(chatId: String, sticker: Sticker, senderUsername: String, replyTo: ReplyData?) {
-        sendExtra(chatId, mapOf("type" to MessageType.STICKER, "url" to sticker.url,
-            "stickerId" to sticker.id), "🎭 Sticker", senderUsername, replyTo)
+        sendExtra(chatId, mapOf(
+            "type" to MessageType.STICKER, "url" to sticker.url, "stickerId" to sticker.id
+        ), "🎭 Sticker", senderUsername, replyTo)
     }
 
-    private suspend fun sendExtra(chatId: String, extra: Map<String, Any?>, preview: String,
-                                  senderUsername: String, replyTo: ReplyData?) {
+    private suspend fun sendExtra(
+        chatId: String, extra: Map<String, Any?>, preview: String,
+        senderUsername: String, replyTo: ReplyData?
+    ) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
         val msg = mutableMapOf<String, Any?>(
             "senderId" to currentUid,
@@ -166,6 +196,7 @@ class ChatRepository(
             "createdAt" to FieldValue.serverTimestamp(),
             "deleted" to false,
             "reactions" to emptyList<Any>(),
+            "readBy" to listOf(currentUid),  // ← v2
             "replyTo" to replyTo?.toMap()
         )
         msg.putAll(extra)
@@ -177,6 +208,24 @@ class ChatRepository(
         ))
         batch.commit().await()
     }
+
+    // ─── Read receipts ────────────────────────────────────────────────────────
+
+    suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {
+        val unread = messages.filter { msg ->
+            msg.senderId != uid && !msg.readBy.contains(uid) && !msg.deleted
+        }
+        if (unread.isEmpty()) return
+        val batch = db.batch()
+        for (msg in unread) {
+            val ref = db.collection("chats").document(chatId)
+                .collection("messages").document(msg.id)
+            batch.update(ref, "readBy", FieldValue.arrayUnion(uid))
+        }
+        batch.commit().await()
+    }
+
+    // ─── Delete / React ───────────────────────────────────────────────────────
 
     suspend fun deleteMessage(chatId: String, messageId: String) {
         db.collection("chats").document(chatId).collection("messages").document(messageId)
@@ -190,20 +239,18 @@ class ChatRepository(
             if (currentUid in existing.uids) {
                 val newUids = existing.uids - currentUid
                 if (newUids.isEmpty()) currentReactions.filter { it.emoji != emoji }
-                else currentReactions.map { if (it.emoji == emoji) it.copy(uids = newUids, count = newUids.size) else it }
+                else currentReactions.map {
+                    if (it.emoji == emoji) it.copy(uids = newUids, count = newUids.size) else it
+                }
             } else {
-                currentReactions.map { if (it.emoji == emoji) it.copy(uids = it.uids + currentUid, count = it.count + 1) else it }
+                currentReactions.map {
+                    if (it.emoji == emoji) it.copy(uids = it.uids + currentUid, count = it.count + 1)
+                    else it
+                }
             }
         } else {
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
         }
         ref.update("reactions", updated.map { it.toMap() }).await()
-    }
-    suspend fun chatExists(chatId: String): Boolean {
-        return try {
-            db.collection("chats").document(chatId).get().await().exists()
-        } catch (e: Exception) {
-            false
-        }
     }
 }

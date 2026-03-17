@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.UserRepository
-import by.iposdev.visorlink.utils.PresenceManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -25,8 +24,7 @@ data class ProfileUiState(
 
 class ProfileViewModel(
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository,
-    private val presenceManager: PresenceManager
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -50,11 +48,13 @@ class ProfileViewModel(
     fun startEditing() = _uiState.update { it.copy(isEditing = true) }
 
     fun cancelEditing() = _uiState.update {
-        it.copy(isEditing = false,
+        it.copy(
+            isEditing = false,
             editDisplayName = it.user?.displayName ?: "",
             editBio = it.user?.bio ?: "",
             editUsername = it.user?.username ?: "",
-            error = null)
+            error = null
+        )
     }
 
     fun onDisplayNameChange(v: String) = _uiState.update { it.copy(editDisplayName = v) }
@@ -91,7 +91,9 @@ class ProfileViewModel(
                     userRepository.updateProfile(state.editDisplayName, state.editBio)
                 if (state.editUsername != user.username)
                     userRepository.changeUsername(state.editUsername, state.editDisplayName)
-                _uiState.update { it.copy(isLoading = false, isEditing = false, successMessage = "Profile updated!") }
+                _uiState.update {
+                    it.copy(isLoading = false, isEditing = false, successMessage = "Profile updated!")
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
@@ -111,7 +113,7 @@ class ProfileViewModel(
     }
 
     fun logout() {
-        presenceManager.detach()
+        // PresenceManager.detach() вызывается в VisorLinkApp через AuthStateListener
         authRepository.logout()
     }
 

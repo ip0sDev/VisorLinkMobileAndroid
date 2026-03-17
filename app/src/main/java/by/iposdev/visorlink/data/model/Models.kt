@@ -9,11 +9,11 @@ data class UserProfile(
     val displayName: String = "",
     val bio: String = "",
     val avatarUrl: String? = null,
-    val online: Boolean = false,
-    val lastSeen: Timestamp? = null,
+    val online: Boolean = false,         // оставляем для совместимости, не пишем
+    val lastSeen: Timestamp? = null,     // оставляем для совместимости, не пишем
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
-    val fcmTokens: List<String> = emptyList()  // добавь это
+    val fcmTokens: List<String> = emptyList()
 )
 
 data class Chat(
@@ -48,7 +48,8 @@ data class Message(
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
     val replyTo: Map<String, Any?>? = null,
-    val reactions: List<Map<String, Any>> = emptyList()
+    val reactions: List<Map<String, Any>> = emptyList(),
+    val readBy: List<String> = emptyList()  // ← NEW v2
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -111,16 +112,26 @@ data class Sticker(
     val createdAt: Timestamp? = null
 )
 
-enum class AppTheme {
-    MATERIAL3_EXPRESSIVE,
-    ONE_UI
-}
-enum class ThemeMode {
-    SYSTEM,  // следует системной теме
-    LIGHT,   // всегда светлая
-    DARK     // всегда тёмная
-}
-data class AppSettings(
-    val hapticFeedback: Boolean = true,
-    val notificationsEnabled: Boolean = true
+// ─── Presence (RTDB) ──────────────────────────────────────────────────────────
+data class PresenceData(
+    val online: Boolean = false,
+    val lastSeen: Long? = null  // Unix ms
 )
+
+// ─── Topbar status ────────────────────────────────────────────────────────────
+sealed class TopbarStatus {
+    object Online : TopbarStatus()
+    object Typing : TopbarStatus()
+    object Offline : TopbarStatus()
+    data class LastSeen(val ts: Long?) : TopbarStatus()
+}
+
+// ─── Message list items (with date separators) ───────────────────────────────
+sealed class MessageListItem {
+    data class MessageItem(val message: Message) : MessageListItem()
+    data class DateHeader(val label: String) : MessageListItem()
+}
+
+enum class AppTheme { MATERIAL3_EXPRESSIVE, ONE_UI }
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+data class AppSettings(val hapticFeedback: Boolean = true, val notificationsEnabled: Boolean = true)

@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,21 +73,42 @@ fun ChatScreen(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.sendImage(it) } }
 
-    // Прокрутка к последнему сообщению при новых
-    LaunchedEffect(uiState.messages.size) {
-        if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.lastIndex)
+    // Прокрутка вниз при новых сообщениях
+    val messageCount = uiState.messages.size
+    LaunchedEffect(messageCount) {
+        if (messageCount > 0 && !uiState.isLoadingMore) {
+            listState.animateScrollToItem(
+                // items = dateHeaders + messages, прокручиваем к последнему
+                index = (uiState.messageListItems.size - 1).coerceAtLeast(0)
+            )
         }
     }
 
-    // Haptic при получении нового сообщения
+    // Haptic при новом входящем сообщении
     val lastMessageId = uiState.messages.lastOrNull()?.id
     LaunchedEffect(lastMessageId) {
         if (lastMessageId != null && hapticEnabled) {
-            val lastMsg = uiState.messages.lastOrNull()
-            if (lastMsg?.senderId != viewModel.currentUid) {
+            val last = uiState.messages.lastOrNull()
+            if (last?.senderId != viewModel.currentUid) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             }
+        }
+    }
+
+    // Триггер пагинации — когда скроллим к топу
+    LaunchedEffect(listState.firstVisibleItemIndex) {
+        if (listState.firstVisibleItemIndex <= 3 &&
+            uiState.hasMore && !uiState.isLoadingMore
+        ) {
+            val offsetBefore = listState.firstVisibleItemScrollOffset
+            val indexBefore = listState.firstVisibleItemIndex
+            viewModel.loadMore()
+            // Восстанавливаем позицию скролла после prepend
+            val added = uiState.messageListItems.size
+            listState.scrollToItem(
+                index = (indexBefore + added).coerceAtLeast(0),
+                scrollOffset = offsetBefore
+            )
         }
     }
 
@@ -106,7 +128,8 @@ fun ChatScreen(
                         AvatarWithPresence(
                             avatarUrl = uiState.otherUser?.avatarUrl,
                             displayName = uiState.otherUser?.displayName ?: "",
-                            isOnline = uiState.isOnline,
+                            isOnline = uiState.topbarStatus is TopbarStatus.Online ||
+                                    uiState.topbarStatus is TopbarStatus.Typing,
                             size = 36.dp
                         )
                         Spacer(Modifier.width(10.dp))
@@ -118,21 +141,38 @@ fun ChatScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            // Topbar status: Typing / Online / Last seen
                             AnimatedContent(
-                                targetState = uiState.isOnline,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                label = "online_status"
-                            ) { isOnline ->
-                                Text(
-                                    text = if (isOnline) "Online"
-                                    else uiState.lastSeen?.let {
-                                        "Last seen ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(it.toDate())}"
-                                    } ?: "",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (isOnline) Color(0xFF22C55E)
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    fontSize = 11.sp
-                                )
+                                targetState = uiState.topbarStatus,
+                                transitionSpec = {
+                                    fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+                                },
+                                label = "topbar_status"
+                            ) { status ->
+                                when (status) {
+                                    is TopbarStatus.Typing -> TypingDots()
+                                    is TopbarStatus.Online -> Text(
+                                        "Online",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color(0xFF22C55E),
+                                        fontSize = 11.sp
+                                    )
+                                    is TopbarStatus.LastSeen -> Text(
+                                        status.ts?.let { ts ->
+                                            "Last seen ${
+                                                SimpleDateFormat("HH:mm", Locale.getDefault())
+                                                    .format(Date(ts))
+                                            }"
+                                        } ?: "",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontSize = 11.sp
+                                    )
+                                    is TopbarStatus.Offline -> Text(
+                                        "",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
                             }
                         }
                     }
@@ -155,7 +195,9 @@ fun ChatScreen(
                     enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
                     exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                 ) {
-                    uiState.replyingTo?.let { ReplyBanner(it) { viewModel.clearReply() } }
+                    uiState.replyingTo?.let { msg ->
+                        ReplyBanner(msg) { viewModel.clearReply() }
+                    }
                 }
 
                 // Upload progress
@@ -174,27 +216,23 @@ fun ChatScreen(
                     verticalAlignment = Alignment.Bottom
                 ) {
                     if (!uiState.isRecording) {
-                        // Attachment
                         IconButton(onClick = { imagePicker.launch("image/*") }) {
-                            Icon(
-                                Icons.Default.AttachFile, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Icon(Icons.Default.AttachFile, null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        // Stickers
                         IconButton(onClick = {
                             onOpenStickers { sticker -> viewModel.sendSticker(sticker) }
                         }) {
-                            Icon(
-                                Icons.Default.EmojiEmotions, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Icon(Icons.Default.EmojiEmotions, null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
 
-                        // Text input
                         OutlinedTextField(
                             value = inputText,
-                            onValueChange = { inputText = it },
+                            onValueChange = {
+                                inputText = it
+                                viewModel.onTextChanged(it)
+                            },
                             placeholder = { Text("Message") },
                             modifier = Modifier.weight(1f),
                             maxLines = 4,
@@ -203,7 +241,6 @@ fun ChatScreen(
 
                         Spacer(Modifier.width(4.dp))
 
-                        // Send / Mic button
                         AnimatedContent(
                             targetState = inputText.isNotBlank(),
                             transitionSpec = {
@@ -215,7 +252,8 @@ fun ChatScreen(
                             if (hasText) {
                                 IconButton(
                                     onClick = {
-                                        if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        if (hapticEnabled)
+                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                         viewModel.sendText(inputText)
                                         inputText = ""
                                     },
@@ -224,8 +262,7 @@ fun ChatScreen(
                                         .background(MaterialTheme.colorScheme.primary, CircleShape)
                                 ) {
                                     Icon(
-                                        Icons.AutoMirrored.Filled.Send,
-                                        "Send",
+                                        Icons.AutoMirrored.Filled.Send, "Send",
                                         tint = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
@@ -233,7 +270,8 @@ fun ChatScreen(
                                 IconButton(
                                     onClick = {
                                         if (audioPermission.status.isGranted) {
-                                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            if (hapticEnabled)
+                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                             viewModel.startRecording()
                                         } else {
                                             audioPermission.launchPermissionRequest()
@@ -241,10 +279,8 @@ fun ChatScreen(
                                     },
                                     modifier = Modifier.size(48.dp)
                                 ) {
-                                    Icon(
-                                        Icons.Default.Mic, "Record",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
+                                    Icon(Icons.Default.Mic, "Record",
+                                        tint = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -259,16 +295,9 @@ fun ChatScreen(
             }
         }
     ) { padding ->
-        // Группировка по датам
-        val grouped = remember(uiState.messages) {
-            uiState.messages.groupBy { msg ->
-                msg.createdAt?.toDate()?.let {
-                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(it)
-                } ?: ""
-            }
-        }
 
-        if (uiState.messages.isEmpty() && !uiState.isUploading) {
+        if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
+            // Empty state
             Box(
                 Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
@@ -298,33 +327,66 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                grouped.forEach { (date, msgs) ->
-                    if (date.isNotEmpty()) {
-                        item(key = "date_$date") { DateSeparator(date) }
-                    }
-                    items(msgs, key = { it.id }) { message ->
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = slideInVertically(
-                                initialOffsetY = { 40 },
-                                animationSpec = tween(200)
-                            ) + fadeIn(animationSpec = tween(200))
+                // Индикатор загрузки старых сообщений
+                if (uiState.isLoadingMore) {
+                    item(key = "loading_more") {
+                        Box(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            MessageBubble(
-                                message = message,
-                                isMine = message.senderId == viewModel.currentUid,
-                                currentUid = viewModel.currentUid,
-                                hapticEnabled = hapticEnabled,
-                                onLongPress = {
-                                    if (message.senderId == viewModel.currentUid && !message.deleted) {
-                                        showDeleteConfirm = message.id
-                                    }
-                                },
-                                onReply = { viewModel.setReplyTo(message) },
-                                onReact = { emoji ->
-                                    viewModel.toggleReaction(message.id, emoji, message.parsedReactions)
-                                }
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
                             )
+                        }
+                    }
+                }
+
+                items(
+                    items = uiState.messageListItems,
+                    key = { item ->
+                        when (item) {
+                            is MessageListItem.DateHeader -> "date_${item.label}"
+                            is MessageListItem.MessageItem -> item.message.id
+                        }
+                    }
+                ) { item ->
+                    when (item) {
+                        is MessageListItem.DateHeader -> {
+                            DateSeparator(label = item.label)
+                        }
+                        is MessageListItem.MessageItem -> {
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = slideInVertically(
+                                    initialOffsetY = { 40 },
+                                    animationSpec = tween(200)
+                                ) + fadeIn(tween(200))
+                            ) {
+                                MessageBubble(
+                                    message = item.message,
+                                    isMine = item.message.senderId == viewModel.currentUid,
+                                    otherUid = otherUid,
+                                    currentUid = viewModel.currentUid,
+                                    hapticEnabled = hapticEnabled,
+                                    onLongPress = {
+                                        if (item.message.senderId == viewModel.currentUid
+                                            && !item.message.deleted
+                                        ) {
+                                            showDeleteConfirm = item.message.id
+                                        }
+                                    },
+                                    onReply = { viewModel.setReplyTo(item.message) },
+                                    onReact = { emoji ->
+                                        viewModel.toggleReaction(
+                                            item.message.id,
+                                            emoji,
+                                            item.message.parsedReactions
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -332,7 +394,7 @@ fun ChatScreen(
         }
     }
 
-    // Delete dialog
+    // Delete confirm dialog
     showDeleteConfirm?.let { msgId ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
@@ -350,11 +412,48 @@ fun ChatScreen(
         )
     }
 
-    // Error snackbar
-    uiState.error?.let { error ->
-        LaunchedEffect(error) {
+    // Error auto-dismiss
+    uiState.error?.let {
+        LaunchedEffect(it) {
             delay(3000)
             viewModel.clearError()
+        }
+    }
+}
+
+// ─── Typing dots animation ────────────────────────────────────────────────────
+
+@Composable
+private fun TypingDots() {
+    val infiniteTransition = rememberInfiniteTransition(label = "typing")
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            "typing",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontSize = 11.sp
+        )
+        (0..2).forEach { i ->
+            val alpha by infiniteTransition.animateFloat(
+                initialValue = 0.2f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(400, delayMillis = i * 130, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "dot_$i"
+            )
+            Box(
+                modifier = Modifier
+                    .size(4.dp)
+                    .background(
+                        MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                        CircleShape
+                    )
+            )
         }
     }
 }
@@ -362,7 +461,7 @@ fun ChatScreen(
 // ─── Date separator ───────────────────────────────────────────────────────────
 
 @Composable
-private fun DateSeparator(date: String) {
+private fun DateSeparator(label: String) {
     Box(
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         contentAlignment = Alignment.Center
@@ -372,7 +471,7 @@ private fun DateSeparator(date: String) {
             shape = MaterialTheme.shapes.extraSmall
         ) {
             Text(
-                date,
+                label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
@@ -388,6 +487,7 @@ private fun DateSeparator(date: String) {
 private fun MessageBubble(
     message: Message,
     isMine: Boolean,
+    otherUid: String,
     currentUid: String,
     hapticEnabled: Boolean,
     onLongPress: () -> Unit,
@@ -397,7 +497,6 @@ private fun MessageBubble(
     val haptic = LocalHapticFeedback.current
     var showActions by remember { mutableStateOf(false) }
 
-    // Анимация появления bubble
     val scale by animateFloatAsState(
         targetValue = if (showActions) 1.02f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
@@ -412,6 +511,9 @@ private fun MessageBubble(
         RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
     else
         RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
+
+    // Прочитал ли другой пользователь сообщение
+    val isReadByOther = otherUid in message.readBy
 
     Column(
         modifier = Modifier
@@ -428,20 +530,25 @@ private fun MessageBubble(
                 .combinedClickable(
                     onClick = { showActions = !showActions },
                     onLongClick = {
-                        if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (hapticEnabled)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         onLongPress()
                         showActions = true
                     }
                 )
         ) {
-            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp)) {
+            Column(
+                modifier = Modifier.padding(
+                    start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp
+                )
+            ) {
                 // Reply preview
                 message.replyData?.let {
                     ReplyPreview(it, isMine)
                     Spacer(Modifier.height(4.dp))
                 }
 
-                // Content
+                // Message content
                 if (message.deleted) {
                     Text(
                         "🚫 Message deleted",
@@ -472,16 +579,25 @@ private fun MessageBubble(
                     )
                 }
 
-                // Timestamp
-                Text(
-                    message.createdAt?.toDate()?.let {
-                        SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
-                    } ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = textColor.copy(alpha = 0.6f),
-                    fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.End)
-                )
+                // Timestamp + read receipt
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Text(
+                        message.createdAt?.toDate()?.let {
+                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
+                        } ?: "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = textColor.copy(alpha = 0.6f),
+                        fontSize = 10.sp
+                    )
+                    // Read receipt — только на своих сообщениях
+                    if (isMine && !message.deleted) {
+                        ReadReceipt(isRead = isReadByOther)
+                    }
+                }
             }
         }
 
@@ -495,7 +611,8 @@ private fun MessageBubble(
                     val iReacted = currentUid in reaction.uids
                     Surface(
                         onClick = {
-                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (hapticEnabled)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onReact(reaction.emoji)
                         },
                         shape = MaterialTheme.shapes.extraSmall,
@@ -513,7 +630,7 @@ private fun MessageBubble(
             }
         }
 
-        // Quick actions bar (появляется по тапу)
+        // Quick actions (тап по пузырю)
         AnimatedVisibility(
             visible = showActions && !message.deleted,
             enter = slideInVertically(
@@ -537,15 +654,17 @@ private fun MessageBubble(
                     horizontalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     listOf("👍", "❤️", "😂", "😮", "😢", "🔥").forEach { emoji ->
-                        ReactionButton(emoji = emoji, onClick = {
-                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        ReactionButton(emoji = emoji) {
+                            if (hapticEnabled)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onReact(emoji)
                             showActions = false
-                        })
+                        }
                     }
                     IconButton(
                         onClick = {
-                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            if (hapticEnabled)
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                             onReply()
                             showActions = false
                         },
@@ -563,6 +682,22 @@ private fun MessageBubble(
     }
 }
 
+// ─── Read receipt ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun ReadReceipt(isRead: Boolean) {
+    // ✓ серый = отправлено, ✓✓ голубой = прочитано
+    // Используем встроенные иконки Material т.к. кастомных drawable нет
+    Icon(
+        imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done,
+        contentDescription = if (isRead) "Read" else "Sent",
+        modifier = Modifier.size(14.dp),
+        tint = if (isRead) Color(0xFF00D4FF) else Color(0xFF6B7280)
+    )
+}
+
+// ─── Reaction button (анимированный) ─────────────────────────────────────────
+
 @Composable
 private fun ReactionButton(emoji: String, onClick: () -> Unit) {
     val scale = remember { Animatable(1f) }
@@ -571,15 +706,16 @@ private fun ReactionButton(emoji: String, onClick: () -> Unit) {
     TextButton(
         onClick = {
             scope.launch {
-                scale.animateTo(1.3f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                scale.animateTo(
+                    1.35f,
+                    spring(dampingRatio = Spring.DampingRatioLowBouncy)
+                )
                 scale.animateTo(1f, tween(100))
             }
             onClick()
         },
         contentPadding = PaddingValues(4.dp),
-        modifier = Modifier
-            .size(36.dp)
-            .scale(scale.value)
+        modifier = Modifier.size(36.dp).scale(scale.value)
     ) {
         Text(emoji, fontSize = 18.sp)
     }
@@ -679,13 +815,8 @@ private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
 @Composable
 private fun VoiceBubble(duration: Int, tint: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            Icons.Default.PlayArrow, "Play",
-            tint = tint,
-            modifier = Modifier.size(28.dp)
-        )
+        Icon(Icons.Default.PlayArrow, "Play", tint = tint, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(4.dp))
-        // Waveform
         Row(
             modifier = Modifier.width(100.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -720,9 +851,9 @@ private fun RecordingBar(
     val haptic = LocalHapticFeedback.current
     var elapsed by remember { mutableIntStateOf(0) }
 
-    // Пульсирующая точка
     val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(
-        initialValue = 1f, targetValue = 0.2f,
+        initialValue = 1f,
+        targetValue = 0.2f,
         animationSpec = infiniteRepeatable(
             tween(600, easing = LinearEasing),
             RepeatMode.Reverse
@@ -734,7 +865,8 @@ private fun RecordingBar(
         while (true) {
             delay(1000)
             elapsed++
-            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (hapticEnabled)
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
     }
 
@@ -757,7 +889,7 @@ private fun RecordingBar(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
             Text(
                 "Recording...",
                 style = MaterialTheme.typography.bodySmall,

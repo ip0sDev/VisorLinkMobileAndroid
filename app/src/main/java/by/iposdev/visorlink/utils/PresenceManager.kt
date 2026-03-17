@@ -1,37 +1,80 @@
 package by.iposdev.visorlink.utils
 
 import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ServerValue
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.database
+import by.iposdev.visorlink.data.model.PresenceData
+import com.google.firebase.Firebase
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 
-class PresenceManager(private val db: FirebaseFirestore) : DefaultLifecycleObserver {
+class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
 
-    private var uid: String? = null
+    private val rtdb = Firebase.database
+    private val presenceRef = rtdb.getReference("presence/$uid")
+    private val connectedRef = rtdb.getReference(".info/connected")
+    private var connectedListener: ValueEventListener? = null
 
-    fun attach(uid: String) {
-        this.uid = uid
-        ProcessLifecycleOwner.get().lifecycle.addObserver(this)
+    fun attach(lifecycle: Lifecycle) {
+        lifecycle.addObserver(this)
+        startListening()
     }
 
-    fun detach() {
-        ProcessLifecycleOwner.get().lifecycle.removeObserver(this)
-        uid?.let { markOffline(it) }
-        uid = null
+    private fun startListening() {
+        connectedListener = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                if (snap.getValue(Boolean::class.java) != true) return
+                // Сначала регистрируем onDisconnect, потом помечаем online
+                presenceRef.onDisconnect().setValue(
+                    mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
+                )
+                presenceRef.setValue(
+                    mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
+                )
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        connectedRef.addValueEventListener(connectedListener!!)
     }
 
     override fun onStart(owner: LifecycleOwner) {
-        uid?.let { db.collection("users").document(it)
-            .update("online", true, "lastSeen", FieldValue.serverTimestamp()) }
+        presenceRef.setValue(
+            mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
+        )
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        uid?.let { markOffline(it) }
+        presenceRef.setValue(
+            mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
+        )
     }
 
-    private fun markOffline(uid: String) {
-        db.collection("users").document(uid)
-            .update("online", false, "lastSeen", FieldValue.serverTimestamp())
+    fun detach() {
+        connectedListener?.let { connectedRef.removeEventListener(it) }
+        presenceRef.setValue(
+            mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
+        )
+    }
+
+    companion object {
+        fun observePresence(uid: String): Flow<PresenceData?> = callbackFlow {
+            val ref = Firebase.database.getReference("presence/$uid")
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snap: DataSnapshot) {
+                    val online = snap.child("online").getValue(Boolean::class.java) ?: false
+                    val lastSeen = snap.child("lastSeen").getValue(Long::class.java)
+                    trySend(PresenceData(online, lastSeen))
+                }
+                override fun onCancelled(e: DatabaseError) { trySend(null) }
+            }
+            ref.addValueEventListener(listener)
+            awaitClose { ref.removeEventListener(listener) }
+        }
     }
 }

@@ -9,23 +9,30 @@ import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
-import com.google.firebase.Timestamp
+import by.iposdev.visorlink.utils.PresenceManager
+import by.iposdev.visorlink.utils.TypingManager
 import com.google.firebase.auth.FirebaseAuth
-import kotlinx.coroutines.delay
+import com.google.firebase.firestore.DocumentSnapshot
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.*
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
+    val messageListItems: List<MessageListItem> = emptyList(),
+    val isLoadingMore: Boolean = false,
+    val hasMore: Boolean = true,
+    val lastDoc: DocumentSnapshot? = null,
     val otherUser: UserProfile? = null,
-    val isOnline: Boolean = false,
-    val lastSeen: Timestamp? = null,
+    val topbarStatus: TopbarStatus = TopbarStatus.Offline,
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
     val error: String? = null,
-    val isRecording: Boolean = false,
-    val isReady: Boolean = false  // чат существует и готов
+    val isRecording: Boolean = false
 )
 
 class ChatViewModel(
@@ -46,55 +53,133 @@ class ChatViewModel(
     private var recorder: MediaRecorder? = null
     private var recordingFile: File? = null
     private var recordingStart = 0L
+    private var typingManager: TypingManager? = null
 
     init {
-        // Загружаем профиль собеседника сразу
         viewModelScope.launch {
-            _uiState.update { it.copy(otherUser = userRepository.getUserProfile(otherUid)) }
+            try {
+                _uiState.update { it.copy(otherUser = userRepository.getUserProfile(otherUid)) }
+            } catch (_: Exception) {}
         }
-        // Получаем свой username
         viewModelScope.launch {
-            userRepository.currentUserFlow().collect { currentUsername = it?.username ?: "" }
+            userRepository.currentUserFlow()
+                .catch { }
+                .collect { currentUsername = it?.username ?: "" }
         }
-        // Ждём готовности чата, потом запускаем listeners
+
         viewModelScope.launch {
-            waitForChatAndStartListeners()
+            val exists = waitForChat()
+            if (!exists) {
+                _uiState.update { it.copy(error = "Failed to open chat") }
+                return@launch
+            }
+
+            // Инициализируем TypingManager
+            typingManager = TypingManager(chatId, currentUid)
+
+            // Слушаем последние сообщения
+            launch {
+                chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
+                    val items = buildMessageList(messages)
+                    _uiState.update {
+                        it.copy(
+                            messages = messages,
+                            messageListItems = items,
+                            lastDoc = lastDoc,
+                            hasMore = lastDoc != null
+                        )
+                    }
+                    // Помечаем прочитанными
+                    viewModelScope.launch {
+                        try { chatRepository.markMessagesAsRead(chatId, messages, currentUid) }
+                        catch (_: Exception) {}
+                    }
+                }.catch { }.collect()
+            }
+
+            // Presence + Typing → TopbarStatus
+            launch {
+                combine(
+                    PresenceManager.observePresence(otherUid).filterNotNull(),
+                    TypingManager.observeTyping(chatId, currentUid)
+                ) { presence, typing ->
+                    when {
+                        typing -> TopbarStatus.Typing
+                        presence.online -> TopbarStatus.Online
+                        else -> TopbarStatus.LastSeen(presence.lastSeen)
+                    }
+                }
+                    .catch { emit(TopbarStatus.Offline) }
+                    .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
+            }
         }
     }
 
-    private suspend fun waitForChatAndStartListeners() {
-        // Ждём пока чат появится в Firestore (макс 10 сек)
-        var chatReady = false
-        repeat(20) {
-            if (chatReady) return@repeat
-            chatReady = chatRepository.chatExists(chatId)
-            if (!chatReady) delay(500)
-        }
+    // ─── Pagination ───────────────────────────────────────────────────────────
 
-        if (!chatReady) {
-            _uiState.update { it.copy(error = "Failed to open chat. Please try again.") }
-            return
-        }
-
-        _uiState.update { it.copy(isReady = true) }
-
-        // Теперь безопасно запускаем listeners
+    fun loadMore() {
+        val state = _uiState.value
+        if (!state.hasMore || state.isLoadingMore || state.lastDoc == null) return
         viewModelScope.launch {
-            chatRepository.messagesFlow(chatId).collect { messages ->
-                _uiState.update { it.copy(messages = messages) }
-            }
-        }
-        viewModelScope.launch {
-            chatRepository.onlineStatusFlow(otherUid).collect { (online, lastSeen) ->
-                _uiState.update { it.copy(isOnline = online, lastSeen = lastSeen) }
+            _uiState.update { it.copy(isLoadingMore = true) }
+            try {
+                val (older, newLastDoc) = chatRepository.loadOlderMessages(chatId, state.lastDoc)
+                val combined = older + state.messages
+                _uiState.update {
+                    it.copy(
+                        messages = combined,
+                        messageListItems = buildMessageList(combined),
+                        isLoadingMore = false,
+                        hasMore = newLastDoc != null,
+                        lastDoc = newLastDoc ?: it.lastDoc
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoadingMore = false, error = e.message) }
             }
         }
     }
+
+    // ─── Date separators ─────────────────────────────────────────────────────
+
+    private fun buildMessageList(messages: List<Message>): List<MessageListItem> {
+        val result = mutableListOf<MessageListItem>()
+        var lastDate: java.time.LocalDate? = null
+        val today = java.time.LocalDate.now()
+        val yesterday = today.minusDays(1)
+
+        for (message in messages) {
+            val msgDate = message.createdAt?.toDate()
+                ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate()
+                ?: continue
+            if (msgDate != lastDate) {
+                val label = when (msgDate) {
+                    today -> "Today"
+                    yesterday -> "Yesterday"
+                    else -> msgDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault()))
+                }
+                result.add(MessageListItem.DateHeader(label))
+                lastDate = msgDate
+            }
+            result.add(MessageListItem.MessageItem(message))
+        }
+        return result
+    }
+
+    // ─── Typing ───────────────────────────────────────────────────────────────
+
+    fun onTextChanged(text: String) {
+        if (text.isNotEmpty()) typingManager?.onTyping()
+        else typingManager?.stopTyping()
+    }
+
+    // ─── Send ─────────────────────────────────────────────────────────────────
 
     fun sendText(text: String) {
         val trimmed = text.trim().ifEmpty { return }
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
+            typingManager?.stopTyping()
             clearReply()
             try { chatRepository.sendText(chatId, trimmed, currentUsername, reply) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
@@ -120,6 +205,8 @@ class ChatViewModel(
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
+
+    // ─── Voice ────────────────────────────────────────────────────────────────
 
     fun startRecording() {
         val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.webm")
@@ -162,6 +249,8 @@ class ChatViewModel(
         _uiState.update { it.copy(isRecording = false) }
     }
 
+    // ─── Delete / React ───────────────────────────────────────────────────────
+
     fun deleteMessage(messageId: String) {
         viewModelScope.launch {
             try { chatRepository.deleteMessage(chatId, messageId) }
@@ -176,9 +265,25 @@ class ChatViewModel(
         }
     }
 
+    // ─── Reply ────────────────────────────────────────────────────────────────
+
     fun setReplyTo(message: Message) = _uiState.update { it.copy(replyingTo = message) }
     fun clearReply() = _uiState.update { it.copy(replyingTo = null) }
     fun clearError() = _uiState.update { it.copy(error = null) }
+
+    override fun onCleared() {
+        typingManager?.cleanup()
+        super.onCleared()
+    }
+
+    private suspend fun waitForChat(): Boolean {
+        repeat(12) {
+            try { if (chatRepository.chatExists(chatId)) return true }
+            catch (_: Exception) {}
+            kotlinx.coroutines.delay(500)
+        }
+        return false
+    }
 
     private fun Message.toReplyData() = ReplyData(id, type, text, url, senderUsername)
 }

@@ -3,7 +3,6 @@ package by.iposdev.visorlink.ui.screens.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.repository.AuthRepository
-import by.iposdev.visorlink.utils.PresenceManager
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,8 +14,7 @@ data class AuthUiState(
 )
 
 class AuthViewModel(
-    private val authRepository: AuthRepository,
-    private val presenceManager: PresenceManager
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     val currentUser: StateFlow<FirebaseUser?> = authRepository.authState
@@ -34,7 +32,7 @@ class AuthViewModel(
             _uiState.value = AuthUiState(isLoading = true)
             try {
                 authRepository.login(email.trim(), password)
-                authRepository.currentUid?.let { presenceManager.attach(it) }
+                // Presence управляется автоматически через VisorLinkApp → AuthStateListener
                 _uiState.value = AuthUiState(success = true)
             } catch (e: Exception) {
                 _uiState.value = AuthUiState(error = e.message ?: "Login failed")
@@ -51,7 +49,6 @@ class AuthViewModel(
             _uiState.value = AuthUiState(isLoading = true)
             try {
                 authRepository.register(email.trim(), password, username.trim())
-                authRepository.currentUid?.let { presenceManager.attach(it) }
                 _uiState.value = AuthUiState(success = true)
             } catch (e: Exception) {
                 _uiState.value = AuthUiState(error = e.message ?: "Registration failed")
@@ -60,13 +57,13 @@ class AuthViewModel(
     }
 
     fun logout() {
-        presenceManager.detach()
+        // PresenceManager.detach() вызывается в VisorLinkApp через AuthStateListener
         authRepository.logout()
     }
 
-    fun initPresenceIfLoggedIn() {
-        authRepository.currentUid?.let { presenceManager.attach(it) }
-    }
+    fun initPresenceIfLoggedIn() { /* управляется из VisorLinkApp */ }
 
-    fun clearError() { _uiState.value = _uiState.value.copy(error = null) }
+    fun clearError() {
+        _uiState.value = _uiState.value.copy(error = null)
+    }
 }
