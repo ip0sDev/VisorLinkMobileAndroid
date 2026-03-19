@@ -267,4 +267,29 @@
     <string name="update_action_downloading">Загрузка…</string>
     <string name="update_status_toast">Начинаем загрузку…</string>
     <string name="update_error_install">Не удалось запустить установщик</string>
+    <!-- Update dialog — Required -->
+    <string name="update_required_title">Требуется обновление</string>
+
+    <!-- Update dialog — Recommended -->
+    <string name="update_recommended_title">Доступно обновление</string>
+
+    <!-- Update dialog — buttons -->
+    <string name="update_btn_update">Обновить</string>
+    <string name="update_btn_later">Позже</string>
+    <string name="update_btn_retry">Повторить</string>
+    <string name="update_btn_downloading">Загрузка…</string>
+    <string name="update_btn_installing">Установка…</string>
+
+    <!-- Changelog section -->
+    <string name="update_whats_new">Что нового</string>
+    <string name="update_changelog_expand">Развернуть</string>
+    <string name="update_changelog_collapse">Свернуть</string>
+    <string name="update_changelog_too_old">Вы пропустили несколько версий. Полный список изменений — в официальном канале:</string>
+
+    <!-- Download progress -->
+    <string name="update_dl_starting">Начало загрузки…</string>
+    <string name="update_dl_progress">Загрузка…</string>
+    <string name="update_dl_complete">✅ Загрузка завершена</string>
+    <string name="update_dl_error">❌ Ошибка загрузки</string>
+    <string name="update_dl_percent">%1$d%%</string>
 </resources>

@@ -67,5 +67,6 @@ val appModule = module {
             chatId = params.get()
         )
     }
-    viewModel { AppUpdateViewModel() }
+    // В список viewModel добавь:
+    viewModel { by.iposdev.visorlink.ui.update.AppUpdateViewModel() }
 }

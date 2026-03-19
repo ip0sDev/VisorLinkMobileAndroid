@@ -28,6 +28,8 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.appcompat.app.AppCompatActivity // <-- Изменился импорт
+import by.iposdev.visorlink.ui.update.AppUpdateViewModel
+import by.iposdev.visorlink.ui.update.AppUpdateWrapper
 // ...
 class MainActivity : AppCompatActivity() { // <-- Изменился класс
 
@@ -57,16 +59,19 @@ class MainActivity : AppCompatActivity() { // <-- Изменился класс
         setContent {
             val themeViewModel: ThemeViewModel = koinViewModel()
             val authViewModel: AuthViewModel = koinViewModel()
+            val updateViewModel: AppUpdateViewModel = koinViewModel()  // ← добавь
             val appTheme by themeViewModel.appTheme.collectAsState()
             val themeMode by themeViewModel.themeMode.collectAsState()
 
             authViewModel.initPresenceIfLoggedIn()
 
             VisorLinkTheme(appTheme = appTheme, themeMode = themeMode) {
-                VisorLinkNavGraph(
-                    authViewModel = authViewModel,
-                    themeViewModel = themeViewModel
-                )
+                AppUpdateWrapper(viewModel = updateViewModel) {  // ← оберни
+                    VisorLinkNavGraph(
+                        authViewModel = authViewModel,
+                        themeViewModel = themeViewModel
+                    )
+                }
             }
         }
     }

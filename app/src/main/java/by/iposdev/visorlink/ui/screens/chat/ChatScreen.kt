@@ -486,6 +486,11 @@ fun ChatScreen(
                                         reactionsOpenForId = reactionsOpenForId,
                                         canReact = uiState.canReact,
                                         showSenderName = uiState.chatType != ChatType.DIRECT,
+                                        voicePlayback = uiState.voicePlayback,
+                                        onPlayVoice = { url, durationSec ->
+                                            viewModel.playVoice(item.message.id, url, durationSec)
+                                        },
+                                        onSeekVoice = { viewModel.seekVoice(it) },
                                         onOpenReactions = { msgId ->
                                             reactionsOpenForId =
                                                 if (reactionsOpenForId == msgId) null else msgId
@@ -858,6 +863,9 @@ private fun MessageBubble(
     reactionsOpenForId: String?,
     canReact: Boolean,
     showSenderName: Boolean,
+    voicePlayback: by.iposdev.visorlink.utils.VoicePlaybackState,
+    onPlayVoice: (url: String, durationSec: Int) -> Unit,
+    onSeekVoice: (Float) -> Unit,
     onOpenReactions: (String) -> Unit,
     onLongPress: () -> Unit,
     onReply: () -> Unit,
@@ -954,7 +962,15 @@ private fun MessageBubble(
                 } else when (message.type) {
                     MessageType.TEXT -> Text(message.text ?: "",
                         style = MaterialTheme.typography.bodyMedium, color = textColor)
-                    MessageType.VOICE -> VoiceBubble(message.duration ?: 0, textColor)
+                    MessageType.VOICE -> VoiceBubble(
+                        messageId = message.id,
+                        url = message.url ?: "",
+                        durationSec = message.duration ?: 0,
+                        tint = textColor,
+                        playback = voicePlayback,
+                        onPlay = onPlayVoice,
+                        onSeek = onSeekVoice
+                    )
                     MessageType.STICKER -> AsyncImage(model = message.url,
                         contentDescription = null, modifier = Modifier.size(120.dp))
                 }
@@ -1329,23 +1345,129 @@ private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
 // ─── Voice bubble ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun VoiceBubble(duration: Int, tint: Color) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.PlayArrow, "Play", tint = tint, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.width(4.dp))
-        Row(modifier = Modifier.width(100.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            listOf(12, 20, 16, 24, 18, 14, 22, 10, 18, 16).forEach { h ->
-                Box(Modifier.width(3.dp).height(h.dp)
-                    .background(tint.copy(0.7f), RoundedCornerShape(2.dp)))
+private fun VoiceBubble(
+    messageId: String,
+    url: String,
+    durationSec: Int,
+    tint: Color,
+    playback: by.iposdev.visorlink.utils.VoicePlaybackState,
+    onPlay: (url: String, durationSec: Int) -> Unit,
+    onSeek: (Float) -> Unit
+) {
+    val isThisMessage = playback.playingMessageId == messageId
+    val isPlaying = isThisMessage && playback.isPlaying
+    val isLoading = isThisMessage && playback.isLoading
+
+    // Прогресс: если это текущее сообщение — берём из стейта, иначе 0
+    val progress = if (isThisMessage) playback.progress else 0f
+    val currentSec = if (isThisMessage) playback.currentMs / 1000 else 0
+    val totalSec = if (isThisMessage && playback.durationMs > 0)
+        playback.durationMs / 1000 else durationSec
+
+    // Waveform bars — активные подсвечиваются в зависимости от прогресса
+    val bars = listOf(8, 14, 10, 18, 12, 20, 16, 24, 18, 14, 22, 10, 18, 16, 12, 20, 14, 18, 10, 16)
+
+    Column(modifier = Modifier.width(200.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Play/Pause/Loading кнопка
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(tint.copy(alpha = 0.15f), CircleShape)
+                    .clickable { onPlay(url, durationSec) },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = tint
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = tint,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Waveform с прогрессом (интерактивный)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(32.dp)
+            ) {
+                // Waveform — тап/свайп для перемотки
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(messageId) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent()
+                                    val press = event.changes.firstOrNull() ?: continue
+                                    if (press.pressed) {
+                                        val fraction = (press.position.x / size.width)
+                                            .coerceIn(0f, 1f)
+                                        press.consume()
+                                        onSeek(fraction)
+                                        onPlay(url, durationSec)
+                                    }
+                                }
+                            }
+                        },
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    bars.forEachIndexed { index, h ->
+                        val barProgress = index.toFloat() / bars.size
+                        val isActive = barProgress <= progress && isThisMessage
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(h.dp)
+                                .background(
+                                    color = if (isActive) tint else tint.copy(alpha = 0.35f),
+                                    shape = RoundedCornerShape(2.dp)
+                                )
+                        )
+                    }
+                }
             }
         }
-        Spacer(Modifier.width(6.dp))
-        Text("${duration / 60}:${(duration % 60).toString().padStart(2, '0')}",
-            style = MaterialTheme.typography.labelSmall, color = tint)
+
+        // Время
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 44.dp, top = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                formatVoiceTime(currentSec),
+                style = MaterialTheme.typography.labelSmall,
+                color = tint.copy(alpha = 0.8f),
+                fontSize = 10.sp
+            )
+            Text(
+                formatVoiceTime(totalSec),
+                style = MaterialTheme.typography.labelSmall,
+                color = tint.copy(alpha = 0.5f),
+                fontSize = 10.sp
+            )
+        }
     }
 }
+
+private fun formatVoiceTime(sec: Int) =
+    "${sec / 60}:${(sec % 60).toString().padStart(2, '0')}"
 
 // ─── Recording bar ────────────────────────────────────────────────────────────
 

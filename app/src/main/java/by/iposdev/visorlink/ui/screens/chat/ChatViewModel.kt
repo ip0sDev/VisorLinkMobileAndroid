@@ -11,14 +11,15 @@ import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.utils.TypingManager
+import by.iposdev.visorlink.utils.VoicePlayerManager
+import by.iposdev.visorlink.utils.VoicePlaybackState
+import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.Firebase
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -28,29 +29,24 @@ import java.time.format.DateTimeFormatter
 import java.util.*
 
 data class ChatUiState(
-    // Messages
     val messages: List<Message> = emptyList(),
     val messageListItems: List<MessageListItem> = emptyList(),
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = true,
     val lastDoc: DocumentSnapshot? = null,
-    // Chat info
     val chat: Chat? = null,
     val chatType: ChatType = ChatType.DIRECT,
     val otherUser: UserProfile? = null,
-    // Member state
     val myMember: Member? = null,
     val members: List<Member> = emptyList(),
-    // Topbar
     val topbarStatus: TopbarStatus = TopbarStatus.Offline,
     val onlineCount: Int = 0,
-    // Input
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
     val error: String? = null,
     val isRecording: Boolean = false,
-    // Stickers
-    val stickers: List<Sticker> = emptyList()
+    val stickers: List<Sticker> = emptyList(),
+    val voicePlayback: VoicePlaybackState = VoicePlaybackState()
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -63,7 +59,7 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val db: com.google.firebase.firestore.FirebaseFirestore,  // ← добавили
+    private val db: com.google.firebase.firestore.FirebaseFirestore,
     private val context: Context,
     val chatId: String,
     val otherUid: String
@@ -75,6 +71,9 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    // Плеер — синглтон на уровне ViewModel (живёт пока открыт чат)
+    val voicePlayer = VoicePlayerManager(context)
+
     private var recorder: MediaRecorder? = null
     private var recordingFile: File? = null
     private var recordingStart = 0L
@@ -82,6 +81,13 @@ class ChatViewModel(
     private var onlineCountListener: ValueEventListener? = null
 
     init {
+        // Прокидываем состояние плеера в uiState
+        viewModelScope.launch {
+            voicePlayer.state.collect { playbackState ->
+                _uiState.update { it.copy(voicePlayback = playbackState) }
+            }
+        }
+
         viewModelScope.launch {
             userRepository.currentUserFlow().catch { }
                 .collect { currentUsername = it?.username ?: "" }
@@ -102,7 +108,7 @@ class ChatViewModel(
 
             typingManager = TypingManager(chatId, currentUid)
 
-            // ── Слушаем документ чата ─────────────────────────────────────────
+            // Слушаем документ чата
             launch {
                 db.collection("chats").document(chatId)
                     .addSnapshotListener { snap, error ->
@@ -120,7 +126,7 @@ class ChatViewModel(
                     }
             }
 
-            // ── Members ───────────────────────────────────────────────────────
+            // Members
             launch {
                 chatRepository.membersFlow(chatId).collect { members ->
                     _uiState.update { it.copy(members = members) }
@@ -129,7 +135,7 @@ class ChatViewModel(
                 }
             }
 
-            // ── Начальные данные myMember ─────────────────────────────────────
+            // Начальный myMember
             launch {
                 try {
                     val myMember = chatRepository.getMyMemberData(chatId)
@@ -137,7 +143,7 @@ class ChatViewModel(
                 } catch (_: Exception) {}
             }
 
-            // ── DIRECT: presence + typing + профиль собеседника ───────────────
+            // DIRECT: presence + typing + профиль
             if (otherUid != chatId) {
                 _uiState.update { it.copy(chatType = ChatType.DIRECT) }
 
@@ -163,7 +169,7 @@ class ChatViewModel(
                 }
             }
 
-            // ── Messages ──────────────────────────────────────────────────────
+            // Messages
             launch {
                 chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
                     val items = buildMessageList(messages)
@@ -186,56 +192,30 @@ class ChatViewModel(
         }
     }
 
-    private suspend fun loadChatData() {
-        try {
-            val myMember = chatRepository.getMyMemberData(chatId)
-            _uiState.update { it.copy(myMember = myMember) }
-        } catch (_: Exception) {}
+    // ─── Voice playback ───────────────────────────────────────────────────────
 
-        viewModelScope.launch {
-            chatRepository.membersFlow(chatId).collect { members ->
-                _uiState.update { it.copy(members = members) }
-                val mine = members.find { it.uid == currentUid }
-                if (mine != null) _uiState.update { it.copy(myMember = mine) }
-            }
-        }
-
-        if (otherUid != chatId) {
-            _uiState.update { it.copy(chatType = ChatType.DIRECT) }
-            viewModelScope.launch {
-                combine(
-                    PresenceManager.observePresence(otherUid).filterNotNull(),
-                    TypingManager.observeTyping(chatId, currentUid)
-                ) { presence, typing ->
-                    when {
-                        typing -> TopbarStatus.Typing
-                        presence.online -> TopbarStatus.Online
-                        else -> TopbarStatus.LastSeen(presence.lastSeen)
-                    }
-                }
-                    .catch { emit(TopbarStatus.Offline) }
-                    .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
-            }
-
-            viewModelScope.launch {
-                val profile = userRepository.getUserProfile(otherUid)
-                _uiState.update { it.copy(otherUser = profile) }
-            }
-        }
+    fun playVoice(messageId: String, url: String, durationSec: Int) {
+        voicePlayer.play(messageId, url, durationSec)
     }
 
-    // ─── Определяем тип чата из Firestore ────────────────────────────────────
-
-    fun setChatInfo(chat: Chat) {
-        val type = chat.chatType()
-        _uiState.update { it.copy(chat = chat, chatType = type) }
-
-        if (type != ChatType.DIRECT) {
-            startGroupOnlineCount(chat.memberIds)
-        }
+    fun toggleVoice() {
+        voicePlayer.togglePlayPause()
     }
+
+    fun seekVoice(fraction: Float) {
+        voicePlayer.seekTo(fraction)
+    }
+
+    fun stopVoice() {
+        voicePlayer.stop()
+    }
+
+    // ─── Online count for groups ──────────────────────────────────────────────
 
     private fun startGroupOnlineCount(memberIds: List<String>) {
+        onlineCountListener?.let {
+            Firebase.database.getReference("presence").removeEventListener(it)
+        }
         val presenceRef = Firebase.database.getReference("presence")
         onlineCountListener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
@@ -282,7 +262,6 @@ class ChatViewModel(
         var lastDate: LocalDate? = null
         val today = LocalDate.now()
         val yesterday = today.minusDays(1)
-
         for (message in messages) {
             val msgDate = message.createdAt?.toDate()
                 ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: continue
@@ -343,10 +322,13 @@ class ChatViewModel(
         }
     }
 
-    // ─── Voice ────────────────────────────────────────────────────────────────
+    // ─── Voice recording ──────────────────────────────────────────────────────
 
     fun startRecording() {
         if (!_uiState.value.canSendMedia) return
+        // Останавливаем воспроизведение если идёт
+        voicePlayer.stop()
+
         val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.webm")
         recordingFile = file
         recordingStart = System.currentTimeMillis()
@@ -422,12 +404,8 @@ class ChatViewModel(
 
     fun leaveChat(onLeft: () -> Unit) {
         viewModelScope.launch {
-            try {
-                chatRepository.leaveChat(chatId)
-                onLeft()
-            } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
-            }
+            try { chatRepository.leaveChat(chatId); onLeft() }
+            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
 
@@ -442,6 +420,7 @@ class ChatViewModel(
         onlineCountListener?.let {
             Firebase.database.getReference("presence").removeEventListener(it)
         }
+        voicePlayer.release()
         super.onCleared()
     }
 
@@ -455,8 +434,4 @@ class ChatViewModel(
     }
 
     private fun Message.toReplyData() = ReplyData(id, type, text, url, senderUsername)
-
-    // Koin inject workaround для firestore
-    private val com.google.firebase.firestore.CollectionReference.document
-        get() = this
 }

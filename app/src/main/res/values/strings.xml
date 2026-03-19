@@ -267,4 +267,29 @@
     <string name="update_action_downloading">Downloading…</string>
     <string name="update_status_toast">Starting download…</string>
     <string name="update_error_install">Failed to launch installer</string>
+    <!-- Update dialog — Required -->
+    <string name="update_required_title">Update Required</string>
+
+    <!-- Update dialog — Recommended -->
+    <string name="update_recommended_title">Update Available</string>
+
+    <!-- Update dialog — buttons -->
+    <string name="update_btn_update">Update</string>
+    <string name="update_btn_later">Later</string>
+    <string name="update_btn_retry">Retry</string>
+    <string name="update_btn_downloading">Downloading…</string>
+    <string name="update_btn_installing">Installing…</string>
+
+    <!-- Changelog section -->
+    <string name="update_whats_new">What\'s new</string>
+    <string name="update_changelog_expand">Expand</string>
+    <string name="update_changelog_collapse">Collapse</string>
+    <string name="update_changelog_too_old">You\'ve skipped multiple versions. Check the full changelog in our official channel:</string>
+
+    <!-- Download progress -->
+    <string name="update_dl_starting">Starting download…</string>
+    <string name="update_dl_progress">Downloading…</string>
+    <string name="update_dl_complete">✅ Download complete</string>
+    <string name="update_dl_error">❌ Download failed</string>
+    <string name="update_dl_percent">%1$d%%</string>
 </resources>
