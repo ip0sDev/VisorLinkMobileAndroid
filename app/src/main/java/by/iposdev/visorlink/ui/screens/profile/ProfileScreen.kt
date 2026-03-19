@@ -21,9 +21,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.R
 import coil.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -38,29 +40,48 @@ fun ProfileScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showLogout by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
-    val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-        uri?.let { viewModel.uploadAvatar(it) }
-    }
+    val avatarPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> uri?.let { viewModel.uploadAvatar(it) } }
 
-    LaunchedEffect(uiState.successMessage) { uiState.successMessage?.let { snackbar.showSnackbar(it); viewModel.clearMessages() } }
-    LaunchedEffect(uiState.error) { uiState.error?.let { snackbar.showSnackbar("Error: $it"); viewModel.clearMessages() } }
+    LaunchedEffect(uiState.successMessage) {
+        uiState.successMessage?.let { snackbar.showSnackbar(it); viewModel.clearMessages() }
+    }
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { snackbar.showSnackbar(it); viewModel.clearMessages() }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isEditing) "Edit Profile" else "Profile") },
+                title = {
+                    Text(
+                        if (uiState.isEditing) stringResource(R.string.profile_edit_title)
+                        else stringResource(R.string.profile_title)
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = { if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                    IconButton(onClick = {
+                        if (uiState.isEditing) viewModel.cancelEditing()
+                        else onNavigateBack()
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     if (!uiState.isEditing) {
-                        IconButton(onClick = { viewModel.startEditing() }) { Icon(Icons.Default.Edit, "Edit") }
-                        IconButton(onClick = { showLogout = true }) { Icon(Icons.AutoMirrored.Filled.Logout, "Logout") }
+                        IconButton(onClick = { viewModel.startEditing() }) {
+                            Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
+                        }
+                        IconButton(onClick = { showLogout = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Logout, null)
+                        }
                     } else {
-                        TextButton(onClick = { viewModel.saveProfile() }, enabled = !uiState.isLoading) {
-                            Text("Save", fontWeight = FontWeight.Bold)
+                        TextButton(
+                            onClick = { viewModel.saveProfile() },
+                            enabled = !uiState.isLoading
+                        ) {
+                            Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -69,7 +90,8 @@ fun ProfileScreen(
         snackbarHost = { SnackbarHost(snackbar) }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().padding(padding)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(24.dp))
@@ -78,7 +100,9 @@ fun ProfileScreen(
                 Box(
                     modifier = Modifier.fillMaxSize().clip(CircleShape)
                         .background(MaterialTheme.colorScheme.primaryContainer)
-                        .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier),
+                        .then(if (uiState.isEditing)
+                            Modifier.clickable { avatarPicker.launch("image/*") }
+                        else Modifier),
                     contentAlignment = Alignment.Center
                 ) {
                     if (!uiState.user?.avatarUrl.isNullOrEmpty()) {
@@ -92,9 +116,12 @@ fun ProfileScreen(
                 }
                 if (uiState.isEditing) {
                     Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(32.dp).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)) {
+                        modifier = Modifier.size(32.dp)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.CameraAlt, null, tint = MaterialTheme.colorScheme.onPrimary,
+                            Icon(Icons.Default.CameraAlt, null,
+                                tint = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.size(16.dp))
                         }
                     }
@@ -104,66 +131,98 @@ fun ProfileScreen(
             if (uiState.isLoading) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.height(8.dp)) }
 
             if (!uiState.isEditing) {
-                Text(uiState.user?.displayName ?: "", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("@${uiState.user?.username ?: ""}", style = MaterialTheme.typography.bodyMedium,
+                Text(uiState.user?.displayName ?: "",
+                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("@${uiState.user?.username ?: ""}",
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary)
                 if (!uiState.user?.bio.isNullOrEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    Text(uiState.user?.bio ?: "", style = MaterialTheme.typography.bodyMedium,
+                    Text(uiState.user?.bio ?: "",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(32.dp))
-                Card(onClick = onOpenStickers, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                Card(onClick = onOpenStickers,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     shape = MaterialTheme.shapes.large) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.EmojiEmotions, null, tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.Default.EmojiEmotions, null,
+                            tint = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.width(12.dp))
-                        Text("My Stickers", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.profile_stickers),
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f))
+                        Icon(Icons.Default.ChevronRight, null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(value = uiState.editDisplayName, onValueChange = viewModel::onDisplayNameChange,
-                        label = { Text("Display Name") }, leadingIcon = { Icon(Icons.Default.Person, null) },
-                        singleLine = true, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
-                    OutlinedTextField(value = uiState.editBio, onValueChange = viewModel::onBioChange,
-                        label = { Text("Bio") }, leadingIcon = { Icon(Icons.Default.Info, null) },
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = uiState.editDisplayName,
+                        onValueChange = viewModel::onDisplayNameChange,
+                        label = { Text(stringResource(R.string.profile_field_display_name)) },
+                        leadingIcon = { Icon(Icons.Default.Person, null) },
+                        singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium)
+                    OutlinedTextField(
+                        value = uiState.editBio, onValueChange = viewModel::onBioChange,
+                        label = { Text(stringResource(R.string.profile_field_bio)) },
+                        leadingIcon = { Icon(Icons.Default.Info, null) },
                         supportingText = { Text("${uiState.editBio.length}/160") },
-                        maxLines = 3, modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                        maxLines = 3, modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium)
                     OutlinedTextField(
                         value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
-                        label = { Text("Username") }, leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
+                        label = { Text(stringResource(R.string.profile_field_username)) },
+                        leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
                         trailingIcon = {
                             when {
-                                uiState.checkingUsername -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                                uiState.usernameAvailable == true -> Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
-                                uiState.usernameAvailable == false -> Icon(Icons.Default.Cancel, null, tint = MaterialTheme.colorScheme.error)
+                                uiState.checkingUsername -> CircularProgressIndicator(
+                                    Modifier.size(20.dp), strokeWidth = 2.dp)
+                                uiState.usernameAvailable == true -> Icon(
+                                    Icons.Default.CheckCircle, null,
+                                    tint = MaterialTheme.colorScheme.primary)
+                                uiState.usernameAvailable == false -> Icon(
+                                    Icons.Default.Cancel, null,
+                                    tint = MaterialTheme.colorScheme.error)
                             }
                         },
                         isError = uiState.usernameAvailable == false,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium
-                    )
-                    OutlinedButton(onClick = { viewModel.checkUsername() }, modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium) { Text("Check username availability") }
+                        modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium)
+                    OutlinedButton(onClick = { viewModel.checkUsername() },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium) {
+                        Text(stringResource(R.string.profile_check_username))
+                    }
                 }
             }
             Spacer(Modifier.height(32.dp))
         }
     }
+
     if (showLogout) {
         AlertDialog(
             onDismissRequest = { showLogout = false },
-            title = { Text("Sign Out") },
-            text = { Text("Are you sure you want to sign out?") },
+            title = { Text(stringResource(R.string.dialog_logout_title)) },
+            text  = { Text(stringResource(R.string.dialog_logout_body)) },
             confirmButton = {
-                TextButton(onClick = { showLogout = false; viewModel.logout(); onLoggedOut() }) {
-                    Text("Sign Out", color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = {
+                    showLogout = false; viewModel.logout(); onLoggedOut()
+                }) {
+                    Text(stringResource(R.string.dialog_logout_confirm),
+                        color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { showLogout = false }) { Text("Cancel") } }
+            dismissButton = {
+                TextButton(onClick = { showLogout = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
         )
     }
 }

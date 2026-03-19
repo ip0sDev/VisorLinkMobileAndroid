@@ -61,7 +61,10 @@ fun VisorLinkNavGraph(
                 },
                 onOpenSearch = { navController.navigate(Screen.Search.route) },
                 onOpenProfile = { navController.navigate(Screen.Profile.route) },
-                onOpenSettings = { navController.navigate(Screen.Settings.route) }
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
+                onCreateChat = { navController.navigate(Screen.CreateChat.route) },
+                onFindChannel = { navController.navigate(Screen.FindChannel.route) },
+                onOpenNotifications = { navController.navigate(Screen.Notifications.route) }
             )
         }
 
@@ -71,9 +74,10 @@ fun VisorLinkNavGraph(
                 navArgument("chatId") { type = NavType.StringType },
                 navArgument("otherUid") { type = NavType.StringType }
             )
-        ) { backStack ->
-            val chatId = backStack.arguments?.getString("chatId") ?: ""
-            val otherUid = backStack.arguments?.getString("otherUid") ?: ""
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            val otherUid = backStackEntry.arguments?.getString("otherUid") ?: return@composable
+
             ChatScreen(
                 chatId = chatId,
                 otherUid = otherUid,
@@ -81,8 +85,12 @@ fun VisorLinkNavGraph(
                 onOpenOtherProfile = { uid ->
                     navController.navigate(Screen.OtherProfile.createRoute(uid))
                 },
-                // ИСПРАВЛЕНИЕ: Передаем пустую заглушку, так как логика стикеров теперь внутри ChatScreen
-                onOpenStickers = { _ -> },
+                onOpenStickers = { onSelect ->
+                    // sticker callback логика
+                },
+                onOpenChatSettings = { cId ->
+                    navController.navigate(Screen.ChatSettings.createRoute(cId))
+                },
                 hapticEnabled = hapticEnabled
             )
         }
@@ -134,6 +142,46 @@ fun VisorLinkNavGraph(
         // Полноэкранное управление стикерами (из профиля)
         composable(Screen.Stickers.route) {
             StickersScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable(Screen.CreateChat.route) {
+            by.iposdev.visorlink.ui.screens.group.CreateChatScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onCreated = { chatId ->
+                    navController.navigate(Screen.Chat.createRoute(chatId, chatId)) {
+                        popUpTo(Screen.CreateChat.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.FindChannel.route) {
+            by.iposdev.visorlink.ui.screens.group.FindChannelScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onJoined = { chatId ->
+                    navController.navigate(Screen.Chat.createRoute(chatId, chatId)) {
+                        popUpTo(Screen.FindChannel.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Screen.Notifications.route) {
+            by.iposdev.visorlink.ui.screens.group.NotificationsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenChat = { chatId ->
+                    navController.navigate(Screen.Chat.createRoute(chatId, chatId))
+                }
+            )
+        }
+        composable(
+            route = Screen.ChatSettings.route,
+            arguments = listOf(navArgument("chatId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            by.iposdev.visorlink.ui.screens.group.ChatSettingsScreen(
+                chatId = chatId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

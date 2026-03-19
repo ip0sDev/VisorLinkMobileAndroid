@@ -1,0 +1,270 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- App -->
+    <string name="app_name">VisorLink</string>
+    <string name="app_logo">⬡</string>
+
+    <!-- Common -->
+    <string name="action_back">Назад</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_close">Закрыть</string>
+    <string name="action_edit">Редактировать</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_search">Поиск</string>
+    <string name="action_send">Отправить</string>
+    <string name="action_accept">Принять</string>
+    <string name="action_decline">Отклонить</string>
+    <string name="action_leave">Выйти</string>
+    <string name="action_upload">Загрузить</string>
+    <string name="action_copy">Копировать</string>
+
+    <!-- Auth — Login -->
+    <string name="login_subtitle">Войдите, чтобы продолжить</string>
+    <string name="login_field_email">Email</string>
+    <string name="login_field_password">Пароль</string>
+    <string name="login_button">Войти</string>
+    <string name="login_no_account">Нет аккаунта?\u0020</string>
+    <string name="login_register_link">Регистрация</string>
+
+    <!-- Auth — Register -->
+    <string name="register_title">Создать аккаунт</string>
+    <string name="register_field_username">Имя пользователя</string>
+    <string name="register_username_hint">3+ символов, буквы/цифры/_</string>
+    <string name="register_field_confirm">Подтвердите пароль</string>
+    <string name="register_passwords_mismatch">Пароли не совпадают</string>
+    <string name="register_button">Создать аккаунт</string>
+
+    <!-- Chat List -->
+    <string name="chatlist_title">VisorLink</string>
+    <string name="chatlist_empty_title">Нет чатов</string>
+    <string name="chatlist_empty_subtitle">Нажмите +, чтобы начать общение</string>
+    <string name="chatlist_no_messages">Нет сообщений</string>
+    <string name="chatlist_fab_new_chat">Новый чат</string>
+    <string name="chatlist_fab_new_group">Новая группа</string>
+    <string name="chatlist_fab_find_channel">Найти канал</string>
+
+    <!-- Chat Screen — Top bar -->
+    <string name="chat_status_online">В сети</string>
+    <string name="chat_status_last_seen">Был(а) в %1$s</string>
+    <string name="chat_members_count">%1$d участников</string>
+    <string name="chat_members_online">%1$d участников · %2$d в сети</string>
+    <string name="chat_subscribers_count">%1$d подписчиков</string>
+    <string name="chat_action_settings">Настройки</string>
+    <string name="chat_action_leave">Выйти</string>
+
+    <!-- Chat Screen — Restrictions -->
+    <string name="chat_restriction_banned">Вы заблокированы в этом чате</string>
+    <string name="chat_restriction_muted">Вы заглушены</string>
+    <string name="chat_restriction_channel">📢 Только администраторы могут писать в каналах</string>
+
+    <!-- Chat Screen — Input -->
+    <string name="chat_input_placeholder">Сообщение</string>
+    <string name="chat_input_record">Запись</string>
+    <string name="chat_recording_label">Запись…</string>
+
+    <!-- Chat Screen — Empty state -->
+    <string name="chat_empty_title">Нет сообщений</string>
+    <string name="chat_empty_subtitle">Поздоровайтесь! 👋</string>
+
+    <!-- Chat Screen — Typing -->
+    <string name="chat_typing">печатает</string>
+    <string name="chat_date_today">Сегодня</string>
+    <string name="chat_date_yesterday">Вчера</string>
+
+    <!-- Chat Screen — Message actions -->
+    <string name="chat_reply">Ответить</string>
+    <string name="chat_message_deleted">🚫 Сообщение удалено</string>
+    <string name="chat_cancel_reply">Отменить ответ</string>
+    <string name="chat_voice_play">Воспроизвести</string>
+
+    <!-- Chat Screen — Media captions -->
+    <string name="media_photo">📷 Фото</string>
+    <string name="media_photo_icon">📷 Изображение</string>
+    <string name="media_voice">🎤 Голосовое сообщение</string>
+    <string name="media_sticker">🎭 Стикер</string>
+
+    <!-- Chat Screen — Delete dialog -->
+    <string name="dialog_delete_message_title">Удалить сообщение?</string>
+    <string name="dialog_delete_message_body">Сообщение будет помечено как удалённое для всех.</string>
+
+    <!-- Chat Screen — Leave dialog -->
+    <string name="dialog_leave_channel_title">Покинуть канал?</string>
+    <string name="dialog_leave_group_title">Покинуть группу?</string>
+    <string name="dialog_leave_body">Для повторного вступления потребуется приглашение или ссылка.</string>
+
+    <!-- Chat Screen — Sticker sheet -->
+    <string name="stickers_title">Стикеры</string>
+    <string name="stickers_empty_title">Нет стикеров</string>
+    <string name="stickers_empty_subtitle">Добавьте стикеры в профиле</string>
+
+    <!-- Chat Settings — Tabs -->
+    <string name="settings_tab_info">Инфо</string>
+    <string name="settings_tab_members">Участники</string>
+    <string name="settings_tab_moderation">Модерация</string>
+
+    <!-- Chat Settings — Info tab -->
+    <string name="settings_member_count">%1$d участников</string>
+    <string name="settings_subscriber_count">%1$d подписчиков</string>
+    <string name="settings_section_invite_link">Пригласительная ссылка</string>
+    <string name="settings_invite_link_empty">Ссылка ещё не создана.</string>
+    <string name="settings_generate_link">Создать ссылку</string>
+    <string name="settings_regenerate_link">Обновить</string>
+    <string name="settings_link_copied">Ссылка скопирована!</string>
+    <string name="settings_toggle_join_by_link">Вступление по ссылке</string>
+    <string name="settings_toggle_join_by_link_sub">Любой с пригласительной ссылкой может вступить</string>
+    <string name="settings_toggle_join_by_tag">Вступление по @тегу</string>
+    <string name="settings_toggle_join_by_tag_sub">Любой может найти и вступить через поиск по @тегу</string>
+    <string name="settings_section_channel">Настройки канала</string>
+    <string name="settings_toggle_reactions">Разрешить реакции</string>
+    <string name="settings_toggle_reactions_sub">Участники могут реагировать на сообщения</string>
+    <string name="settings_leave_channel">Покинуть канал</string>
+    <string name="settings_leave_group">Покинуть группу</string>
+    <string name="settings_info_saved">Сохранено!</string>
+
+    <!-- Chat Settings — Members tab -->
+    <string name="settings_invite_member">Пригласить участника</string>
+    <string name="settings_dialog_invite_title">Пригласить пользователя</string>
+    <string name="settings_dialog_invite_field">@имя_пользователя</string>
+    <string name="settings_dialog_invite_button">Отправить приглашение</string>
+    <string name="settings_invitation_sent">Приглашение отправлено!</string>
+    <string name="settings_member_you">%1$s (вы)</string>
+
+    <!-- Chat Settings — Member roles & badges -->
+    <string name="role_owner">👑 Владелец</string>
+    <string name="role_admin">⚡ Админ</string>
+    <string name="badge_banned">🚫 Заблокирован</string>
+    <string name="badge_muted">🔇 Заглушён</string>
+    <string name="badge_no_media">📵 Без медиа</string>
+
+    <!-- Chat Settings — Member actions -->
+    <string name="member_promote">Назначить админом</string>
+    <string name="member_demote">Разжаловать</string>
+    <string name="member_mute">Заглушить…</string>
+    <string name="member_unmute">Снять заглушку</string>
+    <string name="member_restrict_media">Запретить медиа</string>
+    <string name="member_allow_media">Разрешить медиа</string>
+    <string name="member_ban">Заблокировать</string>
+    <string name="member_unban">Разблокировать</string>
+    <string name="member_allow">Разрешить</string>
+
+    <!-- Chat Settings — Mute dialog -->
+    <string name="dialog_mute_title">Длительность заглушения (минуты)</string>
+    <string name="dialog_mute_field">Минуты</string>
+    <string name="dialog_mute_confirm">Заглушить</string>
+
+    <!-- Chat Settings — Moderation tab -->
+    <string name="moderation_empty">Нет действий модерации</string>
+    <string name="moderation_section_banned">Заблокированы (%1$d)</string>
+    <string name="moderation_section_muted">Заглушены (%1$d)</string>
+    <string name="moderation_section_restricted">Ограничены в медиа (%1$d)</string>
+    <string name="moderation_status_banned">🚫 Заблокирован</string>
+    <string name="moderation_status_muted">🔇 Заглушён</string>
+    <string name="moderation_status_restricted">📵 Без медиа</string>
+
+    <!-- Create Chat -->
+    <string name="create_title_group">Новая группа</string>
+    <string name="create_title_channel">Новый канал</string>
+    <string name="create_tab_group">👥 Группа</string>
+    <string name="create_tab_channel">📢 Канал</string>
+    <string name="create_field_name">Название</string>
+    <string name="create_field_tag">@Тег</string>
+    <string name="create_tag_hint">3–24 символа, буквы/цифры/_</string>
+    <string name="create_field_description">Описание</string>
+    <string name="create_channel_notice">📢 В канале только администраторы могут публиковать сообщения. Участники могут читать и реагировать.</string>
+    <string name="create_button_group">Создать группу</string>
+    <string name="create_button_channel">Создать канал</string>
+    <string name="create_error_default">Не удалось создать</string>
+
+    <!-- Find Channel -->
+    <string name="find_title">Найти канал или группу</string>
+    <string name="find_field_hint">@тег или пригласительная ссылка</string>
+    <string name="find_button">Поиск</string>
+    <string name="find_not_found">Не найдено: @%1$s</string>
+    <string name="find_error_default">Ошибка поиска</string>
+    <string name="find_member_count">%1$d участников</string>
+    <string name="find_join">Вступить</string>
+    <string name="find_join_disabled">Вступление закрыто</string>
+
+    <!-- Notifications -->
+    <string name="notifications_title">Приглашения</string>
+    <string name="notifications_empty">Нет приглашений</string>
+    <string name="notification_group_invite_title">Приглашение в группу</string>
+    <string name="notification_from">От @%1$s</string>
+
+    <!-- Profile -->
+    <string name="profile_title">Профиль</string>
+    <string name="profile_edit_title">Редактировать профиль</string>
+    <string name="profile_field_display_name">Имя</string>
+    <string name="profile_field_bio">О себе</string>
+    <string name="profile_field_username">Имя пользователя</string>
+    <string name="profile_check_username">Проверить доступность</string>
+    <string name="profile_stickers">Мои стикеры</string>
+    <string name="profile_success_avatar">Аватар обновлён!</string>
+    <string name="profile_success_saved">Профиль обновлён!</string>
+
+    <!-- Profile — Logout dialog -->
+    <string name="dialog_logout_title">Выйти из аккаунта</string>
+    <string name="dialog_logout_body">Вы уверены, что хотите выйти?</string>
+    <string name="dialog_logout_confirm">Выйти</string>
+
+    <!-- Other Profile -->
+    <string name="other_profile_online">● В сети</string>
+    <string name="other_profile_message">Написать</string>
+
+    <!-- Search -->
+    <string name="search_title">Найти пользователя</string>
+    <string name="search_field_hint">Поиск по @имени</string>
+    <string name="search_not_found">Пользователь не найден</string>
+    <string name="search_action_chat">Написать</string>
+
+    <!-- Stickers screen -->
+    <string name="stickers_screen_title">Мои стикеры</string>
+    <string name="stickers_picker_title">Выбрать стикер</string>
+    <string name="stickers_empty_add">Нет стикеров.\nНажмите + чтобы добавить!</string>
+    <string name="stickers_add_hint">Добавьте в профиле</string>
+    <string name="stickers_dialog_name_title">Название стикера</string>
+    <string name="stickers_dialog_name_field">Название</string>
+    <string name="stickers_delete_title">Удалить стикер?</string>
+    <string name="stickers_delete_body">«%1$s» будет удалён навсегда.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_section_appearance">Внешний вид</string>
+    <string name="settings_theme_title">Тема приложения</string>
+    <string name="settings_theme_m3_name">Material 3 Expressive</string>
+    <string name="settings_theme_m3_desc">Яркие цвета, смелые формы, динамическая тема на Android 12+</string>
+    <string name="settings_theme_oneui_name">One UI 8.5</string>
+    <string name="settings_theme_oneui_desc">Дизайн в стиле Samsung с синей палитрой и крупными скруглёнными карточками</string>
+    <string name="settings_section_notifications">Уведомления и отклик</string>
+    <string name="settings_push_title">Push-уведомления</string>
+    <string name="settings_push_sub">Уведомления о новых сообщениях</string>
+    <string name="settings_haptic_title">Тактильный отклик</string>
+    <string name="settings_haptic_sub">Вибрация при взаимодействии</string>
+    <string name="settings_section_about">О приложении</string>
+    <string name="settings_version">Версия</string>
+    <string name="settings_dark_title">Тёмный режим</string>
+    <string name="settings_dark_system">Как в системе</string>
+    <string name="settings_dark_system_desc">Следует настройке темы устройства</string>
+    <string name="settings_dark_light">Светлая</string>
+    <string name="settings_dark_light_desc">Всегда использовать светлую тему</string>
+    <string name="settings_dark_dark">Тёмная</string>
+    <string name="settings_dark_dark_desc">Всегда использовать тёмную тему</string>
+
+    <!-- Settings — Language -->
+    <string name="settings_section_language">Язык</string>
+    <string name="settings_language_title">Язык приложения</string>
+    <string name="settings_language_system">Как в системе</string>
+    <string name="settings_language_en">Английский</string>
+    <string name="settings_language_ru">Русский</string>
+    <!-- Обновление приложения -->
+    <string name="update_title">Доступно обновление</string>
+    <string name="update_recommended_body">Доступна новая версия VisorLink. Обновитесь сейчас, чтобы получить последние функции и улучшения!</string>
+    <string name="update_required_body">Эта версия VisorLink больше не поддерживается. Пожалуйста, обновите приложение до последней версии, чтобы продолжить работу.</string>
+    <string name="update_action_update">Обновить</string>
+    <string name="update_action_later">Позже</string>
+    <string name="update_action_downloading">Загрузка…</string>
+    <string name="update_status_toast">Начинаем загрузку…</string>
+    <string name="update_error_install">Не удалось запустить установщик</string>
+</resources>

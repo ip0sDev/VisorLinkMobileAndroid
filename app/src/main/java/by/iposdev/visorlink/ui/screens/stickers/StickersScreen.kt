@@ -14,100 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.Sticker
 import coil.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
-
-// ── Picker (BottomSheet) ──────────────────────────────────────────────────────
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun StickerPickerSheet(
-    onSelectSticker: (Sticker) -> Unit,
-    onDismiss: () -> Unit,
-    viewModel: StickersViewModel = koinViewModel()
-) {
-    val stickers by viewModel.stickers.collectAsState()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        dragHandle = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                BottomSheetDefaults.DragHandle()
-                Text(
-                    "Stickers",
-                    style = MaterialTheme.typography.titleSmall,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
-        },
-        tonalElevation = 4.dp
-    ) {
-        if (stickers.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.EmojiEmotions, null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "No stickers yet",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "Add them in your profile",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)
-                    )
-                }
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 90.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp),
-                contentPadding = PaddingValues(
-                    start = 12.dp, end = 12.dp,
-                    top = 4.dp,
-                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp
-                ),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(stickers, key = { it.id }) { sticker ->
-                    Surface(
-                        onClick = { onSelectSticker(sticker) },
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        AsyncImage(
-                            model = sticker.url,
-                            contentDescription = sticker.name,
-                            modifier = Modifier
-                                .size(90.dp)
-                                .padding(8.dp),
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── Management screen (полноэкранный, открывается из профиля) ─────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -126,23 +38,26 @@ fun StickersScreen(
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        uri?.let { pendingUri = it; showNameDialog = true }
-    }
+    ) { uri: Uri? -> uri?.let { pendingUri = it; showNameDialog = true } }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isPickerMode) "Choose Sticker" else "My Stickers") },
+                title = {
+                    Text(
+                        if (isPickerMode) stringResource(R.string.stickers_picker_title)
+                        else stringResource(R.string.stickers_screen_title)
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                     }
                 },
                 actions = {
                     if (!isPickerMode) {
                         IconButton(onClick = { imagePicker.launch("image/*") }) {
-                            Icon(Icons.Default.Add, "Add sticker")
+                            Icon(Icons.Default.Add, null)
                         }
                     }
                 }
@@ -150,25 +65,18 @@ fun StickersScreen(
         }
     ) { padding ->
         when {
-            isLoading -> Box(
-                Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) { CircularProgressIndicator() }
+            isLoading -> Box(Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center) { CircularProgressIndicator() }
 
-            stickers.isEmpty() -> Box(
-                Modifier.fillMaxSize().padding(padding),
-                contentAlignment = Alignment.Center
-            ) {
+            stickers.isEmpty() -> Box(Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.EmojiEmotions, null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f)
-                    )
+                    Icon(Icons.Default.EmojiEmotions, null, modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f))
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        if (isPickerMode) "No stickers yet"
-                        else "No stickers yet.\nTap + to add some!",
+                        if (isPickerMode) stringResource(R.string.stickers_empty_title)
+                        else stringResource(R.string.stickers_empty_add),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -182,29 +90,19 @@ fun StickersScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(stickers, key = { it.id }) { sticker ->
-                    Card(
-                        onClick = { onSelectSticker?.invoke(sticker) },
-                        shape = MaterialTheme.shapes.medium
-                    ) {
+                    Card(onClick = { onSelectSticker?.invoke(sticker) },
+                        shape = MaterialTheme.shapes.medium) {
                         Box(Modifier.size(100.dp)) {
-                            AsyncImage(
-                                model = sticker.url,
-                                contentDescription = sticker.name,
-                                modifier = Modifier
-                                    .fillMaxSize()
+                            AsyncImage(model = sticker.url, contentDescription = sticker.name,
+                                modifier = Modifier.fillMaxSize()
                                     .clip(MaterialTheme.shapes.medium),
-                                contentScale = ContentScale.Fit
-                            )
+                                contentScale = ContentScale.Fit)
                             if (!isPickerMode) {
-                                IconButton(
-                                    onClick = { deleteTarget = sticker },
-                                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close, "Delete",
+                                IconButton(onClick = { deleteTarget = sticker },
+                                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp)) {
+                                    Icon(Icons.Default.Close, null,
                                         tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                        modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -215,25 +113,36 @@ fun StickersScreen(
     }
 
     if (showNameDialog) {
+        // 1. Получаем строку здесь, в Composable-контексте
+        val defaultStickerName = stringResource(R.string.stickers_dialog_name_field)
+
         AlertDialog(
             onDismissRequest = { showNameDialog = false; pendingUri = null },
-            title = { Text("Name this sticker") },
+            title = { Text(stringResource(R.string.stickers_dialog_name_title)) },
             text = {
                 OutlinedTextField(
                     value = stickerName,
                     onValueChange = { stickerName = it },
-                    label = { Text("Sticker name") },
+                    label = { Text(defaultStickerName) }, // Можно сразу использовать и тут
                     singleLine = true
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingUri?.let { viewModel.uploadSticker(it, stickerName.ifEmpty { "Sticker" }) }
+                    pendingUri?.let {
+                        // 2. Используем сохраненную обычную строку (String)
+                        viewModel.uploadSticker(
+                            it,
+                            stickerName.ifEmpty { defaultStickerName }
+                        )
+                    }
                     showNameDialog = false; stickerName = ""; pendingUri = null
-                }) { Text("Upload") }
+                }) { Text(stringResource(R.string.action_upload)) }
             },
             dismissButton = {
-                TextButton(onClick = { showNameDialog = false; pendingUri = null }) { Text("Cancel") }
+                TextButton(onClick = { showNameDialog = false; pendingUri = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             }
         )
     }
@@ -241,15 +150,18 @@ fun StickersScreen(
     deleteTarget?.let { sticker ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("Delete sticker?") },
-            text = { Text("\"${sticker.name}\" will be permanently deleted.") },
+            title = { Text(stringResource(R.string.stickers_delete_title)) },
+            text  = { Text(stringResource(R.string.stickers_delete_body, sticker.name)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.deleteSticker(sticker); deleteTarget = null }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             }
         )
     }

@@ -17,6 +17,9 @@ import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import by.iposdev.visorlink.R
+// Для работы со строками
+import androidx.compose.ui.res.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,10 +35,10 @@ fun OtherProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(user?.displayName ?: "Profile") },
+                title = { Text(user?.displayName ?: stringResource(R.string.profile_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                     }
                 }
             )
@@ -49,9 +52,9 @@ fun OtherProfileScreen(
                     }
                 },
                 icon = { Icon(Icons.Default.Chat, null) },
-                text = { Text("Message") },
+                text = { Text(stringResource(R.string.other_profile_message)) },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                contentColor   = MaterialTheme.colorScheme.onPrimary
             )
         }
     ) { padding ->
@@ -83,7 +86,8 @@ fun OtherProfileScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
-            Text(u.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(u.displayName,
+                style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("@${u.username}", style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary)
@@ -91,7 +95,8 @@ fun OtherProfileScreen(
                     Spacer(Modifier.width(8.dp))
                     Surface(color = MaterialTheme.colorScheme.primaryContainer,
                         shape = MaterialTheme.shapes.extraSmall) {
-                        Text("● Online", style = MaterialTheme.typography.labelSmall,
+                        Text(stringResource(R.string.other_profile_online),
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                     }

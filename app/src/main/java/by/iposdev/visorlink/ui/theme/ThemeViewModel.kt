@@ -1,67 +1,91 @@
 package by.iposdev.visorlink.ui.theme
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ThemeMode
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
+import by.iposdev.visorlink.utils.AppLanguage
+import by.iposdev.visorlink.utils.LocaleHelper
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("theme_prefs")
-private val THEME_KEY = stringPreferencesKey("app_theme")
-private val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
-private val HAPTIC_KEY = booleanPreferencesKey("haptic_feedback")
-private val NOTIFICATIONS_KEY = booleanPreferencesKey("notifications_enabled")
+private const val PREFS_NAME      = "visorlink_settings"
+private const val KEY_THEME       = "app_theme"
+private const val KEY_THEME_MODE  = "theme_mode"
+private const val KEY_HAPTIC      = "haptic_feedback"
+private const val KEY_NOTIF       = "notifications_enabled"
+private const val KEY_LANGUAGE    = "app_language"
 
 class ThemeViewModel(private val context: Context) : ViewModel() {
 
-    val appTheme: StateFlow<AppTheme> = context.dataStore.data
-        .map { prefs ->
-            when (prefs[THEME_KEY]) {
-                AppTheme.ONE_UI.name -> AppTheme.ONE_UI
-                else -> AppTheme.MATERIAL3_EXPRESSIVE
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, AppTheme.MATERIAL3_EXPRESSIVE)
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    val themeMode: StateFlow<ThemeMode> = context.dataStore.data
-        .map { prefs ->
-            when (prefs[THEME_MODE_KEY]) {
-                ThemeMode.LIGHT.name -> ThemeMode.LIGHT
-                ThemeMode.DARK.name -> ThemeMode.DARK
-                else -> ThemeMode.SYSTEM
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
+    // ── Theme ──────────────────────────────────────────────────────────────────
 
-    val hapticEnabled: StateFlow<Boolean> = context.dataStore.data
-        .map { prefs -> prefs[HAPTIC_KEY] ?: true }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    private val _appTheme = MutableStateFlow(
+        AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+    )
+    val appTheme: StateFlow<AppTheme> = _appTheme.asStateFlow()
 
-    val notificationsEnabled: StateFlow<Boolean> = context.dataStore.data
-        .map { prefs -> prefs[NOTIFICATIONS_KEY] ?: true }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+    private val _themeMode = MutableStateFlow(
+        ThemeMode.valueOf(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)!!)
+    )
+    val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
-    fun setTheme(theme: AppTheme) = viewModelScope.launch {
-        context.dataStore.edit { it[THEME_KEY] = theme.name }
+    private val _hapticEnabled = MutableStateFlow(prefs.getBoolean(KEY_HAPTIC, true))
+    val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
+
+    private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_NOTIF, true))
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    // ── Language ───────────────────────────────────────────────────────────────
+
+    private val _language = MutableStateFlow(
+        AppLanguage.fromCode(
+            // Если язык не был сохранен ранее, ставим SYSTEM по умолчанию
+            prefs.getString(KEY_LANGUAGE, null) ?: AppLanguage.SYSTEM.code
+        )
+    )
+    val language: StateFlow<AppLanguage> = _language.asStateFlow()
+
+    init {
+        // Применяем сохраненный язык сразу при создании ViewModel
+        LocaleHelper.applyLanguage(_language.value)
     }
 
-    fun setThemeMode(mode: ThemeMode) = viewModelScope.launch {
-        context.dataStore.edit { it[THEME_MODE_KEY] = mode.name }
+    // ── Setters ────────────────────────────────────────────────────────────────
+
+    fun setTheme(theme: AppTheme) {
+        _appTheme.value = theme
+        prefs.edit().putString(KEY_THEME, theme.name).apply()
     }
 
-    fun setHaptic(enabled: Boolean) = viewModelScope.launch {
-        context.dataStore.edit { it[HAPTIC_KEY] = enabled }
+    fun setThemeMode(mode: ThemeMode) {
+        _themeMode.value = mode
+        prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 
-    fun setNotifications(enabled: Boolean) = viewModelScope.launch {
-        context.dataStore.edit { it[NOTIFICATIONS_KEY] = enabled }
+    fun setHaptic(enabled: Boolean) {
+        _hapticEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_HAPTIC, enabled).apply()
+    }
+
+    fun setNotifications(enabled: Boolean) {
+        _notificationsEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_NOTIF, enabled).apply()
+    }
+
+    fun setLanguage(language: AppLanguage) {
+        // 1. Обновляем StateFlow (для галочек в UI)
+        _language.value = language
+
+        // 2. Сохраняем в настройки (чтобы восстановить при следующем запуске)
+        prefs.edit().putString(KEY_LANGUAGE, language.code).apply()
+
+        // 3. Даем команду системе сменить язык приложения.
+        // Это заставит Activity автоматически пересоздаться (на старых Android)
+        // или обновить конфигурацию (на Android 13+), и Compose мгновенно перерисует все stringResource().
+        LocaleHelper.applyLanguage(language)
     }
 }

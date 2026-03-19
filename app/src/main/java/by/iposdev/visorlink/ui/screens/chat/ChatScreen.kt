@@ -13,7 +13,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,8 +23,6 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,12 +34,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
+import by.iposdev.visorlink.ui.screens.chatlist.GroupChannelAvatar
 import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -63,6 +62,7 @@ fun ChatScreen(
     onNavigateBack: () -> Unit,
     onOpenOtherProfile: (String) -> Unit,
     onOpenStickers: (onSelect: (Sticker) -> Unit) -> Unit,
+    onOpenChatSettings: (chatId: String) -> Unit = {},
     hapticEnabled: Boolean = true
 ) {
     val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid) })
@@ -74,7 +74,7 @@ fun ChatScreen(
     var inputText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
     var showStickerSheet by remember { mutableStateOf(false) }
-    // ID сообщения у которого открыто меню реакций
+    var showLeaveDialog by remember { mutableStateOf(false) }
     var reactionsOpenForId by remember { mutableStateOf<String?>(null) }
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
@@ -85,19 +85,19 @@ fun ChatScreen(
     // ── Скролл вниз при новых сообщениях ─────────────────────────────────────
     val messageCount = uiState.messages.size
     LaunchedEffect(messageCount) {
-        if (messageCount > 0) {
+        if (messageCount > 0 && !uiState.isLoadingMore) {
             listState.animateScrollToItem(
-                index = (uiState.messageListItems.size - 1).coerceAtLeast(0)
+                (uiState.messageListItems.size - 1).coerceAtLeast(0)
             )
         }
     }
 
-    // ── Скролл вниз при отправке (по изменению последнего своего сообщения) ──
+    // ── Скролл после отправки своего сообщения ────────────────────────────────
     val lastOwnMessageId = uiState.messages.lastOrNull { it.senderId == viewModel.currentUid }?.id
     LaunchedEffect(lastOwnMessageId) {
         if (lastOwnMessageId != null) {
             listState.animateScrollToItem(
-                index = (uiState.messageListItems.size - 1).coerceAtLeast(0)
+                (uiState.messageListItems.size - 1).coerceAtLeast(0)
             )
         }
     }
@@ -115,17 +115,8 @@ fun ChatScreen(
 
     // ── Пагинация ─────────────────────────────────────────────────────────────
     LaunchedEffect(listState.firstVisibleItemIndex) {
-        if (listState.firstVisibleItemIndex <= 3 &&
-            uiState.hasMore && !uiState.isLoadingMore
-        ) {
+        if (listState.firstVisibleItemIndex <= 3 && uiState.hasMore && !uiState.isLoadingMore) {
             viewModel.loadMore()
-        }
-    }
-
-    // ── Закрываем реакции при тапе вне ───────────────────────────────────────
-    if (reactionsOpenForId != null) {
-        DisposableEffect(Unit) {
-            onDispose { reactionsOpenForId = null }
         }
     }
 
@@ -140,54 +131,119 @@ fun ChatScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onOpenOtherProfile(otherUid) }
+                        modifier = Modifier.clickable {
+                            when (uiState.chatType) {
+                                ChatType.DIRECT -> onOpenOtherProfile(otherUid)
+                                else -> onOpenChatSettings(chatId)
+                            }
+                        }
                     ) {
-                        AvatarWithPresence(
-                            avatarUrl = uiState.otherUser?.avatarUrl,
-                            displayName = uiState.otherUser?.displayName ?: "",
-                            isOnline = uiState.topbarStatus is TopbarStatus.Online ||
-                                    uiState.topbarStatus is TopbarStatus.Typing,
-                            size = 36.dp
-                        )
+                        // Аватар зависит от типа чата
+                        when (uiState.chatType) {
+                            ChatType.DIRECT -> AvatarWithPresence(
+                                avatarUrl = uiState.otherUser?.avatarUrl,
+                                displayName = uiState.otherUser?.displayName ?: "",
+                                isOnline = uiState.topbarStatus is TopbarStatus.Online ||
+                                        uiState.topbarStatus is TopbarStatus.Typing,
+                                size = 36.dp
+                            )
+                            ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
+                                avatarUrl = uiState.chat?.avatarUrl,
+                                name = uiState.chat?.name ?: "",
+                                isChannel = uiState.chatType == ChatType.CHANNEL,
+                                size = 36.dp
+                            )
+                        }
+
                         Spacer(Modifier.width(10.dp))
+
                         Column {
+                            // Название чата
                             Text(
-                                uiState.otherUser?.displayName ?: "",
+                                when (uiState.chatType) {
+                                    ChatType.DIRECT -> uiState.otherUser?.displayName ?: ""
+                                    else -> uiState.chat?.name ?: ""
+                                },
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            AnimatedContent(
-                                targetState = uiState.topbarStatus,
-                                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
-                                label = "topbar_status"
-                            ) { status ->
-                                when (status) {
-                                    is TopbarStatus.Typing -> TypingDots()
-                                    is TopbarStatus.Online -> Text(
-                                        "Online",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFF22C55E), fontSize = 11.sp
-                                    )
-                                    is TopbarStatus.LastSeen -> Text(
-                                        status.ts?.let { ts ->
-                                            "Last seen ${
-                                                SimpleDateFormat("HH:mm", Locale.getDefault())
-                                                    .format(Date(ts))
-                                            }"
-                                        } ?: "",
+
+                            // Subtitle
+                            when (uiState.chatType) {
+                                ChatType.DIRECT -> AnimatedContent(
+                                    targetState = uiState.topbarStatus,
+                                    transitionSpec = {
+                                        fadeIn(tween(200)) togetherWith fadeOut(tween(200))
+                                    },
+                                    label = "topbar_status"
+                                ) { status ->
+                                    when (status) {
+                                        is TopbarStatus.Typing -> TypingDots()
+                                        is TopbarStatus.Online -> Text(
+                                            "Online",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFF22C55E), fontSize = 11.sp
+                                        )
+                                        is TopbarStatus.LastSeen -> Text(
+                                            status.ts?.let { ts ->
+                                                "Last seen ${
+                                                    SimpleDateFormat("HH:mm", Locale.getDefault())
+                                                        .format(Date(ts))
+                                                }"
+                                            } ?: "",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                        else -> Text("", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
+
+                                ChatType.GROUP -> {
+                                    val memberCount = uiState.chat?.memberCount
+                                        ?: uiState.members.size
+                                    val online = uiState.onlineCount
+                                    Text(
+                                        buildString {
+                                            append("$memberCount members")
+                                            if (online > 0) append(" · $online online")
+                                        },
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         fontSize = 11.sp
                                     )
-                                    is TopbarStatus.Offline -> Text("", style = MaterialTheme.typography.labelSmall)
                                 }
+
+                                ChatType.CHANNEL -> Text(
+                                    "${uiState.chat?.memberCount ?: 0} subscribers",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontSize = 11.sp
+                                )
                             }
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                actions = {
+                    // Настройки — для admin групп/каналов
+                    if (uiState.chatType != ChatType.DIRECT && uiState.isAdmin) {
+                        IconButton(onClick = { onOpenChatSettings(chatId) }) {
+                            Icon(Icons.Default.Settings, "Settings")
+                        }
+                    }
+                    // Выйти — для не-owner'ов в группах/каналах
+                    if (uiState.chatType != ChatType.DIRECT && !uiState.isOwner) {
+                        IconButton(onClick = { showLeaveDialog = true }) {
+                            Icon(Icons.Default.ExitToApp, "Leave",
+                                tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         },
         bottomBar = {
@@ -197,6 +253,31 @@ fun ChatScreen(
                     .navigationBarsPadding()
                     .imePadding()
             ) {
+                // Баннер ограничений
+                val restriction = when {
+                    uiState.myMember?.banned == true ->
+                        "You are banned from this chat"
+                    uiState.myMember?.muted == true ->
+                        "You are muted"
+                    uiState.chatType == ChatType.CHANNEL && !uiState.isAdmin ->
+                        "📢 Only admins can post in channels"
+                    else -> null
+                }
+                AnimatedVisibility(visible = restriction != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            restriction ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
                 // Reply banner
                 AnimatedVisibility(
                     visible = uiState.replyingTo != null,
@@ -216,131 +297,132 @@ fun ChatScreen(
                     )
                 }
 
-                // Input row
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    if (!uiState.isRecording) {
-                        IconButton(onClick = { imagePicker.launch("image/*") }) {
-                            Icon(
-                                Icons.Default.AttachFile, null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // Кнопка стикеров — открывает bottom sheet
-                        IconButton(onClick = {
-                            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                            showStickerSheet = true
-                        }) {
-                            Icon(
-                                Icons.Default.EmojiEmotions, null,
-                                tint = if (showStickerSheet) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = inputText,
-                            onValueChange = {
-                                inputText = it
-                                viewModel.onTextChanged(it)
-                            },
-                            placeholder = { Text("Message") },
-                            modifier = Modifier.weight(1f),
-                            maxLines = 4,
-                            shape = MaterialTheme.shapes.extraLarge
-                        )
-
-                        Spacer(Modifier.width(4.dp))
-
-                        AnimatedContent(
-                            targetState = inputText.isNotBlank(),
-                            transitionSpec = {
-                                scaleIn(initialScale = 0.8f) + fadeIn() togetherWith
-                                        scaleOut(targetScale = 0.8f) + fadeOut()
-                            },
-                            label = "send_mic"
-                        ) { hasText ->
-                            if (hasText) {
-                                IconButton(
-                                    onClick = {
-                                        if (hapticEnabled)
-                                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                        val text = inputText
-                                        inputText = ""
-                                        viewModel.sendText(text)
-                                        // Принудительный скролл вниз после отправки
-                                        scope.launch {
-                                            delay(100)
-                                            listState.animateScrollToItem(
-                                                (uiState.messageListItems.size - 1).coerceAtLeast(0)
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .size(48.dp)
-                                        .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Filled.Send, "Send",
-                                        tint = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                }
-                            } else {
-                                IconButton(
-                                    onClick = {
-                                        if (audioPermission.status.isGranted) {
-                                            if (hapticEnabled)
-                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.startRecording()
-                                        } else {
-                                            audioPermission.launchPermissionRequest()
-                                        }
-                                    },
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Mic, "Record",
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
+                // Input row — только если разрешено отправлять
+                if (uiState.canSendMessage) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        if (!uiState.isRecording) {
+                            // Прикрепить файл — только если не mediaRestricted
+                            if (uiState.canSendMedia) {
+                                IconButton(onClick = { imagePicker.launch("image/*") }) {
+                                    Icon(Icons.Default.AttachFile, null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
+
+                            // Стикеры
+                            IconButton(onClick = {
+                                if (hapticEnabled)
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                showStickerSheet = true
+                            }) {
+                                Icon(Icons.Default.EmojiEmotions, null,
+                                    tint = if (showStickerSheet) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+
+                            OutlinedTextField(
+                                value = inputText,
+                                onValueChange = {
+                                    inputText = it
+                                    viewModel.onTextChanged(it)
+                                },
+                                placeholder = { Text("Message") },
+                                modifier = Modifier.weight(1f),
+                                maxLines = 4,
+                                shape = MaterialTheme.shapes.extraLarge
+                            )
+
+                            Spacer(Modifier.width(4.dp))
+
+                            AnimatedContent(
+                                targetState = inputText.isNotBlank(),
+                                transitionSpec = {
+                                    scaleIn(initialScale = 0.8f) + fadeIn() togetherWith
+                                            scaleOut(targetScale = 0.8f) + fadeOut()
+                                },
+                                label = "send_mic"
+                            ) { hasText ->
+                                if (hasText) {
+                                    IconButton(
+                                        onClick = {
+                                            if (hapticEnabled)
+                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                            val text = inputText
+                                            inputText = ""
+                                            viewModel.sendText(text)
+                                            scope.launch {
+                                                delay(100)
+                                                listState.animateScrollToItem(
+                                                    (uiState.messageListItems.size - 1).coerceAtLeast(0)
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.Send, "Send",
+                                            tint = MaterialTheme.colorScheme.onPrimary)
+                                    }
+                                } else {
+                                    // Микрофон — только если можно отправлять медиа
+                                    if (uiState.canSendMedia) {
+                                        IconButton(
+                                            onClick = {
+                                                if (audioPermission.status.isGranted) {
+                                                    if (hapticEnabled)
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    viewModel.startRecording()
+                                                } else {
+                                                    audioPermission.launchPermissionRequest()
+                                                }
+                                            },
+                                            modifier = Modifier.size(48.dp)
+                                        ) {
+                                            Icon(Icons.Default.Mic, "Record",
+                                                tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                    } else {
+                                        // Только текст — нет кнопки медиа
+                                        Spacer(Modifier.size(48.dp))
+                                    }
+                                }
+                            }
+                        } else {
+                            RecordingBar(
+                                hapticEnabled = hapticEnabled,
+                                onCancel = { viewModel.cancelRecording() },
+                                onSend = { viewModel.stopRecordingAndSend() }
+                            )
                         }
-                    } else {
-                        RecordingBar(
-                            hapticEnabled = hapticEnabled,
-                            onCancel = { viewModel.cancelRecording() },
-                            onSend = { viewModel.stopRecordingAndSend() }
-                        )
                     }
                 }
             }
         }
     ) { padding ->
 
+        // Пустое состояние
         if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.ChatBubbleOutline, null,
+                    Icon(Icons.Default.ChatBubbleOutline, null,
                         modifier = Modifier.size(56.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f)
-                    )
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f))
                     Spacer(Modifier.height(12.dp))
-                    Text(
-                        "No messages yet",
+                    Text("No messages yet",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)
-                    )
-                    Text(
-                        "Say hi! 👋",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
+                    Text("Say hi! 👋",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f)
-                    )
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f))
                 }
             }
         } else {
@@ -349,6 +431,7 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
+                // Индикатор загрузки старых
                 if (uiState.isLoadingMore) {
                     item(key = "loading_more") {
                         Box(
@@ -378,8 +461,10 @@ fun ChatScreen(
                         is MessageListItem.MessageItem -> {
                             AnimatedVisibility(
                                 visible = true,
-                                enter = slideInVertically(initialOffsetY = { 40 }, animationSpec = tween(200))
-                                        + fadeIn(tween(200))
+                                enter = slideInVertically(
+                                    initialOffsetY = { 40 },
+                                    animationSpec = tween(200)
+                                ) + fadeIn(tween(200))
                             ) {
                                 SwipeableMessage(
                                     message = item.message,
@@ -396,10 +481,14 @@ fun ChatScreen(
                                         isMine = item.message.senderId == viewModel.currentUid,
                                         otherUid = otherUid,
                                         currentUid = viewModel.currentUid,
+                                        chatType = uiState.chatType,
                                         hapticEnabled = hapticEnabled,
                                         reactionsOpenForId = reactionsOpenForId,
+                                        canReact = uiState.canReact,
+                                        showSenderName = uiState.chatType != ChatType.DIRECT,
                                         onOpenReactions = { msgId ->
-                                            reactionsOpenForId = if (reactionsOpenForId == msgId) null else msgId
+                                            reactionsOpenForId =
+                                                if (reactionsOpenForId == msgId) null else msgId
                                         },
                                         onLongPress = {
                                             reactionsOpenForId = item.message.id
@@ -412,7 +501,8 @@ fun ChatScreen(
                                         onReply = { viewModel.setReplyTo(item.message) },
                                         onReact = { emoji ->
                                             viewModel.toggleReaction(
-                                                item.message.id, emoji, item.message.parsedReactions
+                                                item.message.id, emoji,
+                                                item.message.parsedReactions
                                             )
                                             reactionsOpenForId = null
                                         }
@@ -426,16 +516,17 @@ fun ChatScreen(
         }
     }
 
-    // ── Sticker Bottom Sheet ──────────────────────────────────────────────────
+    // ── Sticker bottom sheet ──────────────────────────────────────────────────
     if (showStickerSheet) {
         StickerBottomSheet(
-            viewModel = viewModel,
+            stickers = uiState.stickers,
             hapticEnabled = hapticEnabled,
             onDismiss = { showStickerSheet = false },
             onStickerSelected = { sticker ->
                 viewModel.sendSticker(sticker)
                 showStickerSheet = false
-                if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                if (hapticEnabled)
+                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             }
         )
     }
@@ -458,7 +549,27 @@ fun ChatScreen(
         )
     }
 
-    // ── Error snackbar ────────────────────────────────────────────────────────
+    // ── Leave dialog ──────────────────────────────────────────────────────────
+    if (showLeaveDialog) {
+        AlertDialog(
+            onDismissRequest = { showLeaveDialog = false },
+            title = {
+                Text("Leave ${if (uiState.chatType == ChatType.CHANNEL) "channel" else "group"}?")
+            },
+            text = { Text("You will need an invite or link to rejoin.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLeaveDialog = false
+                    viewModel.leaveChat { onNavigateBack() }
+                }) { Text("Leave", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLeaveDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // ── Error auto-dismiss ────────────────────────────────────────────────────
     uiState.error?.let {
         LaunchedEffect(it) {
             delay(3000)
@@ -480,13 +591,10 @@ private fun SwipeableMessage(
     val haptic = LocalHapticFeedback.current
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-
-    // Порог в пикселях для срабатывания реплая
     val triggerThreshold = 80f
-    // Максимальный сдвиг (резиновый)
     val maxOffset = 100f
+    var didTrigger by remember { mutableStateOf(false) }
 
-    // Иконка реплая — появляется при свайпе
     val replyIconAlpha by animateFloatAsState(
         targetValue = if (kotlin.math.abs(offsetX.value) > 20f)
             (kotlin.math.abs(offsetX.value) / triggerThreshold).coerceIn(0f, 1f)
@@ -500,10 +608,8 @@ private fun SwipeableMessage(
         label = "reply_icon_scale"
     )
 
-    var didTrigger by remember { mutableStateOf(false) }
-
     Box(modifier = Modifier.fillMaxWidth()) {
-        // Иконка реплая — слева для своих (свайп влево), справа для чужих (свайп вправо)
+        // Иконка реплая
         Box(
             modifier = Modifier
                 .align(if (isMine) Alignment.CenterStart else Alignment.CenterEnd)
@@ -520,54 +626,53 @@ private fun SwipeableMessage(
             )
         }
 
-        // Само сообщение со смещением
+        // Сообщение
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .pointerInput(message.id) {
                     detectHorizontalDragGestures(
-                        onDragStart = {
-                            didTrigger = false
-                        },
+                        onDragStart = { didTrigger = false },
                         onDragEnd = {
                             scope.launch {
-                                // Если не достигли порога — возвращаемся
-                                if (kotlin.math.abs(offsetX.value) < triggerThreshold) {
-                                    offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                                } else {
-                                    // Достигли порога — срабатывает реплай
-                                    offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                                }
+                                offsetX.animateTo(
+                                    0f,
+                                    spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                )
                             }
                         },
                         onDragCancel = {
                             scope.launch {
-                                offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                offsetX.animateTo(
+                                    0f,
+                                    spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                )
                             }
                         },
                         onHorizontalDrag = { _, dragAmount ->
                             scope.launch {
                                 val target = if (isMine) {
-                                    // Своё — свайп влево (отрицательное смещение)
                                     (offsetX.value + dragAmount).coerceIn(-maxOffset, 0f)
                                 } else {
-                                    // Чужое — свайп вправо (положительное смещение)
                                     (offsetX.value + dragAmount).coerceIn(0f, maxOffset)
                                 }
                                 offsetX.snapTo(target)
 
-                                // Срабатываем ровно один раз при достижении порога
-                                val absCurrent = kotlin.math.abs(offsetX.value)
-                                if (absCurrent >= triggerThreshold && !didTrigger) {
+                                if (kotlin.math.abs(offsetX.value) >= triggerThreshold && !didTrigger) {
                                     didTrigger = true
+                                    if (hapticEnabled)
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onReply()
-                                    // Небольшой отскок назад для индикации
                                     offsetX.animateTo(
-                                        if (isMine) -triggerThreshold * 0.6f else triggerThreshold * 0.6f,
+                                        if (isMine) -triggerThreshold * 0.6f
+                                        else triggerThreshold * 0.6f,
                                         spring(dampingRatio = Spring.DampingRatioMediumBouncy)
                                     )
                                     delay(150)
-                                    offsetX.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                    offsetX.animateTo(
+                                        0f,
+                                        spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                    )
                                 }
                             }
                         }
@@ -584,19 +689,17 @@ private fun SwipeableMessage(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StickerBottomSheet(
-    viewModel: ChatViewModel,
+    stickers: List<Sticker>,
     hapticEnabled: Boolean,
     onDismiss: () -> Unit,
     onStickerSelected: (Sticker) -> Unit
 ) {
-    val stickers: List<Sticker> by viewModel.stickers.collectAsState(initial = emptyList())
     val haptic = LocalHapticFeedback.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         dragHandle = {
-            // Минималистичный drag handle
             Box(
                 modifier = Modifier
                     .padding(top = 12.dp, bottom = 4.dp)
@@ -616,19 +719,14 @@ private fun StickerBottomSheet(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
-            // Заголовок
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    "Stickers",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
-                )
+                Text("Stickers", style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, "Close",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -637,32 +735,22 @@ private fun StickerBottomSheet(
 
             if (stickers.isEmpty()) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(160.dp),
+                    modifier = Modifier.fillMaxWidth().height(160.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Default.EmojiEmotions, null,
+                        Icon(Icons.Default.EmojiEmotions, null,
                             modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f)
-                        )
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f))
                         Spacer(Modifier.height(8.dp))
-                        Text(
-                            "No stickers yet",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            "Add stickers in your profile",
+                        Text("No stickers yet", style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Add stickers in your profile",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)
-                        )
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
                     }
                 }
             } else {
-                // Сетка стикеров — 4 колонки, горизонтальный скролл по рядам
                 val rows = stickers.chunked(4)
                 Column(
                     modifier = Modifier
@@ -692,14 +780,11 @@ private fun StickerBottomSheet(
                                     AsyncImage(
                                         model = sticker.url,
                                         contentDescription = sticker.name,
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .padding(4.dp),
+                                        modifier = Modifier.fillMaxSize().padding(4.dp),
                                         contentScale = ContentScale.Fit
                                     )
                                 }
                             }
-                            // Заполняем пустые ячейки если ряд неполный
                             repeat(4 - rowStickers.size) {
                                 Box(modifier = Modifier.weight(1f).aspectRatio(1f))
                             }
@@ -707,7 +792,6 @@ private fun StickerBottomSheet(
                     }
                 }
             }
-
             Spacer(Modifier.height(8.dp))
         }
     }
@@ -722,16 +806,11 @@ private fun TypingDots() {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text(
-            "typing",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = 11.sp
-        )
+        Text("typing", style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
         (0..2).forEach { i ->
             val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.2f,
-                targetValue = 1f,
+                initialValue = 0.2f, targetValue = 1f,
                 animationSpec = infiniteRepeatable(
                     animation = tween(400, delayMillis = i * 130, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse
@@ -739,8 +818,7 @@ private fun TypingDots() {
                 label = "dot_$i"
             )
             Box(
-                modifier = Modifier
-                    .size(4.dp)
+                modifier = Modifier.size(4.dp)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = alpha), CircleShape)
             )
         }
@@ -759,12 +837,9 @@ private fun DateSeparator(label: String) {
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
             shape = MaterialTheme.shapes.extraSmall
         ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
+            Text(label, style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
         }
     }
 }
@@ -778,8 +853,11 @@ private fun MessageBubble(
     isMine: Boolean,
     otherUid: String,
     currentUid: String,
+    chatType: ChatType,
     hapticEnabled: Boolean,
     reactionsOpenForId: String?,
+    canReact: Boolean,
+    showSenderName: Boolean,
     onOpenReactions: (String) -> Unit,
     onLongPress: () -> Unit,
     onReply: () -> Unit,
@@ -801,16 +879,18 @@ private fun MessageBubble(
             message = message,
             isMine = isMine,
             isReadByOther = isReadByOther,
+            chatType = chatType,
             hapticEnabled = hapticEnabled,
             showActions = showActions,
             currentUid = currentUid,
+            canReact = canReact,
             onTap = { onOpenReactions(message.id) },
             onLongPress = {
                 if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onLongPress()
             },
             onReply = { onReply(); onOpenReactions("") },
-            onReact = { emoji -> onReact(emoji) }
+            onReact = onReact
         )
         return
     }
@@ -845,30 +925,38 @@ private fun MessageBubble(
                     }
                 )
         ) {
-            Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp)) {
+            Column(
+                modifier = Modifier.padding(
+                    start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp
+                )
+            ) {
+                // Имя отправителя в группах/каналах (только для чужих сообщений)
+                if (showSenderName && !isMine) {
+                    Text(
+                        "@${message.senderUsername}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                }
+
                 message.replyData?.let {
                     ReplyPreview(it, isMine)
                     Spacer(Modifier.height(4.dp))
                 }
 
                 if (message.deleted) {
-                    Text(
-                        "🚫 Message deleted",
+                    Text("🚫 Message deleted",
                         style = MaterialTheme.typography.bodyMedium,
                         fontStyle = FontStyle.Italic,
-                        color = textColor.copy(alpha = 0.6f)
-                    )
+                        color = textColor.copy(alpha = 0.6f))
                 } else when (message.type) {
-                    MessageType.TEXT -> Text(
-                        message.text ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = textColor
-                    )
+                    MessageType.TEXT -> Text(message.text ?: "",
+                        style = MaterialTheme.typography.bodyMedium, color = textColor)
                     MessageType.VOICE -> VoiceBubble(message.duration ?: 0, textColor)
-                    MessageType.STICKER -> AsyncImage(
-                        model = message.url, contentDescription = null,
-                        modifier = Modifier.size(120.dp)
-                    )
+                    MessageType.STICKER -> AsyncImage(model = message.url,
+                        contentDescription = null, modifier = Modifier.size(120.dp))
                 }
 
                 Row(
@@ -881,15 +969,17 @@ private fun MessageBubble(
                             SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
                         } ?: "",
                         style = MaterialTheme.typography.labelSmall,
-                        color = textColor.copy(alpha = 0.6f),
-                        fontSize = 10.sp
+                        color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
                     )
-                    if (isMine && !message.deleted) ReadReceipt(isRead = isReadByOther)
+                    // Read receipt только в DIRECT
+                    if (isMine && !message.deleted && chatType == ChatType.DIRECT) {
+                        ReadReceipt(isRead = isReadByOther)
+                    }
                 }
             }
         }
 
-        // Reactions row
+        // Reactions
         if (message.parsedReactions.isNotEmpty()) {
             ReactionRow(
                 reactions = message.parsedReactions,
@@ -899,7 +989,7 @@ private fun MessageBubble(
             )
         }
 
-        // Quick actions bar — появляется над пузырём при тапе
+        // Quick actions
         AnimatedVisibility(
             visible = showActions && !message.deleted,
             enter = slideInVertically(
@@ -913,12 +1003,15 @@ private fun MessageBubble(
         ) {
             QuickActionsBar(
                 hapticEnabled = hapticEnabled,
+                canReact = canReact,
                 onReact = { emoji ->
-                    if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (hapticEnabled)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onReact(emoji)
                 },
                 onReply = {
-                    if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (hapticEnabled)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onReply()
                     onOpenReactions("")
                 }
@@ -932,6 +1025,7 @@ private fun MessageBubble(
 @Composable
 private fun QuickActionsBar(
     hapticEnabled: Boolean,
+    canReact: Boolean,
     onReact: (String) -> Unit,
     onReply: () -> Unit
 ) {
@@ -942,21 +1036,16 @@ private fun QuickActionsBar(
         shadowElevation = 4.dp,
         modifier = Modifier.padding(top = 4.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-        ) {
-            listOf("👍", "❤️", "😂", "😮", "😢", "🔥").forEach { emoji ->
-                ReactionButton(emoji = emoji, onClick = { onReact(emoji) })
+        Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)) {
+            if (canReact) {
+                listOf("👍", "❤️", "😂", "😮", "😢", "🔥").forEach { emoji ->
+                    ReactionButton(emoji = emoji, onClick = { onReact(emoji) })
+                }
             }
-            IconButton(
-                onClick = onReply,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    Icons.Default.Reply, "Reply",
+            IconButton(onClick = onReply, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Default.Reply, "Reply",
                     modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -980,7 +1069,8 @@ private fun ReactionRow(
             val iReacted = currentUid in reaction.uids
             Surface(
                 onClick = {
-                    if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    if (hapticEnabled)
+                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     onReact(reaction.emoji)
                 },
                 shape = MaterialTheme.shapes.extraSmall,
@@ -988,11 +1078,9 @@ private fun ReactionRow(
                 else MaterialTheme.colorScheme.surfaceVariant,
                 tonalElevation = if (iReacted) 2.dp else 0.dp
             ) {
-                Text(
-                    "${reaction.emoji} ${reaction.count}",
+                Text("${reaction.emoji} ${reaction.count}",
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    style = MaterialTheme.typography.labelSmall
-                )
+                    style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -1006,16 +1094,17 @@ private fun ImageBubble(
     message: Message,
     isMine: Boolean,
     isReadByOther: Boolean,
+    chatType: ChatType,
     hapticEnabled: Boolean,
     showActions: Boolean,
     currentUid: String,
+    canReact: Boolean,
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onReply: () -> Unit,
     onReact: (String) -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-
     val imageShape = if (isMine)
         RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
     else
@@ -1031,17 +1120,11 @@ private fun ImageBubble(
             modifier = Modifier
                 .widthIn(min = 160.dp, max = 260.dp)
                 .clip(imageShape)
-                .combinedClickable(
-                    onClick = onTap,
-                    onLongClick = onLongPress
-                )
+                .combinedClickable(onClick = onTap, onLongClick = onLongPress)
         ) {
             AsyncImage(
-                model = message.url,
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 120.dp, max = 320.dp),
+                model = message.url, contentDescription = null,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp),
                 contentScale = ContentScale.Crop
             )
 
@@ -1055,39 +1138,28 @@ private fun ImageBubble(
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .width(3.dp)
-                                .height(28.dp)
-                                .background(Color.White, RoundedCornerShape(2.dp))
-                        )
+                        Box(Modifier.width(3.dp).height(28.dp)
+                            .background(Color.White, RoundedCornerShape(2.dp)))
                         Spacer(Modifier.width(6.dp))
                         Column {
-                            Text(
-                                "@${reply.senderUsername}",
+                            Text("@${reply.senderUsername}",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color.White, fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                reply.text ?: "📷 Photo",
+                                color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(reply.text ?: "📷 Photo",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color.White.copy(0.8f),
-                                maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
+                                maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
             }
 
-            // Время + read receipt (снизу справа)
+            // Время + read receipt поверх (снизу справа)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
-                    .background(
-                        color = Color.Black.copy(alpha = 0.45f),
-                        shape = RoundedCornerShape(10.dp)
-                    )
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Row(
@@ -1101,9 +1173,10 @@ private fun ImageBubble(
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White, fontSize = 10.sp
                     )
-                    if (isMine) {
+                    if (isMine && chatType == ChatType.DIRECT) {
                         Icon(
-                            imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done,
+                            imageVector = if (isReadByOther) Icons.Default.DoneAll
+                            else Icons.Default.Done,
                             contentDescription = null,
                             modifier = Modifier.size(13.dp),
                             tint = if (isReadByOther) Color(0xFF7DD3FC)
@@ -1114,7 +1187,7 @@ private fun ImageBubble(
             }
         }
 
-        // Reactions под изображением
+        // Reactions
         if (message.parsedReactions.isNotEmpty()) {
             ReactionRow(
                 reactions = message.parsedReactions,
@@ -1138,6 +1211,7 @@ private fun ImageBubble(
         ) {
             QuickActionsBar(
                 hapticEnabled = hapticEnabled,
+                canReact = canReact,
                 onReact = onReact,
                 onReply = onReply
             )
@@ -1191,25 +1265,17 @@ private fun ReplyPreview(reply: ReplyData, isMine: Boolean) {
     else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
             .clip(MaterialTheme.shapes.extraSmall)
             .background(accentColor)
             .padding(6.dp)
     ) {
-        Box(
-            Modifier
-                .width(3.dp)
-                .height(32.dp)
-                .background(nameColor, RoundedCornerShape(2.dp))
-        )
+        Box(Modifier.width(3.dp).height(32.dp).background(nameColor, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(6.dp))
         Column {
-            Text(
-                "@${reply.senderUsername}",
+            Text("@${reply.senderUsername}",
                 style = MaterialTheme.typography.labelSmall,
-                color = nameColor, fontWeight = FontWeight.SemiBold
-            )
+                color = nameColor, fontWeight = FontWeight.SemiBold)
             Text(
                 reply.text ?: when (reply.type) {
                     MessageType.IMAGE -> "📷 Image"
@@ -1229,24 +1295,18 @@ private fun ReplyPreview(reply: ReplyData, isMine: Boolean) {
 @Composable
 private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
             .background(MaterialTheme.colorScheme.primaryContainer)
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            Icons.Default.Reply, null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp)
-        )
+        Icon(Icons.Default.Reply, null,
+            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text(
-                "@${message.senderUsername}",
+            Text("@${message.senderUsername}",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold
-            )
+                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
             Text(
                 when (message.type) {
                     MessageType.IMAGE -> "📷 Photo"
@@ -1260,10 +1320,8 @@ private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
             )
         }
         IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-            Icon(
-                Icons.Default.Close, "Cancel reply",
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            Icon(Icons.Default.Close, "Cancel reply",
+                tint = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }
@@ -1275,25 +1333,17 @@ private fun VoiceBubble(duration: Int, tint: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.PlayArrow, "Play", tint = tint, modifier = Modifier.size(28.dp))
         Spacer(Modifier.width(4.dp))
-        Row(
-            modifier = Modifier.width(100.dp),
+        Row(modifier = Modifier.width(100.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            verticalAlignment = Alignment.CenterVertically) {
             listOf(12, 20, 16, 24, 18, 14, 22, 10, 18, 16).forEach { h ->
-                Box(
-                    Modifier
-                        .width(3.dp)
-                        .height(h.dp)
-                        .background(tint.copy(0.7f), RoundedCornerShape(2.dp))
-                )
+                Box(Modifier.width(3.dp).height(h.dp)
+                    .background(tint.copy(0.7f), RoundedCornerShape(2.dp)))
             }
         }
         Spacer(Modifier.width(6.dp))
-        Text(
-            "${duration / 60}:${(duration % 60).toString().padStart(2, '0')}",
-            style = MaterialTheme.typography.labelSmall, color = tint
-        )
+        Text("${duration / 60}:${(duration % 60).toString().padStart(2, '0')}",
+            style = MaterialTheme.typography.labelSmall, color = tint)
     }
 }
 
@@ -1310,7 +1360,9 @@ private fun RecordingBar(
 
     val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(
         initialValue = 1f, targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
+        animationSpec = infiniteRepeatable(
+            tween(600, easing = LinearEasing), RepeatMode.Reverse
+        ),
         label = "dot_alpha"
     )
 
@@ -1318,7 +1370,8 @@ private fun RecordingBar(
         while (true) {
             delay(1000)
             elapsed++
-            if (hapticEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            if (hapticEnabled)
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         }
     }
 
@@ -1329,23 +1382,20 @@ private fun RecordingBar(
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), CircleShape))
             Spacer(Modifier.width(8.dp))
-            Text(
-                "${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}",
+            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
-            )
+                color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.width(6.dp))
-            Text(
-                "Recording...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Recording...", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         IconButton(
             onClick = onSend,
-            modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+            modifier = Modifier.size(48.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
         ) {
-            Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(Icons.AutoMirrored.Filled.Send, "Send",
+                tint = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }

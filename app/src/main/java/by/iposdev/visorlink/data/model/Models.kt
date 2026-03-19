@@ -2,6 +2,8 @@ package by.iposdev.visorlink.data.model
 
 import com.google.firebase.Timestamp
 
+// ─── User ─────────────────────────────────────────────────────────────────────
+
 data class UserProfile(
     val uid: String = "",
     val email: String = "",
@@ -9,21 +11,55 @@ data class UserProfile(
     val displayName: String = "",
     val bio: String = "",
     val avatarUrl: String? = null,
-    val online: Boolean = false,         // оставляем для совместимости, не пишем
-    val lastSeen: Timestamp? = null,     // оставляем для совместимости, не пишем
+    val online: Boolean = false,
+    val lastSeen: Timestamp? = null,
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
     val fcmTokens: List<String> = emptyList()
 )
 
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+enum class ChatType { DIRECT, GROUP, CHANNEL }
+
+data class ChatSettings(
+    val joinByLink: Boolean = true,
+    val joinByTag: Boolean = false,
+    val allowReactions: Boolean = true,
+    val inviteLink: String = ""
+)
+
 data class Chat(
     val id: String = "",
+    val type: String = "direct",
+    // direct only
     val participants: List<String> = emptyList(),
     val participantData: Map<String, Map<String, String>> = emptyMap(),
+    // group/channel only
+    val name: String = "",
+    val tag: String = "",
+    val description: String = "",
+    val avatarUrl: String? = null,
+    val createdBy: String = "",
+    val memberCount: Int = 0,
+    val memberIds: List<String> = emptyList(),
+    val settings: ChatSettings = ChatSettings(),
+    // common
     val lastMessage: String? = null,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null
 ) {
+    fun chatType() = when (type) {
+        "group" -> ChatType.GROUP
+        "channel" -> ChatType.CHANNEL
+        else -> ChatType.DIRECT
+    }
+
+    fun displayName(currentUid: String) = when (chatType()) {
+        ChatType.DIRECT -> participantData[otherParticipantId(currentUid)]?.get("displayName") ?: ""
+        else -> name
+    }
+
     fun otherParticipantId(currentUid: String) =
         participants.firstOrNull { it != currentUid } ?: ""
 
@@ -33,6 +69,89 @@ data class Chat(
     fun otherUsername(currentUid: String) =
         participantData[otherParticipantId(currentUid)]?.get("username") ?: ""
 }
+
+// ─── Member ───────────────────────────────────────────────────────────────────
+
+data class Member(
+    val uid: String = "",
+    val role: String = "member",
+    val joinedAt: Timestamp? = null,
+    val muted: Boolean = false,
+    val mutedUntil: Timestamp? = null,
+    val mediaRestricted: Boolean = false,
+    val banned: Boolean = false,
+    val bannedAt: Timestamp? = null,
+    val bannedBy: String? = null
+) {
+    fun isAdmin() = role in listOf("admin", "owner")
+    fun isOwner() = role == "owner"
+
+    fun canSend(): Boolean {
+        if (banned) return false
+        if (muted) {
+            mutedUntil?.let { if (java.util.Date() > it.toDate()) return true }
+            return false
+        }
+        return true
+    }
+
+    fun canSendMedia() = canSend() && !mediaRestricted
+}
+
+// ─── Permissions helpers ──────────────────────────────────────────────────────
+
+fun canSendMessage(myMember: Member?, chatType: ChatType): Boolean = when (chatType) {
+    ChatType.DIRECT -> true
+    ChatType.GROUP -> myMember?.canSend() ?: false
+    ChatType.CHANNEL -> myMember?.isAdmin() ?: false
+}
+
+fun canSendMedia(myMember: Member?, chatType: ChatType): Boolean = when (chatType) {
+    ChatType.DIRECT -> true
+    ChatType.CHANNEL -> myMember?.isAdmin() ?: false
+    ChatType.GROUP -> myMember?.canSend() == true && myMember.mediaRestricted == false
+}
+
+fun canReact(chat: Chat, chatType: ChatType): Boolean {
+    if (chatType != ChatType.CHANNEL) return true
+    return chat.settings.allowReactions
+}
+
+// ─── Invites ──────────────────────────────────────────────────────────────────
+
+data class GroupInvite(
+    val id: String = "",
+    val chatId: String = "",
+    val invitedBy: String = "",
+    val createdAt: Timestamp? = null,
+    val status: String = "pending"
+)
+
+data class AppNotification(
+    val id: String = "",
+    val type: String = "",
+    val chatId: String = "",
+    val inviteId: String = "",
+    val invitedBy: String = "",
+    val createdAt: Timestamp? = null,
+    val read: Boolean = false
+)
+
+// ─── Tag search ───────────────────────────────────────────────────────────────
+
+data class TagSearchResult(
+    val found: Boolean = false,
+    val chatId: String = "",
+    val name: String = "",
+    val tag: String = "",
+    val description: String = "",
+    val avatarUrl: String? = null,
+    val memberCount: Int = 0,
+    val type: String = "",
+    val joinByTag: Boolean = false
+)
+
+// ─── Message ──────────────────────────────────────────────────────────────────
 
 data class Message(
     val id: String = "",
@@ -49,7 +168,7 @@ data class Message(
     val deletedAt: Timestamp? = null,
     val replyTo: Map<String, Any?>? = null,
     val reactions: List<Map<String, Any>> = emptyList(),
-    val readBy: List<String> = emptyList()  // ← NEW v2
+    val readBy: List<String> = emptyList()
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -112,25 +231,26 @@ data class Sticker(
     val createdAt: Timestamp? = null
 )
 
-// ─── Presence (RTDB) ──────────────────────────────────────────────────────────
-data class PresenceData(
-    val online: Boolean = false,
-    val lastSeen: Long? = null  // Unix ms
-)
+// ─── Presence / Topbar ───────────────────────────────────────────────────────
 
-// ─── Topbar status ────────────────────────────────────────────────────────────
+data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null)
+
 sealed class TopbarStatus {
     object Online : TopbarStatus()
     object Typing : TopbarStatus()
     object Offline : TopbarStatus()
     data class LastSeen(val ts: Long?) : TopbarStatus()
+    data class MemberCount(val total: Int, val online: Int) : TopbarStatus()
 }
 
-// ─── Message list items (with date separators) ───────────────────────────────
+// ─── Message list items ───────────────────────────────────────────────────────
+
 sealed class MessageListItem {
     data class MessageItem(val message: Message) : MessageListItem()
     data class DateHeader(val label: String) : MessageListItem()
 }
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
 
 enum class AppTheme { MATERIAL3_EXPRESSIVE, ONE_UI }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }

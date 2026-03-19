@@ -12,33 +12,58 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.utils.TypingManager
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.database
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.Firebase
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
-import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.*
 
 data class ChatUiState(
+    // Messages
     val messages: List<Message> = emptyList(),
     val messageListItems: List<MessageListItem> = emptyList(),
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = true,
     val lastDoc: DocumentSnapshot? = null,
+    // Chat info
+    val chat: Chat? = null,
+    val chatType: ChatType = ChatType.DIRECT,
     val otherUser: UserProfile? = null,
+    // Member state
+    val myMember: Member? = null,
+    val members: List<Member> = emptyList(),
+    // Topbar
     val topbarStatus: TopbarStatus = TopbarStatus.Offline,
+    val onlineCount: Int = 0,
+    // Input
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
     val error: String? = null,
-    val isRecording: Boolean = false
-)
+    val isRecording: Boolean = false,
+    // Stickers
+    val stickers: List<Sticker> = emptyList()
+) {
+    val canSendMessage get() = canSendMessage(myMember, chatType)
+    val canSendMedia get() = canSendMedia(myMember, chatType)
+    val canReact get() = chat?.let { canReact(it, chatType) } ?: true
+    val isAdmin get() = myMember?.isAdmin() ?: false
+    val isOwner get() = myMember?.isOwner() ?: false
+}
 
 class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
+    private val db: com.google.firebase.firestore.FirebaseFirestore,  // ← добавили
     private val context: Context,
     val chatId: String,
     val otherUid: String
@@ -50,26 +75,22 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    // ВОТ ИСПРАВЛЕНИЕ: Вынесли stickers из блока init, теперь ChatScreen видит эту переменную!
-    val stickers: StateFlow<List<Sticker>> = userRepository.stickersFlow(currentUid)
-        .catch { emit(emptyList()) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     private var recorder: MediaRecorder? = null
     private var recordingFile: File? = null
     private var recordingStart = 0L
     private var typingManager: TypingManager? = null
+    private var onlineCountListener: ValueEventListener? = null
 
     init {
         viewModelScope.launch {
-            try {
-                _uiState.update { it.copy(otherUser = userRepository.getUserProfile(otherUid)) }
-            } catch (_: Exception) {}
-        }
-        viewModelScope.launch {
-            userRepository.currentUserFlow()
-                .catch { }
+            userRepository.currentUserFlow().catch { }
                 .collect { currentUsername = it?.username ?: "" }
+        }
+
+        viewModelScope.launch {
+            userRepository.stickersFlow(currentUid).collect { stickers ->
+                _uiState.update { it.copy(stickers = stickers) }
+            }
         }
 
         viewModelScope.launch {
@@ -79,10 +100,70 @@ class ChatViewModel(
                 return@launch
             }
 
-            // Инициализируем TypingManager
             typingManager = TypingManager(chatId, currentUid)
 
-            // Слушаем последние сообщения
+            // ── Слушаем документ чата ─────────────────────────────────────────
+            launch {
+                db.collection("chats").document(chatId)
+                    .addSnapshotListener { snap, error ->
+                        if (error != null || snap == null) return@addSnapshotListener
+                        val chat = try {
+                            snap.toObject(Chat::class.java)?.copy(id = chatId)
+                        } catch (e: Exception) { null } ?: return@addSnapshotListener
+
+                        val type = chat.chatType()
+                        _uiState.update { it.copy(chat = chat, chatType = type) }
+
+                        if (type != ChatType.DIRECT) {
+                            startGroupOnlineCount(chat.memberIds)
+                        }
+                    }
+            }
+
+            // ── Members ───────────────────────────────────────────────────────
+            launch {
+                chatRepository.membersFlow(chatId).collect { members ->
+                    _uiState.update { it.copy(members = members) }
+                    val mine = members.find { it.uid == currentUid }
+                    if (mine != null) _uiState.update { it.copy(myMember = mine) }
+                }
+            }
+
+            // ── Начальные данные myMember ─────────────────────────────────────
+            launch {
+                try {
+                    val myMember = chatRepository.getMyMemberData(chatId)
+                    if (myMember != null) _uiState.update { it.copy(myMember = myMember) }
+                } catch (_: Exception) {}
+            }
+
+            // ── DIRECT: presence + typing + профиль собеседника ───────────────
+            if (otherUid != chatId) {
+                _uiState.update { it.copy(chatType = ChatType.DIRECT) }
+
+                launch {
+                    val profile = try { userRepository.getUserProfile(otherUid) }
+                    catch (_: Exception) { null }
+                    _uiState.update { it.copy(otherUser = profile) }
+                }
+
+                launch {
+                    combine(
+                        PresenceManager.observePresence(otherUid).filterNotNull(),
+                        TypingManager.observeTyping(chatId, currentUid)
+                    ) { presence, typing ->
+                        when {
+                            typing -> TopbarStatus.Typing
+                            presence.online -> TopbarStatus.Online
+                            else -> TopbarStatus.LastSeen(presence.lastSeen)
+                        }
+                    }
+                        .catch { emit(TopbarStatus.Offline) }
+                        .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
+                }
+            }
+
+            // ── Messages ──────────────────────────────────────────────────────
             launch {
                 chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
                     val items = buildMessageList(messages)
@@ -94,16 +175,34 @@ class ChatViewModel(
                             hasMore = lastDoc != null
                         )
                     }
-                    // Помечаем прочитанными
-                    viewModelScope.launch {
-                        try { chatRepository.markMessagesAsRead(chatId, messages, currentUid) }
-                        catch (_: Exception) {}
+                    if (_uiState.value.chatType == ChatType.DIRECT) {
+                        viewModelScope.launch {
+                            try { chatRepository.markMessagesAsRead(chatId, messages, currentUid) }
+                            catch (_: Exception) {}
+                        }
                     }
                 }.catch { }.collect()
             }
+        }
+    }
 
-            // Presence + Typing → TopbarStatus
-            launch {
+    private suspend fun loadChatData() {
+        try {
+            val myMember = chatRepository.getMyMemberData(chatId)
+            _uiState.update { it.copy(myMember = myMember) }
+        } catch (_: Exception) {}
+
+        viewModelScope.launch {
+            chatRepository.membersFlow(chatId).collect { members ->
+                _uiState.update { it.copy(members = members) }
+                val mine = members.find { it.uid == currentUid }
+                if (mine != null) _uiState.update { it.copy(myMember = mine) }
+            }
+        }
+
+        if (otherUid != chatId) {
+            _uiState.update { it.copy(chatType = ChatType.DIRECT) }
+            viewModelScope.launch {
                 combine(
                     PresenceManager.observePresence(otherUid).filterNotNull(),
                     TypingManager.observeTyping(chatId, currentUid)
@@ -117,7 +216,38 @@ class ChatViewModel(
                     .catch { emit(TopbarStatus.Offline) }
                     .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
             }
+
+            viewModelScope.launch {
+                val profile = userRepository.getUserProfile(otherUid)
+                _uiState.update { it.copy(otherUser = profile) }
+            }
         }
+    }
+
+    // ─── Определяем тип чата из Firestore ────────────────────────────────────
+
+    fun setChatInfo(chat: Chat) {
+        val type = chat.chatType()
+        _uiState.update { it.copy(chat = chat, chatType = type) }
+
+        if (type != ChatType.DIRECT) {
+            startGroupOnlineCount(chat.memberIds)
+        }
+    }
+
+    private fun startGroupOnlineCount(memberIds: List<String>) {
+        val presenceRef = Firebase.database.getReference("presence")
+        onlineCountListener = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                val count = memberIds.count { uid ->
+                    uid != currentUid &&
+                            snap.child(uid).child("online").getValue(Boolean::class.java) == true
+                }
+                _uiState.update { it.copy(onlineCount = count) }
+            }
+            override fun onCancelled(e: DatabaseError) {}
+        }
+        presenceRef.addValueEventListener(onlineCountListener!!)
     }
 
     // ─── Pagination ───────────────────────────────────────────────────────────
@@ -149,14 +279,13 @@ class ChatViewModel(
 
     private fun buildMessageList(messages: List<Message>): List<MessageListItem> {
         val result = mutableListOf<MessageListItem>()
-        var lastDate: java.time.LocalDate? = null
-        val today = java.time.LocalDate.now()
+        var lastDate: LocalDate? = null
+        val today = LocalDate.now()
         val yesterday = today.minusDays(1)
 
         for (message in messages) {
             val msgDate = message.createdAt?.toDate()
-                ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate()
-                ?: continue
+                ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: continue
             if (msgDate != lastDate) {
                 val label = when (msgDate) {
                     today -> "Today"
@@ -181,6 +310,7 @@ class ChatViewModel(
     // ─── Send ─────────────────────────────────────────────────────────────────
 
     fun sendText(text: String) {
+        if (!_uiState.value.canSendMessage) return
         val trimmed = text.trim().ifEmpty { return }
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
@@ -192,6 +322,7 @@ class ChatViewModel(
     }
 
     fun sendImage(uri: Uri) {
+        if (!_uiState.value.canSendMedia) return
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
@@ -203,6 +334,7 @@ class ChatViewModel(
     }
 
     fun sendSticker(sticker: Sticker) {
+        if (!_uiState.value.canSendMessage) return
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             clearReply()
@@ -214,6 +346,7 @@ class ChatViewModel(
     // ─── Voice ────────────────────────────────────────────────────────────────
 
     fun startRecording() {
+        if (!_uiState.value.canSendMedia) return
         val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.webm")
         recordingFile = file
         recordingStart = System.currentTimeMillis()
@@ -264,9 +397,37 @@ class ChatViewModel(
     }
 
     fun toggleReaction(messageId: String, emoji: String, currentReactions: List<Reaction>) {
+        if (!_uiState.value.canReact) return
         viewModelScope.launch {
             try { chatRepository.toggleReaction(chatId, messageId, emoji, currentReactions) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    // ─── Moderation ───────────────────────────────────────────────────────────
+
+    fun moderateUser(targetUid: String, action: String, durationMinutes: Int? = null) {
+        viewModelScope.launch {
+            try { chatRepository.moderateUser(chatId, targetUid, action, durationMinutes) }
+            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun setMemberRole(targetUid: String, role: String) {
+        viewModelScope.launch {
+            try { chatRepository.setMemberRole(chatId, targetUid, role) }
+            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun leaveChat(onLeft: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                chatRepository.leaveChat(chatId)
+                onLeft()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
         }
     }
 
@@ -278,6 +439,9 @@ class ChatViewModel(
 
     override fun onCleared() {
         typingManager?.cleanup()
+        onlineCountListener?.let {
+            Firebase.database.getReference("presence").removeEventListener(it)
+        }
         super.onCleared()
     }
 
@@ -291,4 +455,8 @@ class ChatViewModel(
     }
 
     private fun Message.toReplyData() = ReplyData(id, type, text, url, senderUsername)
+
+    // Koin inject workaround для firestore
+    private val com.google.firebase.firestore.CollectionReference.document
+        get() = this
 }

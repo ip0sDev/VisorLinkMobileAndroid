@@ -12,10 +12,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.R
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -41,22 +43,28 @@ fun LoginScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text("⬡", style = MaterialTheme.typography.displayLarge,
+            Text(stringResource(R.string.app_logo),
+                style = MaterialTheme.typography.displayLarge,
                 color = MaterialTheme.colorScheme.primary)
-            Text("VisorLink", style = MaterialTheme.typography.headlineLarge,
+            Text(stringResource(R.string.app_name),
+                style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold)
-            Text("Sign in to continue", style = MaterialTheme.typography.bodyMedium,
+            Text(stringResource(R.string.login_subtitle),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
 
             Spacer(Modifier.height(40.dp))
 
             OutlinedTextField(
                 value = email, onValueChange = { email = it; viewModel.clearError() },
-                label = { Text("Email") },
+                label = { Text(stringResource(R.string.login_field_email)) },
                 leadingIcon = { Icon(Icons.Default.Email, null) },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium
             )
@@ -65,16 +73,20 @@ fun LoginScreen(
 
             OutlinedTextField(
                 value = password, onValueChange = { password = it; viewModel.clearError() },
-                label = { Text("Password") },
+                label = { Text(stringResource(R.string.login_field_password)) },
                 leadingIcon = { Icon(Icons.Default.Lock, null) },
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility, null)
+                        Icon(if (passwordVisible) Icons.Default.VisibilityOff
+                        else Icons.Default.Visibility, null)
                     }
                 },
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                visualTransformation = if (passwordVisible) VisualTransformation.None
+                else PasswordVisualTransformation(),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     focusManager.clearFocus()
                     viewModel.login(email, password)
@@ -87,13 +99,16 @@ fun LoginScreen(
                 uiState.error?.let { error ->
                     Spacer(Modifier.height(8.dp))
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer),
                         shape = MaterialTheme.shapes.small,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(error, color = MaterialTheme.colorScheme.onErrorContainer,
+                        Text(error,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(12.dp), textAlign = TextAlign.Center)
+                            modifier = Modifier.padding(12.dp),
+                            textAlign = TextAlign.Center)
                     }
                 }
             }
@@ -106,16 +121,19 @@ fun LoginScreen(
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = MaterialTheme.shapes.large
             ) {
-                if (uiState.isLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary)
-                else Text("Sign In", style = MaterialTheme.typography.labelLarge)
+                if (uiState.isLoading)
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary)
+                else Text(stringResource(R.string.login_button),
+                    style = MaterialTheme.typography.labelLarge)
             }
 
             Spacer(Modifier.height(16.dp))
 
             TextButton(onClick = onNavigateToRegister) {
-                Text("Don't have an account? ")
-                Text("Register", color = MaterialTheme.colorScheme.primary,
+                Text(stringResource(R.string.login_no_account))
+                Text(stringResource(R.string.login_register_link),
+                    color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold)
             }
         }

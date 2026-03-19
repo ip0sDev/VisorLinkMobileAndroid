@@ -11,9 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -32,9 +34,11 @@ fun SearchScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Find User") },
+                title = { Text(stringResource(R.string.search_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                    }
                 }
             )
         }
@@ -43,67 +47,89 @@ fun SearchScreen(
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = uiState.query, onValueChange = viewModel::onQueryChange,
-                label = { Text("Search by @username") },
+                label = { Text(stringResource(R.string.search_field_hint)) },
                 leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
                 trailingIcon = {
                     if (uiState.query.isNotEmpty())
-                        IconButton(onClick = { viewModel.onQueryChange("") }) { Icon(Icons.Default.Clear, null) }
+                        IconButton(onClick = { viewModel.onQueryChange("") }) {
+                            Icon(Icons.Default.Clear, null)
+                        }
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus(); viewModel.search() }),
-                modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium
+                keyboardActions = KeyboardActions(onSearch = {
+                    focusManager.clearFocus(); viewModel.search()
+                }),
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
             )
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = { focusManager.clearFocus(); viewModel.search() },
                 enabled = uiState.query.isNotEmpty() && !uiState.isLoading,
-                modifier = Modifier.fillMaxWidth().height(48.dp), shape = MaterialTheme.shapes.large
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = MaterialTheme.shapes.large
             ) {
-                if (uiState.isLoading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary)
-                else { Icon(Icons.Default.Search, null); Spacer(Modifier.width(8.dp)); Text("Search") }
+                if (uiState.isLoading)
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary)
+                else {
+                    Icon(Icons.Default.Search, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.action_search))
+                }
             }
             Spacer(Modifier.height(24.dp))
             when {
-                uiState.notFound -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                uiState.notFound -> Box(Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.PersonSearch, null, modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.4f))
                         Spacer(Modifier.height(12.dp))
-                        Text("User not found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(stringResource(R.string.search_not_found),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                uiState.error != null -> Text(uiState.error!!, color = MaterialTheme.colorScheme.error)
+                uiState.error != null -> Text(uiState.error!!,
+                    color = MaterialTheme.colorScheme.error)
                 uiState.result != null -> {
                     val user = uiState.result!!
                     Card(Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AvatarWithPresence(avatarUrl = user.avatarUrl, displayName = user.displayName,
+                            AvatarWithPresence(avatarUrl = user.avatarUrl,
+                                displayName = user.displayName,
                                 isOnline = user.online, size = 56.dp)
                             Spacer(Modifier.width(14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(user.displayName, style = MaterialTheme.typography.titleMedium,
+                                Text(user.displayName,
+                                    style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold)
-                                Text("@${user.username}", style = MaterialTheme.typography.bodySmall,
+                                Text("@${user.username}",
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (user.bio.isNotEmpty()) {
                                     Spacer(Modifier.height(4.dp))
                                     Text(user.bio, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2)
                                 }
                             }
                             Spacer(Modifier.width(8.dp))
-                            Button(onClick = {
-                                scope.launch {
-                                    val chatId = viewModel.openOrCreateChat(user)
-                                    onOpenChat(chatId, user.uid)
-                                }
-                            }, shape = MaterialTheme.shapes.medium) {
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        val chatId = viewModel.openOrCreateChat(user)
+                                        onOpenChat(chatId, user.uid)
+                                    }
+                                },
+                                shape = MaterialTheme.shapes.medium
+                            ) {
                                 Icon(Icons.Default.Chat, null, modifier = Modifier.size(16.dp))
                                 Spacer(Modifier.width(4.dp))
-                                Text("Chat")
+                                Text(stringResource(R.string.search_action_chat))
                             }
                         }
                     }

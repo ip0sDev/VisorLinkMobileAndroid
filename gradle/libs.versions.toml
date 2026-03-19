@@ -1,5 +1,6 @@
 [versions]
 agp = "9.1.0"
+firebaseConfigKtx = "22.1.2"
 kotlin = "2.3.10"
 coreKtx = "1.18.0"
 junit = "4.13.2"
@@ -19,9 +20,12 @@ media = "1.7.1"
 materialIconsExtended = "1.7.8"
 firebaseMessaging = "24.1.1"
 firebase-database = "24.1.1"
+animation = "1.10.5"
+foundationLayout = "1.10.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+firebase-config-ktx = { module = "com.google.firebase:firebase-config-ktx", version.ref = "firebaseConfigKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -55,6 +59,8 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
 firebase-database = { group = "com.google.firebase", name = "firebase-database" }
+androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "animation" }
+androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

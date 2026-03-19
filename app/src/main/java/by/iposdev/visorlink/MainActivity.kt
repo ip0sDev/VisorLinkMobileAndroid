@@ -27,8 +27,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.compose.viewmodel.koinViewModel
+import androidx.appcompat.app.AppCompatActivity // <-- Изменился импорт
+// ...
+class MainActivity : AppCompatActivity() { // <-- Изменился класс
 
-class MainActivity : ComponentActivity() {
 
     private val userRepository: UserRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
