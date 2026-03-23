@@ -77,7 +77,6 @@ class ChatRepository(
         awaitClose { reg1.remove(); reg2.remove() }
     }
 
-    // Legacy — оставляем для совместимости
     fun chatsFlow(uid: String) = allChatsFlow(uid)
 
     // ─── Messages ─────────────────────────────────────────────────────────────
@@ -172,8 +171,6 @@ class ChatRepository(
             }
         awaitClose { reg.remove() }
     }
-
-    // ─── Presence for online status ───────────────────────────────────────────
 
     fun onlineStatusFlow(uid: String): Flow<Pair<Boolean, com.google.firebase.Timestamp?>> = callbackFlow {
         trySend(Pair(false, null))
@@ -312,13 +309,29 @@ class ChatRepository(
         batch.commit().await()
     }
 
-    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?) {
+    // isSpoiler=true → добавляет поле "spoiler":true в документ сообщения
+    // Firestore rules поддерживают обновление поля spoiler
+    suspend fun sendImage(
+        chatId: String,
+        uri: Uri,
+        senderUsername: String,
+        replyTo: ReplyData?,
+        isSpoiler: Boolean = false
+    ) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment}"
         val ref = storage.reference.child("chats/$chatId/$fileName")
         ref.putFile(uri).await()
         val url = ref.downloadUrl.await().toString()
-        sendExtra(chatId, mapOf("type" to MessageType.IMAGE, "url" to url,
-            "fileName" to (uri.lastPathSegment ?: "image")), "📷 Image", senderUsername, replyTo)
+
+        val extra = mutableMapOf<String, Any?>(
+            "type" to MessageType.IMAGE,
+            "url" to url,
+            "fileName" to (uri.lastPathSegment ?: "image")
+        )
+        // Пишем spoiler только если true — не засоряем обычные сообщения
+        if (isSpoiler) extra["spoiler"] = true
+
+        sendExtra(chatId, extra, "📷 Image", senderUsername, replyTo)
     }
 
     suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?) {

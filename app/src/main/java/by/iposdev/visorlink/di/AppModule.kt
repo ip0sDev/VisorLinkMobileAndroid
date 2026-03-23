@@ -10,9 +10,11 @@ import by.iposdev.visorlink.ui.screens.group.ChatSettingsViewModel
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileViewModel
 import by.iposdev.visorlink.ui.screens.profile.ProfileViewModel
 import by.iposdev.visorlink.ui.screens.search.SearchViewModel
+import by.iposdev.visorlink.ui.screens.settings.CacheViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickersViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
+import by.iposdev.visorlink.utils.CacheManager
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.firestoreSettings
@@ -39,8 +41,11 @@ val appModule = module {
     single { Firebase.functions("us-central1") }
 
     single { AuthRepository(get(), get()) }
-    single { ChatRepository(get(), get(), get(), get()) }  // ← добавили functions
+    single { ChatRepository(get(), get(), get(), get()) }
     single { UserRepository(get(), get(), get(), get()) }
+
+    // CacheManager — синглтон, используется и в CacheViewModel и для инициализации AppImageLoader
+    single { CacheManager(androidContext()) }
 
     viewModel { AuthViewModel(get()) }
     viewModel { ThemeViewModel(androidContext()) }
@@ -48,7 +53,7 @@ val appModule = module {
     viewModel { parameters ->
         ChatViewModel(
             get(), get(), get(),
-            get(),          // ← db
+            get(),
             androidContext(),
             parameters.get(),
             parameters.get()
@@ -57,7 +62,7 @@ val appModule = module {
     viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
-    viewModel { StickersViewModel(get(), get()) };
+    viewModel { StickersViewModel(get(), get()) }
     viewModel { params ->
         ChatSettingsViewModel(
             chatRepository = get(),
@@ -67,6 +72,6 @@ val appModule = module {
             chatId = params.get()
         )
     }
-    // В список viewModel добавь:
-    viewModel { by.iposdev.visorlink.ui.update.AppUpdateViewModel() }
+    viewModel { AppUpdateViewModel() }
+    viewModel { CacheViewModel(get(), androidContext()) }
 }

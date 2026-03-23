@@ -168,7 +168,8 @@ data class Message(
     val deletedAt: Timestamp? = null,
     val replyTo: Map<String, Any?>? = null,
     val reactions: List<Map<String, Any>> = emptyList(),
-    val readBy: List<String> = emptyList()
+    val readBy: List<String> = emptyList(),
+    val spoiler: Boolean? = null      // ← скрыть изображение под спойлер
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {

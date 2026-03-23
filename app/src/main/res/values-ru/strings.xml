@@ -19,6 +19,7 @@
     <string name="action_leave">Выйти</string>
     <string name="action_upload">Загрузить</string>
     <string name="action_copy">Копировать</string>
+    <string name="action_refresh">Обновить</string>
 
     <!-- Auth — Login -->
     <string name="login_subtitle">Войдите, чтобы продолжить</string>
@@ -78,12 +79,21 @@
     <string name="chat_message_deleted">🚫 Сообщение удалено</string>
     <string name="chat_cancel_reply">Отменить ответ</string>
     <string name="chat_voice_play">Воспроизвести</string>
+    <string name="chat_voice_pause">Пауза</string>
+    <string name="chat_read">Прочитано</string>
+    <string name="chat_sent">Отправлено</string>
 
     <!-- Chat Screen — Media captions -->
     <string name="media_photo">📷 Фото</string>
     <string name="media_photo_icon">📷 Изображение</string>
     <string name="media_voice">🎤 Голосовое сообщение</string>
     <string name="media_sticker">🎭 Стикер</string>
+
+    <!-- Chat Screen — Toasts -->
+    <string name="toast_saved_gallery">Сохранено в галерею</string>
+    <string name="toast_saved_downloads">Сохранено в Загрузки/VisorLink</string>
+    <string name="toast_save_failed">Не удалось сохранить</string>
+    <string name="toast_copied">Скопировано</string>
 
     <!-- Chat Screen — Delete dialog -->
     <string name="dialog_delete_message_title">Удалить сообщение?</string>
@@ -98,6 +108,21 @@
     <string name="stickers_title">Стикеры</string>
     <string name="stickers_empty_title">Нет стикеров</string>
     <string name="stickers_empty_subtitle">Добавьте стикеры в профиле</string>
+
+    <!-- Message Action Sheet -->
+    <string name="action_copy_text">Копировать текст</string>
+    <string name="action_view_image">Открыть изображение</string>
+    <string name="action_save_gallery">Сохранить в галерею</string>
+    <string name="action_save_voice">Сохранить голосовое</string>
+    <string name="action_reply">Ответить</string>
+    <string name="action_delete_message">Удалить</string>
+    <string name="action_preview_photo">📷 Фото</string>
+    <string name="action_preview_voice">🎤 Голосовое сообщение</string>
+    <string name="action_preview_sticker">🎭 Стикер</string>
+
+    <!-- Image Viewer -->
+    <string name="image_viewer_save">Сохранить</string>
+    <string name="image_viewer_load_error">Не удалось загрузить изображение</string>
 
     <!-- Chat Settings — Tabs -->
     <string name="settings_tab_info">Инфо</string>
@@ -258,7 +283,39 @@
     <string name="settings_language_system">Как в системе</string>
     <string name="settings_language_en">Английский</string>
     <string name="settings_language_ru">Русский</string>
-    <!-- Обновление приложения -->
+
+    <!-- Settings — Storage -->
+    <string name="settings_section_storage">Хранилище</string>
+    <string name="settings_cache_title">Кэш и хранилище</string>
+    <string name="settings_cache_subtitle">Лимиты и очистка картинок, голосовых, данных чатов</string>
+
+    <!-- Cache Settings Screen -->
+    <string name="cache_title">Кэш и хранилище</string>
+    <string name="cache_section_usage">Текущее использование</string>
+    <string name="cache_section_clear">Очистить кэш</string>
+    <string name="cache_section_limits">Лимиты хранения</string>
+    <string name="cache_total_label">Всего в кэше</string>
+    <string name="cache_row_images">Картинки и аватарки</string>
+    <string name="cache_row_voice">Голосовые сообщения</string>
+    <string name="cache_row_waveforms">Спектрограммы</string>
+    <string name="cache_row_chat">Данные чатов</string>
+    <string name="cache_clear_images">Очистить кэш картинок</string>
+    <string name="cache_clear_images_sub">Аватарки и фотографии</string>
+    <string name="cache_clear_voice">Очистить кэш голосовых</string>
+    <string name="cache_clear_voice_sub">Скачанные голосовые сообщения</string>
+    <string name="cache_clear_all">Очистить всё</string>
+    <string name="cache_clear_all_sub">Картинки, голосовые, спектрограммы, данные чатов</string>
+    <string name="cache_clear_all_confirm">Очистить</string>
+    <string name="cache_limit_images">Лимит кэша картинок</string>
+    <string name="cache_limit_voice">Лимит кэша голосовых</string>
+    <string name="cache_limit_history">Хранить историю чатов</string>
+    <string name="cache_limit_mb">%1$d МБ</string>
+    <string name="cache_limit_days">%1$d дней</string>
+    <string name="cache_toast_images_cleared">Кэш картинок очищен</string>
+    <string name="cache_toast_voice_cleared">Кэш голосовых очищен</string>
+    <string name="cache_toast_all_cleared">Весь кэш очищен</string>
+
+    <!-- App Update -->
     <string name="update_title">Доступно обновление</string>
     <string name="update_recommended_body">Доступна новая версия VisorLink. Обновитесь сейчас, чтобы получить последние функции и улучшения!</string>
     <string name="update_required_body">Эта версия VisorLink больше не поддерживается. Пожалуйста, обновите приложение до последней версии, чтобы продолжить работу.</string>
@@ -267,29 +324,38 @@
     <string name="update_action_downloading">Загрузка…</string>
     <string name="update_status_toast">Начинаем загрузку…</string>
     <string name="update_error_install">Не удалось запустить установщик</string>
-    <!-- Update dialog — Required -->
     <string name="update_required_title">Требуется обновление</string>
-
-    <!-- Update dialog — Recommended -->
     <string name="update_recommended_title">Доступно обновление</string>
-
-    <!-- Update dialog — buttons -->
     <string name="update_btn_update">Обновить</string>
     <string name="update_btn_later">Позже</string>
     <string name="update_btn_retry">Повторить</string>
     <string name="update_btn_downloading">Загрузка…</string>
     <string name="update_btn_installing">Установка…</string>
-
-    <!-- Changelog section -->
     <string name="update_whats_new">Что нового</string>
     <string name="update_changelog_expand">Развернуть</string>
     <string name="update_changelog_collapse">Свернуть</string>
     <string name="update_changelog_too_old">Вы пропустили несколько версий. Полный список изменений — в официальном канале:</string>
-
-    <!-- Download progress -->
     <string name="update_dl_starting">Начало загрузки…</string>
     <string name="update_dl_progress">Загрузка…</string>
     <string name="update_dl_complete">✅ Загрузка завершена</string>
     <string name="update_dl_error">❌ Ошибка загрузки</string>
     <string name="update_dl_percent">%1$d%%</string>
+
+
+    <!-- Редактор изображений -->
+    <string name="editor_title">Редактировать</string>
+    <string name="editor_crop">Обрезать</string>
+    <string name="editor_rotate">Повернуть</string>
+    <string name="editor_flip_h">Отразить</string>
+    <string name="editor_flip_v">Перевернуть</string>
+    <string name="editor_draw">Карандаш</string>
+    <string name="editor_blur">Блюр</string>
+    <string name="editor_undo">Отменить</string>
+    <string name="editor_reset_crop">Сбросить кроп</string>
+    <string name="editor_apply_crop">Применить</string>
+    <string name="editor_brush_size">Размер</string>
+    <string name="editor_spoiler_on">Спойлер включён</string>
+    <string name="editor_spoiler_off">Скрыть как спойлер</string>
+    <string name="spoiler_tap_to_reveal">Нажмите, чтобы открыть</string>
+
 </resources>

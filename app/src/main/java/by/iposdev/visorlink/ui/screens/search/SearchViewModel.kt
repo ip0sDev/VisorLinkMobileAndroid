@@ -2,6 +2,7 @@ package by.iposdev.visorlink.ui.screens.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import by.iposdev.visorlink.data.model.TagSearchResult
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
@@ -11,8 +12,10 @@ import kotlinx.coroutines.launch
 
 data class SearchUiState(
     val query: String = "",
-    val result: UserProfile? = null,
+    val userResult: UserProfile? = null,
+    val chatResult: TagSearchResult? = null,
     val isLoading: Boolean = false,
+    val isJoining: Boolean = false,
     val error: String? = null,
     val notFound: Boolean = false
 )
@@ -34,21 +37,52 @@ class SearchViewModel(
         }
     }
 
+    fun initSearch(initialQuery: String?) {
+        if (!initialQuery.isNullOrBlank() && _uiState.value.query.isBlank()) {
+            onQueryChange(initialQuery)
+            search()
+        }
+    }
+
     fun onQueryChange(q: String) {
-        _uiState.update { it.copy(query = q, result = null, error = null, notFound = false) }
+        val sanitized = q.trim().removePrefix("@")
+        _uiState.update {
+            it.copy(query = sanitized, userResult = null, chatResult = null, error = null, notFound = false)
+        }
     }
 
     fun search() {
-        val q = _uiState.value.query.trim()
+        val q = _uiState.value.query
         if (q.isEmpty()) return
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, result = null, notFound = false, error = null) }
+            _uiState.update { it.copy(isLoading = true, userResult = null, chatResult = null, notFound = false, error = null) }
             try {
-                val user = userRepository.findUserByUsername(q)
-                when {
-                    user == null -> _uiState.update { it.copy(isLoading = false, notFound = true) }
-                    user.uid == auth.currentUser?.uid -> _uiState.update { it.copy(isLoading = false, error = "That's you!") }
-                    else -> _uiState.update { it.copy(isLoading = false, result = user) }
+                // 1. Ищем пользователя
+                val user = try { userRepository.findUserByUsername(q) } catch (e: Exception) { null }
+
+                // 2. Ищем канал/группу по тегу
+                val chat = try {
+                    val r = chatRepository.findByTag(q)
+                    if (r.found) r else null
+                } catch (e: Exception) { null }
+
+                // Проверяем, не нашли ли мы сами себя
+                val isMe = user?.uid == auth.currentUser?.uid
+                val finalUser = if (isMe) null else user
+
+                if (finalUser == null && chat == null) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            notFound = true,
+                            error = if (isMe) "That's you!" else null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(isLoading = false, userResult = finalUser, chatResult = chat)
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
@@ -59,5 +93,29 @@ class SearchViewModel(
     suspend fun openOrCreateChat(targetUser: UserProfile): String {
         val me = _currentUser.value ?: throw Exception("Not logged in")
         return chatRepository.findOrCreateChat(me, targetUser.uid)
+    }
+
+    suspend fun joinChatByTag(tag: String): String {
+        _uiState.update { it.copy(isJoining = true, error = null) }
+        try {
+            val chatId = chatRepository.joinByTag(tag)
+            _uiState.update { it.copy(isJoining = false) }
+            return chatId
+        } catch (e: Exception) {
+            _uiState.update { it.copy(isJoining = false, error = e.message) }
+            throw e
+        }
+    }
+
+    suspend fun joinByInviteToken(token: String): String {
+        _uiState.update { it.copy(isJoining = true, error = null) }
+        try {
+            val (chatId, _) = chatRepository.joinByInvite(token)
+            _uiState.update { it.copy(isJoining = false) }
+            return chatId
+        } catch (e: Exception) {
+            _uiState.update { it.copy(isJoining = false, error = e.message) }
+            throw e
+        }
     }
 }

@@ -71,7 +71,6 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    // Плеер — синглтон на уровне ViewModel (живёт пока открыт чат)
     val voicePlayer = VoicePlayerManager(context)
 
     private var recorder: MediaRecorder? = null
@@ -81,7 +80,6 @@ class ChatViewModel(
     private var onlineCountListener: ValueEventListener? = null
 
     init {
-        // Прокидываем состояние плеера в uiState
         viewModelScope.launch {
             voicePlayer.state.collect { playbackState ->
                 _uiState.update { it.copy(voicePlayback = playbackState) }
@@ -108,7 +106,6 @@ class ChatViewModel(
 
             typingManager = TypingManager(chatId, currentUid)
 
-            // Слушаем документ чата
             launch {
                 db.collection("chats").document(chatId)
                     .addSnapshotListener { snap, error ->
@@ -126,7 +123,6 @@ class ChatViewModel(
                     }
             }
 
-            // Members
             launch {
                 chatRepository.membersFlow(chatId).collect { members ->
                     _uiState.update { it.copy(members = members) }
@@ -135,7 +131,6 @@ class ChatViewModel(
                 }
             }
 
-            // Начальный myMember
             launch {
                 try {
                     val myMember = chatRepository.getMyMemberData(chatId)
@@ -143,7 +138,6 @@ class ChatViewModel(
                 } catch (_: Exception) {}
             }
 
-            // DIRECT: presence + typing + профиль
             if (otherUid != chatId) {
                 _uiState.update { it.copy(chatType = ChatType.DIRECT) }
 
@@ -169,7 +163,6 @@ class ChatViewModel(
                 }
             }
 
-            // Messages
             launch {
                 chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
                     val items = buildMessageList(messages)
@@ -300,13 +293,13 @@ class ChatViewModel(
         }
     }
 
-    fun sendImage(uri: Uri) {
+    fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
         if (!_uiState.value.canSendMedia) return
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendImage(chatId, uri, currentUsername, reply) }
+            try { chatRepository.sendImage(chatId, uri, currentUsername, reply, isSpoiler) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) } }
         }
@@ -326,7 +319,6 @@ class ChatViewModel(
 
     fun startRecording() {
         if (!_uiState.value.canSendMedia) return
-        // Останавливаем воспроизведение если идёт
         voicePlayer.stop()
 
         val file = File(context.cacheDir, "voice_${System.currentTimeMillis()}.webm")

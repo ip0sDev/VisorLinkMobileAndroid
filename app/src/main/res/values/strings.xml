@@ -19,6 +19,7 @@
     <string name="action_leave">Leave</string>
     <string name="action_upload">Upload</string>
     <string name="action_copy">Copy</string>
+    <string name="action_refresh">Refresh</string>
 
     <!-- Auth — Login -->
     <string name="login_subtitle">Sign in to continue</string>
@@ -78,12 +79,21 @@
     <string name="chat_message_deleted">🚫 Message deleted</string>
     <string name="chat_cancel_reply">Cancel reply</string>
     <string name="chat_voice_play">Play</string>
+    <string name="chat_voice_pause">Pause</string>
+    <string name="chat_read">Read</string>
+    <string name="chat_sent">Sent</string>
 
     <!-- Chat Screen — Media captions -->
     <string name="media_photo">📷 Photo</string>
     <string name="media_photo_icon">📷 Image</string>
     <string name="media_voice">🎤 Voice message</string>
     <string name="media_sticker">🎭 Sticker</string>
+
+    <!-- Chat Screen — Toasts -->
+    <string name="toast_saved_gallery">Saved to gallery</string>
+    <string name="toast_saved_downloads">Saved to Downloads/VisorLink</string>
+    <string name="toast_save_failed">Failed to save</string>
+    <string name="toast_copied">Copied</string>
 
     <!-- Chat Screen — Delete dialog -->
     <string name="dialog_delete_message_title">Delete message?</string>
@@ -98,6 +108,21 @@
     <string name="stickers_title">Stickers</string>
     <string name="stickers_empty_title">No stickers yet</string>
     <string name="stickers_empty_subtitle">Add stickers in your profile</string>
+
+    <!-- Message Action Sheet -->
+    <string name="action_copy_text">Copy text</string>
+    <string name="action_view_image">View image</string>
+    <string name="action_save_gallery">Save to gallery</string>
+    <string name="action_save_voice">Save voice message</string>
+    <string name="action_reply">Reply</string>
+    <string name="action_delete_message">Delete</string>
+    <string name="action_preview_photo">📷 Photo</string>
+    <string name="action_preview_voice">🎤 Voice message</string>
+    <string name="action_preview_sticker">🎭 Sticker</string>
+
+    <!-- Image Viewer -->
+    <string name="image_viewer_save">Save</string>
+    <string name="image_viewer_load_error">Failed to load image</string>
 
     <!-- Chat Settings — Tabs -->
     <string name="settings_tab_info">Info</string>
@@ -258,6 +283,38 @@
     <string name="settings_language_system">System default</string>
     <string name="settings_language_en">English</string>
     <string name="settings_language_ru">Russian</string>
+
+    <!-- Settings — Storage -->
+    <string name="settings_section_storage">Storage</string>
+    <string name="settings_cache_title">Cache &amp; Storage</string>
+    <string name="settings_cache_subtitle">Images, voice, chat data limits and cleanup</string>
+
+    <!-- Cache Settings Screen -->
+    <string name="cache_title">Cache &amp; Storage</string>
+    <string name="cache_section_usage">Current usage</string>
+    <string name="cache_section_clear">Clear cache</string>
+    <string name="cache_section_limits">Storage limits</string>
+    <string name="cache_total_label">Total cached</string>
+    <string name="cache_row_images">Images &amp; Avatars</string>
+    <string name="cache_row_voice">Voice messages</string>
+    <string name="cache_row_waveforms">Waveforms</string>
+    <string name="cache_row_chat">Chat data</string>
+    <string name="cache_clear_images">Clear image cache</string>
+    <string name="cache_clear_images_sub">Avatars and photos</string>
+    <string name="cache_clear_voice">Clear voice cache</string>
+    <string name="cache_clear_voice_sub">Downloaded voice messages</string>
+    <string name="cache_clear_all">Clear all caches</string>
+    <string name="cache_clear_all_sub">Images, voice, waveforms, chat data</string>
+    <string name="cache_clear_all_confirm">Clear all</string>
+    <string name="cache_limit_images">Image cache limit</string>
+    <string name="cache_limit_voice">Voice cache limit</string>
+    <string name="cache_limit_history">Keep chat history</string>
+    <string name="cache_limit_mb">%1$d MB</string>
+    <string name="cache_limit_days">%1$d days</string>
+    <string name="cache_toast_images_cleared">Image cache cleared</string>
+    <string name="cache_toast_voice_cleared">Voice cache cleared</string>
+    <string name="cache_toast_all_cleared">All caches cleared</string>
+
     <!-- App Update -->
     <string name="update_title">Update Available</string>
     <string name="update_recommended_body">A new version of VisorLink is available. Update now to get the latest features and improvements!</string>
@@ -267,29 +324,38 @@
     <string name="update_action_downloading">Downloading…</string>
     <string name="update_status_toast">Starting download…</string>
     <string name="update_error_install">Failed to launch installer</string>
-    <!-- Update dialog — Required -->
     <string name="update_required_title">Update Required</string>
-
-    <!-- Update dialog — Recommended -->
     <string name="update_recommended_title">Update Available</string>
-
-    <!-- Update dialog — buttons -->
     <string name="update_btn_update">Update</string>
     <string name="update_btn_later">Later</string>
     <string name="update_btn_retry">Retry</string>
     <string name="update_btn_downloading">Downloading…</string>
     <string name="update_btn_installing">Installing…</string>
-
-    <!-- Changelog section -->
     <string name="update_whats_new">What\'s new</string>
     <string name="update_changelog_expand">Expand</string>
     <string name="update_changelog_collapse">Collapse</string>
     <string name="update_changelog_too_old">You\'ve skipped multiple versions. Check the full changelog in our official channel:</string>
-
-    <!-- Download progress -->
     <string name="update_dl_starting">Starting download…</string>
     <string name="update_dl_progress">Downloading…</string>
     <string name="update_dl_complete">✅ Download complete</string>
     <string name="update_dl_error">❌ Download failed</string>
     <string name="update_dl_percent">%1$d%%</string>
+
+
+    <!-- Image Editor -->
+    <string name="editor_title">Edit Image</string>
+    <string name="editor_crop">Crop</string>
+    <string name="editor_rotate">Rotate</string>
+    <string name="editor_flip_h">Flip H</string>
+    <string name="editor_flip_v">Flip V</string>
+    <string name="editor_draw">Draw</string>
+    <string name="editor_blur">Blur</string>
+    <string name="editor_undo">Undo</string>
+    <string name="editor_reset_crop">Reset crop</string>
+    <string name="editor_apply_crop">Apply crop</string>
+    <string name="editor_brush_size">Size</string>
+    <string name="editor_spoiler_on">Spoiler on</string>
+    <string name="editor_spoiler_off">Hide as spoiler</string>
+    <string name="spoiler_tap_to_reveal">Tap to reveal</string>
+
 </resources>
