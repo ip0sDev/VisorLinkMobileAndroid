@@ -6,6 +6,7 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
+import by.iposdev.visorlink.ui.screens.comments.CommentsViewModel
 import by.iposdev.visorlink.ui.screens.group.ChatSettingsViewModel
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileViewModel
 import by.iposdev.visorlink.ui.screens.profile.ProfileViewModel
@@ -44,7 +45,6 @@ val appModule = module {
     single { ChatRepository(get(), get(), get(), get()) }
     single { UserRepository(get(), get(), get(), get()) }
 
-    // CacheManager — синглтон, используется и в CacheViewModel и для инициализации AppImageLoader
     single { CacheManager(androidContext()) }
 
     viewModel { AuthViewModel(get()) }
@@ -59,6 +59,18 @@ val appModule = module {
             parameters.get()
         )
     }
+    // ─── NEW v4 ───────────────────────────────────────────────────────────────
+    viewModel { parameters ->
+        CommentsViewModel(
+            chatId = parameters.get(),
+            messageId = parameters.get(),
+            chatRepository = get(),
+            userRepository = get(),
+            auth = get(),
+            context = androidContext()
+        )
+    }
+    // ─────────────────────────────────────────────────────────────────────────
     viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }

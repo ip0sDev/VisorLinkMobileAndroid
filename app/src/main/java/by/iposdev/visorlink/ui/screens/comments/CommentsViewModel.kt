@@ -1,0 +1,254 @@
+package by.iposdev.visorlink.ui.screens.comments
+
+import android.Manifest
+import android.content.Context
+import android.media.MediaRecorder
+import android.net.Uri
+import android.os.Build
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.data.repository.ChatRepository
+import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.VoicePlayerManager
+import by.iposdev.visorlink.utils.VoicePlaybackState
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import java.io.File
+
+data class CommentsUiState(
+    val post: Message? = null,
+    val comments: List<Comment> = emptyList(),
+    val revealedSpoilers: Set<String> = emptySet(),
+    val replyingTo: Comment? = null,
+    val isUploading: Boolean = false,
+    val isRecording: Boolean = false,
+    val error: String? = null,
+    val voicePlayback: VoicePlaybackState = VoicePlaybackState(),
+    val myMember: Member? = null
+) {
+    /** Comments are allowed when both the channel-level and post-level flags permit. */
+    fun commentsAllowed(channel: Chat?): Boolean {
+        if (channel?.settings?.allowComments == false) return false
+        if (post?.commentsEnabled == false) return false
+        return true
+    }
+
+    val isAdmin get() = myMember?.isAdmin() ?: false
+    val commentCount get() = post?.commentsCount ?: comments.size
+}
+
+class CommentsViewModel(
+    private val chatId: String,
+    private val messageId: String,
+    private val chatRepository: ChatRepository,
+    private val userRepository: UserRepository,
+    private val auth: FirebaseAuth,
+    private val context: Context
+) : ViewModel() {
+
+    val currentUid: String get() = auth.currentUser!!.uid
+    private var currentUsername = ""
+
+    private val _uiState = MutableStateFlow(CommentsUiState())
+    val uiState: StateFlow<CommentsUiState> = _uiState.asStateFlow()
+
+    val voicePlayer = VoicePlayerManager(context)
+
+    private var postListener: ListenerRegistration? = null
+    private var commentsListener: ListenerRegistration? = null
+
+    private var recorder: MediaRecorder? = null
+    private var recordingFile: File? = null
+    private var recordingStart = 0L
+
+    init {
+        viewModelScope.launch {
+            voicePlayer.state.collect { playbackState ->
+                _uiState.update { it.copy(voicePlayback = playbackState) }
+            }
+        }
+
+        viewModelScope.launch {
+            userRepository.currentUserFlow().catch { }
+                .collect { currentUsername = it?.username ?: "" }
+        }
+
+        viewModelScope.launch {
+            try {
+                val myMember = chatRepository.getMyMemberData(chatId)
+                _uiState.update { it.copy(myMember = myMember) }
+            } catch (_: Exception) {}
+        }
+
+        startListening()
+    }
+
+    // ─── Real-time listeners ──────────────────────────────────────────────────
+
+    private fun startListening() {
+        // Listen to the post document for live commentsCount / commentsEnabled
+        postListener = chatRepository.listenPost(chatId, messageId) { post ->
+            _uiState.update { it.copy(post = post) }
+        }
+        // Listen to comments subcollection
+        commentsListener = chatRepository.listenComments(chatId, messageId) { comments ->
+            _uiState.update { it.copy(comments = comments) }
+        }
+    }
+
+    // ─── Spoiler reveal (local, per-session) ──────────────────────────────────
+
+    fun revealSpoiler(id: String) {
+        _uiState.update { it.copy(revealedSpoilers = it.revealedSpoilers + id) }
+    }
+
+    // ─── Reply ────────────────────────────────────────────────────────────────
+
+    fun setReplyTo(comment: Comment?) = _uiState.update { it.copy(replyingTo = comment) }
+    fun clearReply() = _uiState.update { it.copy(replyingTo = null) }
+
+    // ─── Send text comment ────────────────────────────────────────────────────
+
+    fun sendText(text: String) {
+        val trimmed = text.trim().ifEmpty { return }
+        val reply = _uiState.value.replyingTo?.toCommentReplyData()
+        viewModelScope.launch {
+            clearReply()
+            try {
+                chatRepository.addComment(
+                    chatId = chatId, messageId = messageId,
+                    type = MessageType.TEXT, text = trimmed,
+                    replyTo = reply
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    // ─── Send image comment ───────────────────────────────────────────────────
+
+    fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
+        val reply = _uiState.value.replyingTo?.toCommentReplyData()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploading = true) }
+            clearReply()
+            try {
+                chatRepository.uploadAndCommentImage(
+                    chatId = chatId, messageId = messageId,
+                    file = uri, spoiler = isSpoiler, replyTo = reply
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            } finally {
+                _uiState.update { it.copy(isUploading = false) }
+            }
+        }
+    }
+
+    // ─── Voice recording ──────────────────────────────────────────────────────
+
+    fun startRecording() {
+        voicePlayer.stop()
+        val file = File(context.cacheDir, "comment_voice_${System.currentTimeMillis()}.webm")
+        recordingFile = file
+        recordingStart = System.currentTimeMillis()
+        @Suppress("DEPRECATION")
+        recorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            MediaRecorder(context) else MediaRecorder()).apply {
+            setAudioSource(MediaRecorder.AudioSource.MIC)
+            setOutputFormat(MediaRecorder.OutputFormat.WEBM)
+            setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+            setOutputFile(file.absolutePath)
+            prepare()
+            start()
+        }
+        _uiState.update { it.copy(isRecording = true) }
+    }
+
+    fun stopRecordingAndSend() {
+        val file = recordingFile ?: return
+        val duration = ((System.currentTimeMillis() - recordingStart) / 1000).toInt().coerceAtLeast(1)
+        try { recorder?.apply { stop(); release() } } catch (_: Exception) {}
+        recorder = null
+        val reply = _uiState.value.replyingTo?.toCommentReplyData()
+        _uiState.update { it.copy(isRecording = false) }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploading = true) }
+            clearReply()
+            try {
+                chatRepository.uploadAndCommentVoice(
+                    chatId = chatId, messageId = messageId,
+                    audioFile = file, durationSeconds = duration, replyTo = reply
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            } finally {
+                _uiState.update { it.copy(isUploading = false) }
+                file.delete()
+            }
+        }
+    }
+
+    fun cancelRecording() {
+        try { recorder?.apply { stop(); release() } } catch (_: Exception) {}
+        recorder = null
+        recordingFile?.delete()
+        recordingFile = null
+        _uiState.update { it.copy(isRecording = false) }
+    }
+
+    // ─── Reactions & delete ───────────────────────────────────────────────────
+
+    fun toggleReaction(commentId: String, emoji: String, currentReactions: List<Reaction>) {
+        viewModelScope.launch {
+            try {
+                chatRepository.toggleCommentReaction(chatId, messageId, commentId, emoji, currentReactions)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    fun deleteComment(commentId: String) {
+        viewModelScope.launch {
+            try {
+                chatRepository.deleteComment(chatId, messageId, commentId)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    // ─── Admin: toggle comments on this post ─────────────────────────────────
+
+    fun toggleComments(currentlyEnabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                chatRepository.togglePostComments(chatId, messageId, !currentlyEnabled)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    // ─── Voice playback ───────────────────────────────────────────────────────
+
+    fun playVoice(commentId: String, url: String, durationSec: Int) =
+        voicePlayer.play(commentId, url, durationSec)
+
+    fun seekVoice(fraction: Float) = voicePlayer.seekTo(fraction)
+
+    fun clearError() = _uiState.update { it.copy(error = null) }
+
+    override fun onCleared() {
+        // Both listeners MUST be removed to avoid memory leaks
+        postListener?.remove()
+        commentsListener?.remove()
+        voicePlayer.release()
+        super.onCleared()
+    }
+}

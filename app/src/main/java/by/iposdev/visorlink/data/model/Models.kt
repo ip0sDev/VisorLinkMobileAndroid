@@ -26,6 +26,7 @@ data class ChatSettings(
     val joinByLink: Boolean = true,
     val joinByTag: Boolean = false,
     val allowReactions: Boolean = true,
+    val allowComments: Boolean = true,   // ← NEW v4: global comments switch
     val inviteLink: String = ""
 )
 
@@ -117,6 +118,14 @@ fun canReact(chat: Chat, chatType: ChatType): Boolean {
     return chat.settings.allowReactions
 }
 
+// ─── v4: Two-level comments-allowed check ─────────────────────────────────────
+
+fun commentsAllowed(channel: Chat, post: Message): Boolean {
+    if (channel.settings.allowComments == false) return false
+    if (post.commentsEnabled == false) return false
+    return true
+}
+
 // ─── Invites ──────────────────────────────────────────────────────────────────
 
 data class GroupInvite(
@@ -169,7 +178,10 @@ data class Message(
     val replyTo: Map<String, Any?>? = null,
     val reactions: List<Map<String, Any>> = emptyList(),
     val readBy: List<String> = emptyList(),
-    val spoiler: Boolean? = null      // ← скрыть изображение под спойлер
+    val spoiler: Boolean = false,
+    // ─── NEW v4 ───────────────────────────────────────────────────────────────
+    val commentsEnabled: Boolean? = null,   // null = inherit channel setting
+    val commentsCount: Int = 0
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -230,6 +242,56 @@ data class Sticker(
     val name: String = "",
     val storagePath: String = "",
     val createdAt: Timestamp? = null
+)
+
+// ─── v4: Comment ──────────────────────────────────────────────────────────────
+
+data class Comment(
+    val id: String = "",
+    val senderId: String = "",
+    val senderUsername: String = "",
+    val type: String = MessageType.TEXT,
+    val text: String? = null,
+    val url: String? = null,
+    val fileName: String? = null,
+    val duration: Int? = null,
+    val spoiler: Boolean = false,
+    val replyTo: CommentReplyData? = null,
+    val reactions: List<Map<String, Any>> = emptyList(),
+    val deleted: Boolean = false,
+    val deletedAt: Timestamp? = null,
+    val createdAt: Timestamp? = null
+) {
+    val parsedReactions: List<Reaction>
+        get() = reactions.mapNotNull { map ->
+            try {
+                @Suppress("UNCHECKED_CAST")
+                Reaction(
+                    emoji = map["emoji"] as? String ?: return@mapNotNull null,
+                    uids = map["uids"] as? List<String> ?: emptyList(),
+                    count = (map["count"] as? Long)?.toInt() ?: 0
+                )
+            } catch (e: Exception) { null }
+        }.filter { it.count > 0 }
+}
+
+data class CommentReplyData(
+    val id: String = "",
+    val type: String = "",
+    val text: String? = null,
+    val url: String? = null,
+    val senderUsername: String = ""
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "id" to id, "type" to type,
+        "text" to text, "url" to url,
+        "senderUsername" to senderUsername
+    )
+}
+
+fun Comment.toCommentReplyData() = CommentReplyData(
+    id = id, type = type, text = text, url = url,
+    senderUsername = senderUsername
 )
 
 // ─── Presence / Topbar ───────────────────────────────────────────────────────

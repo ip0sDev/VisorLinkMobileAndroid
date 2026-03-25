@@ -1,6 +1,7 @@
 package by.iposdev.visorlink.data.repository
 
 import android.net.Uri
+import androidx.core.net.toUri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
@@ -309,8 +310,6 @@ class ChatRepository(
         batch.commit().await()
     }
 
-    // isSpoiler=true → добавляет поле "spoiler":true в документ сообщения
-    // Firestore rules поддерживают обновление поля spoiler
     suspend fun sendImage(
         chatId: String,
         uri: Uri,
@@ -328,7 +327,6 @@ class ChatRepository(
             "url" to url,
             "fileName" to (uri.lastPathSegment ?: "image")
         )
-        // Пишем spoiler только если true — не засоряем обычные сообщения
         if (isSpoiler) extra["spoiler"] = true
 
         sendExtra(chatId, extra, "📷 Image", senderUsername, replyTo)
@@ -401,5 +399,164 @@ class ChatRepository(
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
         }
         ref.update("reactions", updated.map { it.toMap() }).await()
+    }
+
+    // ─── v4: Comments Firestore listeners ─────────────────────────────────────
+
+    /**
+     * Real-time listener for comments on a specific channel post.
+     * Returns a ListenerRegistration — caller must call .remove() in onCleared().
+     */
+    fun listenComments(
+        chatId: String,
+        messageId: String,
+        onUpdate: (List<Comment>) -> Unit
+    ): ListenerRegistration {
+        return db.collection("chats").document(chatId)
+            .collection("messages").document(messageId)
+            .collection("comments")
+            .orderBy("createdAt", Query.Direction.ASCENDING)
+            .addSnapshotListener { snap, error ->
+                if (error != null || snap == null) return@addSnapshotListener
+                val comments = snap.documents.mapNotNull { doc ->
+                    try { doc.toObject(Comment::class.java)?.copy(id = doc.id) }
+                    catch (_: Exception) { null }
+                }
+                onUpdate(comments)
+            }
+    }
+
+    /**
+     * Real-time listener for the post document itself (for live commentsCount
+     * and commentsEnabled). Must be active simultaneously with listenComments.
+     */
+    fun listenPost(
+        chatId: String,
+        messageId: String,
+        onUpdate: (Message) -> Unit
+    ): ListenerRegistration {
+        return db.collection("chats").document(chatId)
+            .collection("messages").document(messageId)
+            .addSnapshotListener { snap, _ ->
+                snap?.toObject(Message::class.java)
+                    ?.copy(id = snap.id)
+                    ?.let(onUpdate)
+            }
+    }
+
+    // ─── v4: Cloud Function wrappers for comments ─────────────────────────────
+
+    /**
+     * Creates a comment and atomically increments commentsCount on the post.
+     * NEVER let the client write commentsCount directly — always go through here.
+     */
+    suspend fun addComment(
+        chatId: String,
+        messageId: String,
+        type: String,
+        text: String? = null,
+        url: String? = null,
+        fileName: String? = null,
+        duration: Int? = null,
+        spoiler: Boolean = false,
+        replyTo: CommentReplyData? = null
+    ): String {
+        val data = buildMap<String, Any?> {
+            put("chatId", chatId)
+            put("messageId", messageId)
+            put("type", type)
+            if (text != null) put("text", text)
+            if (url != null) put("url", url)
+            if (fileName != null) put("fileName", fileName)
+            if (duration != null) put("duration", duration)
+            put("spoiler", spoiler)
+            if (replyTo != null) put("replyTo", replyTo.toMap())
+        }
+        val result = functions.getHttpsCallable("addComment").call(data).await()
+        return (result.data as Map<*, *>)["commentId"] as String
+    }
+
+    /** Admin: enable or disable comments for a specific post. */
+    suspend fun togglePostComments(chatId: String, messageId: String, enabled: Boolean) {
+        functions.getHttpsCallable("togglePostComments").call(mapOf(
+            "chatId" to chatId,
+            "messageId" to messageId,
+            "enabled" to enabled
+        )).await()
+    }
+
+    // ─── v4: Comment reactions & soft delete (direct Firestore) ───────────────
+
+    suspend fun toggleCommentReaction(
+        chatId: String,
+        messageId: String,
+        commentId: String,
+        emoji: String,
+        currentReactions: List<Reaction>
+    ) {
+        val existing = currentReactions.find { it.emoji == emoji }
+        val updated = if (existing == null) {
+            currentReactions + Reaction(emoji, listOf(currentUid), 1)
+        } else {
+            val hasMe = currentUid in existing.uids
+            currentReactions.map { r ->
+                if (r.emoji != emoji) r
+                else if (hasMe) r.copy(uids = r.uids - currentUid, count = r.count - 1)
+                else r.copy(uids = r.uids + currentUid, count = r.count + 1)
+            }.filter { it.count > 0 }
+        }
+        db.collection("chats").document(chatId)
+            .collection("messages").document(messageId)
+            .collection("comments").document(commentId)
+            .update("reactions", updated.map { it.toMap() })
+            .await()
+    }
+
+    suspend fun deleteComment(chatId: String, messageId: String, commentId: String) {
+        db.collection("chats").document(chatId)
+            .collection("messages").document(messageId)
+            .collection("comments").document(commentId)
+            .update(mapOf(
+                "deleted" to true,
+                "deletedAt" to FieldValue.serverTimestamp()
+            )).await()
+    }
+
+    // ─── v4: Upload media for comments ────────────────────────────────────────
+
+    suspend fun uploadAndCommentImage(
+        chatId: String,
+        messageId: String,
+        file: Uri,
+        spoiler: Boolean,
+        replyTo: CommentReplyData? = null
+    ) {
+        val filename = "${System.currentTimeMillis()}_${file.lastPathSegment}"
+        val storageRef = storage.reference.child("chats/$chatId/comments/$filename")
+        storageRef.putFile(file).await()
+        val url = storageRef.downloadUrl.await().toString()
+        addComment(
+            chatId = chatId, messageId = messageId,
+            type = MessageType.IMAGE, url = url, fileName = filename,
+            spoiler = spoiler, replyTo = replyTo
+        )
+    }
+
+    suspend fun uploadAndCommentVoice(
+        chatId: String,
+        messageId: String,
+        audioFile: File,
+        durationSeconds: Int,
+        replyTo: CommentReplyData? = null
+    ) {
+        val path = "chats/$chatId/comments/voice_${System.currentTimeMillis()}.webm"
+        val storageRef = storage.reference.child(path)
+        storageRef.putFile(audioFile.toUri()).await()
+        val url = storageRef.downloadUrl.await().toString()
+        addComment(
+            chatId = chatId, messageId = messageId,
+            type = MessageType.VOICE, url = url,
+            duration = durationSeconds, replyTo = replyTo
+        )
     }
 }

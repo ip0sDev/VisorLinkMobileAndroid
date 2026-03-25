@@ -11,11 +11,14 @@ import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
 import by.iposdev.visorlink.ui.screens.chat.ChatScreen
 import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListScreen
+import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
+import by.iposdev.visorlink.ui.screens.comments.CommentsScreen
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
 import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
 import by.iposdev.visorlink.ui.screens.stickers.StickersScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun VisorLinkNavGraph(
@@ -63,7 +66,6 @@ fun VisorLinkNavGraph(
                 onOpenProfile = { navController.navigate(Screen.Profile.route) },
                 onOpenSettings = { navController.navigate(Screen.Settings.route) },
                 onCreateChat = { navController.navigate(Screen.CreateChat.route) },
-                // ──> Направляем поиск каналов в общий поиск <──
                 onFindChannel = { navController.navigate(Screen.Search.createRoute(null)) },
                 onOpenNotifications = { navController.navigate(Screen.Notifications.route) }
             )
@@ -96,6 +98,10 @@ fun VisorLinkNavGraph(
                 onMentionClick = { usernameOrTag ->
                     navController.navigate(Screen.Search.createRoute(usernameOrTag))
                 },
+                // ─── NEW v4: open comments for a channel post ─────────────────
+                onOpenComments = { msgId ->
+                    navController.navigate(Screen.Comments.createRoute(chatId, msgId))
+                },
                 hapticEnabled = hapticEnabled
             )
         }
@@ -127,7 +133,6 @@ fun VisorLinkNavGraph(
             )
         ) { backStackEntry ->
             val initialQuery = backStackEntry.arguments?.getString("query")
-
             SearchScreen(
                 initialQuery = initialQuery,
                 onNavigateBack = { navController.popBackStack() },
@@ -136,9 +141,7 @@ fun VisorLinkNavGraph(
                         popUpTo(Screen.Search.route) { inclusive = true }
                     }
                 },
-                // ──> Добавляем обработчик для вступления в группы/каналы <──
                 onJoinedGroup = { chatId ->
-                    // Для каналов/групп мы передаем chatId и в качестве otherUid
                     navController.navigate(Screen.Chat.createRoute(chatId, chatId)) {
                         popUpTo(Screen.Search.route) { inclusive = true }
                     }
@@ -216,6 +219,38 @@ fun VisorLinkNavGraph(
             by.iposdev.visorlink.ui.screens.group.ChatSettingsScreen(
                 chatId = chatId,
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        // ─── NEW v4: Comments screen ──────────────────────────────────────────
+        composable(
+            route = Screen.Comments.route,
+            arguments = listOf(
+                navArgument("chatId") { type = NavType.StringType },
+                navArgument("messageId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val chatId    = backStackEntry.arguments?.getString("chatId")    ?: return@composable
+            val messageId = backStackEntry.arguments?.getString("messageId") ?: return@composable
+
+            // Resolve the Chat object so CommentsScreen can check allowComments.
+            // ChatListViewModel is already scoped to the NavBackStack entry for ChatList,
+            // so we look it up from the back-stack entry instead of creating a new instance.
+            val chatListEntry = remember(navController) {
+                try { navController.getBackStackEntry(Screen.ChatList.route) } catch (_: Exception) { null }
+            }
+            val chatListVm: ChatListViewModel? = chatListEntry?.let { koinViewModel(viewModelStoreOwner = it) }
+            val channel = chatListVm?.chats?.collectAsState()?.value?.firstOrNull { it.id == chatId }
+
+            CommentsScreen(
+                chatId = chatId,
+                messageId = messageId,
+                channel = channel,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenImageViewer = { url ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url))
+                },
+                hapticEnabled = hapticEnabled
             )
         }
     }

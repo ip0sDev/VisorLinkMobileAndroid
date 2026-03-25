@@ -77,7 +77,8 @@ fun ChatScreen(
     onOpenStickers: (onSelect: (Sticker) -> Unit) -> Unit,
     onOpenChatSettings: (chatId: String) -> Unit = {},
     onOpenImageViewer: (url: String) -> Unit = {},
-    onMentionClick: (String) -> Unit = {}, // <-- Добавлен коллбэк для @тегов
+    onMentionClick: (String) -> Unit = {},
+    onOpenComments: (messageId: String) -> Unit = {}, // <-- ДОБАВЛЕНО: для v4 comments
     hapticEnabled: Boolean = true
 ) {
     val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid) })
@@ -516,7 +517,9 @@ fun ChatScreen(
                                             viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions)
                                         },
                                         onReplyClick = onScrollToMessage,
-                                        onMentionClick = onMentionClick // <-- Прокидываем коллбэк
+                                        onMentionClick = onMentionClick,
+                                        onOpenComments = { onOpenComments(item.message.id) }, // <-- ДОБАВЛЕНО: передаем в MessageBubble
+                                        chat = uiState.chat // <-- ДОБАВЛЕНО: передаем стейт чата
                                     )
                                 }
                             }
@@ -625,7 +628,7 @@ fun LinkifiedText(
     color: Color,
     linkColor: Color,
     onLongPress: () -> Unit,
-    onMentionClick: (String) -> Unit // <-- Новый коллбэк
+    onMentionClick: (String) -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
     val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -959,7 +962,9 @@ private fun MessageBubble(
     onImageTap: (url: String) -> Unit,
     onReact: (String) -> Unit,
     onReplyClick: (String) -> Unit,
-    onMentionClick: (String) -> Unit // <-- Добавлен коллбэк для тегов
+    onMentionClick: (String) -> Unit,
+    onOpenComments: () -> Unit = {}, // <-- ДОБАВЛЕНО: v4 comments
+    chat: Chat? = null // <-- ДОБАВЛЕНО: v4 comments
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
@@ -980,7 +985,9 @@ private fun MessageBubble(
                 onLongPress()
             },
             onReact = onReact,
-            onReplyClick = onReplyClick
+            onReplyClick = onReplyClick,
+            onOpenComments = onOpenComments, // <-- ДОБАВЛЕНО: v4 comments
+            chat = chat // <-- ДОБАВЛЕНО: v4 comments
         )
         return
     }
@@ -1043,7 +1050,7 @@ private fun MessageBubble(
                             haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
                             onLongPress()
                         },
-                        onMentionClick = onMentionClick // <-- Прокидываем коллбэк
+                        onMentionClick = onMentionClick
                     )
                     MessageType.VOICE -> VoiceBubble(
                         messageId = message.id, url = message.url ?: "",
@@ -1095,6 +1102,16 @@ private fun MessageBubble(
             ReactionRow(reactions = message.parsedReactions, currentUid = currentUid,
                 hapticEnabled = hapticEnabled, onReact = onReact)
         }
+
+        // <-- ДОБАВЛЕНО: v4 comments
+        if (chatType == ChatType.CHANNEL && !message.deleted) {
+            CommentsButton(
+                post = message,
+                channelAllowsComments = chat?.settings?.allowComments ?: true,
+                onClick = onOpenComments,
+                modifier = Modifier.padding(start = if (isMine) 0.dp else 0.dp)
+            )
+        }
     }
 }
 
@@ -1112,7 +1129,9 @@ private fun ImageBubble(
     onTap: () -> Unit,
     onLongPress: () -> Unit,
     onReact: (String) -> Unit,
-    onReplyClick: (String) -> Unit
+    onReplyClick: (String) -> Unit,
+    onOpenComments: () -> Unit = {}, // <-- ДОБАВЛЕНО: v4 comments
+    chat: Chat? = null // <-- ДОБАВЛЕНО: v4 comments
 ) {
     val imageShape = if (isMine)
         RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
@@ -1235,6 +1254,15 @@ private fun ImageBubble(
         ) {
             ReactionRow(reactions = message.parsedReactions, currentUid = currentUid,
                 hapticEnabled = hapticEnabled, onReact = onReact)
+        }
+
+        // <-- ДОБАВЛЕНО: v4 comments
+        if (chatType == ChatType.CHANNEL && !message.deleted) {
+            CommentsButton(
+                post = message,
+                channelAllowsComments = chat?.settings?.allowComments ?: true,
+                onClick = onOpenComments
+            )
         }
     }
 }
@@ -1369,7 +1397,7 @@ private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
 // ─── Voice bubble ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun VoiceBubble(
+fun VoiceBubble(
     messageId: String,
     url: String,
     durationSec: Int,

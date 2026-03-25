@@ -4,66 +4,78 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 1. ОСНОВНОЙ ЧЕРНЫЙ СИЛУЭТ (Строгая форма без пересечений) -->
-    <path
-        android:fillColor="#000000"
-        android:pathData="
-            M 39,94
-            L 69,94
-            C 84,94 89,89 92,79
-            C 94,72 92,69 89,66
-            L 69,49
-            C 54,36 34,24 19,24
-            C 14,39 19,59 26,69
-            C 29,79 29,89 39,94
-            Z" />
+    <!-- Группа для центрирования и уменьшения.
+         scale 0.55 гарантирует, что иконка не вылезет за края Safe Zone -->
+    <group
+        android:scaleX="0.55"
+        android:scaleY="0.55"
+        android:pivotX="54"
+        android:pivotY="54"
+        android:translateY="2">
 
-    <!-- 2. КРУГЛЫЙ ШАРНИР (Идеальный круг, черная заливка, белая обводка) -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.5"
-        android:fillColor="#000000"
-        android:pathData="M 61,79 A 12,12 0 1,1 37,79 A 12,12 0 1,1 61,79" />
+        <!-- 1. ОСНОВНОЙ СИЛУЭТ (Теперь прозрачный внутри, с белым контуром) -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="4.5"
+            android:strokeLineJoin="round"
+            android:pathData="
+                M 39,94
+                L 69,94
+                C 84,94 89,89 92,79
+                C 94,72 92,69 89,66
+                L 69,49
+                C 54,36 34,24 19,24
+                C 14,39 19,59 26,69
+                C 29,79 29,89 39,94
+                Z" />
 
-    <!-- 3. ВЕРХНИЙ РАЗРЕЗ ВИЗОРА (Прямая линия) -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M 57,70 L 74,54" />
+        <!-- 2. КРУГЛЫЙ ШАРНИР (Только контур) -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="4.5"
+            android:pathData="M 61,79 A 12,12 0 1,1 37,79 A 12,12 0 1,1 61,79" />
 
-    <!-- 4. НИЖНИЙ РАЗРЕЗ (Линия к челюсти) -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:pathData="M 58,86 L 66,92" />
+        <!-- 3. ВЕРХНИЙ РАЗРЕЗ ВИЗОРА -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3.5"
+            android:strokeLineCap="round"
+            android:pathData="M 57,70 L 74,54" />
 
-    <!-- 5. ГЛАЗ (Четкий белый треугольник) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M 70,62 L 76,65 L 72,68 Z" />
+        <!-- 4. НИЖНИЙ РАЗРЕЗ -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3.5"
+            android:strokeLineCap="round"
+            android:pathData="M 58,86 L 66,92" />
 
-    <!-- 6. ПАСТЬ / ВОЛНА (Рубленый зигзаг) -->
-    <path
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3.5"
-        android:strokeLineCap="square"
-        android:strokeLineJoin="miter"
-        android:pathData="M 67,74 L 79,84 L 84,81" />
+        <!-- 5. ГЛАЗ (Оставил с заливкой для контраста, так смотрится выразительнее) -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M 70,62 L 76,65 L 72,68 Z" />
 
-    <!-- 7. ВЫРЕЗЫ В УХЕ (Те самые ломаные линии, сделаны рубленым полигоном) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="
-            M 46,67
-            L 42,59
-            L 34,61
-            L 39,54
-            L 32,56
-            L 42,44
-            L 39,32
-            L 46,49
-            Z" />
+        <!-- 6. ПАСТЬ / ВОЛНА -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3.5"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M 67,74 L 79,84 L 84,81" />
 
+        <!-- 7. ВЫРЕЗЫ В УХЕ (Переведено в контур, чтобы смотрелось как техно-деталь) -->
+        <path
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3"
+            android:strokeLineJoin="round"
+            android:pathData="
+                M 46,67
+                L 42,59
+                L 34,61
+                L 39,54
+                L 32,56
+                L 42,44
+                L 39,32
+                L 46,49
+                Z" />
+    </group>
 </vector>
