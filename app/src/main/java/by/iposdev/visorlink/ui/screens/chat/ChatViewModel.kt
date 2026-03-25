@@ -20,8 +20,12 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.ListenerRegistration
+import com.google.firebase.storage.storage
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
@@ -46,7 +50,8 @@ data class ChatUiState(
     val error: String? = null,
     val isRecording: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
-    val voicePlayback: VoicePlaybackState = VoicePlaybackState()
+    val voicePlayback: VoicePlaybackState = VoicePlaybackState(),
+    val wallpaperUrl: String? = null // НОВОЕ ПОЛЕ ДЛЯ ОБОЕВ
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -78,6 +83,7 @@ class ChatViewModel(
     private var recordingStart = 0L
     private var typingManager: TypingManager? = null
     private var onlineCountListener: ValueEventListener? = null
+    private var wallpaperListener: ListenerRegistration? = null // СЛУШАТЕЛЬ ОБОЕВ
 
     init {
         viewModelScope.launch {
@@ -105,6 +111,13 @@ class ChatViewModel(
             }
 
             typingManager = TypingManager(chatId, currentUid)
+
+            // Запускаем реактивное обновление слушателя обоев, если изменится тип чата
+            launch {
+                _uiState.map { it.chatType }.distinctUntilChanged().collect { type ->
+                    startWallpaperListener(type)
+                }
+            }
 
             launch {
                 db.collection("chats").document(chatId)
@@ -184,6 +197,84 @@ class ChatViewModel(
             }
         }
     }
+
+    // ─── Обои (Wallpapers) ───────────────────────────────────────────────────
+
+    private fun startWallpaperListener(type: ChatType) {
+        wallpaperListener?.remove()
+
+        // Личные: у каждого своя запись. Группы/Каналы: единая запись "shared"
+        val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
+
+        wallpaperListener = db.collection("chats").document(chatId)
+            .collection("wallpapers").document(docId)
+            .addSnapshotListener { snap, error ->
+                if (error != null) return@addSnapshotListener
+                val url = snap?.getString("url")
+                _uiState.update { it.copy(wallpaperUrl = url) }
+            }
+    }
+
+    fun setWallpaper(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isUploading = true) }
+
+                val type = _uiState.value.chatType
+                val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
+                val storagePath = "chats/$chatId/wallpapers/${docId}_${System.currentTimeMillis()}.jpg"
+                val storageRef = Firebase.storage.reference.child(storagePath)
+
+                // Загружаем файл
+                storageRef.putFile(uri).await()
+                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                // Пишем в Firestore
+                val data = hashMapOf(
+                    "url" to downloadUrl,
+                    "storagePath" to storageRef.path,
+                    "setBy" to currentUid,
+                    "setAt" to FieldValue.serverTimestamp()
+                )
+                db.collection("chats").document(chatId)
+                    .collection("wallpapers").document(docId)
+                    .set(data).await()
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Failed to set wallpaper: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isUploading = false) }
+            }
+        }
+    }
+
+    fun removeWallpaper() {
+        viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isUploading = true) } // Используем статус загрузки для лоадера
+                val type = _uiState.value.chatType
+                val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
+                val docRef = db.collection("chats").document(chatId).collection("wallpapers").document(docId)
+
+                // Получаем путь к файлу в Storage, чтобы удалить его физически
+                val snap = docRef.get().await()
+                val storagePath = snap.getString("storagePath")
+
+                // Удаляем из Firestore
+                docRef.delete().await()
+
+                // Очищаем Storage
+                if (storagePath != null) {
+                    Firebase.storage.getReference(storagePath).delete().await()
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Failed to remove wallpaper: ${e.message}") }
+            } finally {
+                _uiState.update { it.copy(isUploading = false) }
+            }
+        }
+    }
+
 
     // ─── Voice playback ───────────────────────────────────────────────────────
 
@@ -412,6 +503,7 @@ class ChatViewModel(
         onlineCountListener?.let {
             Firebase.database.getReference("presence").removeEventListener(it)
         }
+        wallpaperListener?.remove() // ЧИСТИМ СЛУШАТЕЛЯ
         voicePlayer.release()
         super.onCleared()
     }

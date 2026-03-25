@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 import com.google.firebase.Firebase
@@ -13,13 +14,22 @@ import kotlinx.coroutines.flow.callbackFlow
 
 class TypingManager(private val chatId: String, private val uid: String) {
 
-    private val rtdb = Firebase.database
-    private val typingRef = rtdb.getReference("typing/$chatId/$uid")
+    // ИЗМЕНЕНИЕ 1: Получаем инстанс базы данных один раз для чистоты кода
+    private val rtdb = Firebase.database.reference
+    private val typingRef = rtdb.child("typing/$chatId/$uid")
+
     private val handler = Handler(Looper.getMainLooper())
     private val stopRunnable = Runnable { stopTyping() }
 
     fun onTyping() {
-        typingRef.setValue(mapOf("uid" to uid, "ts" to System.currentTimeMillis()))
+        // ИЗМЕНЕНИЕ 2 (КЛЮЧЕВОЕ): Используем серверное время вместо системного
+        val typingUpdate = mapOf(
+            "uid" to uid,
+            "ts" to ServerValue.TIMESTAMP
+        )
+        typingRef.setValue(typingUpdate)
+
+        // Эта логика с Handler абсолютно правильная, оставляем ее
         handler.removeCallbacks(stopRunnable)
         handler.postDelayed(stopRunnable, 3000)
     }
@@ -29,6 +39,7 @@ class TypingManager(private val chatId: String, private val uid: String) {
         typingRef.removeValue()
     }
 
+    // Этот метод будет вызван в onCleared() у ViewModel
     fun cleanup() {
         stopTyping()
     }
@@ -42,11 +53,15 @@ class TypingManager(private val chatId: String, private val uid: String) {
                     val someoneTyping = snap.children.any { child ->
                         val uid = child.child("uid").getValue(String::class.java)
                         val ts = child.child("ts").getValue(Long::class.java) ?: 0L
+                        // Логика проверки остается той же, но теперь 'ts' надежный
                         uid != currentUid && (now - ts) < 4000
                     }
                     trySend(someoneTyping)
                 }
-                override fun onCancelled(e: DatabaseError) { trySend(false) }
+                override fun onCancelled(e: DatabaseError) {
+                    // В случае ошибки лучше отправить false
+                    trySend(false)
+                }
             }
             ref.addValueEventListener(listener)
             awaitClose { ref.removeEventListener(listener) }

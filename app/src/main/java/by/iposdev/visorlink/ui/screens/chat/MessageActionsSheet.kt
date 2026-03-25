@@ -7,10 +7,11 @@ import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,19 +24,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
-import by.iposdev.visorlink.data.model.Message
-import androidx.compose.ui.res.stringResource
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.data.model.Message
 import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
 
-private val QUICK_EMOJIS = listOf("👍", "❤️", "😂", "😮", "😢", "🔥")
+// Обновленный расширенный список реакций
+private val QUICK_REACTIONS = listOf(
+    "👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👏",
+    "🥰", "😍", "🤩", "😭", "🤔", "👀", "💯", "✅",
+    "🙏", "😎", "🤣", "😅", "😡", "💀", "🎊", "⚡"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,16 +72,17 @@ fun MessageActionSheet(
                 .navigationBarsPadding()
                 .padding(bottom = 8.dp)
         ) {
-            // ── Реакции — ряд эмодзи-кнопок вверху ───────────────────────────
+            // ── Реакции — ГОРИЗОНТАЛЬНО СКРОЛЛИРУЕМЫЙ ряд эмодзи-кнопок ─────
             if (canReact && !message.deleted) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
+                        .horizontalScroll(rememberScrollState()) // Добавлен скролл
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp), // Отступы между эмодзи
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    QUICK_EMOJIS.forEach { emoji ->
+                    QUICK_REACTIONS.forEach { emoji ->
                         val alreadyReacted = message.parsedReactions
                             .find { it.emoji == emoji }
                             ?.uids?.contains(currentUid) == true
