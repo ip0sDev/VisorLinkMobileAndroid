@@ -26,17 +26,15 @@ data class ChatSettings(
     val joinByLink: Boolean = true,
     val joinByTag: Boolean = false,
     val allowReactions: Boolean = true,
-    val allowComments: Boolean = true,   // ← NEW v4: global comments switch
+    val allowComments: Boolean = true,
     val inviteLink: String = ""
 )
 
 data class Chat(
     val id: String = "",
     val type: String = "direct",
-    // direct only
     val participants: List<String> = emptyList(),
     val participantData: Map<String, Map<String, String>> = emptyMap(),
-    // group/channel only
     val name: String = "",
     val tag: String = "",
     val description: String = "",
@@ -45,7 +43,6 @@ data class Chat(
     val memberCount: Int = 0,
     val memberIds: List<String> = emptyList(),
     val settings: ChatSettings = ChatSettings(),
-    // common
     val lastMessage: String? = null,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null
@@ -160,6 +157,27 @@ data class TagSearchResult(
     val joinByTag: Boolean = false
 )
 
+// ─── Album Image ──────────────────────────────────────────────────────────────
+
+/** Элемент массива images[] в Firestore (тип сообщения "album") */
+data class AlbumImage(
+    val url: String = "",
+    val fileName: String = "",
+    val spoiler: Boolean = false
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "url" to url,
+        "fileName" to fileName,
+        "spoiler" to spoiler
+    )
+}
+
+/** Локальное состояние одного выбранного фото ДО загрузки на сервер */
+data class AlbumImageLocal(
+    val uri: android.net.Uri,
+    val spoiler: Boolean = false
+)
+
 // ─── Message ──────────────────────────────────────────────────────────────────
 
 data class Message(
@@ -179,9 +197,12 @@ data class Message(
     val reactions: List<Map<String, Any>> = emptyList(),
     val readBy: List<String> = emptyList(),
     val spoiler: Boolean = false,
-    // ─── NEW v4 ───────────────────────────────────────────────────────────────
-    val commentsEnabled: Boolean? = null,   // null = inherit channel setting
-    val commentsCount: Int = 0
+    // ─── v4 ───────────────────────────────────────────────────────────────────
+    val commentsEnabled: Boolean? = null,
+    val commentsCount: Int = 0,
+    // ─── Album ────────────────────────────────────────────────────────────────
+    val caption: String? = null,
+    val images: List<AlbumImage> = emptyList()
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -208,10 +229,11 @@ data class Message(
 }
 
 object MessageType {
-    const val TEXT = "text"
-    const val IMAGE = "image"
-    const val VOICE = "voice"
+    const val TEXT    = "text"
+    const val IMAGE   = "image"
+    const val VOICE   = "voice"
     const val STICKER = "sticker"
+    const val ALBUM   = "album"
 }
 
 data class ReplyData(

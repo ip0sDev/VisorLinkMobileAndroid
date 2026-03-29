@@ -51,7 +51,13 @@ data class ChatUiState(
     val isRecording: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
     val voicePlayback: VoicePlaybackState = VoicePlaybackState(),
-    val wallpaperUrl: String? = null // НОВОЕ ПОЛЕ ДЛЯ ОБОЕВ
+    val wallpaperUrl: String? = null,
+    // ─── Album draft ──────────────────────────────────────────────────────────
+    val albumDraft: List<AlbumImageLocal> = emptyList(),
+    val albumCaption: String = "",
+    val showAlbumPreview: Boolean = false,
+    /** Заполняется при выборе одного фото — передаётся в ImageEditorScreen */
+    val singlePickedUri: Uri? = null
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -83,7 +89,7 @@ class ChatViewModel(
     private var recordingStart = 0L
     private var typingManager: TypingManager? = null
     private var onlineCountListener: ValueEventListener? = null
-    private var wallpaperListener: ListenerRegistration? = null // СЛУШАТЕЛЬ ОБОЕВ
+    private var wallpaperListener: ListenerRegistration? = null
 
     init {
         viewModelScope.launch {
@@ -112,7 +118,6 @@ class ChatViewModel(
 
             typingManager = TypingManager(chatId, currentUid)
 
-            // Запускаем реактивное обновление слушателя обоев, если изменится тип чата
             launch {
                 _uiState.map { it.chatType }.distinctUntilChanged().collect { type ->
                     startWallpaperListener(type)
@@ -198,14 +203,11 @@ class ChatViewModel(
         }
     }
 
-    // ─── Обои (Wallpapers) ───────────────────────────────────────────────────
+    // ─── Обои ─────────────────────────────────────────────────────────────────
 
     private fun startWallpaperListener(type: ChatType) {
         wallpaperListener?.remove()
-
-        // Личные: у каждого своя запись. Группы/Каналы: единая запись "shared"
         val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
-
         wallpaperListener = db.collection("chats").document(chatId)
             .collection("wallpapers").document(docId)
             .addSnapshotListener { snap, error ->
@@ -219,17 +221,12 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 _uiState.update { it.copy(isUploading = true) }
-
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
                 val storagePath = "chats/$chatId/wallpapers/${docId}_${System.currentTimeMillis()}.jpg"
                 val storageRef = Firebase.storage.reference.child(storagePath)
-
-                // Загружаем файл
                 storageRef.putFile(uri).await()
                 val downloadUrl = storageRef.downloadUrl.await().toString()
-
-                // Пишем в Firestore
                 val data = hashMapOf(
                     "url" to downloadUrl,
                     "storagePath" to storageRef.path,
@@ -239,7 +236,6 @@ class ChatViewModel(
                 db.collection("chats").document(chatId)
                     .collection("wallpapers").document(docId)
                     .set(data).await()
-
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Failed to set wallpaper: ${e.message}") }
             } finally {
@@ -251,19 +247,13 @@ class ChatViewModel(
     fun removeWallpaper() {
         viewModelScope.launch {
             try {
-                _uiState.update { it.copy(isUploading = true) } // Используем статус загрузки для лоадера
+                _uiState.update { it.copy(isUploading = true) }
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
                 val docRef = db.collection("chats").document(chatId).collection("wallpapers").document(docId)
-
-                // Получаем путь к файлу в Storage, чтобы удалить его физически
                 val snap = docRef.get().await()
                 val storagePath = snap.getString("storagePath")
-
-                // Удаляем из Firestore
                 docRef.delete().await()
-
-                // Очищаем Storage
                 if (storagePath != null) {
                     Firebase.storage.getReference(storagePath).delete().await()
                 }
@@ -275,6 +265,79 @@ class ChatViewModel(
         }
     }
 
+    // ─── Album draft ──────────────────────────────────────────────────────────
+
+    /**
+     * Вызывается когда мульти-пикер вернул результат.
+     * 1 фото → старый флоу через ImageEditorScreen (singlePickedUri).
+     * 2–10 фото → album preview sheet.
+     */
+    fun onImagesPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        if (uris.size == 1) {
+            // Одно фото — передаём в ImageEditor как раньше
+            _uiState.update { it.copy(singlePickedUri = uris.first()) }
+            return
+        }
+        val items = uris.take(10).map { AlbumImageLocal(uri = it) }
+        _uiState.update {
+            it.copy(
+                albumDraft = items,
+                albumCaption = "",
+                showAlbumPreview = true
+            )
+        }
+    }
+
+    /** Снимаем/ставим spoiler на конкретном фото в draft */
+    fun onAlbumSpoilerToggle(index: Int) {
+        val current = _uiState.value.albumDraft.toMutableList()
+        if (index !in current.indices) return
+        current[index] = current[index].copy(spoiler = !current[index].spoiler)
+        _uiState.update { it.copy(albumDraft = current) }
+    }
+
+    /** Изменение подписи, max 500 символов */
+    fun onAlbumCaptionChange(text: String) {
+        if (text.length <= 500) _uiState.update { it.copy(albumCaption = text) }
+    }
+
+    /** Закрыть preview sheet без отправки */
+    fun dismissAlbumPreview() {
+        _uiState.update { it.copy(showAlbumPreview = false, albumDraft = emptyList(), albumCaption = "") }
+    }
+
+    /** Сбросить singlePickedUri после того как ImageEditorScreen открылся */
+    fun clearSinglePickedUri() {
+        _uiState.update { it.copy(singlePickedUri = null) }
+    }
+
+    /**
+     * Параллельно загружает все фото и вызывает sendAlbum Cloud Function.
+     * При любой ошибке загрузки — откатывает UI и показывает ошибку.
+     */
+    fun sendAlbum() {
+        val draft = _uiState.value.albumDraft
+        val caption = _uiState.value.albumCaption.trim().ifEmpty { null }
+        val reply = _uiState.value.replyingTo?.toReplyData()
+        if (draft.isEmpty() || !_uiState.value.canSendMedia) return
+
+        _uiState.update { it.copy(isUploading = true, showAlbumPreview = false) }
+        clearReply()
+
+        viewModelScope.launch {
+            try {
+                val uploaded = chatRepository.uploadAlbumImages(chatId, draft)
+                chatRepository.sendAlbum(chatId, uploaded, caption, reply)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Failed to send album: ${e.message}") }
+            } finally {
+                _uiState.update {
+                    it.copy(isUploading = false, albumDraft = emptyList(), albumCaption = "")
+                }
+            }
+        }
+    }
 
     // ─── Voice playback ───────────────────────────────────────────────────────
 
@@ -503,7 +566,7 @@ class ChatViewModel(
         onlineCountListener?.let {
             Firebase.database.getReference("presence").removeEventListener(it)
         }
-        wallpaperListener?.remove() // ЧИСТИМ СЛУШАТЕЛЯ
+        wallpaperListener?.remove()
         voicePlayer.release()
         super.onCleared()
     }

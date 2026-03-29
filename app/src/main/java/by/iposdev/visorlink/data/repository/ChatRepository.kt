@@ -11,7 +11,10 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.*
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
@@ -346,6 +349,50 @@ class ChatRepository(
             "stickerId" to sticker.id), "🎭 Sticker", senderUsername, replyTo)
     }
 
+    // ─── Album ────────────────────────────────────────────────────────────────
+
+    /**
+     * Параллельно загружает все изображения альбома в Firebase Storage.
+     * При ошибке любого — выбрасывает исключение, клиент должен показать ошибку
+     * и НЕ вызывать sendAlbum с частичными результатами.
+     */
+    suspend fun uploadAlbumImages(
+        chatId: String,
+        items: List<AlbumImageLocal>
+    ): List<AlbumImage> = coroutineScope {
+        items.map { item ->
+            async {
+                val fileName = "${System.currentTimeMillis()}_${item.uri.lastPathSegment ?: "photo.jpg"}"
+                val ref = storage.reference.child("chats/$chatId/$fileName")
+                ref.putFile(item.uri).await()
+                val url = ref.downloadUrl.await().toString()
+                AlbumImage(url = url, fileName = fileName, spoiler = item.spoiler)
+            }
+        }.awaitAll()
+    }
+
+    /**
+     * Вызывает Cloud Function sendAlbum.
+     * Все URL должны быть уже загружены через uploadAlbumImages.
+     */
+    suspend fun sendAlbum(
+        chatId: String,
+        images: List<AlbumImage>,
+        caption: String?,
+        replyTo: ReplyData?
+    ): String {
+        val data = buildMap<String, Any?> {
+            put("chatId", chatId)
+            put("images", images.map { it.toMap() })
+            if (!caption.isNullOrBlank()) put("caption", caption.trim())
+            if (replyTo != null) put("replyTo", replyTo.toMap())
+        }
+        val result = functions.getHttpsCallable("sendAlbum").call(data).await()
+        return (result.data as Map<*, *>)["messageId"] as String
+    }
+
+    // ─── Internal helpers ─────────────────────────────────────────────────────
+
     private suspend fun sendExtra(chatId: String, extra: Map<String, Any?>, preview: String,
                                   senderUsername: String, replyTo: ReplyData?) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
@@ -403,10 +450,6 @@ class ChatRepository(
 
     // ─── v4: Comments Firestore listeners ─────────────────────────────────────
 
-    /**
-     * Real-time listener for comments on a specific channel post.
-     * Returns a ListenerRegistration — caller must call .remove() in onCleared().
-     */
     fun listenComments(
         chatId: String,
         messageId: String,
@@ -426,10 +469,6 @@ class ChatRepository(
             }
     }
 
-    /**
-     * Real-time listener for the post document itself (for live commentsCount
-     * and commentsEnabled). Must be active simultaneously with listenComments.
-     */
     fun listenPost(
         chatId: String,
         messageId: String,
@@ -446,10 +485,6 @@ class ChatRepository(
 
     // ─── v4: Cloud Function wrappers for comments ─────────────────────────────
 
-    /**
-     * Creates a comment and atomically increments commentsCount on the post.
-     * NEVER let the client write commentsCount directly — always go through here.
-     */
     suspend fun addComment(
         chatId: String,
         messageId: String,
@@ -476,7 +511,6 @@ class ChatRepository(
         return (result.data as Map<*, *>)["commentId"] as String
     }
 
-    /** Admin: enable or disable comments for a specific post. */
     suspend fun togglePostComments(chatId: String, messageId: String, enabled: Boolean) {
         functions.getHttpsCallable("togglePostComments").call(mapOf(
             "chatId" to chatId,
@@ -484,8 +518,6 @@ class ChatRepository(
             "enabled" to enabled
         )).await()
     }
-
-    // ─── v4: Comment reactions & soft delete (direct Firestore) ───────────────
 
     suspend fun toggleCommentReaction(
         chatId: String,
@@ -521,8 +553,6 @@ class ChatRepository(
                 "deletedAt" to FieldValue.serverTimestamp()
             )).await()
     }
-
-    // ─── v4: Upload media for comments ────────────────────────────────────────
 
     suspend fun uploadAndCommentImage(
         chatId: String,

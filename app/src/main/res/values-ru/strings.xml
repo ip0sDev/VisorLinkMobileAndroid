@@ -357,5 +357,28 @@
     <string name="editor_spoiler_on">Спойлер включён</string>
     <string name="editor_spoiler_off">Скрыть как спойлер</string>
     <string name="spoiler_tap_to_reveal">Нажмите, чтобы открыть</string>
-
+    <string name="settings_check_updates">Проверить наличие обновлений</string>
+    <string name="settings_check_updates_sub">Нажмите чтобы проверить наличие обновлений</string>
+    <string name="settings_checking_updates">Проверка обновлений...</string>
+    <string name="settings_up_to_date">У вас установлена последняя версия VisorLink!</string>
+    <string name="last_seen">Был в сети в %1$s</string>
+    <string name="members">%1$d Участников</string>
+    <string name="online">" · %1$d Онлайн"</string>
+    <string name="subscribers">%1$d Подписчиков</string>
+    <string name="wallpaper">Обои</string>
+    <string name="settings">Настройки</string>
+    <string name="leave">Выйти</string>
+    <string name="last_seen_topbar">Был в сети в %1$s</string>
+    <string name="members_topbar">%1$d Подписчиков</string>
+    <string name="online_topbar">" · %1$d Онлайн"</string>
+    <string name="subscribers_topbar">%1$d Подписчиков</string>
+    <string name="you_are_banned_from_this_chat">Вы забанены в этом чате</string>
+    <string name="you_are_muted">Вы заглушены</string>
+    <string name="only_admins_can_post_in_channels">📢 Только администраторы могут постить в канале</string>
+    <string name="photo">📷 Фото</string>
+    <string name="voice_message">🎤 Голосовое Сообщение</string>
+    <string name="sticker">🎭 Стикер</string>
+    <string name="media">Медиа</string>
+    <string name="tap_to_reveal">Нажмите чтобы посмотреть</string>
+    <string name="image">📷 Изображение</string>
 </resources>

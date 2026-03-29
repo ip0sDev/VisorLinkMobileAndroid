@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +35,8 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.ui.update.AppUpdateViewModel
+import by.iposdev.visorlink.ui.update.UpdateState
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticHelper
 import by.iposdev.visorlink.utils.HapticType
@@ -47,37 +51,30 @@ import java.util.*
 // ════════════════════════════════════════════════════════════════════════════
 
 private object OneUi {
-    // Фирменный синий Samsung (One UI 7 accent)
     val Blue        = Color(0xFF1259C3)
-    val BlueDark    = Color(0xFF4D90F0)     // dark mode variant
+    val BlueDark    = Color(0xFF4D90F0)
 
-    // Поверхности
     val PageBg      = Color(0xFFF4F4F4)
     val PageBgDark  = Color(0xFF1A1A1A)
     val CardBg      = Color(0xFFFFFFFF)
     val CardBgDark  = Color(0xFF2C2C2C)
 
-    // Текст
     val TextPrimary       = Color(0xFF1A1A1A)
     val TextPrimaryDark   = Color(0xFFEEEEEE)
     val TextSecondary     = Color(0xFF888888)
     val TextSecondaryDark = Color(0xFF999999)
 
-    // Разделитель внутри карточки
     val Divider     = Color(0xFFE8E8E8)
     val DividerDark = Color(0xFF3A3A3A)
 
-    // Switch
     val SwitchOn    = Blue
     val SwitchOnDark= BlueDark
     val SwitchOff   = Color(0xFFD0D0D0)
     val SwitchOffDk = Color(0xFF555555)
 
-    // Метки секций
     val SectionColor     = Blue
     val SectionColorDark = BlueDark
 
-    // Иконка-обёртка цвета по типу (One UI использует цветные icon tray)
     val IconBgBlue    = Color(0xFFEBF1FD)
     val IconBlueDark  = Color(0xFF1E3356)
     val IconBgRed     = Color(0xFFFFF0F0)
@@ -94,7 +91,7 @@ private object OneUi {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  M3E shape system (для M3E режима)
+//  M3E shape system
 // ════════════════════════════════════════════════════════════════════════════
 
 private val M3E_BIG   = 20.dp
@@ -110,7 +107,6 @@ private fun shapeAt(index: Int, total: Int) = when {
     else               -> RoundedCornerShape(M3E_SMALL)
 }
 
-// One UI тоже групповые, но всегда 24dp снаружи и нет зазоров — единая карточка
 private val OUI_CARD_SHAPE = RoundedCornerShape(24.dp)
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -122,7 +118,8 @@ private val OUI_CARD_SHAPE = RoundedCornerShape(24.dp)
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
-    themeViewModel: ThemeViewModel = koinViewModel()
+    themeViewModel: ThemeViewModel = koinViewModel(),
+    appUpdateViewModel: AppUpdateViewModel = koinViewModel()
 ) {
     val currentTheme  by themeViewModel.appTheme.collectAsState()
     val currentMode   by themeViewModel.themeMode.collectAsState()
@@ -140,6 +137,33 @@ fun SettingsScreen(
     }
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate"
 
+    val context = LocalContext.current
+    val updateState by appUpdateViewModel.updateState.collectAsState()
+    var isManualCheck by remember { mutableStateOf(false) }
+
+    // Логика ручной проверки обновлений
+    LaunchedEffect(updateState) {
+        if (isManualCheck) {
+            when (updateState) {
+                is UpdateState.None -> {
+                    Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
+                    isManualCheck = false
+                }
+                is UpdateState.Required, is UpdateState.Recommended -> {
+                    isManualCheck = false // AppUpdateWrapper перехватит состояние и покажет диалог
+                }
+                UpdateState.Loading -> { } // Ждём
+            }
+        }
+    }
+
+    val onCheckUpdates = {
+        haptic.perform(HapticType.CLICK, hapticEnabled)
+        isManualCheck = true
+        appUpdateViewModel.checkForUpdates()
+        Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
+    }
+
     Scaffold(
         containerColor = if (isOneUi)
             if (isDark) OneUi.PageBgDark else OneUi.PageBg
@@ -147,7 +171,6 @@ fun SettingsScreen(
             MaterialTheme.colorScheme.surface,
         topBar = {
             if (isOneUi) {
-                // One UI TopBar: крупный bold заголовок, без elevation
                 TopAppBar(
                     title = {
                         Text(stringResource(R.string.settings_title),
@@ -159,7 +182,8 @@ fun SettingsScreen(
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {
                             Box(
-                                Modifier.size(36.dp)
+                                Modifier
+                                    .size(36.dp)
                                     .clip(CircleShape)
                                     .background(if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8)),
                                 contentAlignment = Alignment.Center
@@ -201,13 +225,13 @@ fun SettingsScreen(
                 OuiSettingsContent(
                     currentTheme, currentMode, hapticEnabled, notifEnabled,
                     currentLang, versionString, isDark, haptic, themeViewModel,
-                    onOpenCacheSettings
+                    onOpenCacheSettings, onCheckUpdates
                 )
             } else {
                 M3eSettingsContent(
                     currentTheme, currentMode, hapticEnabled, notifEnabled,
                     currentLang, versionString, haptic, themeViewModel,
-                    onOpenCacheSettings
+                    onOpenCacheSettings, onCheckUpdates
                 )
             }
         }
@@ -229,7 +253,8 @@ private fun OuiSettingsContent(
     isDark: Boolean,
     haptic: HapticHelper,
     vm: ThemeViewModel,
-    onOpenCacheSettings: () -> Unit
+    onOpenCacheSettings: () -> Unit,
+    onCheckUpdates: () -> Unit
 ) {
     // ── Appearance ──────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_appearance), isDark)
@@ -357,6 +382,18 @@ private fun OuiSettingsContent(
             subtitle = versionString,
             isDark   = isDark
         )
+
+        OuiDivider(isDark)
+
+        OuiNavRow(
+            icon     = Icons.Default.Sync,
+            iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
+            iconTint = if (isDark) OneUi.BlueDark else OneUi.IconBlue,
+            title    = stringResource(R.string.settings_check_updates),
+            sub      = stringResource(R.string.settings_check_updates_sub),
+            isDark   = isDark,
+            onClick  = onCheckUpdates
+        )
     }
 }
 
@@ -398,7 +435,6 @@ private fun OuiDivider(isDark: Boolean) {
     )
 }
 
-// One UI иконка-трей — скруглённый квадрат, не круг
 @Composable
 private fun OuiIconTray(bg: Color, tint: Color, icon: ImageVector) {
     Box(
@@ -412,7 +448,6 @@ private fun OuiIconTray(bg: Color, tint: Color, icon: ImageVector) {
     }
 }
 
-// Фирменный One UI Switch
 @Composable
 private fun OuiSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val thumbOffset by animateFloatAsState(
@@ -423,7 +458,6 @@ private fun OuiSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boole
         ),
         label = "oui_thumb"
     )
-    // Thumb ширина анимируется — при нажатии растягивается (One UI "morph" thumb)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val thumbWidth by animateFloatAsState(
@@ -462,7 +496,6 @@ private fun OuiSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boole
     }
 }
 
-// One UI Radio bullet
 @Composable
 private fun OuiRadio(selected: Boolean, isDark: Boolean) {
     val dotScale by animateFloatAsState(
@@ -491,7 +524,6 @@ private fun OuiRadio(selected: Boolean, isDark: Boolean) {
                 .clip(CircleShape)
                 .background(Color.Transparent),
         )
-        // Border
         Surface(
             modifier = Modifier.size(22.dp),
             shape = CircleShape,
@@ -501,7 +533,6 @@ private fun OuiRadio(selected: Boolean, isDark: Boolean) {
                 brush = SolidColor(borderColor)
             )
         ) {}
-        // Dot
         Box(
             modifier = Modifier
                 .size((11 * dotScale).dp)
@@ -590,7 +621,9 @@ private fun OuiLangRow(
         shape = RoundedCornerShape(0.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -618,7 +651,9 @@ private fun OuiSwitchRow(
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -658,7 +693,9 @@ private fun OuiNavRow(
         shape = RoundedCornerShape(0.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
@@ -687,7 +724,9 @@ private fun OuiInfoRow(
     isDark: Boolean
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -715,7 +754,8 @@ private fun M3eSettingsContent(
     versionString: String,
     haptic: HapticHelper,
     vm: ThemeViewModel,
-    onOpenCacheSettings: () -> Unit
+    onOpenCacheSettings: () -> Unit,
+    onCheckUpdates: () -> Unit
 ) {
     SectionHeader(stringResource(R.string.settings_section_appearance))
     GroupLabel(Icons.Default.Palette, stringResource(R.string.settings_theme_title))
@@ -781,7 +821,11 @@ private fun M3eSettingsContent(
 
     SectionHeader(stringResource(R.string.settings_section_about))
     OptionGroup {
-        InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 1)
+        InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 2)
+        Spacer(Modifier.height(M3E_GAP))
+        NavRow(Icons.Default.Sync, stringResource(R.string.settings_check_updates),
+            stringResource(R.string.settings_check_updates_sub), 1, 2)
+        { onCheckUpdates() }
     }
 }
 
@@ -804,7 +848,9 @@ private fun M3eSettingsContent(
 }
 
 @Composable private fun OptionGroup(content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), content = content)
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 16.dp), content = content)
 }
 
 @Composable private fun ThemeOption(
@@ -823,11 +869,18 @@ private fun M3eSettingsContent(
     val bgColor by animateColorAsState(if (selected) selectedBg else MaterialTheme.colorScheme.surfaceContainerLow, tween(220), label = "bg")
     val iconBg  by animateColorAsState(if (selected) checkColor.copy(.15f) else MaterialTheme.colorScheme.surfaceContainerHigh, tween(220), label = "ibg")
     Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier.fillMaxWidth().scale(scale), shape = shapeAt(index, total), color = bgColor) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale), shape = shapeAt(index, total), color = bgColor) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(iconBg), Alignment.Center) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(iconBg), Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
@@ -852,7 +905,9 @@ private fun M3eSettingsContent(
     val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
     val bgColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow, tween(220), label = "bg")
     Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier.fillMaxWidth().scale(scale), shape = shapeAt(index, total), color = bgColor) {
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale), shape = shapeAt(index, total), color = bgColor) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -874,10 +929,15 @@ private fun M3eSettingsContent(
         if (checked) MaterialTheme.colorScheme.primary.copy(.12f)
         else MaterialTheme.colorScheme.surfaceContainerHighest, tween(200), label = "ibg")
     Surface(shape = shapeAt(index, total), color = bgColor, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(iconBg), Alignment.Center) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(iconBg), Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
@@ -905,12 +965,19 @@ private fun M3eSettingsContent(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
     Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier.fillMaxWidth().scale(scale), shape = shapeAt(index, total),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale), shape = shapeAt(index, total),
         color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(.1f)), Alignment.Center) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(.1f)), Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
@@ -934,10 +1001,15 @@ private fun M3eSettingsContent(
 
 @Composable private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: Int, total: Int) {
     Surface(shape = shapeAt(index, total), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
