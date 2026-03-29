@@ -48,14 +48,14 @@ data class Chat(
     val createdAt: Timestamp? = null
 ) {
     fun chatType() = when (type) {
-        "group" -> ChatType.GROUP
+        "group"   -> ChatType.GROUP
         "channel" -> ChatType.CHANNEL
-        else -> ChatType.DIRECT
+        else      -> ChatType.DIRECT
     }
 
     fun displayName(currentUid: String) = when (chatType()) {
         ChatType.DIRECT -> participantData[otherParticipantId(currentUid)]?.get("displayName") ?: ""
-        else -> name
+        else            -> name
     }
 
     fun otherParticipantId(currentUid: String) =
@@ -99,15 +99,15 @@ data class Member(
 // ─── Permissions helpers ──────────────────────────────────────────────────────
 
 fun canSendMessage(myMember: Member?, chatType: ChatType): Boolean = when (chatType) {
-    ChatType.DIRECT -> true
-    ChatType.GROUP -> myMember?.canSend() ?: false
+    ChatType.DIRECT  -> true
+    ChatType.GROUP   -> myMember?.canSend() ?: false
     ChatType.CHANNEL -> myMember?.isAdmin() ?: false
 }
 
 fun canSendMedia(myMember: Member?, chatType: ChatType): Boolean = when (chatType) {
-    ChatType.DIRECT -> true
+    ChatType.DIRECT  -> true
     ChatType.CHANNEL -> myMember?.isAdmin() ?: false
-    ChatType.GROUP -> myMember?.canSend() == true && myMember.mediaRestricted == false
+    ChatType.GROUP   -> myMember?.canSend() == true && myMember.mediaRestricted == false
 }
 
 fun canReact(chat: Chat, chatType: ChatType): Boolean {
@@ -159,23 +159,46 @@ data class TagSearchResult(
 
 // ─── Album Image ──────────────────────────────────────────────────────────────
 
-/** Элемент массива images[] в Firestore (тип сообщения "album") */
 data class AlbumImage(
     val url: String = "",
     val fileName: String = "",
     val spoiler: Boolean = false
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
-        "url" to url,
+        "url"      to url,
         "fileName" to fileName,
-        "spoiler" to spoiler
+        "spoiler"  to spoiler
     )
 }
 
-/** Локальное состояние одного выбранного фото ДО загрузки на сервер */
 data class AlbumImageLocal(
     val uri: android.net.Uri,
     val spoiler: Boolean = false
+)
+
+// ─── Sticker Pack ─────────────────────────────────────────────────────────────
+
+data class StickerPack(
+    val id: String = "",
+    val name: String = "",
+    val emoji: String = "📦",
+    val authorId: String = "",
+    val authorName: String = "",
+    val stickerCount: Int = 0,
+    val createdAt: Timestamp? = null,
+    val stickers: List<StickerItem> = emptyList()
+)
+
+data class StickerItem(
+    val id: String = "",
+    val url: String = "",
+    val emoji: String = "🎭",
+    val storagePath: String = "",
+    val createdAt: Timestamp? = null
+)
+
+data class UserStickerData(
+    val packIds: List<String> = emptyList()
 )
 
 // ─── Message ──────────────────────────────────────────────────────────────────
@@ -190,6 +213,11 @@ data class Message(
     val fileName: String? = null,
     val duration: Int? = null,
     val stickerId: String? = null,
+    // ─── Sticker Pack fields ──────────────────────────────────────────────────
+    val packId: String? = null,
+    val packName: String? = null,
+    val packEmoji: String? = null,
+    // ─────────────────────────────────────────────────────────────────────────
     val createdAt: Timestamp? = null,
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
@@ -221,7 +249,7 @@ data class Message(
                 @Suppress("UNCHECKED_CAST")
                 Reaction(
                     emoji = map["emoji"] as? String ?: return@mapNotNull null,
-                    uids = map["uids"] as? List<String> ?: emptyList(),
+                    uids  = map["uids"] as? List<String> ?: emptyList(),
                     count = (map["count"] as? Long)?.toInt() ?: 0
                 )
             } catch (e: Exception) { null }
@@ -244,8 +272,10 @@ data class ReplyData(
     val senderUsername: String
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
-        "id" to id, "type" to type,
-        "text" to text, "url" to url,
+        "id"             to id,
+        "type"           to type,
+        "text"           to text,
+        "url"            to url,
         "senderUsername" to senderUsername
     )
 }
@@ -257,6 +287,8 @@ data class Reaction(
 ) {
     fun toMap() = mapOf("emoji" to emoji, "uids" to uids, "count" to count)
 }
+
+// ─── Legacy Sticker (kept for backward compat — old user sticker collection) ──
 
 data class Sticker(
     val id: String = "",
@@ -290,7 +322,7 @@ data class Comment(
                 @Suppress("UNCHECKED_CAST")
                 Reaction(
                     emoji = map["emoji"] as? String ?: return@mapNotNull null,
-                    uids = map["uids"] as? List<String> ?: emptyList(),
+                    uids  = map["uids"] as? List<String> ?: emptyList(),
                     count = (map["count"] as? Long)?.toInt() ?: 0
                 )
             } catch (e: Exception) { null }
@@ -305,14 +337,19 @@ data class CommentReplyData(
     val senderUsername: String = ""
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
-        "id" to id, "type" to type,
-        "text" to text, "url" to url,
+        "id"             to id,
+        "type"           to type,
+        "text"           to text,
+        "url"            to url,
         "senderUsername" to senderUsername
     )
 }
 
 fun Comment.toCommentReplyData() = CommentReplyData(
-    id = id, type = type, text = text, url = url,
+    id             = id,
+    type           = type,
+    text           = text,
+    url            = url,
     senderUsername = senderUsername
 )
 
@@ -339,4 +376,7 @@ sealed class MessageListItem {
 
 enum class AppTheme { MATERIAL3_EXPRESSIVE, ONE_UI }
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
-data class AppSettings(val hapticFeedback: Boolean = true, val notificationsEnabled: Boolean = true)
+data class AppSettings(
+    val hapticFeedback: Boolean = true,
+    val notificationsEnabled: Boolean = true
+)

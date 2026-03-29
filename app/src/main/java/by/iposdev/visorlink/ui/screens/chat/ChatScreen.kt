@@ -2,6 +2,7 @@ package by.iposdev.visorlink.ui.screens.chat
 
 import android.Manifest
 import android.net.Uri
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,6 +14,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -67,6 +70,8 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
 import by.iposdev.visorlink.ui.screens.chatlist.GroupChannelAvatar
+import by.iposdev.visorlink.ui.screens.stickers.AddStickerPackBanner
+import by.iposdev.visorlink.ui.screens.stickers.StickerPickerBottomSheet
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
@@ -527,11 +532,15 @@ fun ChatScreen(
     }
 
     if (showStickerSheet) {
-        StickerBottomSheet(
-            stickers = uiState.stickers, hapticEnabled = hapticEnabled,
+        StickerPickerBottomSheet(
             onDismiss = { showStickerSheet = false },
-            onStickerSelected = { sticker ->
-                viewModel.sendSticker(sticker)
+            onStickerSelected = { packId, sticker ->
+                viewModel.sendSticker(
+                    sticker   = sticker,
+                    packId    = packId,
+                    packName  = "",   // StickerPackViewModel знает имя пака,
+                    packEmoji = ""    // но сюда можно передать пустую строку пока
+                )
                 showStickerSheet = false
                 haptic.perform(HapticType.SUCCESS, hapticEnabled)
             }
@@ -769,6 +778,7 @@ fun AlbumBubble(
         isMine                      -> MaterialTheme.colorScheme.primary
         isOneUi && isDark           -> Color(0xFF2C2C2C)
         isOneUi                     -> Color.White
+
         else                        -> MaterialTheme.colorScheme.surfaceVariant
     }
 
@@ -1808,6 +1818,7 @@ private fun MessageBubble(
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
+    var showPackBanner by remember(message.id) { mutableStateOf(false) }
 
     // ── Album bubble — отдельный путь рендера ─────────────────────────────────
     if (message.type == MessageType.ALBUM && !message.deleted) {
@@ -1840,6 +1851,84 @@ private fun MessageBubble(
     }
 
     // ── Text / Voice / Sticker bubble ─────────────────────────────────────────
+    // ── Sticker bubble — без рамки ────────────────────────────────────────────
+    if (message.type == MessageType.STICKER && !message.deleted) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .combinedClickable(
+                        onClick = {
+                            Log.d("STICKER_TAP", "sticker onClick fired, packId=${message.packId}")
+                            if (!message.packId.isNullOrBlank()) showPackBanner = !showPackBanner
+                        },
+                        onLongClick = {
+                            Log.d("STICKER_TAP", "sticker onLongClick fired")
+                            haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                            onLongPress()
+                        }
+                    )
+            ) {
+                Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
+                    message.replyData?.let { reply ->
+                        ReplyPreview(
+                            reply = reply, isMine = isMine,
+                            onClick = { reply.id?.let { id -> onReplyClick(id) } }
+                        )
+                        Spacer(Modifier.height(4.dp))
+                    }
+                    AsyncImage(
+                        model = message.url,
+                        contentDescription = null,
+                        modifier = Modifier.size(120.dp)
+                    )
+                    Text(
+                        message.createdAt?.toDate()?.let {
+                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
+                        } ?: "",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    // ← баннер только если showPackBanner == true
+                    if (!message.packId.isNullOrBlank() && showPackBanner) {
+                        AddStickerPackBanner(
+                            packId    = message.packId,
+                            packName  = message.packName ?: "",
+                            packEmoji = message.packEmoji ?: "🎭"
+                        )
+                    }
+                }
+            }
+
+            AnimatedVisibility(
+                visible = message.parsedReactions.isNotEmpty(),
+                enter = slideInVertically(initialOffsetY = { -it / 2 },
+                    animationSpec = spring(Spring.DampingRatioMediumBouncy)) +
+                        scaleIn(initialScale = 0.7f,
+                            animationSpec = spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
+                exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(150))
+            ) {
+                InlinedReactionRow(
+                    reactions = message.parsedReactions,
+                    currentUid = currentUid,
+                    isMine = isMine,
+                    isOneUi = isOneUi,
+                    isDark = isDark,
+                    hapticEnabled = hapticEnabled,
+                    onReact = onReact,
+                    onShowPicker = { onLongPress() }
+                )
+            }
+        }
+        return
+    }
     val bubbleColor = when {
         isOneUi && isMine && isDark -> OneUiChat.BubbleMineDark
         isOneUi && isMine           -> OneUiChat.BubbleMine
@@ -2407,43 +2496,72 @@ private fun SwipeableMessage(
     else MaterialTheme.colorScheme.primary
 
     Box(modifier = Modifier.fillMaxWidth()) {
-        Box(modifier = Modifier.align(if (isMine) Alignment.CenterStart else Alignment.CenterEnd)
-            .padding(horizontal = 16.dp).size(36.dp).scale(replyIconScale)
-            .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), CircleShape),
-            contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .align(if (isMine) Alignment.CenterStart else Alignment.CenterEnd)
+                .padding(horizontal = 16.dp).size(36.dp).scale(replyIconScale)
+                .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
             Icon(Icons.Default.Reply, stringResource(R.string.chat_reply),
                 tint = replyIconColor.copy(alpha = replyIconAlpha), modifier = Modifier.size(20.dp))
         }
-        Box(modifier = Modifier.offset { IntOffset(offsetX.value.roundToInt(), 0) }
-            .pointerInput(message.id) {
-                detectHorizontalDragGestures(
-                    onDragStart = { didTrigger = false },
-                    onDragEnd = {
-                        scope.launch { offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) }
-                    },
-                    onDragCancel = {
-                        scope.launch { offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy)) }
-                    },
-                    onHorizontalDrag = { _, dragAmount ->
-                        scope.launch {
-                            val target = if (isMine)
-                                (offsetX.value + dragAmount).coerceIn(-maxOffset, 0f)
-                            else (offsetX.value + dragAmount).coerceIn(0f, maxOffset)
-                            offsetX.snapTo(target)
-                            if (kotlin.math.abs(offsetX.value) >= triggerThreshold && !didTrigger) {
-                                didTrigger = true
-                                haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                onReply()
-                                offsetX.animateTo(
-                                    if (isMine) -triggerThreshold * 0.5f else triggerThreshold * 0.5f,
-                                    spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
-                                delay(100)
-                                offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .pointerInput(message.id) {
+                    var totalDrag = 0f
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        totalDrag = 0f
+                        didTrigger = false
+                        var isDragging = false
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+
+                            if (!change.pressed) break // палец поднят
+
+                            val dragDelta = change.position.x - change.previousPosition.x
+                            totalDrag += dragDelta
+
+                            // Начинаем считать драгом только если сдвиг больше 10px
+                            if (kotlin.math.abs(totalDrag) > 10f) {
+                                isDragging = true
+                                change.consume()
+
+                                val target = if (isMine)
+                                    (offsetX.value + dragDelta).coerceIn(-maxOffset, 0f)
+                                else (offsetX.value + dragDelta).coerceIn(0f, maxOffset)
+
+                                scope.launch { offsetX.snapTo(target) }
+
+                                if (kotlin.math.abs(offsetX.value) >= triggerThreshold && !didTrigger) {
+                                    didTrigger = true
+                                    haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                    onReply()
+                                    scope.launch {
+                                        offsetX.animateTo(
+                                            if (isMine) -triggerThreshold * 0.5f else triggerThreshold * 0.5f,
+                                            spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
+                                        )
+                                        delay(100)
+                                        offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
+                                    }
+                                }
+                            }
+                        }
+
+                        // Если был драг — возвращаем в 0
+                        if (isDragging) {
+                            scope.launch {
+                                offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium))
                             }
                         }
                     }
-                )
-            }) { content() }
+                }
+        ) { content() }
     }
 }
 

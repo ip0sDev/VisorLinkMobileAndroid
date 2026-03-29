@@ -41,7 +41,7 @@ class ChatRepository(
 
     fun allChatsFlow(uid: String): Flow<List<Chat>> = callbackFlow {
         val directChats = mutableListOf<Chat>()
-        val groupChats = mutableListOf<Chat>()
+        val groupChats  = mutableListOf<Chat>()
 
         fun merge() {
             val all = (directChats + groupChats)
@@ -108,7 +108,10 @@ class ChatRepository(
         awaitClose { reg.remove() }
     }
 
-    suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> {
+    suspend fun loadOlderMessages(
+        chatId: String,
+        startAfterDoc: DocumentSnapshot
+    ): Pair<List<Message>, DocumentSnapshot?> {
         val snap = db.collection("chats").document(chatId)
             .collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -176,10 +179,11 @@ class ChatRepository(
         awaitClose { reg.remove() }
     }
 
-    fun onlineStatusFlow(uid: String): Flow<Pair<Boolean, com.google.firebase.Timestamp?>> = callbackFlow {
-        trySend(Pair(false, null))
-        awaitClose {}
-    }
+    fun onlineStatusFlow(uid: String): Flow<Pair<Boolean, com.google.firebase.Timestamp?>> =
+        callbackFlow {
+            trySend(Pair(false, null))
+            awaitClose {}
+        }
 
     // ─── Create / find direct chat ────────────────────────────────────────────
 
@@ -191,21 +195,21 @@ class ChatRepository(
         val chatDoc = db.collection("chats").document(chatId).get().await()
         if (!chatDoc.exists()) {
             db.collection("chats").document(chatId).set(mapOf(
-                "type" to "direct",
-                "participants" to listOf(currentUserProfile.uid, targetUid),
+                "type"            to "direct",
+                "participants"    to listOf(currentUserProfile.uid, targetUid),
                 "participantData" to mapOf(
                     currentUserProfile.uid to mapOf(
-                        "username" to currentUserProfile.username,
+                        "username"    to currentUserProfile.username,
                         "displayName" to currentUserProfile.displayName
                     ),
                     targetUid to mapOf(
-                        "username" to targetUser.username,
+                        "username"    to targetUser.username,
                         "displayName" to targetUser.displayName
                     )
                 ),
-                "createdAt" to FieldValue.serverTimestamp(),
-                "lastMessageAt" to FieldValue.serverTimestamp(),
-                "lastMessage" to null
+                "createdAt"      to FieldValue.serverTimestamp(),
+                "lastMessageAt"  to FieldValue.serverTimestamp(),
+                "lastMessage"    to null
             )).await()
         }
         return chatId
@@ -213,7 +217,12 @@ class ChatRepository(
 
     // ─── Cloud Functions ──────────────────────────────────────────────────────
 
-    suspend fun createChat(type: String, name: String, tag: String, description: String = ""): Pair<String, String> {
+    suspend fun createChat(
+        type: String,
+        name: String,
+        tag: String,
+        description: String = ""
+    ): Pair<String, String> {
         val result = functions.getHttpsCallable("createChat")
             .call(mapOf("type" to type, "name" to name, "tag" to tag, "description" to description))
             .await()
@@ -227,15 +236,15 @@ class ChatRepository(
         val data = result.data as Map<*, *>
         if (data["found"] != true) return TagSearchResult(found = false)
         return TagSearchResult(
-            found = true,
-            chatId = data["chatId"] as? String ?: "",
-            name = data["name"] as? String ?: "",
-            tag = data["tag"] as? String ?: "",
+            found       = true,
+            chatId      = data["chatId"] as? String ?: "",
+            name        = data["name"] as? String ?: "",
+            tag         = data["tag"] as? String ?: "",
             description = data["description"] as? String ?: "",
-            avatarUrl = data["avatarUrl"] as? String,
+            avatarUrl   = data["avatarUrl"] as? String,
             memberCount = (data["memberCount"] as? Long)?.toInt() ?: 0,
-            type = data["type"] as? String ?: "",
-            joinByTag = data["joinByTag"] as? Boolean ?: false
+            type        = data["type"] as? String ?: "",
+            joinByTag   = data["joinByTag"] as? Boolean ?: false
         )
     }
 
@@ -268,10 +277,19 @@ class ChatRepository(
             .call(mapOf("chatId" to chatId)).await()
     }
 
-    suspend fun moderateUser(chatId: String, targetUid: String, action: String, durationMinutes: Int? = null) {
+    suspend fun moderateUser(
+        chatId: String,
+        targetUid: String,
+        action: String,
+        durationMinutes: Int? = null
+    ) {
         functions.getHttpsCallable("moderateUser")
-            .call(mapOf("chatId" to chatId, "targetUid" to targetUid,
-                "action" to action, "durationMinutes" to durationMinutes)).await()
+            .call(mapOf(
+                "chatId"          to chatId,
+                "targetUid"       to targetUid,
+                "action"          to action,
+                "durationMinutes" to durationMinutes
+            )).await()
     }
 
     suspend fun setMemberRole(chatId: String, targetUid: String, role: String) {
@@ -292,22 +310,27 @@ class ChatRepository(
 
     // ─── Send messages ────────────────────────────────────────────────────────
 
-    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendText(
+        chatId: String,
+        text: String,
+        senderUsername: String,
+        replyTo: ReplyData?
+    ) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
-        val batch = db.batch()
+        val batch  = db.batch()
         batch.set(msgRef, mutableMapOf<String, Any?>(
-            "senderId" to currentUid,
+            "senderId"       to currentUid,
             "senderUsername" to senderUsername,
-            "type" to MessageType.TEXT,
-            "text" to text,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "deleted" to false,
-            "reactions" to emptyList<Any>(),
-            "readBy" to listOf(currentUid),
-            "replyTo" to replyTo?.toMap()
+            "type"           to MessageType.TEXT,
+            "text"           to text,
+            "createdAt"      to FieldValue.serverTimestamp(),
+            "deleted"        to false,
+            "reactions"      to emptyList<Any>(),
+            "readBy"         to listOf(currentUid),
+            "replyTo"        to replyTo?.toMap()
         ))
         batch.update(db.collection("chats").document(chatId), mapOf(
-            "lastMessage" to text,
+            "lastMessage"   to text,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
         batch.commit().await()
@@ -321,13 +344,13 @@ class ChatRepository(
         isSpoiler: Boolean = false
     ) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment}"
-        val ref = storage.reference.child("chats/$chatId/$fileName")
+        val ref      = storage.reference.child("chats/$chatId/$fileName")
         ref.putFile(uri).await()
         val url = ref.downloadUrl.await().toString()
 
         val extra = mutableMapOf<String, Any?>(
-            "type" to MessageType.IMAGE,
-            "url" to url,
+            "type"     to MessageType.IMAGE,
+            "url"      to url,
             "fileName" to (uri.lastPathSegment ?: "image")
         )
         if (isSpoiler) extra["spoiler"] = true
@@ -335,27 +358,58 @@ class ChatRepository(
         sendExtra(chatId, extra, "📷 Image", senderUsername, replyTo)
     }
 
-    suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendVoice(
+        chatId: String,
+        file: File,
+        durationSec: Int,
+        senderUsername: String,
+        replyTo: ReplyData?
+    ) {
         val path = "chats/$chatId/voice_${System.currentTimeMillis()}.webm"
-        val ref = storage.reference.child(path)
+        val ref  = storage.reference.child(path)
         ref.putFile(Uri.fromFile(file)).await()
         val url = ref.downloadUrl.await().toString()
-        sendExtra(chatId, mapOf("type" to MessageType.VOICE, "url" to url,
-            "duration" to durationSec), "🎤 Voice message", senderUsername, replyTo)
+        sendExtra(chatId, mapOf(
+            "type"     to MessageType.VOICE,
+            "url"      to url,
+            "duration" to durationSec
+        ), "🎤 Voice message", senderUsername, replyTo)
     }
 
-    suspend fun sendSticker(chatId: String, sticker: Sticker, senderUsername: String, replyTo: ReplyData?) {
-        sendExtra(chatId, mapOf("type" to MessageType.STICKER, "url" to sticker.url,
-            "stickerId" to sticker.id), "🎭 Sticker", senderUsername, replyTo)
+    /**
+     * Отправка стикера с привязкой к паку.
+     * [sticker]   — StickerItem из StickerPickerBottomSheet
+     * [packId]    — ID пака (сохраняется в сообщении для баннера AddStickerPackBanner)
+     * [packName]  — название пака (отображается в баннере)
+     * [packEmoji] — эмодзи пака (отображается в баннере)
+     */
+    suspend fun sendSticker(
+        chatId: String,
+        sticker: StickerItem,
+        packId: String,
+        packName: String,
+        packEmoji: String,
+        senderUsername: String,
+        replyTo: ReplyData?
+    ) {
+        sendExtra(
+            chatId,
+            mapOf(
+                "type"      to MessageType.STICKER,
+                "url"       to sticker.url,
+                "stickerId" to sticker.id,
+                "packId"    to packId,
+                "packName"  to packName,
+                "packEmoji" to packEmoji
+            ),
+            "$packEmoji Sticker",
+            senderUsername,
+            replyTo
+        )
     }
 
     // ─── Album ────────────────────────────────────────────────────────────────
 
-    /**
-     * Параллельно загружает все изображения альбома в Firebase Storage.
-     * При ошибке любого — выбрасывает исключение, клиент должен показать ошибку
-     * и НЕ вызывать sendAlbum с частичными результатами.
-     */
     suspend fun uploadAlbumImages(
         chatId: String,
         items: List<AlbumImageLocal>
@@ -371,10 +425,6 @@ class ChatRepository(
         }.awaitAll()
     }
 
-    /**
-     * Вызывает Cloud Function sendAlbum.
-     * Все URL должны быть уже загружены через uploadAlbumImages.
-     */
     suspend fun sendAlbum(
         chatId: String,
         images: List<AlbumImage>,
@@ -382,8 +432,8 @@ class ChatRepository(
         replyTo: ReplyData?
     ): String {
         val data = buildMap<String, Any?> {
-            put("chatId", chatId)
-            put("images", images.map { it.toMap() })
+            put("chatId",  chatId)
+            put("images",  images.map { it.toMap() })
             if (!caption.isNullOrBlank()) put("caption", caption.trim())
             if (replyTo != null) put("replyTo", replyTo.toMap())
         }
@@ -393,34 +443,42 @@ class ChatRepository(
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
-    private suspend fun sendExtra(chatId: String, extra: Map<String, Any?>, preview: String,
-                                  senderUsername: String, replyTo: ReplyData?) {
+    private suspend fun sendExtra(
+        chatId: String,
+        extra: Map<String, Any?>,
+        preview: String,
+        senderUsername: String,
+        replyTo: ReplyData?
+    ) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
-        val msg = mutableMapOf<String, Any?>(
-            "senderId" to currentUid,
+        val msg    = mutableMapOf<String, Any?>(
+            "senderId"       to currentUid,
             "senderUsername" to senderUsername,
-            "createdAt" to FieldValue.serverTimestamp(),
-            "deleted" to false,
-            "reactions" to emptyList<Any>(),
-            "readBy" to listOf(currentUid),
-            "replyTo" to replyTo?.toMap()
+            "createdAt"      to FieldValue.serverTimestamp(),
+            "deleted"        to false,
+            "reactions"      to emptyList<Any>(),
+            "readBy"         to listOf(currentUid),
+            "replyTo"        to replyTo?.toMap()
         )
         msg.putAll(extra)
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf(
-            "lastMessage" to preview,
+            "lastMessage"   to preview,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
         batch.commit().await()
     }
 
     suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {
-        val unread = messages.filter { it.senderId != uid && !it.readBy.contains(uid) && !it.deleted }
+        val unread = messages.filter {
+            it.senderId != uid && !it.readBy.contains(uid) && !it.deleted
+        }
         if (unread.isEmpty()) return
         val batch = db.batch()
         for (msg in unread) {
-            val ref = db.collection("chats").document(chatId).collection("messages").document(msg.id)
+            val ref = db.collection("chats").document(chatId)
+                .collection("messages").document(msg.id)
             batch.update(ref, "readBy", FieldValue.arrayUnion(uid))
         }
         batch.commit().await()
@@ -428,19 +486,34 @@ class ChatRepository(
 
     suspend fun deleteMessage(chatId: String, messageId: String) {
         db.collection("chats").document(chatId).collection("messages").document(messageId)
-            .update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
+            .update(mapOf(
+                "deleted"   to true,
+                "deletedAt" to FieldValue.serverTimestamp()
+            )).await()
     }
 
-    suspend fun toggleReaction(chatId: String, messageId: String, emoji: String, currentReactions: List<Reaction>) {
-        val ref = db.collection("chats").document(chatId).collection("messages").document(messageId)
+    suspend fun toggleReaction(
+        chatId: String,
+        messageId: String,
+        emoji: String,
+        currentReactions: List<Reaction>
+    ) {
+        val ref      = db.collection("chats").document(chatId)
+            .collection("messages").document(messageId)
         val existing = currentReactions.find { it.emoji == emoji }
-        val updated = if (existing != null) {
+        val updated  = if (existing != null) {
             if (currentUid in existing.uids) {
                 val newUids = existing.uids - currentUid
                 if (newUids.isEmpty()) currentReactions.filter { it.emoji != emoji }
-                else currentReactions.map { if (it.emoji == emoji) it.copy(uids = newUids, count = newUids.size) else it }
+                else currentReactions.map {
+                    if (it.emoji == emoji) it.copy(uids = newUids, count = newUids.size) else it
+                }
             } else {
-                currentReactions.map { if (it.emoji == emoji) it.copy(uids = it.uids + currentUid, count = it.count + 1) else it }
+                currentReactions.map {
+                    if (it.emoji == emoji)
+                        it.copy(uids = it.uids + currentUid, count = it.count + 1)
+                    else it
+                }
             }
         } else {
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
@@ -513,9 +586,9 @@ class ChatRepository(
 
     suspend fun togglePostComments(chatId: String, messageId: String, enabled: Boolean) {
         functions.getHttpsCallable("togglePostComments").call(mapOf(
-            "chatId" to chatId,
+            "chatId"    to chatId,
             "messageId" to messageId,
-            "enabled" to enabled
+            "enabled"   to enabled
         )).await()
     }
 
@@ -527,7 +600,7 @@ class ChatRepository(
         currentReactions: List<Reaction>
     ) {
         val existing = currentReactions.find { it.emoji == emoji }
-        val updated = if (existing == null) {
+        val updated  = if (existing == null) {
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
         } else {
             val hasMe = currentUid in existing.uids
@@ -549,7 +622,7 @@ class ChatRepository(
             .collection("messages").document(messageId)
             .collection("comments").document(commentId)
             .update(mapOf(
-                "deleted" to true,
+                "deleted"   to true,
                 "deletedAt" to FieldValue.serverTimestamp()
             )).await()
     }
@@ -561,14 +634,18 @@ class ChatRepository(
         spoiler: Boolean,
         replyTo: CommentReplyData? = null
     ) {
-        val filename = "${System.currentTimeMillis()}_${file.lastPathSegment}"
+        val filename   = "${System.currentTimeMillis()}_${file.lastPathSegment}"
         val storageRef = storage.reference.child("chats/$chatId/comments/$filename")
         storageRef.putFile(file).await()
         val url = storageRef.downloadUrl.await().toString()
         addComment(
-            chatId = chatId, messageId = messageId,
-            type = MessageType.IMAGE, url = url, fileName = filename,
-            spoiler = spoiler, replyTo = replyTo
+            chatId    = chatId,
+            messageId = messageId,
+            type      = MessageType.IMAGE,
+            url       = url,
+            fileName  = filename,
+            spoiler   = spoiler,
+            replyTo   = replyTo
         )
     }
 
@@ -579,14 +656,17 @@ class ChatRepository(
         durationSeconds: Int,
         replyTo: CommentReplyData? = null
     ) {
-        val path = "chats/$chatId/comments/voice_${System.currentTimeMillis()}.webm"
+        val path       = "chats/$chatId/comments/voice_${System.currentTimeMillis()}.webm"
         val storageRef = storage.reference.child(path)
         storageRef.putFile(audioFile.toUri()).await()
         val url = storageRef.downloadUrl.await().toString()
         addComment(
-            chatId = chatId, messageId = messageId,
-            type = MessageType.VOICE, url = url,
-            duration = durationSeconds, replyTo = replyTo
+            chatId    = chatId,
+            messageId = messageId,
+            type      = MessageType.VOICE,
+            url       = url,
+            duration  = durationSeconds,
+            replyTo   = replyTo
         )
     }
 }

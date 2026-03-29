@@ -16,7 +16,6 @@ import by.iposdev.visorlink.ui.screens.comments.CommentsScreen
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
 import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
-import by.iposdev.visorlink.ui.screens.stickers.StickersScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -185,10 +184,6 @@ fun VisorLinkNavGraph(
 
         composable(Screen.CacheSettings.route) {
             CacheSettingsScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.Stickers.route) {
-            StickersScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(Screen.CreateChat.route) {

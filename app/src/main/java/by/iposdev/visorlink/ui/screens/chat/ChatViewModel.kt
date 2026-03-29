@@ -459,13 +459,14 @@ class ChatViewModel(
         }
     }
 
-    fun sendSticker(sticker: Sticker) {
+    fun sendSticker(sticker: StickerItem, packId: String, packName: String, packEmoji: String) {
         if (!_uiState.value.canSendMessage) return
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             clearReply()
-            try { chatRepository.sendSticker(chatId, sticker, currentUsername, reply) }
-            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
+            try {
+                chatRepository.sendSticker(chatId, sticker, packId, packName, packEmoji, currentUsername, reply)
+            } catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
 
