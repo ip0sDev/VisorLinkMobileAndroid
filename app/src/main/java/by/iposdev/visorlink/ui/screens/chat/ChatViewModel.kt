@@ -52,6 +52,8 @@ data class ChatUiState(
     val stickers: List<Sticker> = emptyList(),
     val voicePlayback: VoicePlaybackState = VoicePlaybackState(),
     val wallpaperUrl: String? = null,
+    val showUnofficialClientWarning: Boolean = false,
+    val hasDismissedUnofficialWarning: Boolean = false,
     // ─── Album draft ──────────────────────────────────────────────────────────
     val albumDraft: List<AlbumImageLocal> = emptyList(),
     val albumCaption: String = "",
@@ -166,6 +168,17 @@ class ChatViewModel(
                 }
 
                 launch {
+                    launch {
+                        userRepository.clientStatusFlow(otherUid).collect { isOfficial ->
+                            val state = _uiState.value
+                            if (!isOfficial && !state.hasDismissedUnofficialWarning) {
+                                _uiState.update { it.copy(showUnofficialClientWarning = true) }
+                            } else if (isOfficial) {
+                                // Если он зашел с официального, скрываем варнинг
+                                _uiState.update { it.copy(showUnofficialClientWarning = false) }
+                            }
+                        }
+                    }
                     combine(
                         PresenceManager.observePresence(otherUid).filterNotNull(),
                         TypingManager.observeTyping(chatId, currentUid)
@@ -582,4 +595,12 @@ class ChatViewModel(
     }
 
     private fun Message.toReplyData() = ReplyData(id, type, text, url, senderUsername)
+    fun dismissUnofficialWarning() {
+        _uiState.update {
+            it.copy(
+                showUnofficialClientWarning = false,
+                hasDismissedUnofficialWarning = true
+            )
+        }
+    }
 }

@@ -3,11 +3,13 @@ package by.iposdev.visorlink.ui
 import androidx.compose.runtime.*
 import androidx.navigation.*
 import androidx.navigation.compose.*
+import by.iposdev.visorlink.data.repository.AuthState
 import by.iposdev.visorlink.ui.screens.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
+import by.iposdev.visorlink.ui.screens.auth.VerifyEmailScreen
 import by.iposdev.visorlink.ui.screens.chat.ChatScreen
 import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListScreen
@@ -25,21 +27,43 @@ fun VisorLinkNavGraph(
     themeViewModel: ThemeViewModel
 ) {
     val navController = rememberNavController()
-    val currentUser by authViewModel.currentUser.collectAsState()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
-    val start = if (currentUser != null) Screen.ChatList.route else Screen.Login.route
+    // ── Three-state auth guard (guideline §6) ─────────────────────────────────
+    // Reacts to every AuthState change and replaces the entire back-stack,
+    // so the user can never press Back into a screen they shouldn't see.
+    val authState by authViewModel.authState.collectAsState()
+
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthState.NoSession  -> navController.navigate(Screen.Login.route) {
+                popUpTo(0) { inclusive = true }
+            }
+            is AuthState.Unverified -> navController.navigate(Screen.VerifyEmail.route) {
+                popUpTo(0) { inclusive = true }
+            }
+            is AuthState.Verified   -> navController.navigate(Screen.ChatList.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+
+    // Start destination is resolved synchronously so the first frame is correct.
+    val start = when (authState) {
+        is AuthState.Verified   -> Screen.ChatList.route
+        is AuthState.Unverified -> Screen.VerifyEmail.route
+        else                    -> Screen.Login.route
+    }
 
     NavHost(navController = navController, startDestination = start) {
+
+        // ── Auth ──────────────────────────────────────────────────────────────
 
         composable(Screen.Login.route) {
             LoginScreen(
                 onNavigateToRegister = { navController.navigate(Screen.Register.route) },
-                onLoginSuccess = {
-                    navController.navigate(Screen.ChatList.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
-                },
+                // Actual navigation happens reactively via LaunchedEffect(authState).
+                onLoginSuccess = { /* handled by authState guard */ },
                 viewModel = authViewModel
             )
         }
@@ -47,25 +71,34 @@ fun VisorLinkNavGraph(
         composable(Screen.Register.route) {
             RegisterScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onRegisterSuccess = {
-                    navController.navigate(Screen.ChatList.route) {
-                        popUpTo(Screen.Login.route) { inclusive = true }
-                    }
-                },
+                // On success authState becomes Unverified → guard routes to VerifyEmail.
+                onRegistrationComplete = { /* handled by authState guard */ },
                 viewModel = authViewModel
             )
         }
 
+        // ── Email verification (guideline §5) ─────────────────────────────────
+        composable(Screen.VerifyEmail.route) {
+            VerifyEmailScreen(
+                // On verified authState becomes Verified → guard routes to ChatList.
+                onVerified = { /* handled by authState guard */ },
+                onLogout   = { authViewModel.logout() },
+                viewModel  = authViewModel
+            )
+        }
+
+        // ── Main app ──────────────────────────────────────────────────────────
+
         composable(Screen.ChatList.route) {
             ChatListScreen(
-                onOpenChat = { chatId, otherUid ->
+                onOpenChat          = { chatId, otherUid ->
                     navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
                 },
-                onOpenSearch = { navController.navigate(Screen.Search.createRoute(null)) },
-                onOpenProfile = { navController.navigate(Screen.Profile.route) },
-                onOpenSettings = { navController.navigate(Screen.Settings.route) },
-                onCreateChat = { navController.navigate(Screen.CreateChat.route) },
-                onFindChannel = { navController.navigate(Screen.Search.createRoute(null)) },
+                onOpenSearch        = { navController.navigate(Screen.Search.createRoute(null)) },
+                onOpenProfile       = { navController.navigate(Screen.Profile.route) },
+                onOpenSettings      = { navController.navigate(Screen.Settings.route) },
+                onCreateChat        = { navController.navigate(Screen.CreateChat.route) },
+                onFindChannel       = { navController.navigate(Screen.Search.createRoute(null)) },
                 onOpenNotifications = { navController.navigate(Screen.Notifications.route) }
             )
         }
@@ -73,32 +106,31 @@ fun VisorLinkNavGraph(
         composable(
             route = Screen.Chat.route,
             arguments = listOf(
-                navArgument("chatId") { type = NavType.StringType },
+                navArgument("chatId")   { type = NavType.StringType },
                 navArgument("otherUid") { type = NavType.StringType }
             )
         ) { backStackEntry ->
-            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            val chatId   = backStackEntry.arguments?.getString("chatId")   ?: return@composable
             val otherUid = backStackEntry.arguments?.getString("otherUid") ?: return@composable
 
             ChatScreen(
-                chatId = chatId,
-                otherUid = otherUid,
-                onNavigateBack = { navController.popBackStack() },
+                chatId             = chatId,
+                otherUid           = otherUid,
+                onNavigateBack     = { navController.popBackStack() },
                 onOpenOtherProfile = { uid ->
                     navController.navigate(Screen.OtherProfile.createRoute(uid))
                 },
-                onOpenStickers = { },
+                onOpenStickers     = { },
                 onOpenChatSettings = { cId ->
                     navController.navigate(Screen.ChatSettings.createRoute(cId))
                 },
-                onOpenImageViewer = { url ->
+                onOpenImageViewer  = { url ->
                     navController.navigate(Screen.ImageViewer.createRoute(url))
                 },
-                onMentionClick = { usernameOrTag ->
+                onMentionClick     = { usernameOrTag ->
                     navController.navigate(Screen.Search.createRoute(usernameOrTag))
                 },
-                // ─── NEW v4: open comments for a channel post ─────────────────
-                onOpenComments = { msgId ->
+                onOpenComments     = { msgId ->
                     navController.navigate(Screen.Comments.createRoute(chatId, msgId))
                 },
                 hapticEnabled = hapticEnabled
@@ -116,7 +148,7 @@ fun VisorLinkNavGraph(
         ) { backStackEntry ->
             val url = backStackEntry.arguments?.getString("url") ?: return@composable
             ImageViewerScreen(
-                url = url,
+                url            = url,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -133,14 +165,14 @@ fun VisorLinkNavGraph(
         ) { backStackEntry ->
             val initialQuery = backStackEntry.arguments?.getString("query")
             SearchScreen(
-                initialQuery = initialQuery,
+                initialQuery   = initialQuery,
                 onNavigateBack = { navController.popBackStack() },
-                onOpenChat = { chatId, otherUid ->
+                onOpenChat     = { chatId, otherUid ->
                     navController.navigate(Screen.Chat.createRoute(chatId, otherUid)) {
                         popUpTo(Screen.Search.route) { inclusive = true }
                     }
                 },
-                onJoinedGroup = { chatId ->
+                onJoinedGroup  = { chatId ->
                     navController.navigate(Screen.Chat.createRoute(chatId, chatId)) {
                         popUpTo(Screen.Search.route) { inclusive = true }
                     }
@@ -151,11 +183,8 @@ fun VisorLinkNavGraph(
         composable(Screen.Profile.route) {
             ProfileScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onLoggedOut = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                },
+                // logout() → authState becomes NoSession → guard routes to Login
+                onLoggedOut    = { authViewModel.logout() },
                 onOpenStickers = { navController.navigate(Screen.Stickers.route) }
             )
         }
@@ -166,9 +195,9 @@ fun VisorLinkNavGraph(
         ) { backStack ->
             val uid = backStack.arguments?.getString("uid") ?: ""
             OtherProfileScreen(
-                uid = uid,
+                uid            = uid,
                 onNavigateBack = { navController.popBackStack() },
-                onOpenChat = { chatId, otherUid ->
+                onOpenChat     = { chatId, otherUid ->
                     navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
                 }
             )
@@ -189,7 +218,7 @@ fun VisorLinkNavGraph(
         composable(Screen.CreateChat.route) {
             by.iposdev.visorlink.ui.screens.group.CreateChatScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onCreated = { chatId ->
+                onCreated      = { chatId ->
                     navController.navigate(Screen.Chat.createRoute(chatId, chatId)) {
                         popUpTo(Screen.CreateChat.route) { inclusive = true }
                     }
@@ -200,7 +229,7 @@ fun VisorLinkNavGraph(
         composable(Screen.Notifications.route) {
             by.iposdev.visorlink.ui.screens.group.NotificationsScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onOpenChat = { chatId ->
+                onOpenChat     = { chatId ->
                     navController.navigate(Screen.Chat.createRoute(chatId, chatId))
                 }
             )
@@ -212,25 +241,21 @@ fun VisorLinkNavGraph(
         ) { backStackEntry ->
             val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
             by.iposdev.visorlink.ui.screens.group.ChatSettingsScreen(
-                chatId = chatId,
+                chatId         = chatId,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
 
-        // ─── NEW v4: Comments screen ──────────────────────────────────────────
         composable(
             route = Screen.Comments.route,
             arguments = listOf(
-                navArgument("chatId") { type = NavType.StringType },
+                navArgument("chatId")    { type = NavType.StringType },
                 navArgument("messageId") { type = NavType.StringType }
             )
         ) { backStackEntry ->
             val chatId    = backStackEntry.arguments?.getString("chatId")    ?: return@composable
             val messageId = backStackEntry.arguments?.getString("messageId") ?: return@composable
 
-            // Resolve the Chat object so CommentsScreen can check allowComments.
-            // ChatListViewModel is already scoped to the NavBackStack entry for ChatList,
-            // so we look it up from the back-stack entry instead of creating a new instance.
             val chatListEntry = remember(navController) {
                 try { navController.getBackStackEntry(Screen.ChatList.route) } catch (_: Exception) { null }
             }
@@ -238,10 +263,10 @@ fun VisorLinkNavGraph(
             val channel = chatListVm?.chats?.collectAsState()?.value?.firstOrNull { it.id == chatId }
 
             CommentsScreen(
-                chatId = chatId,
-                messageId = messageId,
-                channel = channel,
-                onNavigateBack = { navController.popBackStack() },
+                chatId            = chatId,
+                messageId         = messageId,
+                channel           = channel,
+                onNavigateBack    = { navController.popBackStack() },
                 onOpenImageViewer = { url ->
                     navController.navigate(Screen.ImageViewer.createRoute(url))
                 },

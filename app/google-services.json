@@ -30,6 +30,13 @@
             {
               "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "18511020064-0kq4085ug8rsbkpc9qgotocngi885vr1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "by.iposdev.visorlink"
+              }
             }
           ]
         }

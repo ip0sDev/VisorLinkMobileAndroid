@@ -12,8 +12,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 36
-        versionCode = 16
-        versionName = "1.16"
+        versionCode = 19
+        versionName = "1.17.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
     }
@@ -85,4 +85,7 @@ dependencies {
     implementation(libs.firebase.database)
     implementation(libs.firebase.config.ktx) // или актуальная версия
     implementation(libs.androidx.media.v170)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
+    implementation(platform(libs.firebase.bom.v3370))
 }

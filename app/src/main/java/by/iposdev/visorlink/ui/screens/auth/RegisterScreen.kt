@@ -1,6 +1,5 @@
 package by.iposdev.visorlink.ui.screens.auth
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -13,33 +12,57 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.*
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
 import org.koin.compose.viewmodel.koinViewModel
+
+private const val MIN_PASSWORD_LENGTH = 6   // Firebase minimum
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
     onNavigateBack: () -> Unit,
-    onRegisterSuccess: () -> Unit,
+    // Called after successful registration → the caller routes to VerifyEmailScreen
+    onRegistrationComplete: () -> Unit,
     viewModel: AuthViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
-    var username by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var confirm by remember { mutableStateOf("") }
+
+    val emailFocus    = remember { FocusRequester() }
+    val passwordFocus = remember { FocusRequester() }
+    val confirmFocus  = remember { FocusRequester() }
+
+    var username  by remember { mutableStateOf("") }
+    var email     by remember { mutableStateOf("") }
+    var password  by remember { mutableStateOf("") }
+    var confirm   by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var passwordError by remember { mutableStateOf<String?>(null) }
+
+    // Local validation errors (shown inline in fields before the server call)
+    var passwordLengthError by remember { mutableStateOf(false) }
+    var passwordMismatchError by remember { mutableStateOf(false) }
 
     val passwordsMismatch = stringResource(R.string.register_passwords_mismatch)
-    LaunchedEffect(uiState.success) { if (uiState.success) onRegisterSuccess() }
+    val passwordTooShort  = stringResource(R.string.register_password_too_short, MIN_PASSWORD_LENGTH)
+
+    // Navigate to VerifyEmailScreen on success (not to the main app — email unverified)
+    LaunchedEffect(uiState.success) {
+        if (uiState.success) onRegistrationComplete()
+    }
+
+    fun submit() {
+        focusManager.clearFocus()
+        passwordLengthError   = password.length < MIN_PASSWORD_LENGTH
+        passwordMismatchError = password != confirm
+        if (passwordLengthError || passwordMismatchError) return
+        viewModel.register(email.trim(), password, username.trim())
+    }
 
     Scaffold(
         topBar = {
@@ -47,8 +70,10 @@ fun RegisterScreen(
                 title = { Text(stringResource(R.string.register_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack,
-                            stringResource(R.string.action_back))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 }
             )
@@ -64,6 +89,8 @@ fun RegisterScreen(
         ) {
             Spacer(Modifier.height(16.dp))
 
+            // ── Username ──────────────────────────────────────────────────────
+            // Guideline §3.2: 3–32 chars, [a-zA-Z0-9_]+ only.
             OutlinedTextField(
                 value = username,
                 onValueChange = {
@@ -71,113 +98,156 @@ fun RegisterScreen(
                     viewModel.clearError()
                 },
                 label = { Text(stringResource(R.string.register_field_username)) },
-                leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
+                leadingIcon = { Icon(Icons.Default.AlternateEmail, contentDescription = null) },
+                // MD3: prefix shows "@" inline without overlapping the label
+                prefix = { Text("@") },
                 supportingText = { Text(stringResource(R.string.register_username_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }),
+                keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium
             )
+
             Spacer(Modifier.height(12.dp))
 
+            // ── Email ─────────────────────────────────────────────────────────
             OutlinedTextField(
-                value = email, onValueChange = { email = it; viewModel.clearError() },
+                value = email,
+                onValueChange = { email = it; viewModel.clearError() },
                 label = { Text(stringResource(R.string.login_field_email)) },
-                leadingIcon = { Icon(Icons.Default.Email, null) },
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                // Show server-side email error (e.g. already-in-use) on this field
+                isError = uiState.error?.contains("email", ignoreCase = true) == true,
+                supportingText = if (uiState.error?.contains("email", ignoreCase = true) == true)
+                    ({ Text(uiState.error!!) }) else null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                modifier = Modifier.fillMaxWidth(),
+                    imeAction = ImeAction.Next,
+                    autoCorrectEnabled = false
+                ),
+                keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(emailFocus),
                 shape = MaterialTheme.shapes.medium
             )
+
             Spacer(Modifier.height(12.dp))
 
+            // ── Password ──────────────────────────────────────────────────────
             OutlinedTextField(
                 value = password,
-                onValueChange = { password = it; passwordError = null; viewModel.clearError() },
+                onValueChange = {
+                    password = it
+                    passwordLengthError   = false
+                    passwordMismatchError = false
+                    viewModel.clearError()
+                },
                 label = { Text(stringResource(R.string.login_field_password)) },
-                leadingIcon = { Icon(Icons.Default.Lock, null) },
+                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(if (passwordVisible) Icons.Default.VisibilityOff
-                        else Icons.Default.Visibility, null)
+                        Icon(
+                            imageVector = if (passwordVisible) Icons.Default.VisibilityOff
+                            else Icons.Default.Visibility,
+                            contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                        )
                     }
                 },
+                // Inline validation: password too short
+                isError = passwordLengthError,
+                supportingText = if (passwordLengthError) ({ Text(passwordTooShort) }) else null,
                 visualTransformation = if (passwordVisible) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) }),
-                modifier = Modifier.fillMaxWidth(),
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(onNext = { confirmFocus.requestFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(passwordFocus),
                 shape = MaterialTheme.shapes.medium
             )
+
             Spacer(Modifier.height(12.dp))
 
+            // ── Confirm password ──────────────────────────────────────────────
             OutlinedTextField(
                 value = confirm,
-                onValueChange = { confirm = it; passwordError = null; viewModel.clearError() },
+                onValueChange = {
+                    confirm = it
+                    passwordMismatchError = false
+                    viewModel.clearError()
+                },
                 label = { Text(stringResource(R.string.register_field_confirm)) },
-                leadingIcon = { Icon(Icons.Default.LockOpen, null) },
-                isError = passwordError != null,
-                supportingText = passwordError?.let { { Text(it) } },
+                leadingIcon = { Icon(Icons.Default.LockOpen, contentDescription = null) },
+                // Inline validation: passwords don't match
+                isError = passwordMismatchError,
+                supportingText = if (passwordMismatchError) ({ Text(passwordsMismatch) }) else null,
                 visualTransformation = if (passwordVisible) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    focusManager.clearFocus()
-                    if (password == confirm) viewModel.register(email, password, username)
-                    else passwordError = passwordsMismatch
-                }),
-                modifier = Modifier.fillMaxWidth(),
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(confirmFocus),
                 shape = MaterialTheme.shapes.medium
             )
 
-            AnimatedVisibility(visible = uiState.error != null) {
-                uiState.error?.let { error ->
-                    Spacer(Modifier.height(8.dp))
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer),
-                        shape = MaterialTheme.shapes.small,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(error,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(12.dp),
-                            textAlign = TextAlign.Center)
-                    }
-                }
+            // ── Generic server error (username taken, network, etc.) ───────────
+            // Only shown when the error is NOT an email error (already handled above).
+            val genericError = uiState.error?.takeIf {
+                !it.contains("email", ignoreCase = true)
+            }
+            if (genericError != null) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = genericError,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(Modifier.height(24.dp))
 
+            // ── Register button ───────────────────────────────────────────────
             Button(
-                onClick = {
-                    if (password != confirm) { passwordError = passwordsMismatch; return@Button }
-                    viewModel.register(email, password, username)
-                },
+                onClick = { submit() },
                 enabled = !uiState.isLoading,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
                 shape = MaterialTheme.shapes.large
             ) {
-                if (uiState.isLoading)
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary)
-                else Text(stringResource(R.string.register_button),
-                    style = MaterialTheme.typography.labelLarge)
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text(
+                        text = stringResource(R.string.register_button),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
+
             Spacer(Modifier.height(24.dp))
         }
     }

@@ -381,4 +381,24 @@
     <string name="media">Медиа</string>
     <string name="tap_to_reveal">Нажмите чтобы посмотреть</string>
     <string name="image">📷 Изображение</string>
+    <!-- VerifyEmailScreen -->
+    <string name="verify_email_title">Проверьте входящие сообщения</string>
+    <string name="verify_email_body">Мы отправили сообщение на вашу электронную почту. Откройте ссылку из сообщения для подтверждения</string>
+    <string name="verify_email_checking">Проверка…</string>
+    <string name="verify_email_resend">Отправить снова</string>
+    <string name="verify_email_resend_cooldown">Отправить снова через %ds</string>
+    <string name="verify_email_use_different_account">Использовать другой аккаунт</string>
+
+    <!-- RegisterScreen additions -->
+    <string name="register_password_too_short">Длина пароля должна быть не менее %d символов</string>
+    <string name="chat_client_unsafe_warning">Собеседник использует не официальный клиент или его устройство небезопасно.</string>
+    <string name="chat_client_unsafe_close">Закрыть</string>
+    <string name="unofficial_client_detected">Ошибка системы безопасности</string>
+    <string name="this_build_of_visorlink_has_not_been_verified_by_our_security_system">Ваше устройство и/или приложение не прошло проверку безопасности.</string>
+    <string name="you_may_be_using_a_modified_or_unofficial_version_of_the_app">"Возможно вы используете модифицированный клиент или небезопасное устройство. "</string>
+    <string name="for_your_security_and_the_security_of_your_conversations">"Для безопасности вас и ваших собеседников, "</string>
+    <string name="please_use_the_official_build">рекомендуется использовать оффициальный клиент.</string>
+    <string name="some_features_may_be_unavailable_or_behave_unexpectedly">"Некоторые функции могут быть отключены или ограничены "</string>
+    <string name="until_you_switch_to_the_official_app">пока вы не перейдете на оффициальный клиент.</string>
+    <string name="i_understand">Я принимаю этот риск</string>
 </resources>

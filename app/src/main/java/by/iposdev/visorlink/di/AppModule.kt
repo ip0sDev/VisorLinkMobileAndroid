@@ -1,10 +1,10 @@
 package by.iposdev.visorlink.di
 
-import by.iposdev.visorlink.data.model.StickerPack
 import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.StickerPackRepository
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel              // ← NEW
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
@@ -60,6 +60,11 @@ val appModule = module {
 
     // ─── ViewModels ───────────────────────────────────────────────────────────
 
+    // ─── NEW: App Check ───────────────────────────────────────────────────────
+    // Declared as a single viewModel so that AppCheckManager.validate() is
+    // called exactly once regardless of how many times AppCheckGuard recomposes.
+    viewModel { AppCheckViewModel() }
+
     viewModel { AuthViewModel(get()) }
     viewModel { ThemeViewModel(androidContext()) }
     viewModel { ChatListViewModel(get(), get(), get()) }
@@ -69,7 +74,7 @@ val appModule = module {
             chatRepository = get(),
             userRepository = get(),
             auth           = get(),
-            db             = get(),          // ← добавить
+            db             = get(),
             context        = androidContext(),
             chatId         = parameters.get(),
             otherUid       = parameters.get()
@@ -95,12 +100,8 @@ val appModule = module {
     viewModel { ProfileViewModel(get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
 
-    // ─── Legacy personal stickers screen ──────────────────────────────────────
-    viewModel { StickerPackViewModel(get(), get()) }
+    // ─── Sticker Packs ────────────────────────────────────────────────────────
 
-    // ── NEW: Sticker Pack picker ───────────────────────────────────────────────
-    //  Объявляем как single чтобы состояние паков не пересоздавалось при каждом
-    //  открытии StickerPickerBottomSheet (Koin сам вернёт тот же экземпляр).
     viewModel { StickerPackViewModel(get(), get()) }
 
     // ─── Chat Settings ────────────────────────────────────────────────────────

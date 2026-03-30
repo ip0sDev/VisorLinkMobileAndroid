@@ -3,6 +3,7 @@ package by.iposdev.visorlink.ui
 sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Register : Screen("register")
+    object VerifyEmail : Screen("verify_email")
     object ChatList : Screen("chat_list")
     object Profile : Screen("profile")
     object Settings : Screen("settings")
@@ -40,7 +41,6 @@ sealed class Screen(val route: String) {
         }
     }
 
-    // ─── NEW v4: Comments screen ──────────────────────────────────────────────
     object Comments : Screen("comments/{chatId}/{messageId}") {
         fun createRoute(chatId: String, messageId: String) = "comments/$chatId/$messageId"
     }

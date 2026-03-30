@@ -381,4 +381,24 @@
     <string name="media">Media</string>
     <string name="tap_to_reveal">Tap to reveal</string>
     <string name="image">📷 Image</string>
+    <!-- VerifyEmailScreen -->
+       <string name="verify_email_title">Check your inbox</string>
+       <string name="verify_email_body">We sent a verification link to your email address. Tap the link to activate your account.</string>
+       <string name="verify_email_checking">Checking…</string>
+       <string name="verify_email_resend">Resend email</string>
+       <string name="verify_email_resend_cooldown">Resend in %ds</string>
+       <string name="verify_email_use_different_account">Use a different account</string>
+
+       <!-- RegisterScreen additions -->
+       <string name="register_password_too_short">Password must be at least %d characters</string>
+    <string name="chat_client_unsafe_warning">Sender is using unofficial client, or his device is unsafe.</string>
+    <string name="chat_client_unsafe_close">Close</string>
+    <string name="unofficial_client_detected">Unofficial client detected</string>
+    <string name="this_build_of_visorlink_has_not_been_verified_by_our_security_system">This build of VisorLink has not been verified by our security system.</string>
+    <string name="you_may_be_using_a_modified_or_unofficial_version_of_the_app">"You may be using a modified or unofficial version of the app. "</string>
+    <string name="for_your_security_and_the_security_of_your_conversations">"For your security and the security of your conversations, "</string>
+    <string name="please_use_the_official_build">please use the official build.</string>
+    <string name="some_features_may_be_unavailable_or_behave_unexpectedly">"Some features may be unavailable or behave unexpectedly "</string>
+    <string name="until_you_switch_to_the_official_app">until you switch to the official app.</string>
+    <string name="i_understand">I understand</string>
 </resources>

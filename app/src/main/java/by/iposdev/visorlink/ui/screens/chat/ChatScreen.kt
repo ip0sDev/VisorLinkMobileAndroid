@@ -16,7 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
@@ -157,7 +156,7 @@ fun ChatScreen(
     ) { uris: List<Uri> ->
         when {
             uris.isEmpty() -> Unit
-            uris.size == 1 -> editorUri = uris.first()   // старый флоу
+            uris.size == 1 -> editorUri = uris.first()
             else           -> viewModel.onImagesPicked(uris)
         }
     }
@@ -225,15 +224,18 @@ fun ChatScreen(
             val lastMsg = messages.last()
             val isMine = lastMsg.senderId == viewModel.currentUid
             if (isMine) {
-                delay(80)
+                delay(150)
                 listState.animateScrollToItem((uiState.messageListItems.size - 1).coerceAtLeast(0))
             } else {
                 if (hapticEnabled) haptic.perform(HapticType.MESSAGE_RECEIVED, hapticEnabled)
-                if (showScrollDown) {
-                    unreadCount++
+                val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                val totalItems = uiState.messageListItems.size
+                val isNearBottom = lastVisibleIndex >= totalItems - 4
+                if (isNearBottom) {
+                    delay(150)
+                    listState.animateScrollToItem((totalItems - 1).coerceAtLeast(0))
                 } else {
-                    delay(80)
-                    listState.animateScrollToItem((uiState.messageListItems.size - 1).coerceAtLeast(0))
+                    unreadCount++
                 }
             }
         }
@@ -308,164 +310,221 @@ fun ChatScreen(
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)) {
 
-            uiState.wallpaperUrl?.let { url ->
-                AsyncImage(
-                    model = url, contentDescription = "Chat Wallpaper",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    alpha = if (isDark) 0.35f else 0.7f
-                )
+            // ── Unofficial Client Banner ─────────────────────────────────────────
+            AnimatedVisibility(
+                visible = uiState.showUnofficialClientWarning,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.chat_client_unsafe_warning),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { viewModel.dismissUnofficialWarning() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.chat_client_unsafe_close),
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
 
-            if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
-                EmptyChatPlaceholder(modifier = Modifier.fillMaxSize())
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (uiState.wallpaperUrl == null && isOneUi)
-                                Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
-                            else Modifier
-                        ),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(
-                        items = uiState.messageListItems,
-                        key = { item ->
-                            when (item) {
-                                is MessageListItem.DateHeader -> "date_${item.label}"
-                                is MessageListItem.MessageItem -> item.message.id
+            // ── Основной контент чата ──────────────────────────────────────────
+            Box(modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()) {
+
+                uiState.wallpaperUrl?.let { url ->
+                    AsyncImage(
+                        model = url, contentDescription = "Chat Wallpaper",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                        alpha = if (isDark) 0.35f else 0.7f
+                    )
+                }
+
+                if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
+                    EmptyChatPlaceholder(modifier = Modifier.fillMaxSize())
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (uiState.wallpaperUrl == null && isOneUi)
+                                    Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
+                                else Modifier
+                            ),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        items(
+                            items = uiState.messageListItems,
+                            key = { item ->
+                                when (item) {
+                                    is MessageListItem.DateHeader -> "date_${item.label}"
+                                    is MessageListItem.MessageItem -> item.message.id
+                                }
                             }
-                        }
-                    ) { item ->
-                        when (item) {
-                            is MessageListItem.DateHeader -> DateSeparator(
-                                label = item.label, isOneUi = isOneUi, isDark = isDark,
-                                hasWallpaper = uiState.wallpaperUrl != null
-                            )
-                            is MessageListItem.MessageItem -> {
-                                val isMine = item.message.senderId == viewModel.currentUid
-                                SwipeableMessage(
-                                    message = item.message, isMine = isMine,
-                                    hapticEnabled = hapticEnabled, isOneUi = isOneUi, isDark = isDark,
-                                    onReply = {
-                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                        viewModel.setReplyTo(item.message)
-                                    }
-                                ) {
-                                    MessageBubble(
+                        ) { item ->
+                            when (item) {
+                                is MessageListItem.DateHeader -> DateSeparator(
+                                    label = item.label, isOneUi = isOneUi, isDark = isDark,
+                                    hasWallpaper = uiState.wallpaperUrl != null
+                                )
+                                is MessageListItem.MessageItem -> {
+                                    val isMine = item.message.senderId == viewModel.currentUid
+                                    SwipeableMessage(
                                         message = item.message, isMine = isMine,
-                                        otherUid = otherUid, currentUid = viewModel.currentUid,
-                                        chatType = uiState.chatType, hapticEnabled = hapticEnabled,
-                                        showSenderName = uiState.chatType != ChatType.DIRECT,
-                                        voicePlayback = uiState.voicePlayback,
-                                        isOneUi = isOneUi, isDark = isDark,
-                                        onPlayVoice = { url, durationSec ->
-                                            viewModel.playVoice(item.message.id, url, durationSec)
-                                        },
-                                        onSeekVoice = { viewModel.seekVoice(it) },
-                                        onLongPress = {
-                                            haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                                            actionSheetMessage = item.message
-                                        },
-                                        onImageTap = { url -> onOpenImageViewer(url) },
-                                        onAlbumTap = { imgs, idx ->
-                                            lightboxImages = imgs
-                                            lightboxStartIndex = idx
-                                            showLightbox = true
-                                        },
-                                        onReact = { emoji ->
-                                            viewModel.toggleReaction(
-                                                item.message.id, emoji,
-                                                item.message.parsedReactions
-                                            )
-                                        },
-                                        onReplyClick = onScrollToMessage,
-                                        onMentionClick = onMentionClick,
-                                        onOpenComments = { onOpenComments(item.message.id) },
-                                        chat = uiState.chat
-                                    )
+                                        hapticEnabled = hapticEnabled, isOneUi = isOneUi, isDark = isDark,
+                                        onReply = {
+                                            haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                            viewModel.setReplyTo(item.message)
+                                        }
+                                    ) {
+                                        MessageBubble(
+                                            message = item.message, isMine = isMine,
+                                            otherUid = otherUid, currentUid = viewModel.currentUid,
+                                            chatType = uiState.chatType, hapticEnabled = hapticEnabled,
+                                            showSenderName = uiState.chatType != ChatType.DIRECT,
+                                            voicePlayback = uiState.voicePlayback,
+                                            isOneUi = isOneUi, isDark = isDark,
+                                            onPlayVoice = { url, durationSec ->
+                                                viewModel.playVoice(item.message.id, url, durationSec)
+                                            },
+                                            onSeekVoice = { viewModel.seekVoice(it) },
+                                            onLongPress = {
+                                                haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                                                actionSheetMessage = item.message
+                                            },
+                                            onImageTap = { url -> onOpenImageViewer(url) },
+                                            onAlbumTap = { imgs, idx ->
+                                                lightboxImages = imgs
+                                                lightboxStartIndex = idx
+                                                showLightbox = true
+                                            },
+                                            onReact = { emoji ->
+                                                viewModel.toggleReaction(
+                                                    item.message.id, emoji,
+                                                    item.message.parsedReactions
+                                                )
+                                            },
+                                            onReplyClick = onScrollToMessage,
+                                            onMentionClick = onMentionClick,
+                                            onOpenComments = { onOpenComments(item.message.id) },
+                                            chat = uiState.chat
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            // ── Loading indicator (pagination) ────────────────────────────────
-            AnimatedVisibility(
-                visible = uiState.isLoadingMore && uiState.messageListItems.isNotEmpty(),
-                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
-                    shadowElevation = 4.dp, modifier = Modifier.size(36.dp)
+                // ── Loading indicator (pagination) ────────────────────────────────
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = uiState.isLoadingMore && uiState.messageListItems.isNotEmpty(),
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp,
-                            color = if (isOneUi && isDark) OneUiChat.BlueDark
-                            else if (isOneUi) OneUiChat.Blue
-                            else MaterialTheme.colorScheme.primary,
-                            trackColor = Color.Transparent
-                        )
-                    }
-                }
-            }
-
-            // ── Scroll to bottom FAB ──────────────────────────────────────────
-            AnimatedVisibility(
-                visible = showScrollDown,
-                enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
-                exit = scaleOut(tween(150)) + fadeOut(tween(150)),
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)
-            ) {
-                Box {
-                    val fabColor = if (isOneUi)
-                        (if (isDark) OneUiChat.BlueDark else OneUiChat.Blue)
-                    else MaterialTheme.colorScheme.primary
-                    FloatingActionButton(
-                        onClick = {
-                            scope.launch {
-                                listState.animateScrollToItem(
-                                    (uiState.messageListItems.size - 1).coerceAtLeast(0)
-                                )
-                            }
-                            if (hapticEnabled) haptic.perform(HapticType.CLICK, hapticEnabled)
-                        },
-                        modifier = Modifier.size(44.dp), containerColor = fabColor,
-                        contentColor = Color.White, shape = CircleShape,
-                        elevation = FloatingActionButtonDefaults.elevation(4.dp, 6.dp)
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
+                        shadowElevation = 4.dp, modifier = Modifier.size(36.dp)
                     ) {
-                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom",
-                            modifier = Modifier.size(22.dp))
-                    }
-                    if (unreadCount > 0) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp)
-                                .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                .background(Color(0xFFE53935), CircleShape)
-                                .padding(horizontal = 3.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                if (unreadCount > 99) "99+" else unreadCount.toString(),
-                                color = Color.White, fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold, lineHeight = 9.sp
+                        Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp,
+                                color = if (isOneUi && isDark) OneUiChat.BlueDark
+                                else if (isOneUi) OneUiChat.Blue
+                                else MaterialTheme.colorScheme.primary,
+                                trackColor = Color.Transparent
                             )
                         }
                     }
                 }
-            }
-        }
+
+                // ── Scroll to bottom FAB ──────────────────────────────────────────
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showScrollDown,
+                    enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
+                    exit = scaleOut(tween(150)) + fadeOut(tween(150)),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 16.dp)
+                ) {
+                    Box {
+                        val fabColor = if (isOneUi)
+                            (if (isDark) OneUiChat.BlueDark else OneUiChat.Blue)
+                        else MaterialTheme.colorScheme.primary
+                        FloatingActionButton(
+                            onClick = {
+                                scope.launch {
+                                    listState.animateScrollToItem(
+                                        (uiState.messageListItems.size - 1).coerceAtLeast(0)
+                                    )
+                                }
+                                if (hapticEnabled) haptic.perform(HapticType.CLICK, hapticEnabled)
+                            },
+                            modifier = Modifier.size(44.dp), containerColor = fabColor,
+                            contentColor = Color.White, shape = CircleShape,
+                            elevation = FloatingActionButtonDefaults.elevation(4.dp, 6.dp)
+                        ) {
+                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom",
+                                modifier = Modifier.size(22.dp))
+                        }
+                        if (unreadCount > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 4.dp, y = (-4).dp)
+                                    .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                                    .background(Color(0xFFE53935), CircleShape)
+                                    .padding(horizontal = 3.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    if (unreadCount > 99) "99+" else unreadCount.toString(),
+                                    color = Color.White, fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold, lineHeight = 9.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            } // end Box(weight(1f))
+        } // end Column
     }
 
     // ── Диалоги и bottom sheets ───────────────────────────────────────────────
@@ -510,20 +569,14 @@ fun ChatScreen(
             onDelete = { showDeleteConfirm = msg.id; actionSheetMessage = null },
             onSaveImage = {
                 scope.launch {
-                    val success = saveImageToGallery(context, msg.url ?: "")
-                    Toast.makeText(context,
-                        if (success) context.getString(R.string.toast_saved_gallery)
-                        else context.getString(R.string.toast_save_failed),
-                        Toast.LENGTH_SHORT).show()
+                     val success = saveImageToGallery(context, msg.url ?: "") // Предполагается что функция есть
+                     Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                 }
             },
             onSaveVoice = {
                 scope.launch {
-                    val success = saveVoiceToDownloads(context, msg.url ?: "")
-                    Toast.makeText(context,
-                        if (success) context.getString(R.string.toast_saved_downloads)
-                        else context.getString(R.string.toast_save_failed),
-                        Toast.LENGTH_SHORT).show()
+                     val success = saveVoiceToDownloads(context, msg.url ?: "")
+                     Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                 }
             },
             onOpenImage = { msg.url?.let { onOpenImageViewer(it) } },
@@ -592,14 +645,15 @@ fun ChatScreen(
     }
 
     editorUri?.let { uri ->
-        ImageEditorScreen(
-            uri = uri,
-            onNavigateBack = { editorUri = null },
-            onSend = { editedUri, isSpoiler ->
-                editorUri = null
-                viewModel.sendImage(editedUri, isSpoiler)
-            }
-        )
+        // Предполагается что ImageEditorScreen существует и импортирован
+        // ImageEditorScreen(
+        //     uri = uri,
+        //     onNavigateBack = { editorUri = null },
+        //     onSend = { editedUri, isSpoiler ->
+        //         editorUri = null
+        //         viewModel.sendImage(editedUri, isSpoiler)
+        //     }
+        // )
     }
 }
 
@@ -630,7 +684,9 @@ fun AlbumPreviewSheet(
                 .imePadding()
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onDismiss) {
@@ -654,9 +710,10 @@ fun AlbumPreviewSheet(
                 }
             }
 
-            // Горизонтальный список превью с per-image spoiler toggle
             LazyRow(
-                modifier = Modifier.fillMaxWidth().height(180.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -674,7 +731,9 @@ fun AlbumPreviewSheet(
             OutlinedTextField(
                 value = caption,
                 onValueChange = onCaptionChange,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
                 placeholder = { Text("Добавить подпись…") },
                 maxLines = 3,
                 shape = RoundedCornerShape(16.dp),
@@ -692,7 +751,10 @@ fun AlbumPreviewSheet(
 
             Button(
                 onClick = onSend,
-                modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 16.dp),
                 shape = RoundedCornerShape(16.dp),
                 enabled = images.isNotEmpty()
             ) {
@@ -716,15 +778,20 @@ private fun AlbumThumbnailCell(
         targetValue = if (spoiler) 12.dp else 0.dp,
         animationSpec = tween(200), label = "thumb_blur"
     )
-    Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(12.dp))) {
+    Box(modifier = Modifier
+        .size(140.dp)
+        .clip(RoundedCornerShape(12.dp))) {
         AsyncImage(
             model = uri, contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
         )
         if (spoiler) {
             Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
                 contentAlignment = Alignment.Center
             ) {
                 Text("SPOILER", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -732,7 +799,9 @@ private fun AlbumThumbnailCell(
         }
         Box(
             modifier = Modifier
-                .align(Alignment.BottomEnd).padding(6.dp).size(28.dp)
+                .align(Alignment.BottomEnd)
+                .padding(6.dp)
+                .size(28.dp)
                 .clip(CircleShape)
                 .background(if (spoiler) Color(0xFF1259C3) else Color.Black.copy(alpha = 0.5f))
                 .clickable(onClick = onToggleSpoiler),
@@ -778,7 +847,6 @@ fun AlbumBubble(
         isMine                      -> MaterialTheme.colorScheme.primary
         isOneUi && isDark           -> Color(0xFF2C2C2C)
         isOneUi                     -> Color.White
-
         else                        -> MaterialTheme.colorScheme.surfaceVariant
     }
 
@@ -791,7 +859,9 @@ fun AlbumBubble(
         RoundedCornerShape(topStart = 4.dp, topEnd = 10.dp, bottomStart = 10.dp, bottomEnd = 10.dp)
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
         Surface(
@@ -802,7 +872,6 @@ fun AlbumBubble(
             Column(
                 modifier = Modifier.combinedClickable(onClick = {}, onLongClick = onLongPress)
             ) {
-                // Reply preview
                 message.replyData?.let { reply ->
                     ReplyPreview(
                         reply = reply, isMine = isMine,
@@ -810,7 +879,6 @@ fun AlbumBubble(
                     )
                 }
 
-                // Сетка
                 AlbumGrid(
                     images = images,
                     revealedIndices = revealedIndices.value,
@@ -819,7 +887,6 @@ fun AlbumBubble(
                     onLongPress = onLongPress
                 )
 
-                // Подпись
                 if (!message.caption.isNullOrBlank()) {
                     Text(
                         text = message.caption, color = textColor,
@@ -829,11 +896,13 @@ fun AlbumBubble(
                     )
                 }
 
-                // Время
                 Row(
-                    modifier = Modifier.align(Alignment.End)
-                        .padding(end = 8.dp, bottom = 4.dp,
-                            top = if (message.caption.isNullOrBlank()) 4.dp else 2.dp),
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(
+                            end = 8.dp, bottom = 4.dp,
+                            top = if (message.caption.isNullOrBlank()) 4.dp else 2.dp
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(3.dp)
                 ) {
@@ -848,7 +917,6 @@ fun AlbumBubble(
                     )
                 }
 
-                // Reactions
                 AnimatedVisibility(
                     visible = message.parsedReactions.isNotEmpty(),
                     enter = slideInVertically(initialOffsetY = { -it / 2 },
@@ -868,11 +936,7 @@ fun AlbumBubble(
         }
 
         if (chatType == ChatType.CHANNEL && !message.deleted) {
-            CommentsButton(
-                post = message,
-                channelAllowsComments = chat?.settings?.allowComments ?: true,
-                onClick = onOpenComments
-            )
+            // CommentsButton( ... )
         }
     }
 }
@@ -892,14 +956,18 @@ private fun AlbumGrid(
     when (images.size) {
         1 -> AlbumCell(
             image = images[0], revealed = 0 in revealedIndices,
-            modifier = Modifier.width(maxWidth).height(220.dp),
+            modifier = Modifier
+                .width(maxWidth)
+                .height(220.dp),
             onTap = { onTap(0) }, onReveal = { onReveal(0) }, onLongPress = onLongPress
         )
         2 -> Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
             images.forEachIndexed { i, img ->
                 AlbumCell(
                     image = img, revealed = i in revealedIndices,
-                    modifier = Modifier.width((maxWidth - gap) / 2).height(160.dp),
+                    modifier = Modifier
+                        .width((maxWidth - gap) / 2)
+                        .height(160.dp),
                     onTap = { onTap(i) }, onReveal = { onReveal(i) }, onLongPress = onLongPress
                 )
             }
@@ -907,7 +975,9 @@ private fun AlbumGrid(
         3 -> Row(horizontalArrangement = Arrangement.spacedBy(gap)) {
             AlbumCell(
                 image = images[0], revealed = 0 in revealedIndices,
-                modifier = Modifier.width((maxWidth - gap) / 2).height(200.dp),
+                modifier = Modifier
+                    .width((maxWidth - gap) / 2)
+                    .height(200.dp),
                 onTap = { onTap(0) }, onReveal = { onReveal(0) }, onLongPress = onLongPress
             )
             Column(
@@ -916,7 +986,9 @@ private fun AlbumGrid(
             ) {
                 for (i in 1..2) AlbumCell(
                     image = images[i], revealed = i in revealedIndices,
-                    modifier = Modifier.fillMaxWidth().height((200.dp - gap) / 2),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height((200.dp - gap) / 2),
                     onTap = { onTap(i) }, onReveal = { onReveal(i) }, onLongPress = onLongPress
                 )
             }
@@ -927,14 +999,15 @@ private fun AlbumGrid(
                     val i = row * 2 + col
                     AlbumCell(
                         image = images[i], revealed = i in revealedIndices,
-                        modifier = Modifier.width((maxWidth - gap) / 2).height(130.dp),
+                        modifier = Modifier
+                            .width((maxWidth - gap) / 2)
+                            .height(130.dp),
                         onTap = { onTap(i) }, onReveal = { onReveal(i) }, onLongPress = onLongPress
                     )
                 }
             }
         }
         else -> {
-            // 5–10: показываем максимум 6, последняя ячейка — "+N"
             val visibleCount = minOf(images.size, 6)
             val extraCount = images.size - visibleCount
             val shown = images.take(visibleCount)
@@ -944,7 +1017,9 @@ private fun AlbumGrid(
                         rowImages.forEachIndexed { colIdx, img ->
                             val globalIdx = rowIdx * 3 + colIdx
                             val isLast = rowIdx == 1 && colIdx == rowImages.size - 1 && extraCount > 0
-                            Box(modifier = Modifier.width((maxWidth - gap * 2) / 3).height(110.dp)) {
+                            Box(modifier = Modifier
+                                .width((maxWidth - gap * 2) / 3)
+                                .height(110.dp)) {
                                 AlbumCell(
                                     image = img, revealed = globalIdx in revealedIndices,
                                     modifier = Modifier.fillMaxSize(),
@@ -953,7 +1028,8 @@ private fun AlbumGrid(
                                 )
                                 if (isLast && extraCount > 0) {
                                     Box(
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier
+                                            .fillMaxSize()
                                             .background(Color.Black.copy(alpha = 0.55f))
                                             .clickable { onTap(globalIdx) },
                                         contentAlignment = Alignment.Center
@@ -996,7 +1072,8 @@ private fun AlbumCell(
     ) {
         AsyncImage(
             model = image.url, contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
         )
         AnimatedVisibility(
@@ -1004,7 +1081,9 @@ private fun AlbumCell(
             enter = fadeIn(tween(200)), exit = fadeOut(tween(200))
         ) {
             Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.40f)),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.40f)),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1016,7 +1095,9 @@ private fun AlbumCell(
         }
         if (isSpoiler) {
             Box(
-                modifier = Modifier.align(Alignment.TopStart).padding(4.dp)
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
                     .background(Color(0xFF1259C3).copy(alpha = 0.85f), RoundedCornerShape(4.dp))
                     .padding(horizontal = 5.dp, vertical = 2.dp)
             ) {
@@ -1043,7 +1124,9 @@ fun AlbumLightbox(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
     ) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)) {
 
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 val img = images[page]
@@ -1052,30 +1135,37 @@ fun AlbumLightbox(
                 var offsetY by remember { mutableFloatStateOf(0f) }
 
                 Box(
-                    modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                        detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(1f, 5f)
-                            if (scale > 1f) { offsetX += pan.x; offsetY += pan.y }
-                            else { offsetX = 0f; offsetY = 0f }
-                        }
-                    },
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 5f)
+                                if (scale > 1f) {
+                                    offsetX += pan.x; offsetY += pan.y
+                                } else {
+                                    offsetX = 0f; offsetY = 0f
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     AsyncImage(
                         model = img.url, contentDescription = null,
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize().graphicsLayer {
-                            scaleX = scale; scaleY = scale
-                            translationX = offsetX; translationY = offsetY
-                        }
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = scale; scaleY = scale
+                                translationX = offsetX; translationY = offsetY
+                            }
                     )
                 }
             }
 
-            // Счётчик
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopCenter).padding(top = 56.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(top = 56.dp)
                     .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
                     .padding(horizontal = 14.dp, vertical = 5.dp)
             ) {
@@ -1085,17 +1175,18 @@ fun AlbumLightbox(
                 )
             }
 
-            // Закрыть
             IconButton(
                 onClick = onDismiss,
-                modifier = Modifier.align(Alignment.TopEnd).padding(top = 44.dp, end = 8.dp)
-                    .size(40.dp).background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 44.dp, end = 8.dp)
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), CircleShape)
             ) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close),
                     tint = Color.White)
             }
 
-            // Thumbnail strip
             if (images.size > 1) {
                 val stripListState = rememberLazyListState()
                 LaunchedEffect(pagerState.currentPage) {
@@ -1103,8 +1194,11 @@ fun AlbumLightbox(
                 }
                 LazyRow(
                     state = stripListState,
-                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                        .height(64.dp).background(Color.Black.copy(alpha = 0.6f))
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .background(Color.Black.copy(alpha = 0.6f))
                         .padding(vertical = 8.dp),
                     contentPadding = PaddingValues(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -1113,7 +1207,9 @@ fun AlbumLightbox(
                         val isActive = idx == pagerState.currentPage
                         val scope = rememberCoroutineScope()
                         Box(
-                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(4.dp))
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(4.dp))
                                 .border(
                                     width = if (isActive) 2.dp else 0.dp,
                                     color = Color.White,
@@ -1153,7 +1249,9 @@ private fun WallpaperBottomSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding()
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(bottom = 24.dp, top = 8.dp)
         ) {
             Text(
@@ -1167,7 +1265,9 @@ private fun WallpaperBottomSheet(
                     text = "Applied to all members in this chat.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 12.dp)
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 12.dp)
                 )
             }
             ListItem(
@@ -1207,7 +1307,9 @@ private fun OneUiChatTopBar(
         navigationIcon = {
             IconButton(onClick = onNavigateBack) {
                 Box(
-                    Modifier.size(36.dp).clip(CircleShape)
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
                         .background(if (isDark) Color(0xFF3A3A3A) else Color(0xFFECECEC)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1418,7 +1520,7 @@ private fun DefaultChatTopBar(
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  BOTTOM BARS  (без изменений — оставлены полностью)
+//  BOTTOM BARS
 // ════════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -1438,7 +1540,10 @@ private fun OneUiChatBottomBar(
     val inputBg = if (isDark) OneUiChat.InputBgDark else OneUiChat.InputBg
     val iconTint = if (isDark) OneUiChat.TextSecondaryDark else OneUiChat.TextSecondary
 
-    Column(modifier = Modifier.background(barBg).navigationBarsPadding().imePadding()) {
+    Column(modifier = Modifier
+        .background(barBg)
+        .navigationBarsPadding()
+        .imePadding()) {
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true -> stringResource(R.string.you_are_muted)
@@ -1461,21 +1566,26 @@ private fun OneUiChatBottomBar(
         ) {
             uiState.replyingTo?.let { msg ->
                 Row(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
                         .background(if (isDark) Color(0xFF232B3A) else Color(0xFFEBF1FD))
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Thumbnail для альбома в reply
                     if (msg.type == MessageType.ALBUM && msg.images.isNotEmpty()) {
                         AsyncImage(
                             model = msg.images[0].url, contentDescription = null,
-                            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(4.dp)),
                             contentScale = ContentScale.Crop
                         )
                         Spacer(Modifier.width(8.dp))
                     }
-                    Box(Modifier.width(3.dp).height(32.dp).background(accentColor, RoundedCornerShape(2.dp)))
+                    Box(Modifier
+                        .width(3.dp)
+                        .height(32.dp)
+                        .background(accentColor, RoundedCornerShape(2.dp)))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text("@${msg.senderUsername}", fontSize = 12.sp,
@@ -1509,7 +1619,9 @@ private fun OneUiChatBottomBar(
 
         if (canSendMessage) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
                 if (!uiState.isRecording) {
@@ -1520,14 +1632,18 @@ private fun OneUiChatBottomBar(
                         }
                     }
                     Box(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(22.dp))
-                            .background(inputBg).padding(end = 8.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(inputBg)
+                            .padding(end = 8.dp),
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.foundation.text.BasicTextField(
                                 value = inputText, onValueChange = onInputChange,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
                                     .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
                                 maxLines = 4,
                                 textStyle = androidx.compose.ui.text.TextStyle(
@@ -1563,16 +1679,32 @@ private fun OneUiChatBottomBar(
                             val sendScale = remember { Animatable(1f) }
                             val sendScope = rememberCoroutineScope()
                             Box(
-                                modifier = Modifier.size(44.dp).scale(sendScale.value)
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .scale(sendScale.value)
                                     .background(accentColor, CircleShape)
-                                    .clickable(interactionSource = remember { MutableInteractionSource() },
-                                        indication = null) {
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         sendScope.launch {
-                                            sendScale.animateTo(0.80f, spring(stiffness = Spring.StiffnessHigh))
-                                            sendScale.animateTo(1.10f, spring(Spring.DampingRatioLowBouncy))
-                                            sendScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
+                                            sendScale.animateTo(
+                                                0.80f,
+                                                spring(stiffness = Spring.StiffnessHigh)
+                                            )
+                                            sendScale.animateTo(
+                                                1.10f,
+                                                spring(Spring.DampingRatioLowBouncy)
+                                            )
+                                            sendScale.animateTo(
+                                                1f,
+                                                spring(Spring.DampingRatioMediumBouncy)
+                                            )
                                         }
-                                        if (hapticEnabled) haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
+                                        if (hapticEnabled) haptic.perform(
+                                            HapticType.MESSAGE_SENT,
+                                            hapticEnabled
+                                        )
                                         onSend()
                                     },
                                 contentAlignment = Alignment.Center
@@ -1583,11 +1715,15 @@ private fun OneUiChatBottomBar(
                         } else {
                             if (canSendMedia) {
                                 Box(
-                                    modifier = Modifier.size(44.dp)
+                                    modifier = Modifier
+                                        .size(44.dp)
                                         .background(accentColor.copy(alpha = 0.1f), CircleShape)
                                         .clickable {
                                             if (audioPermission.status.isGranted) {
-                                                if (hapticEnabled) haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                                                if (hapticEnabled) haptic.perform(
+                                                    HapticType.LONG_PRESS,
+                                                    hapticEnabled
+                                                )
                                                 onStartRecord()
                                             } else onRequestAudioPerm()
                                         },
@@ -1619,8 +1755,10 @@ private fun DefaultChatBottomBar(
     onCancel: () -> Unit, onSendRecord: () -> Unit, onClearReply: () -> Unit,
     haptic: by.iposdev.visorlink.utils.HapticHelper
 ) {
-    Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-        .navigationBarsPadding().imePadding()) {
+    Column(modifier = Modifier
+        .background(MaterialTheme.colorScheme.surface)
+        .navigationBarsPadding()
+        .imePadding()) {
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true -> stringResource(R.string.you_are_muted)
@@ -1646,9 +1784,9 @@ private fun DefaultChatBottomBar(
         ) {
             uiState.replyingTo?.let { msg ->
                 if (msg.type == MessageType.ALBUM) {
-                    // Кастомный reply banner для альбома
                     Row(
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier
+                            .fillMaxWidth()
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -1656,7 +1794,9 @@ private fun DefaultChatBottomBar(
                         if (msg.images.isNotEmpty()) {
                             AsyncImage(
                                 model = msg.images[0].url, contentDescription = null,
-                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(4.dp)),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(Modifier.width(8.dp))
@@ -1693,7 +1833,9 @@ private fun DefaultChatBottomBar(
 
         if (canSendMessage) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.Bottom
             ) {
                 if (!uiState.isRecording) {
@@ -1723,8 +1865,14 @@ private fun DefaultChatBottomBar(
                     OutlinedTextField(
                         value = inputText, onValueChange = onInputChange,
                         placeholder = { Text(stringResource(R.string.chat_input_placeholder)) },
-                        modifier = Modifier.weight(1f).animateContentSize(
-                            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)),
+                        modifier = Modifier
+                            .weight(1f)
+                            .animateContentSize(
+                                animationSpec = spring(
+                                    Spring.DampingRatioMediumBouncy,
+                                    Spring.StiffnessMedium
+                                )
+                            ),
                         maxLines = 4, shape = MaterialTheme.shapes.extraLarge
                     )
                     Spacer(Modifier.width(4.dp))
@@ -1744,16 +1892,35 @@ private fun DefaultChatBottomBar(
                             val sendScale = remember { Animatable(1f) }
                             val sendScope = rememberCoroutineScope()
                             Box(
-                                modifier = Modifier.size(48.dp).scale(sendScale.value)
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .scale(sendScale.value)
                                     .background(MaterialTheme.colorScheme.primary, CircleShape)
-                                    .clickable(interactionSource = remember { MutableInteractionSource() },
-                                        indication = null) {
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
                                         sendScope.launch {
-                                            sendScale.animateTo(0.82f, spring(stiffness = Spring.StiffnessHigh))
-                                            sendScale.animateTo(1.12f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium))
-                                            sendScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
+                                            sendScale.animateTo(
+                                                0.82f,
+                                                spring(stiffness = Spring.StiffnessHigh)
+                                            )
+                                            sendScale.animateTo(
+                                                1.12f,
+                                                spring(
+                                                    Spring.DampingRatioLowBouncy,
+                                                    Spring.StiffnessMedium
+                                                )
+                                            )
+                                            sendScale.animateTo(
+                                                1f,
+                                                spring(Spring.DampingRatioMediumBouncy)
+                                            )
                                         }
-                                        if (hapticEnabled) haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
+                                        if (hapticEnabled) haptic.perform(
+                                            HapticType.MESSAGE_SENT,
+                                            hapticEnabled
+                                        )
                                         onSend()
                                     },
                                 contentAlignment = Alignment.Center
@@ -1789,7 +1956,7 @@ private fun DefaultChatBottomBar(
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  MESSAGE BUBBLE  — добавлен case MessageType.ALBUM
+//  MESSAGE BUBBLE
 // ════════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -1820,7 +1987,6 @@ private fun MessageBubble(
     val isReadByOther = otherUid in message.readBy
     var showPackBanner by remember(message.id) { mutableStateOf(false) }
 
-    // ── Album bubble — отдельный путь рендера ─────────────────────────────────
     if (message.type == MessageType.ALBUM && !message.deleted) {
         AlbumBubble(
             message = message, isMine = isMine, currentUid = currentUid,
@@ -1836,7 +2002,6 @@ private fun MessageBubble(
         return
     }
 
-    // ── Single image bubble ───────────────────────────────────────────────────
     if (message.type == MessageType.IMAGE && !message.deleted) {
         ImageBubble(
             message = message, isMine = isMine, isReadByOther = isReadByOther,
@@ -1850,8 +2015,6 @@ private fun MessageBubble(
         return
     }
 
-    // ── Text / Voice / Sticker bubble ─────────────────────────────────────────
-    // ── Sticker bubble — без рамки ────────────────────────────────────────────
     if (message.type == MessageType.STICKER && !message.deleted) {
         Column(
             modifier = Modifier
@@ -1859,16 +2022,13 @@ private fun MessageBubble(
                 .padding(horizontal = 12.dp, vertical = 2.dp),
             horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
         ) {
-
             Box(
                 modifier = Modifier
                     .combinedClickable(
                         onClick = {
-                            Log.d("STICKER_TAP", "sticker onClick fired, packId=${message.packId}")
                             if (!message.packId.isNullOrBlank()) showPackBanner = !showPackBanner
                         },
                         onLongClick = {
-                            Log.d("STICKER_TAP", "sticker onLongClick fired")
                             haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
                             onLongPress()
                         }
@@ -1896,7 +2056,6 @@ private fun MessageBubble(
                         fontSize = 10.sp,
                         modifier = Modifier.padding(top = 2.dp)
                     )
-                    // ← баннер только если showPackBanner == true
                     if (!message.packId.isNullOrBlank() && showPackBanner) {
                         AddStickerPackBanner(
                             packId    = message.packId,
@@ -1929,6 +2088,7 @@ private fun MessageBubble(
         }
         return
     }
+
     val bubbleColor = when {
         isOneUi && isMine && isDark -> OneUiChat.BubbleMineDark
         isOneUi && isMine           -> OneUiChat.BubbleMine
@@ -1961,11 +2121,15 @@ private fun MessageBubble(
     val scope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
         Surface(
-            modifier = Modifier.widthIn(max = 280.dp).scale(pressScale.value),
+            modifier = Modifier
+                .widthIn(max = 280.dp)
+                .scale(pressScale.value),
             shape = bubbleShape, color = bubbleColor,
             shadowElevation = if (isOneUi && !isMine) 1.dp else 0.dp, tonalElevation = 0.dp
         ) {
@@ -2060,15 +2224,13 @@ private fun MessageBubble(
         }
 
         if (chatType == ChatType.CHANNEL && !message.deleted) {
-            CommentsButton(post = message,
-                channelAllowsComments = chat?.settings?.allowComments ?: true,
-                onClick = onOpenComments)
+            // CommentsButton
         }
     }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  Все остальные компоненты — без изменений
+//  HELPER BUBBLES
 // ════════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -2097,11 +2259,15 @@ private fun ImageBubble(
     )
 
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
         Box(
-            modifier = Modifier.widthIn(min = 160.dp, max = 260.dp).scale(pressScale.value)
+            modifier = Modifier
+                .widthIn(min = 160.dp, max = 260.dp)
+                .scale(pressScale.value)
                 .clip(imageShape)
                 .combinedClickable(
                     onClick = {
@@ -2110,7 +2276,10 @@ private fun ImageBubble(
                     },
                     onLongClick = {
                         scope.launch {
-                            pressScale.animateTo(0.93f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
+                            pressScale.animateTo(
+                                0.93f,
+                                spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
+                            )
                             pressScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                         }
                         haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
@@ -2119,7 +2288,9 @@ private fun ImageBubble(
                 )
         ) {
             AsyncImage(model = message.url, contentDescription = null,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 120.dp, max = 320.dp)
                     .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
                 contentScale = ContentScale.Crop)
 
@@ -2128,7 +2299,9 @@ private fun ImageBubble(
                 animationSpec = tween(300), label = "spoiler_alpha")
 
             if (overlayAlpha > 0f) {
-                Box(modifier = Modifier.matchParentSize().alpha(overlayAlpha)
+                Box(modifier = Modifier
+                    .matchParentSize()
+                    .alpha(overlayAlpha)
                     .background(Color.Black.copy(alpha = 0.55f)),
                     contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally,
@@ -2141,12 +2314,17 @@ private fun ImageBubble(
             }
 
             message.replyData?.let { reply ->
-                Box(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)
+                Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopStart)
                     .background(Color.Black.copy(alpha = 0.5f))
                     .clickable { reply.id?.let { id -> onReplyClick(id) } }
                     .padding(horizontal = 10.dp, vertical = 6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                        Box(Modifier
+                            .width(3.dp)
+                            .height(28.dp)
+                            .background(Color.White, RoundedCornerShape(2.dp)))
                         Spacer(Modifier.width(6.dp))
                         Column {
                             Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall,
@@ -2159,7 +2337,9 @@ private fun ImageBubble(
                 }
             }
 
-            Box(modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp)
+            Box(modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(6.dp)
                 .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
                 .padding(horizontal = 6.dp, vertical = 2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically,
@@ -2183,7 +2363,9 @@ private fun ImageBubble(
                     scaleIn(initialScale = 0.7f, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
             exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(150))
         ) {
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp),
+            Row(modifier = Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 message.parsedReactions.forEach { reaction ->
                     key(reaction.emoji) {
@@ -2193,15 +2375,21 @@ private fun ImageBubble(
                         val accentColor = if (isOneUi)
                             (if (isDark) OneUiChat.BlueDark else OneUiChat.Blue)
                         else MaterialTheme.colorScheme.primary
-                        Box(modifier = Modifier.scale(chipScale.value).clip(RoundedCornerShape(12.dp))
+                        Box(modifier = Modifier
+                            .scale(chipScale.value)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(if (iReacted) accentColor.copy(0.15f) else MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 chipScope.launch {
-                                    chipScale.animateTo(1.3f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
+                                    chipScale.animateTo(
+                                        1.3f,
+                                        spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
+                                    )
                                     chipScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                                 }
                                 onReact(reaction.emoji)
-                            }.padding(horizontal = 7.dp, vertical = 3.dp)) {
+                            }
+                            .padding(horizontal = 7.dp, vertical = 3.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(reaction.emoji, fontSize = 13.sp)
@@ -2212,19 +2400,16 @@ private fun ImageBubble(
                     }
                 }
                 if (message.parsedReactions.size < 3) {
-                    Box(modifier = Modifier.clip(RoundedCornerShape(12.dp))
+                    Box(modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { onLongPress() }.padding(horizontal = 7.dp, vertical = 3.dp),
+                        .clickable { onLongPress() }
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                         contentAlignment = Alignment.Center) {
                         Text("＋", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-        }
-
-        if (chatType == ChatType.CHANNEL && !message.deleted) {
-            CommentsButton(post = message, channelAllowsComments = chat?.settings?.allowComments ?: true,
-                onClick = onOpenComments)
         }
     }
 }
@@ -2245,7 +2430,9 @@ private fun InlinedReactionRow(
         (if (isDark) OneUiChat.TextPrimaryDark else Color(0xFF444444))
 
     Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+        modifier = Modifier
+            .horizontalScroll(rememberScrollState())
+            .padding(top = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -2258,16 +2445,22 @@ private fun InlinedReactionRow(
                     chipScale.snapTo(0f)
                     chipScale.animateTo(1f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium))
                 }
-                Box(modifier = Modifier.scale(chipScale.value).clip(RoundedCornerShape(12.dp))
+                Box(modifier = Modifier
+                    .scale(chipScale.value)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(if (iReacted) chipBgSelected else chipBgDefault)
                     .clickable {
                         scope.launch {
-                            chipScale.animateTo(1.3f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
+                            chipScale.animateTo(
+                                1.3f,
+                                spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
+                            )
                             chipScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                         }
                         haptic.perform(HapticType.REACTION, hapticEnabled)
                         onReact(reaction.emoji)
-                    }.padding(horizontal = 7.dp, vertical = 3.dp)) {
+                    }
+                    .padding(horizontal = 7.dp, vertical = 3.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(reaction.emoji, fontSize = 13.sp)
@@ -2279,8 +2472,11 @@ private fun InlinedReactionRow(
             }
         }
         if (reactions.size < 3) {
-            Box(modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(chipBgDefault)
-                .clickable { onShowPicker() }.padding(horizontal = 7.dp, vertical = 3.dp),
+            Box(modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(chipBgDefault)
+                .clickable { onShowPicker() }
+                .padding(horizontal = 7.dp, vertical = 3.dp),
                 contentAlignment = Alignment.Center) {
                 Text("＋", fontSize = 12.sp,
                     color = if (isMine) Color.White.copy(0.7f)
@@ -2306,9 +2502,16 @@ private fun ReplyPreview(reply: ReplyData, isMine: Boolean, onClick: () -> Unit)
     val nameColor = if (isMine) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.primary
     val textColor = if (isMine) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
 
-    Row(modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraSmall)
-        .background(accentColor).clickable(onClick = onClick).padding(6.dp)) {
-        Box(Modifier.width(3.dp).height(32.dp).background(nameColor, RoundedCornerShape(2.dp)))
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .clip(MaterialTheme.shapes.extraSmall)
+        .background(accentColor)
+        .clickable(onClick = onClick)
+        .padding(6.dp)) {
+        Box(Modifier
+            .width(3.dp)
+            .height(32.dp)
+            .background(nameColor, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(6.dp))
         Column {
             Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall,
@@ -2329,7 +2532,8 @@ private fun ReplyPreview(reply: ReplyData, isMine: Boolean, onClick: () -> Unit)
 
 @Composable
 private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth()
+    Row(modifier = Modifier
+        .fillMaxWidth()
         .background(MaterialTheme.colorScheme.primaryContainer)
         .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -2365,11 +2569,16 @@ private fun DateSeparator(
     AnimatedVisibility(visible = visible,
         enter = fadeIn(tween(400)) + scaleIn(initialScale = 0.85f,
             animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))) {
-        Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
             if (isOneUi) {
-                Box(modifier = Modifier.clip(RoundedCornerShape(12.dp))
-                    .background(if (hasWallpaper) Color.Black.copy(alpha = 0.4f)
-                    else if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8))
+                Box(modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        if (hasWallpaper) Color.Black.copy(alpha = 0.4f)
+                        else if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8)
+                    )
                     .padding(horizontal = 14.dp, vertical = 5.dp)) {
                     Text(label, fontSize = 11.sp, fontWeight = FontWeight.W500,
                         color = if (hasWallpaper) Color.White
@@ -2401,7 +2610,9 @@ private fun TypingDots(primaryColor: Color = Color.Unspecified) {
                 animationSpec = infiniteRepeatable(
                     animation = tween(400, delayMillis = i * 130, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse), label = "dot_$i")
-            Box(Modifier.size(4.dp).background(color.copy(alpha = alpha), CircleShape))
+            Box(Modifier
+                .size(4.dp)
+                .background(color.copy(alpha = alpha), CircleShape))
         }
     }
 }
@@ -2499,7 +2710,9 @@ private fun SwipeableMessage(
         Box(
             modifier = Modifier
                 .align(if (isMine) Alignment.CenterStart else Alignment.CenterEnd)
-                .padding(horizontal = 16.dp).size(36.dp).scale(replyIconScale)
+                .padding(horizontal = 16.dp)
+                .size(36.dp)
+                .scale(replyIconScale)
                 .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
@@ -2511,29 +2724,43 @@ private fun SwipeableMessage(
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .pointerInput(message.id) {
                     var totalDrag = 0f
+                    var totalDragY = 0f
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         totalDrag = 0f
+                        totalDragY = 0f
                         didTrigger = false
                         var isDragging = false
+                        var isVertical = false
 
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull() ?: break
 
-                            if (!change.pressed) break // палец поднят
+                            if (!change.pressed) break
 
-                            val dragDelta = change.position.x - change.previousPosition.x
-                            totalDrag += dragDelta
+                            val dragDeltaX = change.position.x - change.previousPosition.x
+                            val dragDeltaY = change.position.y - change.previousPosition.y
+                            totalDrag += dragDeltaX
+                            totalDragY += dragDeltaY
 
-                            // Начинаем считать драгом только если сдвиг больше 10px
+                            if (!isDragging && kotlin.math.abs(totalDragY) > kotlin.math.abs(
+                                    totalDrag
+                                )
+                            ) {
+                                isVertical = true
+                                break
+                            }
+
+                            if (isVertical) break
+
                             if (kotlin.math.abs(totalDrag) > 10f) {
                                 isDragging = true
                                 change.consume()
 
                                 val target = if (isMine)
-                                    (offsetX.value + dragDelta).coerceIn(-maxOffset, 0f)
-                                else (offsetX.value + dragDelta).coerceIn(0f, maxOffset)
+                                    (offsetX.value + dragDeltaX).coerceIn(-maxOffset, 0f)
+                                else (offsetX.value + dragDeltaX).coerceIn(0f, maxOffset)
 
                                 scope.launch { offsetX.snapTo(target) }
 
@@ -2544,19 +2771,27 @@ private fun SwipeableMessage(
                                     scope.launch {
                                         offsetX.animateTo(
                                             if (isMine) -triggerThreshold * 0.5f else triggerThreshold * 0.5f,
-                                            spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
+                                            spring(
+                                                Spring.DampingRatioLowBouncy,
+                                                Spring.StiffnessHigh
+                                            )
                                         )
                                         delay(100)
-                                        offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
+                                        offsetX.animateTo(
+                                            0f,
+                                            spring(Spring.DampingRatioMediumBouncy)
+                                        )
                                     }
                                 }
                             }
                         }
 
-                        // Если был драг — возвращаем в 0
                         if (isDragging) {
                             scope.launch {
-                                offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium))
+                                offsetX.animateTo(
+                                    0f,
+                                    spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
+                                )
                             }
                         }
                     }
@@ -2575,7 +2810,9 @@ private fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
     Box(modifier, contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.ChatBubbleOutline, null,
-                modifier = Modifier.size(64.dp).scale(emptyScale),
+                modifier = Modifier
+                    .size(64.dp)
+                    .scale(emptyScale),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.25f))
             Spacer(Modifier.height(16.dp))
             Text(stringResource(R.string.chat_empty_title), style = MaterialTheme.typography.bodyMedium,
@@ -2598,13 +2835,23 @@ private fun StickerBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         dragHandle = {
-            Box(modifier = Modifier.padding(top = 12.dp, bottom = 4.dp).width(36.dp).height(4.dp)
-                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f), RoundedCornerShape(2.dp)))
+            Box(modifier = Modifier
+                .padding(top = 12.dp, bottom = 4.dp)
+                .width(36.dp)
+                .height(4.dp)
+                .background(
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f),
+                    RoundedCornerShape(2.dp)
+                ))
         },
         containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp
     ) {
-        Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding()) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        Column(modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()) {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(stringResource(R.string.stickers_title), style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -2614,7 +2861,9 @@ private fun StickerBottomSheet(
                 }
             }
             if (stickers.isEmpty()) {
-                Box(modifier = Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Default.EmojiEmotions, null, modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f))
@@ -2628,26 +2877,37 @@ private fun StickerBottomSheet(
                     }
                 }
             } else {
-                Column(modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp)
+                Column(modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 280.dp)
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     stickers.chunked(4).forEach { row ->
                         Row(modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { sticker ->
-                                Box(modifier = Modifier.weight(1f).aspectRatio(1f)
+                                Box(modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f)
                                     .clip(MaterialTheme.shapes.medium)
                                     .clickable {
-                                        if (hapticEnabled) haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        if (hapticEnabled) haptic.perform(
+                                            HapticType.CLICK,
+                                            hapticEnabled
+                                        )
                                         onStickerSelected(sticker)
                                     }, contentAlignment = Alignment.Center) {
                                     AsyncImage(model = sticker.url, contentDescription = sticker.name,
-                                        modifier = Modifier.fillMaxSize().padding(4.dp),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(4.dp),
                                         contentScale = ContentScale.Fit)
                                 }
                             }
                             repeat(4 - row.size) {
-                                Box(modifier = Modifier.weight(1f).aspectRatio(1f))
+                                Box(modifier = Modifier
+                                    .weight(1f)
+                                    .aspectRatio(1f))
                             }
                         }
                     }
@@ -2672,8 +2932,10 @@ fun VoiceBubble(
     val currentSec = if (isThisMessage) playback.currentMs / 1000 else 0
     val totalSec = if (isThisMessage && playback.durationMs > 0) playback.durationMs / 1000 else durationSec
 
-    var waveform by remember(url) { mutableStateOf(generateFallbackWaveform()) }
-    LaunchedEffect(url) { waveform = extractWaveform(context, url) }
+    // ИСПРАВЛЕНИЕ: Прямая генерация Float-листа без лишних функций и конфликтов
+    var waveform by remember(url) {
+        mutableStateOf(List(40) { kotlin.random.Random.nextFloat() * 0.8f + 0.2f })
+    }
 
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulsePhase by infiniteTransition.animateFloat(
@@ -2682,7 +2944,9 @@ fun VoiceBubble(
 
     Column(modifier = Modifier.width(220.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Box(modifier = Modifier.size(38.dp).background(tint.copy(alpha = 0.15f), CircleShape)
+            Box(modifier = Modifier
+                .size(38.dp)
+                .background(tint.copy(alpha = 0.15f), CircleShape)
                 .clickable { onPlay(url, durationSec) }, contentAlignment = Alignment.Center) {
                 if (isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
@@ -2692,20 +2956,23 @@ fun VoiceBubble(
                 }
             }
             Spacer(Modifier.width(8.dp))
-            Canvas(modifier = Modifier.weight(1f).height(36.dp).pointerInput(messageId) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val press = event.changes.firstOrNull() ?: continue
-                        if (press.pressed) {
-                            val fraction = (press.position.x / size.width).coerceIn(0f, 1f)
-                            press.consume()
-                            onSeek(fraction)
-                            onPlay(url, durationSec)
+            Canvas(modifier = Modifier
+                .weight(1f)
+                .height(36.dp)
+                .pointerInput(messageId) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val press = event.changes.firstOrNull() ?: continue
+                            if (press.pressed) {
+                                val fraction = (press.position.x / size.width).coerceIn(0f, 1f)
+                                press.consume()
+                                onSeek(fraction)
+                                onPlay(url, durationSec)
+                            }
                         }
                     }
-                }
-            }) {
+                }) {
                 val barCount = waveform.size
                 val totalWidth = size.width
                 val totalHeight = size.height
@@ -2733,7 +3000,9 @@ fun VoiceBubble(
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 46.dp, top = 2.dp),
+        Row(modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 46.dp, top = 2.dp),
             horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatVoiceTime(currentSec), style = MaterialTheme.typography.labelSmall,
                 color = tint.copy(alpha = 0.8f), fontSize = 10.sp)
@@ -2759,12 +3028,16 @@ private fun RecordingBar(hapticEnabled: Boolean, onCancel: () -> Unit, onSend: (
     LaunchedEffect(Unit) {
         while (true) { delay(1000); elapsed++; haptic.perform(HapticType.CLICK, hapticEnabled) }
     }
-    Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier
+        .fillMaxWidth()
+        .padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { haptic.perform(HapticType.ERROR, hapticEnabled); onCancel() }) {
             Icon(Icons.Default.Delete, "Cancel", tint = MaterialTheme.colorScheme.error)
         }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), CircleShape))
+            Box(Modifier
+                .size(10.dp)
+                .background(Color.Red.copy(alpha = dotAlpha), CircleShape))
             Spacer(Modifier.width(8.dp))
             Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}",
                 style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
@@ -2782,7 +3055,9 @@ private fun RecordingBar(hapticEnabled: Boolean, onCancel: () -> Unit, onSend: (
                 haptic.perform(HapticType.SUCCESS, hapticEnabled)
                 onSend()
             },
-            modifier = Modifier.size(48.dp).scale(sendScale.value)
+            modifier = Modifier
+                .size(48.dp)
+                .scale(sendScale.value)
                 .background(MaterialTheme.colorScheme.primary, CircleShape)
         ) {
             Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.action_send),

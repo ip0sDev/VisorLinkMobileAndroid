@@ -12,6 +12,11 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import com.google.firebase.Firebase
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.database
 
 class UserRepository(
     private val auth: FirebaseAuth,
@@ -98,4 +103,18 @@ class UserRepository(
         functions.getHttpsCallable("saveFcmToken")
             .call(mapOf("token" to token)).await()
     }
-}
+    fun clientStatusFlow(uid: String): Flow<Boolean> = callbackFlow {
+        val ref = Firebase.database.getReference("users/$uid/clientStatus/isOfficial")
+        val listener = object : ValueEventListener {
+            override fun onDataChange(snap: DataSnapshot) {
+                // Если значения нет, по умолчанию считаем официальным (чтобы не пугать зря)
+                val isOfficial = snap.getValue(Boolean::class.java) ?: true
+                trySend(isOfficial)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                trySend(true)
+            }
+        }
+        ref.addValueEventListener(listener)
+        awaitClose { ref.removeEventListener(listener) }
+}}
