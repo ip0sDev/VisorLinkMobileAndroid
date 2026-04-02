@@ -279,7 +279,12 @@ fun ChatScreen(
                     canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                     hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                     audioPermission = audioPermission,
-                    onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                    onInputChange = { newText ->
+                        if (newText.length <= 2000) {
+                            inputText = newText
+                            viewModel.onTextChanged(newText)
+                        }
+                    },
                     onAttach = { imagePicker.launch("image/*") },
                     onStickerClick = { showStickerSheet = true },
                     onSend = { val text = inputText; inputText = ""; viewModel.sendText(text) },
@@ -296,7 +301,12 @@ fun ChatScreen(
                     canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                     hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                     audioPermission = audioPermission,
-                    onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                    onInputChange = { newText ->
+                        if (newText.length <= 2000) {
+                            inputText = newText
+                            viewModel.onTextChanged(newText)
+                        }
+                    },
                     onAttach = { imagePicker.launch("image/*") },
                     onStickerClick = { showStickerSheet = true },
                     onSend = { val text = inputText; inputText = ""; viewModel.sendText(text) },
@@ -569,14 +579,14 @@ fun ChatScreen(
             onDelete = { showDeleteConfirm = msg.id; actionSheetMessage = null },
             onSaveImage = {
                 scope.launch {
-                     val success = saveImageToGallery(context, msg.url ?: "") // Предполагается что функция есть
-                     Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
+                    val success = saveImageToGallery(context, msg.url ?: "") // Предполагается что функция есть
+                    Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                 }
             },
             onSaveVoice = {
                 scope.launch {
-                     val success = saveVoiceToDownloads(context, msg.url ?: "")
-                     Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
+                    val success = saveVoiceToDownloads(context, msg.url ?: "") // Предполагается что функция есть
+                    Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                 }
             },
             onOpenImage = { msg.url?.let { onOpenImageViewer(it) } },
@@ -645,15 +655,14 @@ fun ChatScreen(
     }
 
     editorUri?.let { uri ->
-        // Предполагается что ImageEditorScreen существует и импортирован
-        // ImageEditorScreen(
-        //     uri = uri,
-        //     onNavigateBack = { editorUri = null },
-        //     onSend = { editedUri, isSpoiler ->
-        //         editorUri = null
-        //         viewModel.sendImage(editedUri, isSpoiler)
-        //     }
-        // )
+        ImageEditorScreen(
+            uri = uri,
+            onNavigateBack = { editorUri = null },
+            onSend = { editedUri, isSpoiler ->
+                editorUri = null
+                viewModel.sendImage(editedUri, isSpoiler)
+            }
+        )
     }
 }
 
@@ -1626,7 +1635,7 @@ private fun OneUiChatBottomBar(
             ) {
                 if (!uiState.isRecording) {
                     if (canSendMedia) {
-                        IconButton(onClick = onAttach) {
+                        IconButton(onClick = onAttach, enabled = !uiState.isCooldown) {
                             Icon(Icons.Default.AttachFile, null, tint = iconTint,
                                 modifier = Modifier.size(22.dp))
                         }
@@ -1659,7 +1668,15 @@ private fun OneUiChatBottomBar(
                                     inner()
                                 }
                             )
-                            IconButton(onClick = onStickerClick, modifier = Modifier.size(32.dp)) {
+                            if (inputText.isNotEmpty()) {
+                                Text(
+                                    text = "${inputText.length}/2000",
+                                    fontSize = 11.sp,
+                                    color = if (inputText.length >= 2000) MaterialTheme.colorScheme.error else iconTint,
+                                    modifier = Modifier.padding(end = 6.dp)
+                                )
+                            }
+                            IconButton(onClick = onStickerClick, modifier = Modifier.size(32.dp), enabled = !uiState.isCooldown) {
                                 Icon(Icons.Default.EmojiEmotions, null,
                                     tint = if (showStickerSheet) accentColor else iconTint,
                                     modifier = Modifier.size(20.dp))
@@ -1682,8 +1699,9 @@ private fun OneUiChatBottomBar(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .scale(sendScale.value)
-                                    .background(accentColor, CircleShape)
+                                    .background(if (uiState.isCooldown) accentColor.copy(alpha = 0.5f) else accentColor, CircleShape)
                                     .clickable(
+                                        enabled = !uiState.isCooldown,
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
@@ -1718,7 +1736,7 @@ private fun OneUiChatBottomBar(
                                     modifier = Modifier
                                         .size(44.dp)
                                         .background(accentColor.copy(alpha = 0.1f), CircleShape)
-                                        .clickable {
+                                        .clickable(enabled = !uiState.isCooldown) {
                                             if (audioPermission.status.isGranted) {
                                                 if (hapticEnabled) haptic.perform(
                                                     HapticType.LONG_PRESS,
@@ -1844,7 +1862,7 @@ private fun DefaultChatBottomBar(
                         LaunchedEffect(Unit) {
                             attachScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow))
                         }
-                        IconButton(onClick = onAttach, modifier = Modifier.scale(attachScale.value)) {
+                        IconButton(onClick = onAttach, modifier = Modifier.scale(attachScale.value), enabled = !uiState.isCooldown) {
                             Icon(Icons.Default.AttachFile, null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
@@ -1856,7 +1874,8 @@ private fun DefaultChatBottomBar(
                     }
                     IconButton(
                         onClick = { if (hapticEnabled) haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() },
-                        modifier = Modifier.scale(emojiScale.value)
+                        modifier = Modifier.scale(emojiScale.value),
+                        enabled = !uiState.isCooldown
                     ) {
                         Icon(Icons.Default.EmojiEmotions, null,
                             tint = if (showStickerSheet) MaterialTheme.colorScheme.primary
@@ -1873,7 +1892,17 @@ private fun DefaultChatBottomBar(
                                     Spring.StiffnessMedium
                                 )
                             ),
-                        maxLines = 4, shape = MaterialTheme.shapes.extraLarge
+                        maxLines = 4, shape = MaterialTheme.shapes.extraLarge,
+                        supportingText = if (inputText.isNotEmpty()) {
+                            {
+                                Text(
+                                    text = "${inputText.length}/2000",
+                                    color = if (inputText.length >= 2000) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.End
+                                )
+                            }
+                        } else null
                     )
                     Spacer(Modifier.width(4.dp))
                     AnimatedContent(
@@ -1895,8 +1924,9 @@ private fun DefaultChatBottomBar(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .scale(sendScale.value)
-                                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                                    .background(if (uiState.isCooldown) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary, CircleShape)
                                     .clickable(
+                                        enabled = !uiState.isCooldown,
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
@@ -1939,7 +1969,8 @@ private fun DefaultChatBottomBar(
                                             onStartRecord()
                                         } else onRequestAudioPerm()
                                     },
-                                    modifier = Modifier.size(48.dp)
+                                    modifier = Modifier.size(48.dp),
+                                    enabled = !uiState.isCooldown
                                 ) {
                                     Icon(Icons.Default.Mic, stringResource(R.string.chat_input_record),
                                         tint = MaterialTheme.colorScheme.primary)
@@ -2932,7 +2963,6 @@ fun VoiceBubble(
     val currentSec = if (isThisMessage) playback.currentMs / 1000 else 0
     val totalSec = if (isThisMessage && playback.durationMs > 0) playback.durationMs / 1000 else durationSec
 
-    // ИСПРАВЛЕНИЕ: Прямая генерация Float-листа без лишних функций и конфликтов
     var waveform by remember(url) {
         mutableStateOf(List(40) { kotlin.random.Random.nextFloat() * 0.8f + 0.2f })
     }

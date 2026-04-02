@@ -47,6 +47,7 @@ data class ChatUiState(
     val onlineCount: Int = 0,
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
+    val isCooldown: Boolean = false, // <-- Кулдаун
     val error: String? = null,
     val isRecording: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
@@ -54,11 +55,9 @@ data class ChatUiState(
     val wallpaperUrl: String? = null,
     val showUnofficialClientWarning: Boolean = false,
     val hasDismissedUnofficialWarning: Boolean = false,
-    // ─── Album draft ──────────────────────────────────────────────────────────
     val albumDraft: List<AlbumImageLocal> = emptyList(),
     val albumCaption: String = "",
     val showAlbumPreview: Boolean = false,
-    /** Заполняется при выборе одного фото — передаётся в ImageEditorScreen */
     val singlePickedUri: Uri? = null
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
@@ -174,7 +173,6 @@ class ChatViewModel(
                             if (!isOfficial && !state.hasDismissedUnofficialWarning) {
                                 _uiState.update { it.copy(showUnofficialClientWarning = true) }
                             } else if (isOfficial) {
-                                // Если он зашел с официального, скрываем варнинг
                                 _uiState.update { it.copy(showUnofficialClientWarning = false) }
                             }
                         }
@@ -216,7 +214,16 @@ class ChatViewModel(
         }
     }
 
-    // ─── Обои ─────────────────────────────────────────────────────────────────
+    // ─── Логика кулдауна (UI) ──────────────────────────────────────────────────
+    private fun startCooldown(): Boolean {
+        if (_uiState.value.isCooldown) return false
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCooldown = true) }
+            kotlinx.coroutines.delay(500)
+            _uiState.update { it.copy(isCooldown = false) }
+        }
+        return true
+    }
 
     private fun startWallpaperListener(type: ChatType) {
         wallpaperListener?.remove()
@@ -278,17 +285,9 @@ class ChatViewModel(
         }
     }
 
-    // ─── Album draft ──────────────────────────────────────────────────────────
-
-    /**
-     * Вызывается когда мульти-пикер вернул результат.
-     * 1 фото → старый флоу через ImageEditorScreen (singlePickedUri).
-     * 2–10 фото → album preview sheet.
-     */
     fun onImagesPicked(uris: List<Uri>) {
         if (uris.isEmpty()) return
         if (uris.size == 1) {
-            // Одно фото — передаём в ImageEditor как раньше
             _uiState.update { it.copy(singlePickedUri = uris.first()) }
             return
         }
@@ -302,7 +301,6 @@ class ChatViewModel(
         }
     }
 
-    /** Снимаем/ставим spoiler на конкретном фото в draft */
     fun onAlbumSpoilerToggle(index: Int) {
         val current = _uiState.value.albumDraft.toMutableList()
         if (index !in current.indices) return
@@ -310,30 +308,24 @@ class ChatViewModel(
         _uiState.update { it.copy(albumDraft = current) }
     }
 
-    /** Изменение подписи, max 500 символов */
     fun onAlbumCaptionChange(text: String) {
         if (text.length <= 500) _uiState.update { it.copy(albumCaption = text) }
     }
 
-    /** Закрыть preview sheet без отправки */
     fun dismissAlbumPreview() {
         _uiState.update { it.copy(showAlbumPreview = false, albumDraft = emptyList(), albumCaption = "") }
     }
 
-    /** Сбросить singlePickedUri после того как ImageEditorScreen открылся */
     fun clearSinglePickedUri() {
         _uiState.update { it.copy(singlePickedUri = null) }
     }
 
-    /**
-     * Параллельно загружает все фото и вызывает sendAlbum Cloud Function.
-     * При любой ошибке загрузки — откатывает UI и показывает ошибку.
-     */
     fun sendAlbum() {
         val draft = _uiState.value.albumDraft
         val caption = _uiState.value.albumCaption.trim().ifEmpty { null }
         val reply = _uiState.value.replyingTo?.toReplyData()
         if (draft.isEmpty() || !_uiState.value.canSendMedia) return
+        if (!startCooldown()) return
 
         _uiState.update { it.copy(isUploading = true, showAlbumPreview = false) }
         clearReply()
@@ -352,8 +344,6 @@ class ChatViewModel(
         }
     }
 
-    // ─── Voice playback ───────────────────────────────────────────────────────
-
     fun playVoice(messageId: String, url: String, durationSec: Int) {
         voicePlayer.play(messageId, url, durationSec)
     }
@@ -369,8 +359,6 @@ class ChatViewModel(
     fun stopVoice() {
         voicePlayer.stop()
     }
-
-    // ─── Online count for groups ──────────────────────────────────────────────
 
     private fun startGroupOnlineCount(memberIds: List<String>) {
         onlineCountListener?.let {
@@ -389,8 +377,6 @@ class ChatViewModel(
         }
         presenceRef.addValueEventListener(onlineCountListener!!)
     }
-
-    // ─── Pagination ───────────────────────────────────────────────────────────
 
     fun loadMore() {
         val state = _uiState.value
@@ -415,8 +401,6 @@ class ChatViewModel(
         }
     }
 
-    // ─── Date separators ─────────────────────────────────────────────────────
-
     private fun buildMessageList(messages: List<Message>): List<MessageListItem> {
         val result = mutableListOf<MessageListItem>()
         var lastDate: LocalDate? = null
@@ -439,18 +423,18 @@ class ChatViewModel(
         return result
     }
 
-    // ─── Typing ───────────────────────────────────────────────────────────────
-
     fun onTextChanged(text: String) {
         if (text.isNotEmpty()) typingManager?.onTyping()
         else typingManager?.stopTyping()
     }
 
-    // ─── Send ─────────────────────────────────────────────────────────────────
-
     fun sendText(text: String) {
         if (!_uiState.value.canSendMessage) return
         val trimmed = text.trim().ifEmpty { return }
+
+        if (trimmed.length > 2000) return
+        if (!startCooldown()) return
+
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             typingManager?.stopTyping()
@@ -462,6 +446,8 @@ class ChatViewModel(
 
     fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
         if (!_uiState.value.canSendMedia) return
+        if (!startCooldown()) return
+
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
@@ -474,6 +460,8 @@ class ChatViewModel(
 
     fun sendSticker(sticker: StickerItem, packId: String, packName: String, packEmoji: String) {
         if (!_uiState.value.canSendMessage) return
+        if (!startCooldown()) return
+
         val reply = _uiState.value.replyingTo?.toReplyData()
         viewModelScope.launch {
             clearReply()
@@ -482,8 +470,6 @@ class ChatViewModel(
             } catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
-
-    // ─── Voice recording ──────────────────────────────────────────────────────
 
     fun startRecording() {
         if (!_uiState.value.canSendMedia) return
@@ -512,6 +498,9 @@ class ChatViewModel(
         recorder = null
         val reply = _uiState.value.replyingTo?.toReplyData()
         _uiState.update { it.copy(isRecording = false) }
+
+        if (!startCooldown()) return
+
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
@@ -529,8 +518,6 @@ class ChatViewModel(
         _uiState.update { it.copy(isRecording = false) }
     }
 
-    // ─── Delete / React ───────────────────────────────────────────────────────
-
     fun deleteMessage(messageId: String) {
         viewModelScope.launch {
             try { chatRepository.deleteMessage(chatId, messageId) }
@@ -545,8 +532,6 @@ class ChatViewModel(
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
-
-    // ─── Moderation ───────────────────────────────────────────────────────────
 
     fun moderateUser(targetUid: String, action: String, durationMinutes: Int? = null) {
         viewModelScope.launch {
@@ -568,8 +553,6 @@ class ChatViewModel(
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
-
-    // ─── Reply ────────────────────────────────────────────────────────────────
 
     fun setReplyTo(message: Message) = _uiState.update { it.copy(replyingTo = message) }
     fun clearReply() = _uiState.update { it.copy(replyingTo = null) }

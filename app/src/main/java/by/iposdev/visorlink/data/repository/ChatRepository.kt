@@ -308,7 +308,7 @@ class ChatRepository(
         return (result.data as Map<*, *>)["inviteLink"] as String
     }
 
-    // ─── Send messages ────────────────────────────────────────────────────────
+    // ─── Send messages (СИНХРОНИЗАЦИЯ КУЛДАУНА) ────────────────────────────────
 
     suspend fun sendText(
         chatId: String,
@@ -317,6 +317,8 @@ class ChatRepository(
         replyTo: ReplyData?
     ) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
+        val userRef = db.collection("users").document(currentUid)
+
         val batch  = db.batch()
         batch.set(msgRef, mutableMapOf<String, Any?>(
             "senderId"       to currentUid,
@@ -333,6 +335,10 @@ class ChatRepository(
             "lastMessage"   to text,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
+
+        // НОВОЕ: Синхронное обновление профиля для прохождения Firestore Rules (Cooldown)
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+
         batch.commit().await()
     }
 
@@ -376,13 +382,6 @@ class ChatRepository(
         ), "🎤 Voice message", senderUsername, replyTo)
     }
 
-    /**
-     * Отправка стикера с привязкой к паку.
-     * [sticker]   — StickerItem из StickerPickerBottomSheet
-     * [packId]    — ID пака (сохраняется в сообщении для баннера AddStickerPackBanner)
-     * [packName]  — название пака (отображается в баннере)
-     * [packEmoji] — эмодзи пака (отображается в баннере)
-     */
     suspend fun sendSticker(
         chatId: String,
         sticker: StickerItem,
@@ -438,6 +437,13 @@ class ChatRepository(
             if (replyTo != null) put("replyTo", replyTo.toMap())
         }
         val result = functions.getHttpsCallable("sendAlbum").call(data).await()
+
+        // Синхронизируем локальный кулдаун, так как Cloud Function не триггерит правила на клиенте
+        try {
+            db.collection("users").document(currentUid)
+                .update("lastMessageAt", FieldValue.serverTimestamp()).await()
+        } catch (_: Exception) {}
+
         return (result.data as Map<*, *>)["messageId"] as String
     }
 
@@ -451,6 +457,8 @@ class ChatRepository(
         replyTo: ReplyData?
     ) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
+        val userRef = db.collection("users").document(currentUid)
+
         val msg    = mutableMapOf<String, Any?>(
             "senderId"       to currentUid,
             "senderUsername" to senderUsername,
@@ -461,12 +469,17 @@ class ChatRepository(
             "replyTo"        to replyTo?.toMap()
         )
         msg.putAll(extra)
+
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf(
             "lastMessage"   to preview,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
+
+        // НОВОЕ: Синхронное обновление профиля для прохождения Firestore Rules (Cooldown)
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+
         batch.commit().await()
     }
 
@@ -581,6 +594,13 @@ class ChatRepository(
             if (replyTo != null) put("replyTo", replyTo.toMap())
         }
         val result = functions.getHttpsCallable("addComment").call(data).await()
+
+        // Синхронизируем локальный кулдаун
+        try {
+            db.collection("users").document(currentUid)
+                .update("lastMessageAt", FieldValue.serverTimestamp()).await()
+        } catch (_: Exception) {}
+
         return (result.data as Map<*, *>)["commentId"] as String
     }
 
