@@ -25,7 +25,7 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 36
-        versionCode = 21
+        versionCode = 22
         versionName = "1.18.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
