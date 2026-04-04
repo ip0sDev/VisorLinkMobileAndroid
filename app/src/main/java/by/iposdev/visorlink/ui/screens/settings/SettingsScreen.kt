@@ -135,7 +135,9 @@ fun SettingsScreen(
         SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault())
             .format(Date(BuildConfig.BUILD_TIMESTAMP))
     }
-    val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate"
+    // Достаем CommitID из BuildConfig, если он пустой — ставим заглушку
+    val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
+    val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
 
     val context = LocalContext.current
     val updateState by appUpdateViewModel.updateState.collectAsState()
@@ -371,6 +373,7 @@ private fun OuiSettingsContent(
     }
 
     // ── About ───────────────────────────────────────────────────────────────
+    // ── About ───────────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_about), isDark)
 
     OuiCard(isDark) {
@@ -385,6 +388,17 @@ private fun OuiSettingsContent(
 
         OuiDivider(isDark)
 
+        OuiInfoRow(
+            icon     = Icons.Default.Science,
+            iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
+            iconTint = if (isDark) OneUi.BlueDark else OneUi.IconBlue,
+            title    = "Канал обновлений", // Можно вынести в strings.xml
+            subtitle = BuildConfig.CHANNEL,
+            isDark   = isDark
+        )
+
+        OuiDivider(isDark)
+
         OuiNavRow(
             icon     = Icons.Default.Sync,
             iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
@@ -394,6 +408,11 @@ private fun OuiSettingsContent(
             isDark   = isDark,
             onClick  = onCheckUpdates
         )
+    }
+
+    if (BuildConfig.InternalBuild) {
+        Spacer(Modifier.height(24.dp))
+        OuiWarningCard(isDark)
     }
 }
 
@@ -821,11 +840,21 @@ private fun M3eSettingsContent(
 
     SectionHeader(stringResource(R.string.settings_section_about))
     OptionGroup {
-        InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 2)
+        // Увеличиваем total до 3 для правильного скругления углов
+        InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 3)
         Spacer(Modifier.height(M3E_GAP))
+
+        InfoRow(Icons.Default.Science, "Канал обновлений", BuildConfig.CHANNEL, 1, 3)
+        Spacer(Modifier.height(M3E_GAP))
+
         NavRow(Icons.Default.Sync, stringResource(R.string.settings_check_updates),
-            stringResource(R.string.settings_check_updates_sub), 1, 2)
+            stringResource(R.string.settings_check_updates_sub), 2, 3)
         { onCheckUpdates() }
+    }
+
+    if (BuildConfig.InternalBuild) {
+        Spacer(Modifier.height(24.dp))
+        M3eWarningCard()
     }
 }
 
@@ -1044,6 +1073,98 @@ private fun M3eSettingsContent(
                 modifier = Modifier.size(22.dp),
                 tint = MaterialTheme.colorScheme.outline
             )
+        }
+    }
+}
+@Composable
+private fun OuiWarningCard(isDark: Boolean) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = OUI_CARD_SHAPE,
+        color = if (isDark) Color(0xFF3D2A1D) else Color(0xFFFFF3E0),
+        shadowElevation = 0.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (isDark) Color(0xFF5D4037) else Color(0xFFFFE0B2)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WarningAmber,
+                    contentDescription = null,
+                    tint = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "Внутренняя сборка",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) Color(0xFFFFEECC) else Color(0xFFE65100)
+                )
+                Text(
+                    text = "Эта версия предназначена для тестирования и может быть нестабильной.",
+                    fontSize = 13.sp,
+                    color = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00),
+                    modifier = Modifier.padding(top = 2.dp),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3eWarningCard() {
+    OptionGroup {
+        Surface(
+            shape = RoundedCornerShape(M3E_BIG),
+            color = MaterialTheme.colorScheme.errorContainer,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
+                    Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.WarningAmber,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Внутренняя сборка",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    Text(
+                        "Эта версия предназначена для тестирования и может быть нестабильной.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
+                    )
+                }
+            }
         }
     }
 }
