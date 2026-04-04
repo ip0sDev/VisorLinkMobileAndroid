@@ -45,6 +45,8 @@ import by.iposdev.visorlink.utils.rememberHaptic
 import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.ComponentActivity
 
 // ════════════════════════════════════════════════════════════════════════════
 //  One UI colour tokens
@@ -119,7 +121,9 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
-    appUpdateViewModel: AppUpdateViewModel = koinViewModel()
+    appUpdateViewModel: AppUpdateViewModel = koinViewModel(
+        viewModelStoreOwner = LocalContext.current as ComponentActivity
+    )
 ) {
     val currentTheme  by themeViewModel.appTheme.collectAsState()
     val currentMode   by themeViewModel.themeMode.collectAsState()
@@ -163,7 +167,7 @@ fun SettingsScreen(
     val onCheckUpdates = {
         haptic.perform(HapticType.CLICK, hapticEnabled)
         isManualCheck = true
-        appUpdateViewModel.checkForUpdates()
+        appUpdateViewModel.checkForUpdates(isManual = true) // Передаем true
         Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
     }
 

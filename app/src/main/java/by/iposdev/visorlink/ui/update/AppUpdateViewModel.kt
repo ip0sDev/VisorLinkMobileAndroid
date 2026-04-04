@@ -36,13 +36,16 @@ sealed class UpdateState {
     ) : UpdateState()
 }
 
+/**
+ * @param entries  список строк чейнджлога (null = не показывать)
+ * @param tooOld   true = версия старше чем N-1, показываем ссылку на канал
+ */
 data class ChangelogInfo(
     val entries: List<String>? = null,
     val tooOld: Boolean = false,
     val channelTag: String = "@VisorLink"
 )
 
-// ❗️ Наследуемся от AndroidViewModel, чтобы получить Application контекст
 class AppUpdateViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences("visorlink_update_prefs", Context.MODE_PRIVATE)
@@ -50,7 +53,7 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Loading)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
-    // ❗️ Читаем сохраненный канал при старте (по умолчанию BETA)
+    // Читаем сохраненный канал при старте (по умолчанию BETA)
     private val _currentChannel = MutableStateFlow(
         UpdateChannel.entries.find {
             it.name == prefs.getString("selected_channel", UpdateChannel.BETA.name)
@@ -62,32 +65,40 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setChannel(channel: UpdateChannel) {
         _currentChannel.value = channel
-        // ❗️ Сохраняем выбор в SharedPreferences
+        // Сохраняем выбор в SharedPreferences
         prefs.edit().putString("selected_channel", channel.name).apply()
-        checkForUpdates()
+        // При смене канала сразу проверяем наличие обновлений (сбрасывая кэш)
+        checkForUpdates(isManual = true)
     }
 
-    fun checkForUpdates() {
+    /**
+     * @param isManual Если true, кэш Remote Config сбрасывается в 0,
+     * чтобы получить самые свежие данные с сервера.
+     */
+    fun checkForUpdates(isManual: Boolean = false) {
         _updateState.value = UpdateState.Loading
         viewModelScope.launch {
             try {
                 val rc = Firebase.remoteConfig
 
-                // ❗️ Для тестов сейчас ставим 0L принудительно.
-                // Когда убедишься, что всё работает, верни: if (BuildConfig.DEBUG) 0L else 3600L
+                // Сбрасываем кэш для дебаг-сборки или ручной проверки
+                val fetchInterval = if (isManual || BuildConfig.DEBUG) 0L else 3600L
+
                 rc.setConfigSettingsAsync(
                     FirebaseRemoteConfigSettings.Builder()
-                        .setMinimumFetchIntervalInSeconds(0L)
+                        .setMinimumFetchIntervalInSeconds(fetchInterval)
                         .build()
                 ).await()
 
                 rc.setDefaultsAsync(
                     mapOf(
+                        // Ключи для канала Beta
                         "min_version_code"    to 1L,
                         "latest_version_code" to 1L,
                         "update_apk_url"      to "",
                         "changelog"           to "",
 
+                        // Ключи для канала Nightly
                         "nightly_min_version_code"    to 1L,
                         "nightly_latest_version_code" to 1L,
                         "nightly_update_apk_url"      to "",
@@ -96,6 +107,7 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
                 ).await()
 
                 val activated = rc.fetchAndActivate().await()
+                Log.d("AppUpdate", "fetched, activated=$activated, isManual=$isManual")
 
                 val channel = _currentChannel.value
                 val isNightly = channel == UpdateChannel.NIGHTLY
@@ -112,6 +124,7 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
                 val versionName = if (isNightly) "Nightly v$latestVersion" else "v$latestVersion"
                 var changelog = buildChangelog(current = current, latest = latestVersion, raw = changelogRaw)
 
+                // Добавляем префикс [Nightly] к пунктам чейнджлога, если нужно
                 if (isNightly && changelog.entries != null) {
                     changelog = changelog.copy(
                         entries = changelog.entries.map { entry ->
@@ -139,6 +152,8 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
         _updateState.value = UpdateState.None
     }
 
+    // ── Changelog logic ───────────────────────────────────────────────────────
+
     private fun buildChangelog(current: Int, latest: Int, raw: String): ChangelogInfo {
         if (latest <= current) return ChangelogInfo()
 
@@ -156,9 +171,11 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
         return try {
             val trimmed = raw.trim()
             if (trimmed.startsWith("[")) {
+                // JSON array
                 val org = org.json.JSONArray(trimmed)
                 (0 until org.length()).map { org.getString(it) }.filter { it.isNotBlank() }
             } else {
+                // Plain text, split by newlines
                 raw.split("\n").map { it.trim() }.filter { it.isNotBlank() }
             }
         } catch (e: Exception) {
