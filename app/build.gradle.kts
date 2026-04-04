@@ -29,7 +29,7 @@ android {
         versionName = "1.18.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
+        buildConfigField("String", "CHANNEL", "\"BETA\"")
         buildConfigField("boolean", "InternalBuild", "true")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
