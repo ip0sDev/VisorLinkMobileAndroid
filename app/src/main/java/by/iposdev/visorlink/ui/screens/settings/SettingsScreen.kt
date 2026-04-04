@@ -750,12 +750,22 @@ private fun OuiInfoRow(
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
+
+        // Теперь и title, и subtitle лежат внутри контейнера с weight(1f)
         Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary
+            )
+            Text(
+                text = subtitle,
+                fontSize = 13.sp,
+                color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
+                modifier = Modifier.padding(top = 1.dp)
+            )
         }
-        Text(subtitle, fontSize = 13.sp,
-            color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary)
     }
 }
 
@@ -1028,17 +1038,25 @@ private fun M3eSettingsContent(
     }
 }
 
-@Composable private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: Int, total: Int) {
-    Surface(shape = shapeAt(index, total), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+@Composable
+private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: Int, total: Int) {
+    Surface(
+        shape = shapeAt(index, total),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth()
+    ) {
         Row(
             Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             Box(
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                Alignment.Center
+            ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
@@ -1046,10 +1064,20 @@ private fun M3eSettingsContent(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            // Здесь тоже прячем subtitle внутрь Column
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
