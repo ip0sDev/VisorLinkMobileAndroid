@@ -34,6 +34,7 @@ fun AppUpdateWrapper(
     content: @Composable () -> Unit
 ) {
     val updateState by viewModel.updateState.collectAsState()
+    val currentChannel by viewModel.currentChannel.collectAsState()
     val context = LocalContext.current
 
     var downloadProgress by remember { mutableFloatStateOf(0f) }
@@ -50,7 +51,7 @@ fun AppUpdateWrapper(
 
     when (val state = updateState) {
         is UpdateState.Required -> UpdateDialog(
-            title = stringResource(R.string.update_required_title),
+            title = "${stringResource(R.string.update_required_title)} ${state.versionName}",
             body = stringResource(R.string.update_required_body),
             changelog = state.changelog,
             dismissible = false,
@@ -63,6 +64,7 @@ fun AppUpdateWrapper(
                 ApkDownloader.downloadAndInstall(
                     context = context,
                     url = state.url,
+                    fileName = currentChannel.fileName,
                     onProgress = { p ->
                         if (p < 0f) { downloadError = true; isDownloading = false }
                         else downloadProgress = p
@@ -74,7 +76,7 @@ fun AppUpdateWrapper(
         )
 
         is UpdateState.Recommended -> UpdateDialog(
-            title = stringResource(R.string.update_recommended_title),
+            title = "${stringResource(R.string.update_recommended_title)} ${state.versionName}",
             body = stringResource(R.string.update_recommended_body),
             changelog = state.changelog,
             dismissible = true,
@@ -87,6 +89,7 @@ fun AppUpdateWrapper(
                 ApkDownloader.downloadAndInstall(
                     context = context,
                     url = state.url,
+                    fileName = currentChannel.fileName,
                     onProgress = { p ->
                         if (p < 0f) { downloadError = true; isDownloading = false }
                         else downloadProgress = p
@@ -221,7 +224,6 @@ private fun ChangelogSection(
                         .weight(1f)
                         .padding(start = 12.dp, top = 10.dp, bottom = 10.dp)
                 )
-                // Кнопка expand только если есть список (не tooOld — там всегда раскрыто)
                 if (!info.tooOld) {
                     IconButton(
                         onClick = onToggle,
@@ -239,7 +241,6 @@ private fun ChangelogSection(
 
             // Контент
             AnimatedVisibility(
-                // tooOld — всегда раскрыт, иначе управляется expanded
                 visible = expanded || info.tooOld,
                 enter = expandVertically() + fadeIn(tween(200)),
                 exit = shrinkVertically() + fadeOut(tween(150))
@@ -251,14 +252,12 @@ private fun ChangelogSection(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (info.tooOld) {
-                        // Несколько версий позади
                         Text(
                             stringResource(R.string.update_changelog_too_old),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(6.dp))
-                        // Кнопка-чип для открытия канала
                         Surface(
                             color = MaterialTheme.colorScheme.primaryContainer,
                             shape = MaterialTheme.shapes.small
@@ -287,7 +286,6 @@ private fun ChangelogSection(
                             }
                         }
                     } else {
-                        // Один шаг — список изменений
                         info.entries?.forEach { entry ->
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),

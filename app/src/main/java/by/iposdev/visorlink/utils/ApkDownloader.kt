@@ -18,16 +18,17 @@ import java.io.File
 object ApkDownloader {
 
     /**
-     * @param onProgress  0f..1f прогресс загрузки, -1f = ошибка
-     * @param onComplete  вызывается когда файл скачан и запускается установщик
+     * @param fileName   имя сохраняемого файла (например app-beta.apk)
+     * @param onProgress 0f..1f прогресс загрузки, -1f = ошибка
+     * @param onComplete вызывается когда файл скачан и запускается установщик
      */
     fun downloadAndInstall(
         context: Context,
         url: String,
+        fileName: String = "VisorLink_Update.apk",
         onProgress: (Float) -> Unit = {},
         onComplete: () -> Unit = {}
     ) {
-        val fileName = "VisorLink_Update.apk"
         val destination = File(
             context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
             fileName

@@ -36,6 +36,7 @@ import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
+import by.iposdev.visorlink.ui.update.UpdateChannel
 import by.iposdev.visorlink.ui.update.UpdateState
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticHelper
@@ -47,7 +48,6 @@ import java.util.*
 
 // ════════════════════════════════════════════════════════════════════════════
 //  One UI colour tokens
-//  Все цвета — точные значения из One UI 7 light/dark палитры
 // ════════════════════════════════════════════════════════════════════════════
 
 private object OneUi {
@@ -126,24 +126,25 @@ fun SettingsScreen(
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val notifEnabled  by themeViewModel.notificationsEnabled.collectAsState()
     val currentLang   by themeViewModel.language.collectAsState()
+    val currentChannel by appUpdateViewModel.currentChannel.collectAsState()
     val haptic = rememberHaptic()
 
     val isOneUi = currentTheme == AppTheme.ONE_UI
     val isDark  = MaterialTheme.colorScheme.surface.luminance() < 0.1f
+    val isCanary = BuildConfig.CHANNEL.equals("canary", ignoreCase = true)
 
     val buildDate = remember {
         SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault())
             .format(Date(BuildConfig.BUILD_TIMESTAMP))
     }
-    // Достаем CommitID из BuildConfig, если он пустой — ставим заглушку
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
 
     val context = LocalContext.current
     val updateState by appUpdateViewModel.updateState.collectAsState()
     var isManualCheck by remember { mutableStateOf(false) }
+    var showChannelDialog by remember { mutableStateOf(false) }
 
-    // Логика ручной проверки обновлений
     LaunchedEffect(updateState) {
         if (isManualCheck) {
             when (updateState) {
@@ -152,9 +153,9 @@ fun SettingsScreen(
                     isManualCheck = false
                 }
                 is UpdateState.Required, is UpdateState.Recommended -> {
-                    isManualCheck = false // AppUpdateWrapper перехватит состояние и покажет диалог
+                    isManualCheck = false
                 }
-                UpdateState.Loading -> { } // Ждём
+                UpdateState.Loading -> { }
             }
         }
     }
@@ -226,17 +227,28 @@ fun SettingsScreen(
             if (isOneUi) {
                 OuiSettingsContent(
                     currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, versionString, isDark, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates
+                    currentLang, currentChannel, isCanary, versionString, isDark, haptic, themeViewModel,
+                    onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
                 )
             } else {
                 M3eSettingsContent(
                     currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, versionString, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates
+                    currentLang, currentChannel, isCanary, versionString, haptic, themeViewModel,
+                    onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
                 )
             }
         }
+    }
+
+    if (showChannelDialog) {
+        ChannelSelectionDialog(
+            currentChannel = currentChannel,
+            onDismiss = { showChannelDialog = false },
+            onSelect = {
+                appUpdateViewModel.setChannel(it)
+                showChannelDialog = false
+            }
+        )
     }
 }
 
@@ -251,14 +263,16 @@ private fun OuiSettingsContent(
     hapticEnabled: Boolean,
     notifEnabled: Boolean,
     currentLang: AppLanguage,
+    currentChannel: UpdateChannel,
+    isCanary: Boolean,
     versionString: String,
     isDark: Boolean,
     haptic: HapticHelper,
     vm: ThemeViewModel,
     onOpenCacheSettings: () -> Unit,
-    onCheckUpdates: () -> Unit
+    onCheckUpdates: () -> Unit,
+    onChannelClick: () -> Unit
 ) {
-    // ── Appearance ──────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_appearance), isDark)
 
     OuiCard(isDark) {
@@ -285,7 +299,6 @@ private fun OuiSettingsContent(
         ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.ONE_UI) }
     }
 
-    // ── Dark mode ───────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_dark_title), isDark)
 
     OuiCard(isDark) {
@@ -313,7 +326,6 @@ private fun OuiSettingsContent(
         }
     }
 
-    // ── Language ────────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_language), isDark)
 
     OuiCard(isDark) {
@@ -331,7 +343,6 @@ private fun OuiSettingsContent(
         }
     }
 
-    // ── Notifications ───────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_notifications), isDark)
 
     OuiCard(isDark) {
@@ -358,7 +369,6 @@ private fun OuiSettingsContent(
         ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setHaptic(it) }
     }
 
-    // ── Storage ─────────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_storage), isDark)
 
     OuiCard(isDark) {
@@ -372,8 +382,6 @@ private fun OuiSettingsContent(
         ) { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
-    // ── About ───────────────────────────────────────────────────────────────
-    // ── About ───────────────────────────────────────────────────────────────
     OuiSectionLabel(stringResource(R.string.settings_section_about), isDark)
 
     OuiCard(isDark) {
@@ -388,14 +396,29 @@ private fun OuiSettingsContent(
 
         OuiDivider(isDark)
 
-        OuiInfoRow(
-            icon     = Icons.Default.Science,
-            iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
-            iconTint = if (isDark) OneUi.BlueDark else OneUi.IconBlue,
-            title    = "Канал обновлений", // Можно вынести в strings.xml
-            subtitle = BuildConfig.CHANNEL,
-            isDark   = isDark
-        )
+        if (isCanary) {
+            OuiInfoRow(
+                icon     = Icons.Default.Science,
+                iconBg   = if (isDark) OneUi.IconRedDark else OneUi.IconBgRed,
+                iconTint = OneUi.IconRed,
+                title    = "Канал обновлений",
+                subtitle = "Переключение недоступно на сборке Canary",
+                isDark   = isDark
+            )
+        } else {
+            OuiNavRow(
+                icon     = Icons.Default.Science,
+                iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
+                iconTint = if (isDark) OneUi.BlueDark else OneUi.IconBlue,
+                title    = "Канал обновлений",
+                sub      = "Текущий: ${currentChannel.title}",
+                isDark   = isDark,
+                onClick  = {
+                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                    onChannelClick()
+                }
+            )
+        }
 
         OuiDivider(isDark)
 
@@ -750,8 +773,6 @@ private fun OuiInfoRow(
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-
-        // Теперь и title, и subtitle лежат внутри контейнера с weight(1f)
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -780,11 +801,14 @@ private fun M3eSettingsContent(
     hapticEnabled: Boolean,
     notifEnabled: Boolean,
     currentLang: AppLanguage,
+    currentChannel: UpdateChannel,
+    isCanary: Boolean,
     versionString: String,
     haptic: HapticHelper,
     vm: ThemeViewModel,
     onOpenCacheSettings: () -> Unit,
-    onCheckUpdates: () -> Unit
+    onCheckUpdates: () -> Unit,
+    onChannelClick: () -> Unit
 ) {
     SectionHeader(stringResource(R.string.settings_section_appearance))
     GroupLabel(Icons.Default.Palette, stringResource(R.string.settings_theme_title))
@@ -850,11 +874,17 @@ private fun M3eSettingsContent(
 
     SectionHeader(stringResource(R.string.settings_section_about))
     OptionGroup {
-        // Увеличиваем total до 3 для правильного скругления углов
         InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 3)
         Spacer(Modifier.height(M3E_GAP))
 
-        InfoRow(Icons.Default.Science, "Канал обновлений", BuildConfig.CHANNEL, 1, 3)
+        if (isCanary) {
+            InfoRow(Icons.Default.Science, "Канал обновлений", "Переключение недоступно на сборке Canary", 1, 3)
+        } else {
+            NavRow(Icons.Default.Science, "Канал обновлений", "Текущий: ${currentChannel.title}", 1, 3) {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                onChannelClick()
+            }
+        }
         Spacer(Modifier.height(M3E_GAP))
 
         NavRow(Icons.Default.Sync, stringResource(R.string.settings_check_updates),
@@ -866,6 +896,64 @@ private fun M3eSettingsContent(
         Spacer(Modifier.height(24.dp))
         M3eWarningCard()
     }
+}
+
+// ─── Dialog Channel Selection ──────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChannelSelectionDialog(
+    currentChannel: UpdateChannel,
+    onDismiss: () -> Unit,
+    onSelect: (UpdateChannel) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Канал обновлений",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                UpdateChannel.entries.forEach { channel ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onSelect(channel) }
+                            .padding(vertical = 12.dp, horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = currentChannel == channel,
+                            onClick = { onSelect(channel) }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = channel.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "Файл: ${channel.fileName}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
 }
 
 // ─── M3E helpers ─────────────────────────────────────────────────────────────
@@ -1064,8 +1152,6 @@ private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: I
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            // Здесь тоже прячем subtitle внутрь Column
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -1104,6 +1190,7 @@ private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: I
         }
     }
 }
+
 @Composable
 private fun OuiWarningCard(isDark: Boolean) {
     Surface(

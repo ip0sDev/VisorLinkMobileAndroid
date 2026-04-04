@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Test & Build Debug APK
+    name: Test & Build Signed Canary APK
     runs-on: self-hosted
 
     steps:
@@ -30,8 +30,7 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          # Этот экшен сам восстановит build-cache и оптимизирует его размер
-          cache-read-only: ${{ github.ref != 'refs/heads/canary' }} # Пишем в кэш только при пуше в canary
+          cache-read-only: ${{ github.ref != 'refs/heads/canary' }}
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -52,10 +51,10 @@ jobs:
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      # ОБЪЕДИНЕННЫЙ ШАГ: Тесты + Сборка за один запуск Gradle
-      - name: Run Tests and Build APK
+      # Заменили assembleDebug на assembleRelease
+      - name: Run Tests and Build Release APK
         run: >
-          ./gradlew testDebugUnitTest assembleDebug 
+          ./gradlew testReleaseUnitTest assembleRelease 
           -PcommitId=${{ steps.commit.outputs.commit_id }} 
           --parallel 
           --build-cache 
@@ -67,14 +66,27 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: app/build/reports/tests/testDebugUnitTest/
+          path: app/build/reports/tests/testReleaseUnitTest/
 
-      - name: Locate and rename APK
+      # НОВЫЙ ШАГ: Подписываем APK
+      - name: Sign APK
+        id: sign_app
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      # Переименовываем уже подписанный файл
+      - name: Rename Signed APK
         run: |
-          APK_SRC=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          APK_SRC="${{ steps.sign_app.outputs.signedReleaseFile }}"
           APK_NAME="visorlink-canary-${{ steps.commit.outputs.commit_id }}.apk"
-          APK_DEST="app/build/outputs/apk/debug/$APK_NAME"
+          APK_DEST="app/build/outputs/apk/release/$APK_NAME"
           mv "$APK_SRC" "$APK_DEST"
+          
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
