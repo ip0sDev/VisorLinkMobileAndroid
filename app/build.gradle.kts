@@ -3,7 +3,20 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
-    //
+
+// Читаем CommitID из свойства, которое передаёт CI (./gradlew assembleDebug -PcommitId=abc1234)
+// При локальной сборке берём из git напрямую, либо оставляем пустым
+val commitId: String = if (project.hasProperty("commitId")) {
+    project.property("commitId").toString()
+} else {
+    try {
+        val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--short", "HEAD"))
+        process.inputStream.bufferedReader().readLine()?.trim() ?: ""
+    } catch (_: Exception) {
+        ""
+    }
+}
+
 android {
     namespace = "by.iposdev.visorlink"
     compileSdk = 36
@@ -13,12 +26,22 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = 21
-        versionName = "1.17.3"
+        versionName = "1.18.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
+        buildConfigField("String", "CHANNEL", "\"CANARY\"")
+        buildConfigField("boolean", "InternalBuild", "true")
+        buildConfigField("String", "CommitID", "\"$commitId\"")
     }
 
     buildTypes {
+        debug {
+            // Canary — только debug-сборка
+            isDebuggable = true
+            isMinifyEnabled = false
+            applicationIdSuffix = ".canary"
+            versionNameSuffix = "-canary+$commitId"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -83,7 +106,7 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     implementation(libs.firebase.database)
-    implementation(libs.firebase.config.ktx) // или актуальная версия
+    implementation(libs.firebase.config.ktx)
     implementation(libs.androidx.media.v170)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
