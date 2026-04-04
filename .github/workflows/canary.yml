@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: Test & Build Debug APK
-    runs-on: ubuntu-latest
+    runs-on: iposdev-server
 
     steps:
       - name: Checkout
@@ -108,4 +108,3 @@ jobs:
           name: visorlink-canary-${{ steps.commit.outputs.commit_id }}
           path: ${{ env.APK_PATH }}
           retention-days: 7
-          
