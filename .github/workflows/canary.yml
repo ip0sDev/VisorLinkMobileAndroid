@@ -54,7 +54,7 @@ jobs:
       # Заменили assembleDebug на assembleRelease
       - name: Run Tests and Build Release APK
         run: >
-          ./gradlew testReleaseUnitTest assembleRelease 
+          ./gradlew testDebugUnitTest assembleRelease 
           -PcommitId=${{ steps.commit.outputs.commit_id }} 
           --parallel 
           --build-cache 
@@ -66,7 +66,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: app/build/reports/tests/testReleaseUnitTest/
+          path: app/build/reports/tests/testDebugUnitTest/
 
       # НОВЫЙ ШАГ: Подписываем APK
       - name: Sign APK
