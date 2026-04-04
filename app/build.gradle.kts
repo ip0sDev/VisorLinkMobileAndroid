@@ -64,6 +64,7 @@ android {
 }
 
 dependencies {
+    // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -75,6 +76,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
+    // ── AndroidX & Lifecycle ─────────────────────────────────────────────────
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -85,30 +87,35 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.media)
 
+    // ── Koin ─────────────────────────────────────────────────────────────────
     implementation(libs.koin.android)
     implementation(libs.koin.compose)
     implementation(libs.koin.compose.viewmodel)
 
+    // ── Firebase ─────────────────────────────────────────────────────────────
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.storage)
     implementation(libs.firebase.functions)
-    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.firebase.database)
+    implementation(libs.firebase.messaging)
+    implementation(libs.firebase.config)
+    implementation(libs.firebase.appcheck.playintegrity)
+    debugImplementation(libs.firebase.appcheck.debug)
 
+    // ── Other ────────────────────────────────────────────────────────────────
+    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.coil.compose)
     implementation(libs.accompanist.permissions)
-    implementation(libs.firebase.messaging)
 
+    // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    implementation(libs.firebase.database)
-    implementation(libs.firebase.config.ktx)
-    implementation(libs.androidx.media.v170)
-    implementation(libs.firebase.appcheck.playintegrity)
-    debugImplementation(libs.firebase.appcheck.debug)
-    implementation(platform(libs.firebase.bom.v3370))
+    testImplementation(libs.kotlinx.coroutines.test) // Для runTest, setMain, advanceUntilIdle
+    testImplementation(libs.mockito.kotlin)          // Для mock, whenever, any, verify
+    testImplementation(libs.mockito.core)            // Ядро Mockito
 }
