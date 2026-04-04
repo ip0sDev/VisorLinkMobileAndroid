@@ -68,6 +68,9 @@ jobs:
           name: test-results
           path: app/build/reports/tests/testDebugUnitTest/
 
+      # Устанавливаем ту самую 29-ю версию, чтобы экшен подписи заткнулся
+      - name: Install Android Build Tools 29.0.3
+        run: echo "y" | sdkmanager "build-tools;29.0.3"
       # НОВЫЙ ШАГ: Подписываем APK
       - name: Sign APK
         id: sign_app
@@ -78,7 +81,6 @@ jobs:
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
-          buildToolsVersion: 34.0.0  # <--- Добавь эту строку
 
       # Переименовываем уже подписанный файл
       - name: Rename Signed APK
