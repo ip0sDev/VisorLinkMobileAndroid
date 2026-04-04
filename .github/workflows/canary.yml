@@ -67,23 +67,23 @@ jobs:
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
-      - name: Send Info to Telegram
+      - - name: Send Info to Telegram
         run: |
           PREV_TAG="${{ steps.commit.outputs.prev_tag }}"
           SINCE=${PREV_TAG:-"last 3 commits"}
           
           # Формируем текст
           TEXT="🐦 *VisorLink Canary Build*
-
-📦 \`${{ env.APK_NAME }}\`
-🔖 \`${{ steps.commit.outputs.commit_id }}\` | 🌿 \`${GITHUB_REF_NAME}\`
-👤 \`${GITHUB_ACTOR}\`
-✅ *Tests passed*
-
-📋 *Changelog ($SINCE):*
-${{ steps.commit.outputs.changelog }}"
-
-          # Отправляем текст (Markdown V2 для красоты)
+          
+          📦 \`${{ env.APK_NAME }}\`
+          🔖 \`${{ steps.commit.outputs.commit_id }}\` | 🌿 \`${GITHUB_REF_NAME}\`
+          👤 \`${GITHUB_ACTOR}\`
+          ✅ *Tests passed*
+          
+          📋 *Changelog ($SINCE):*
+          ${{ steps.commit.outputs.changelog }}"
+          
+          # Отправляем текст
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
             -d "parse_mode=Markdown" \
