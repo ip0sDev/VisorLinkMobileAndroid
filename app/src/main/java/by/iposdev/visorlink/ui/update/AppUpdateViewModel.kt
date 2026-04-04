@@ -1,7 +1,9 @@
 package by.iposdev.visorlink.ui.update
 
+import android.app.Application
+import android.content.Context
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.BuildConfig
 import com.google.firebase.Firebase
@@ -34,29 +36,34 @@ sealed class UpdateState {
     ) : UpdateState()
 }
 
-/**
- * @param entries  список строк чейнджлога (null = не показывать)
- * @param tooOld   true = версия старше чем N-1, показываем ссылку на канал
- */
 data class ChangelogInfo(
     val entries: List<String>? = null,
     val tooOld: Boolean = false,
     val channelTag: String = "@VisorLink"
 )
 
-class AppUpdateViewModel : ViewModel() {
+// ❗️ Наследуемся от AndroidViewModel, чтобы получить Application контекст
+class AppUpdateViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val prefs = application.getSharedPreferences("visorlink_update_prefs", Context.MODE_PRIVATE)
 
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Loading)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
-    // TODO: В будущем можно сохранять/загружать выбор из DataStore
-    private val _currentChannel = MutableStateFlow(UpdateChannel.BETA)
+    // ❗️ Читаем сохраненный канал при старте (по умолчанию BETA)
+    private val _currentChannel = MutableStateFlow(
+        UpdateChannel.entries.find {
+            it.name == prefs.getString("selected_channel", UpdateChannel.BETA.name)
+        } ?: UpdateChannel.BETA
+    )
     val currentChannel: StateFlow<UpdateChannel> = _currentChannel.asStateFlow()
 
     init { checkForUpdates() }
 
     fun setChannel(channel: UpdateChannel) {
         _currentChannel.value = channel
+        // ❗️ Сохраняем выбор в SharedPreferences
+        prefs.edit().putString("selected_channel", channel.name).apply()
         checkForUpdates()
     }
 
@@ -66,23 +73,21 @@ class AppUpdateViewModel : ViewModel() {
             try {
                 val rc = Firebase.remoteConfig
 
+                // ❗️ Для тестов сейчас ставим 0L принудительно.
+                // Когда убедишься, что всё работает, верни: if (BuildConfig.DEBUG) 0L else 3600L
                 rc.setConfigSettingsAsync(
                     FirebaseRemoteConfigSettings.Builder()
-                        .setMinimumFetchIntervalInSeconds(
-                            if (BuildConfig.DEBUG) 0L else 3600L
-                        )
+                        .setMinimumFetchIntervalInSeconds(0L)
                         .build()
                 ).await()
 
                 rc.setDefaultsAsync(
                     mapOf(
-                        // Beta ключи
                         "min_version_code"    to 1L,
                         "latest_version_code" to 1L,
                         "update_apk_url"      to "",
                         "changelog"           to "",
 
-                        // Nightly ключи
                         "nightly_min_version_code"    to 1L,
                         "nightly_latest_version_code" to 1L,
                         "nightly_update_apk_url"      to "",
@@ -91,7 +96,6 @@ class AppUpdateViewModel : ViewModel() {
                 ).await()
 
                 val activated = rc.fetchAndActivate().await()
-                Log.d("AppUpdate", "fetched, activated=$activated")
 
                 val channel = _currentChannel.value
                 val isNightly = channel == UpdateChannel.NIGHTLY
@@ -103,12 +107,11 @@ class AppUpdateViewModel : ViewModel() {
                 val changelogRaw  = rc.getString("${prefix}changelog")
                 val current       = BuildConfig.VERSION_CODE
 
-                Log.d("AppUpdate", "current=$current min=$minVersion latest=$latestVersion url=$url channel=${channel.name}")
+                Log.d("AppUpdate", "current=$current min=$minVersion latest=$latestVersion url='$url' channel=${channel.name}")
 
                 val versionName = if (isNightly) "Nightly v$latestVersion" else "v$latestVersion"
                 var changelog = buildChangelog(current = current, latest = latestVersion, raw = changelogRaw)
 
-                // Добавляем префикс [Nightly] к строкам, если нужно
                 if (isNightly && changelog.entries != null) {
                     changelog = changelog.copy(
                         entries = changelog.entries.map { entry ->
