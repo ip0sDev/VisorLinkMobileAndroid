@@ -23,7 +23,9 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          # Убрали 'cache: gradle', так как теперь используем официальный экшен
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
