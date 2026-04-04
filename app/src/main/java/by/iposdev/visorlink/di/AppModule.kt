@@ -25,6 +25,7 @@ import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
 import com.google.firebase.storage.storage
+import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
@@ -118,6 +119,6 @@ val appModule = module {
 
     // ─── App Update / Cache ───────────────────────────────────────────────────
 
-    viewModel { AppUpdateViewModel() }
+    viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
 }
