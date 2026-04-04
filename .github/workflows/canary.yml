@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     name: Test & Build Debug APK
-    runs-on: iposdev-server
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
