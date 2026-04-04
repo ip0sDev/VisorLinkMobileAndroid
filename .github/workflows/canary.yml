@@ -66,8 +66,7 @@ jobs:
           mv "$APK_SRC" "$APK_DEST"
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
-
-      - - name: Send Info to Telegram
+      - name: Send Info to Telegram
         run: |
           PREV_TAG="${{ steps.commit.outputs.prev_tag }}"
           SINCE=${PREV_TAG:-"last 3 commits"}
