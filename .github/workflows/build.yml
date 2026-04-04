@@ -155,7 +155,7 @@ jobs:
           
           📦 <code>$APK_NAME</code>
           🔖 <code>$COMMIT_ID</code> | 🌿 <code>$GITHUB_REF_NAME</code>
-          👤 <code>$GITHUB_ACTOR}</code>
+          👤 <code>$GITHUB_ACTOR</code>
           ✅ <b>Tests passed & APK Signed</b>
           
           $LINK
