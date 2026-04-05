@@ -132,7 +132,7 @@ jobs:
           firebase deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}" --project "${{ secrets.FIREBASE_PROJECT_ID }}"
 
       # 6. Отправка уведомления
-      - - name: Send Info to Telegram
+      -name: Send Info to Telegram
         env:
           CHANNEL_NAME: ${{ env.CHANNEL_CAP }}
           APK_NAME: ${{ env.APK_NAME }}
