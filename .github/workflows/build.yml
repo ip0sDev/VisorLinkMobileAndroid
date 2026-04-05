@@ -21,25 +21,23 @@ jobs:
         with:
           fetch-depth: 20
 
-      # 1. Извлекаем канал прямо из кода build.gradle.kts
       - name: Extract Channel from BuildConfig
         id: get_channel
         run: |
           RAW_CHANNEL=$(grep 'buildConfigField("String", "CHANNEL"' app/build.gradle.kts | head -n 1 | cut -d'"' -f6)
           CHANNEL=$(echo "$RAW_CHANNEL" | tr '[:upper:]' '[:lower:]')
-          
+
           if [ -z "$CHANNEL" ]; then
             echo "❌ ОШИБКА: Не удалось найти CHANNEL в build.gradle.kts"
             exit 1
           fi
 
           echo "CHANNEL=$CHANNEL" >> $GITHUB_ENV
-          
+
           CHANNEL_CAP="$(tr '[:lower:]' '[:upper:]' <<< ${CHANNEL:0:1})${CHANNEL:1}"
           echo "CHANNEL_CAP=$CHANNEL_CAP" >> $GITHUB_ENV
 
-          # Роутинг чатов Telegram
-          if [ "$CHANNEL" == "nightly" ]; then
+          if [ "$CHANNEL" = "nightly" ]; then
             echo "CHAT_ID=${{ secrets.TELEGRAM_NIGHTLY_CHAT_ID }}" >> $GITHUB_ENV
           else
             echo "CHAT_ID=${{ secrets.TELEGRAM_CANARY_CHAT_ID }}" >> $GITHUB_ENV
@@ -63,7 +61,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 2. Получаем инфо о последнем коммите с экранированием для HTML Telegram
       - name: Get commit info
         id: commit
         run: |
@@ -71,23 +68,21 @@ jobs:
           echo "commit_id=$COMMIT_ID" >> $GITHUB_OUTPUT
 
           CHANGELOG=$(git log -1 --pretty=format:"%s" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-          
+
           {
             echo "changelog<<EOF"
             echo "$CHANGELOG"
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
-      # 3. Сборка (канал уже внутри BuildConfig через Gradle)
       - name: Run Tests and Build Release APK
         run: >
-          ./gradlew testDebugUnitTest assembleRelease 
-          -PcommitId=${{ steps.commit.outputs.commit_id }} 
-          --parallel 
-          --build-cache 
+          ./gradlew testDebugUnitTest assembleRelease
+          -PcommitId=${{ steps.commit.outputs.commit_id }}
+          --parallel
+          --build-cache
           --no-daemon
 
-      # 4. Подпись APK
       - name: Sign APK
         id: sign_app
         uses: r0adkll/sign-android-release@v1
@@ -104,35 +99,37 @@ jobs:
           APK_NAME="visorlink-${{ env.CHANNEL }}-${{ steps.commit.outputs.commit_id }}.apk"
           APK_DEST="app/build/outputs/apk/release/$APK_NAME"
           mv "$APK_SRC" "$APK_DEST"
-          
+
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
-      # 5. Деплой Nightly на Firebase Hosting
       - name: Deploy Nightly to Firebase Hosting
         if: env.CHANNEL == 'nightly'
         run: |
           mkdir -p firebase_public
           cp ${{ env.APK_PATH }} firebase_public/app-nightly.apk
-          
-          cat << EOF > firebase.json
+
+          cat > firebase.json << 'EOF'
           {
             "hosting": {
               "public": "firebase_public",
               "ignore": ["firebase.json", "**/.*"],
               "headers": [
-                { "source": "**/*.apk", "headers": [{ "key": "Content-Type", "value": "application/vnd.android.package-archive" }] }
+                {
+                  "source": "**/*.apk",
+                  "headers": [
+                    { "key": "Content-Type", "value": "application/vnd.android.package-archive" }
+                  ]
+                }
               ]
             }
           }
           EOF
-          
-          # Установка CLI и деплой
+
           curl -sL https://firebase.tools | bash
           firebase deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}" --project "${{ secrets.FIREBASE_PROJECT_ID }}"
 
-      # 6. Отправка уведомления
-      -name: Send Info to Telegram
+      - name: Send Info to Telegram
         env:
           CHANNEL_NAME: ${{ env.CHANNEL_CAP }}
           APK_NAME: ${{ env.APK_NAME }}
@@ -147,22 +144,20 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           if [ "$CHANNEL" = "nightly" ]; then
-            LINK="📥 <a href=\"$FIREBASE_URL\">Прямая ссылка (Firebase Nightly)</a>"
+            LINK="📥 <a href=\"${FIREBASE_URL}\">Прямая ссылка (Firebase Nightly)</a>"
           else
-            LINK="📥 <a href=\"$RUN_URL\">Скачать из GitHub Artifacts</a>"
+            LINK="📥 <a href=\"${RUN_URL}\">Скачать из GitHub Artifacts</a>"
           fi
-          TEXT="🚀 <b>VisorLink $CHANNEL_NAME Build</b>
-          📦 <code>$APK_NAME</code>
-          🔖 <code>$COMMIT_ID</code> | 🌿 <code>$REF_NAME</code>
-          👤 <code>$ACTOR</code>
-          ✅ <b>Tests passed &amp; APK Signed</b>
-          $LINK
-          📋 <b>Latest Commit:</b>
-          - $CHANGELOG"
+
+          printf '🚀 <b>VisorLink %s Build</b>\n\n📦 <code>%s</code>\n🔖 <code>%s</code> | 🌿 <code>%s</code>\n👤 <code>%s</code>\n✅ <b>Tests passed &amp; APK Signed</b>\n\n%s\n\n📋 <b>Latest Commit:</b>\n• %s' \
+            "$CHANNEL_NAME" "$APK_NAME" "$COMMIT_ID" "$REF_NAME" "$ACTOR" "$LINK" "$CHANGELOG" \
+            > /tmp/tg_message.txt
+
           curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
             -d "chat_id=${CHAT_ID}" \
             -d "parse_mode=HTML" \
-            --data-urlencode "text=${TEXT}"
+            --data-urlencode "text@/tmp/tg_message.txt"
+
       - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
