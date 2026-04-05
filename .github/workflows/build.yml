@@ -24,7 +24,7 @@ jobs:
       - name: Extract Channel from BuildConfig
         id: get_channel
         run: |
-          RAW_CHANNEL=$(grep 'buildConfigField("String", "CHANNEL"' app/build.gradle.kts | head -n 1 | cut -d'"' -f6)
+          RAW_CHANNEL=$(grep 'buildConfigField("String", "CHANNEL"' app/build.gradle.kts | head -n 1 | cut -d'"' -f7)
           CHANNEL=$(echo "$RAW_CHANNEL" | tr '[:upper:]' '[:lower:]')
 
           if [ -z "$CHANNEL" ]; then
