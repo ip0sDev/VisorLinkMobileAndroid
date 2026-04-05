@@ -143,17 +143,13 @@ fun ChatScreen(
     var actionSheetMessage by remember { mutableStateOf<Message?>(null) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
-    // ── Lightbox state ────────────────────────────────────────────────────────
     var lightboxImages by remember { mutableStateOf<List<AlbumImage>>(emptyList()) }
     var lightboxStartIndex by remember { mutableIntStateOf(0) }
     var showLightbox by remember { mutableStateOf(false) }
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
 
-    // ── Мульти-пикер: 1 фото → editor, 2+ → album ────────────────────────────
-    val imagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetMultipleContents()
-    ) { uris: List<Uri> ->
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         when {
             uris.isEmpty() -> Unit
             uris.size == 1 -> editorUri = uris.first()
@@ -161,14 +157,12 @@ fun ChatScreen(
         }
     }
 
-    val wallpaperPicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.setWallpaper(it) }
     }
 
     val onScrollToMessage: (String) -> Unit = { targetMsgId ->
-        val index = uiState.messageListItems.indexOfFirst {
+        val index = uiState.messageListItems.asReversed().indexOfFirst {
             it is MessageListItem.MessageItem && it.message.id == targetMsgId
         }
         if (index >= 0) scope.launch { listState.animateScrollToItem(index) }
@@ -180,14 +174,12 @@ fun ChatScreen(
 
     val isAdmin = uiState.myMember?.isAdmin() == true
     val isOwner = uiState.myMember?.isOwner() == true
-    val isAdminOrOwner = isAdmin || isOwner
-
     val canSetWallpaper = uiState.chatType == ChatType.DIRECT || isAdmin
     val canReact = uiState.chat?.settings?.allowReactions != false
 
     val canSendMessage = when (uiState.chatType) {
         ChatType.DIRECT -> true
-        ChatType.CHANNEL -> isAdminOrOwner
+        ChatType.CHANNEL -> isAdmin || isOwner
         ChatType.GROUP -> {
             val member = uiState.myMember
             if (member?.banned == true) false
@@ -199,187 +191,80 @@ fun ChatScreen(
     }
     val canSendMedia = canSendMessage && uiState.myMember?.mediaRestricted != true
 
-    LaunchedEffect(Unit) {
-        val itemCount = uiState.messageListItems.size
-        if (itemCount > 0) listState.scrollToItem(itemCount - 1)
-    }
-
-    LaunchedEffect(listState.firstVisibleItemIndex) {
-        if (listState.firstVisibleItemIndex <= 3 && uiState.hasMore && !uiState.isLoadingMore) {
+    LaunchedEffect(listState.firstVisibleItemIndex, uiState.messageListItems.size) {
+        val layoutInfo = listState.layoutInfo
+        val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+        if (uiState.messageListItems.isNotEmpty() &&
+            lastVisibleItemIndex >= uiState.messageListItems.size - 5 &&
+            uiState.hasMore && !uiState.isLoadingMore
+        ) {
             viewModel.loadMore()
         }
     }
 
-    val showScrollDown by remember { derivedStateOf { listState.canScrollForward } }
+    val showScrollDown by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     var unreadCount by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(showScrollDown) {
-        if (!showScrollDown) unreadCount = 0
-    }
+    LaunchedEffect(showScrollDown) { if (!showScrollDown) unreadCount = 0 }
 
     val lastMessageId = uiState.messages.lastOrNull()?.id
     LaunchedEffect(lastMessageId) {
-        val messages = uiState.messages
-        if (messages.isNotEmpty()) {
-            val lastMsg = messages.last()
-            val isMine = lastMsg.senderId == viewModel.currentUid
+        if (uiState.messages.isNotEmpty()) {
+            val isMine = uiState.messages.last().senderId == viewModel.currentUid
             if (isMine) {
-                delay(150)
-                listState.animateScrollToItem((uiState.messageListItems.size - 1).coerceAtLeast(0))
-            } else {
+                listState.animateScrollToItem(0)
+            } else if (listState.firstVisibleItemIndex <= 1) {
                 if (hapticEnabled) haptic.perform(HapticType.MESSAGE_RECEIVED, hapticEnabled)
-                val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-                val totalItems = uiState.messageListItems.size
-                val isNearBottom = lastVisibleIndex >= totalItems - 4
-                if (isNearBottom) {
-                    delay(150)
-                    listState.animateScrollToItem((totalItems - 1).coerceAtLeast(0))
-                } else {
-                    unreadCount++
-                }
+                listState.animateScrollToItem(0)
+            } else {
+                unreadCount++
             }
         }
     }
 
-    val scaffoldBg = if (isOneUi)
-        if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg
-    else MaterialTheme.colorScheme.background
+    val scaffoldBg = if (isOneUi) (if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg) else MaterialTheme.colorScheme.background
 
     Scaffold(
         containerColor = scaffoldBg,
         topBar = {
             if (isOneUi) {
-                OneUiChatTopBar(
-                    uiState = uiState, otherUid = otherUid, chatId = chatId,
-                    isDark = isDark, canSetWallpaper = canSetWallpaper,
-                    isAdmin = isAdmin, isOwner = isOwner,
-                    onWallpaperClick = { showWallpaperSheet = true },
-                    onNavigateBack = onNavigateBack,
-                    onOpenOtherProfile = onOpenOtherProfile,
-                    onOpenChatSettings = onOpenChatSettings,
-                    onLeaveClick = { showLeaveDialog = true }
-                )
+                OneUiChatTopBar(uiState, otherUid, chatId, isDark, canSetWallpaper, isAdmin, isOwner, { showWallpaperSheet = true }, onNavigateBack, onOpenOtherProfile, onOpenChatSettings, { showLeaveDialog = true })
             } else {
-                DefaultChatTopBar(
-                    uiState = uiState, otherUid = otherUid, chatId = chatId,
-                    canSetWallpaper = canSetWallpaper,
-                    isAdmin = isAdmin, isOwner = isOwner,
-                    onWallpaperClick = { showWallpaperSheet = true },
-                    onNavigateBack = onNavigateBack,
-                    onOpenOtherProfile = onOpenOtherProfile,
-                    onOpenChatSettings = onOpenChatSettings,
-                    onLeaveClick = { showLeaveDialog = true }
-                )
+                DefaultChatTopBar(uiState, otherUid, chatId, canSetWallpaper, isAdmin, isOwner, { showWallpaperSheet = true }, onNavigateBack, onOpenOtherProfile, onOpenChatSettings, { showLeaveDialog = true })
             }
         },
         bottomBar = {
             if (isOneUi) {
-                OneUiChatBottomBar(
-                    uiState = uiState, inputText = inputText, isDark = isDark,
-                    canSendMessage = canSendMessage, canSendMedia = canSendMedia,
-                    hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                    audioPermission = audioPermission,
-                    onInputChange = { newText ->
-                        if (newText.length <= 2000) {
-                            inputText = newText
-                            viewModel.onTextChanged(newText)
-                        }
-                    },
-                    onAttach = { imagePicker.launch("image/*") },
-                    onStickerClick = { showStickerSheet = true },
-                    onSend = { val text = inputText; inputText = ""; viewModel.sendText(text) },
-                    onStartRecord = { viewModel.startRecording() },
-                    onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                    onCancel = { viewModel.cancelRecording() },
-                    onSendRecord = { viewModel.stopRecordingAndSend() },
-                    onClearReply = { viewModel.clearReply() },
-                    haptic = haptic
-                )
+                OneUiChatBottomBar(uiState, inputText, isDark, canSendMessage, canSendMedia, hapticEnabled, showStickerSheet, audioPermission, { inputText = it; viewModel.onTextChanged(it) }, { imagePicker.launch("image/*") }, { showStickerSheet = true }, { val t = inputText; inputText = ""; viewModel.sendText(t) }, { viewModel.startRecording() }, { audioPermission.launchPermissionRequest() }, { viewModel.cancelRecording() }, { viewModel.stopRecordingAndSend() }, { viewModel.clearReply() }, haptic)
             } else {
-                DefaultChatBottomBar(
-                    uiState = uiState, inputText = inputText,
-                    canSendMessage = canSendMessage, canSendMedia = canSendMedia,
-                    hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                    audioPermission = audioPermission,
-                    onInputChange = { newText ->
-                        if (newText.length <= 2000) {
-                            inputText = newText
-                            viewModel.onTextChanged(newText)
-                        }
-                    },
-                    onAttach = { imagePicker.launch("image/*") },
-                    onStickerClick = { showStickerSheet = true },
-                    onSend = { val text = inputText; inputText = ""; viewModel.sendText(text) },
-                    onStartRecord = { viewModel.startRecording() },
-                    onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                    onCancel = { viewModel.cancelRecording() },
-                    onSendRecord = { viewModel.stopRecordingAndSend() },
-                    onClearReply = { viewModel.clearReply() },
-                    haptic = haptic
-                )
+                DefaultChatBottomBar(uiState, inputText, canSendMessage, canSendMedia, hapticEnabled, showStickerSheet, audioPermission, { inputText = it; viewModel.onTextChanged(it) }, { imagePicker.launch("image/*") }, { showStickerSheet = true }, { val t = inputText; inputText = ""; viewModel.sendText(t) }, { viewModel.startRecording() }, { audioPermission.launchPermissionRequest() }, { viewModel.cancelRecording() }, { viewModel.stopRecordingAndSend() }, { viewModel.clearReply() }, haptic)
             }
         }
     ) { innerPadding ->
-        Column(modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding)) {
+        // FIX: outer Column provides ColumnScope for AnimatedVisibility
+        Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
 
-            // ── Unofficial Client Banner ─────────────────────────────────────────
+            // ── Warning banner — directly in Column so ColumnScope.AnimatedVisibility works ──
             AnimatedVisibility(
                 visible = uiState.showUnofficialClientWarning,
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                Surface(
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.size(20.dp)
-                        )
+                Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.chat_client_unsafe_warning),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(
-                            onClick = { viewModel.dismissUnofficialWarning() },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.chat_client_unsafe_close),
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
+                        Text(stringResource(R.string.chat_client_unsafe_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                        IconButton(onClick = { viewModel.dismissUnofficialWarning() }, modifier = Modifier.size(24.dp)) {
+                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
                         }
                     }
                 }
             }
 
-            // ── Основной контент чата ──────────────────────────────────────────
-            Box(modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()) {
-
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 uiState.wallpaperUrl?.let { url ->
-                    AsyncImage(
-                        model = url, contentDescription = "Chat Wallpaper",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                        alpha = if (isDark) 0.35f else 0.7f
-                    )
+                    AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(), alpha = if (isDark) 0.35f else 0.7f)
                 }
 
                 if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
@@ -387,71 +272,20 @@ fun ChatScreen(
                 } else {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .then(
-                                if (uiState.wallpaperUrl == null && isOneUi)
-                                    Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
-                                else Modifier
-                            ),
+                        reverseLayout = true,
+                        modifier = Modifier.fillMaxSize().then(if (uiState.wallpaperUrl == null && isOneUi) Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg) else Modifier),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
                         items(
-                            items = uiState.messageListItems,
-                            key = { item ->
-                                when (item) {
-                                    is MessageListItem.DateHeader -> "date_${item.label}"
-                                    is MessageListItem.MessageItem -> item.message.id
-                                }
-                            }
+                            items = uiState.messageListItems.asReversed(),
+                            key = { item -> when (item) { is MessageListItem.DateHeader -> "date_${item.label}"; is MessageListItem.MessageItem -> item.message.id } }
                         ) { item ->
                             when (item) {
-                                is MessageListItem.DateHeader -> DateSeparator(
-                                    label = item.label, isOneUi = isOneUi, isDark = isDark,
-                                    hasWallpaper = uiState.wallpaperUrl != null
-                                )
+                                is MessageListItem.DateHeader -> DateSeparator(item.label, isOneUi, isDark, uiState.wallpaperUrl != null)
                                 is MessageListItem.MessageItem -> {
                                     val isMine = item.message.senderId == viewModel.currentUid
-                                    SwipeableMessage(
-                                        message = item.message, isMine = isMine,
-                                        hapticEnabled = hapticEnabled, isOneUi = isOneUi, isDark = isDark,
-                                        onReply = {
-                                            haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                            viewModel.setReplyTo(item.message)
-                                        }
-                                    ) {
-                                        MessageBubble(
-                                            message = item.message, isMine = isMine,
-                                            otherUid = otherUid, currentUid = viewModel.currentUid,
-                                            chatType = uiState.chatType, hapticEnabled = hapticEnabled,
-                                            showSenderName = uiState.chatType != ChatType.DIRECT,
-                                            voicePlayback = uiState.voicePlayback,
-                                            isOneUi = isOneUi, isDark = isDark,
-                                            onPlayVoice = { url, durationSec ->
-                                                viewModel.playVoice(item.message.id, url, durationSec)
-                                            },
-                                            onSeekVoice = { viewModel.seekVoice(it) },
-                                            onLongPress = {
-                                                haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                                                actionSheetMessage = item.message
-                                            },
-                                            onImageTap = { url -> onOpenImageViewer(url) },
-                                            onAlbumTap = { imgs, idx ->
-                                                lightboxImages = imgs
-                                                lightboxStartIndex = idx
-                                                showLightbox = true
-                                            },
-                                            onReact = { emoji ->
-                                                viewModel.toggleReaction(
-                                                    item.message.id, emoji,
-                                                    item.message.parsedReactions
-                                                )
-                                            },
-                                            onReplyClick = onScrollToMessage,
-                                            onMentionClick = onMentionClick,
-                                            onOpenComments = { onOpenComments(item.message.id) },
-                                            chat = uiState.chat
-                                        )
+                                    SwipeableMessage(item.message, isMine, hapticEnabled, isOneUi, isDark, { haptic.perform(HapticType.SELECTION, hapticEnabled); viewModel.setReplyTo(item.message) }) {
+                                        MessageBubble(item.message, isMine, otherUid, viewModel.currentUid, uiState.chatType, hapticEnabled, uiState.chatType != ChatType.DIRECT, uiState.voicePlayback, isOneUi, isDark, { url, dur -> viewModel.playVoice(item.message.id, url, dur) }, { viewModel.seekVoice(it) }, { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); actionSheetMessage = item.message }, { onOpenImageViewer(it) }, { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true }, { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) }, onScrollToMessage, onMentionClick, { onOpenComments(item.message.id) }, uiState.chat)
                                     }
                                 }
                             }
@@ -459,82 +293,47 @@ fun ChatScreen(
                     }
                 }
 
-                // ── Loading indicator (pagination) ────────────────────────────────
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = uiState.isLoadingMore && uiState.messageListItems.isNotEmpty(),
-                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                // ── Loading indicator inside Column so AnimatedVisibility has ColumnScope ──
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 16.dp)
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
-                        shadowElevation = 4.dp, modifier = Modifier.size(36.dp)
+                    AnimatedVisibility(
+                        visible = uiState.isLoadingMore,
+                        enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                        exit = fadeOut() + slideOutVertically(targetOffsetY = { -it })
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp,
-                                color = if (isOneUi && isDark) OneUiChat.BlueDark
-                                else if (isOneUi) OneUiChat.Blue
-                                else MaterialTheme.colorScheme.primary,
-                                trackColor = Color.Transparent
-                            )
-                        }
-                    }
-                }
-
-                // ── Scroll to bottom FAB ──────────────────────────────────────────
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = showScrollDown,
-                    enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
-                    exit = scaleOut(tween(150)) + fadeOut(tween(150)),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 16.dp)
-                ) {
-                    Box {
-                        val fabColor = if (isOneUi)
-                            (if (isDark) OneUiChat.BlueDark else OneUiChat.Blue)
-                        else MaterialTheme.colorScheme.primary
-                        FloatingActionButton(
-                            onClick = {
-                                scope.launch {
-                                    listState.animateScrollToItem(
-                                        (uiState.messageListItems.size - 1).coerceAtLeast(0)
-                                    )
-                                }
-                                if (hapticEnabled) haptic.perform(HapticType.CLICK, hapticEnabled)
-                            },
-                            modifier = Modifier.size(44.dp), containerColor = fabColor,
-                            contentColor = Color.White, shape = CircleShape,
-                            elevation = FloatingActionButtonDefaults.elevation(4.dp, 6.dp)
-                        ) {
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Scroll to bottom",
-                                modifier = Modifier.size(22.dp))
-                        }
-                        if (unreadCount > 0) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .offset(x = 4.dp, y = (-4).dp)
-                                    .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                    .background(Color(0xFFE53935), CircleShape)
-                                    .padding(horizontal = 3.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    if (unreadCount > 99) "99+" else unreadCount.toString(),
-                                    color = Color.White, fontSize = 9.sp,
-                                    fontWeight = FontWeight.Bold, lineHeight = 9.sp
-                                )
+                        Surface(shape = CircleShape, color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface, shadowElevation = 4.dp, modifier = Modifier.size(36.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = if (isOneUi) OneUiChat.Blue else MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
                 }
-            } // end Box(weight(1f))
-        } // end Column
+
+                // ── Scroll-down FAB ──
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showScrollDown,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 16.dp),
+                    enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
+                    exit = scaleOut(tween(150)) + fadeOut(tween(150))
+                ) {
+                    Box {
+                        FloatingActionButton(onClick = { scope.launch { listState.animateScrollToItem(0) } }, modifier = Modifier.size(44.dp), containerColor = if (isOneUi) OneUiChat.Blue else MaterialTheme.colorScheme.primary, contentColor = Color.White, shape = CircleShape) {
+                            Icon(Icons.Default.KeyboardArrowDown, null)
+                        }
+                        if (unreadCount > 0) {
+                            Box(modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp).sizeIn(minWidth = 18.dp, minHeight = 18.dp).background(Color.Red, CircleShape).padding(horizontal = 3.dp), contentAlignment = Alignment.Center) {
+                                Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ── Диалоги и bottom sheets ───────────────────────────────────────────────
@@ -579,13 +378,13 @@ fun ChatScreen(
             onDelete = { showDeleteConfirm = msg.id; actionSheetMessage = null },
             onSaveImage = {
                 scope.launch {
-                    val success = saveImageToGallery(context, msg.url ?: "") // Предполагается что функция есть
+                    val success = saveImageToGallery(context, msg.url ?: "")
                     Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                 }
             },
             onSaveVoice = {
                 scope.launch {
-                    val success = saveVoiceToDownloads(context, msg.url ?: "") // Предполагается что функция есть
+                    val success = saveVoiceToDownloads(context, msg.url ?: "")
                     Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                 }
             },
@@ -601,8 +400,8 @@ fun ChatScreen(
                 viewModel.sendSticker(
                     sticker   = sticker,
                     packId    = packId,
-                    packName  = "",   // StickerPackViewModel знает имя пака,
-                    packEmoji = ""    // но сюда можно передать пустую строку пока
+                    packName  = "",
+                    packEmoji = ""
                 )
                 showStickerSheet = false
                 haptic.perform(HapticType.SUCCESS, hapticEnabled)
@@ -926,6 +725,7 @@ fun AlbumBubble(
                     )
                 }
 
+                // FIX: AnimatedVisibility inside Column — ColumnScope is available here
                 AnimatedVisibility(
                     visible = message.parsedReactions.isNotEmpty(),
                     enter = slideInVertically(initialOffsetY = { -it / 2 },
@@ -1085,7 +885,8 @@ private fun AlbumCell(
                 .fillMaxSize()
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
         )
-        AnimatedVisibility(
+        // FIX: AnimatedVisibility inside Box — use explicit non-receiver call
+        androidx.compose.animation.AnimatedVisibility(
             visible = isSpoiler,
             enter = fadeIn(tween(200)), exit = fadeOut(tween(200))
         ) {
@@ -1560,6 +1361,7 @@ private fun OneUiChatBottomBar(
                 stringResource(R.string.only_admins_can_post_in_channels)
             else -> null
         }
+        // AnimatedVisibility is inside Column — ColumnScope available
         AnimatedVisibility(visible = restriction != null) {
             Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
                 Text(restriction ?: "", style = MaterialTheme.typography.bodySmall,
@@ -1706,23 +1508,11 @@ private fun OneUiChatBottomBar(
                                         indication = null
                                     ) {
                                         sendScope.launch {
-                                            sendScale.animateTo(
-                                                0.80f,
-                                                spring(stiffness = Spring.StiffnessHigh)
-                                            )
-                                            sendScale.animateTo(
-                                                1.10f,
-                                                spring(Spring.DampingRatioLowBouncy)
-                                            )
-                                            sendScale.animateTo(
-                                                1f,
-                                                spring(Spring.DampingRatioMediumBouncy)
-                                            )
+                                            sendScale.animateTo(0.80f, spring(stiffness = Spring.StiffnessHigh))
+                                            sendScale.animateTo(1.10f, spring(Spring.DampingRatioLowBouncy))
+                                            sendScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                                         }
-                                        if (hapticEnabled) haptic.perform(
-                                            HapticType.MESSAGE_SENT,
-                                            hapticEnabled
-                                        )
+                                        if (hapticEnabled) haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
                                         onSend()
                                     },
                                 contentAlignment = Alignment.Center
@@ -1738,10 +1528,7 @@ private fun OneUiChatBottomBar(
                                         .background(accentColor.copy(alpha = 0.1f), CircleShape)
                                         .clickable(enabled = !uiState.isCooldown) {
                                             if (audioPermission.status.isGranted) {
-                                                if (hapticEnabled) haptic.perform(
-                                                    HapticType.LONG_PRESS,
-                                                    hapticEnabled
-                                                )
+                                                if (hapticEnabled) haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
                                                 onStartRecord()
                                             } else onRequestAudioPerm()
                                         },
@@ -1784,6 +1571,7 @@ private fun DefaultChatBottomBar(
                 stringResource(R.string.only_admins_can_post_in_channels)
             else -> null
         }
+        // AnimatedVisibility is inside Column — ColumnScope available
         AnimatedVisibility(visible = restriction != null) {
             Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
                 Text(restriction ?: "", style = MaterialTheme.typography.bodySmall,
@@ -1887,10 +1675,7 @@ private fun DefaultChatBottomBar(
                         modifier = Modifier
                             .weight(1f)
                             .animateContentSize(
-                                animationSpec = spring(
-                                    Spring.DampingRatioMediumBouncy,
-                                    Spring.StiffnessMedium
-                                )
+                                animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
                             ),
                         maxLines = 4, shape = MaterialTheme.shapes.extraLarge,
                         supportingText = if (inputText.isNotEmpty()) {
@@ -1931,26 +1716,11 @@ private fun DefaultChatBottomBar(
                                         indication = null
                                     ) {
                                         sendScope.launch {
-                                            sendScale.animateTo(
-                                                0.82f,
-                                                spring(stiffness = Spring.StiffnessHigh)
-                                            )
-                                            sendScale.animateTo(
-                                                1.12f,
-                                                spring(
-                                                    Spring.DampingRatioLowBouncy,
-                                                    Spring.StiffnessMedium
-                                                )
-                                            )
-                                            sendScale.animateTo(
-                                                1f,
-                                                spring(Spring.DampingRatioMediumBouncy)
-                                            )
+                                            sendScale.animateTo(0.82f, spring(stiffness = Spring.StiffnessHigh))
+                                            sendScale.animateTo(1.12f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium))
+                                            sendScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                                         }
-                                        if (hapticEnabled) haptic.perform(
-                                            HapticType.MESSAGE_SENT,
-                                            hapticEnabled
-                                        )
+                                        if (hapticEnabled) haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
                                         onSend()
                                     },
                                 contentAlignment = Alignment.Center
@@ -2097,6 +1867,7 @@ private fun MessageBubble(
                 }
             }
 
+            // AnimatedVisibility inside Column — ColumnScope available
             AnimatedVisibility(
                 visible = message.parsedReactions.isNotEmpty(),
                 enter = slideInVertically(initialOffsetY = { -it / 2 },
@@ -2215,7 +1986,7 @@ private fun MessageBubble(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        AnimatedVisibility(visible = message.createdAt != null,
+                        androidx.compose.animation.AnimatedVisibility(visible = message.createdAt != null,
                             enter = fadeIn(tween(300))) {
                             Text(message.createdAt?.toDate()?.let {
                                 SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
@@ -2235,6 +2006,7 @@ private fun MessageBubble(
                         }
                     }
 
+                    // AnimatedVisibility inside Column — ColumnScope available
                     AnimatedVisibility(
                         visible = message.parsedReactions.isNotEmpty(),
                         enter = slideInVertically(initialOffsetY = { -it / 2 },
@@ -2307,10 +2079,7 @@ private fun ImageBubble(
                     },
                     onLongClick = {
                         scope.launch {
-                            pressScale.animateTo(
-                                0.93f,
-                                spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
-                            )
+                            pressScale.animateTo(0.93f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
                             pressScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                         }
                         haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
@@ -2388,6 +2157,7 @@ private fun ImageBubble(
             }
         }
 
+        // AnimatedVisibility inside Column — ColumnScope available
         AnimatedVisibility(visible = message.parsedReactions.isNotEmpty(),
             enter = slideInVertically(initialOffsetY = { -it / 2 },
                 animationSpec = spring(Spring.DampingRatioMediumBouncy)) +
@@ -2412,10 +2182,7 @@ private fun ImageBubble(
                             .background(if (iReacted) accentColor.copy(0.15f) else MaterialTheme.colorScheme.surfaceVariant)
                             .clickable {
                                 chipScope.launch {
-                                    chipScale.animateTo(
-                                        1.3f,
-                                        spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
-                                    )
+                                    chipScale.animateTo(1.3f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
                                     chipScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                                 }
                                 onReact(reaction.emoji)
@@ -2482,10 +2249,7 @@ private fun InlinedReactionRow(
                     .background(if (iReacted) chipBgSelected else chipBgDefault)
                     .clickable {
                         scope.launch {
-                            chipScale.animateTo(
-                                1.3f,
-                                spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
-                            )
+                            chipScale.animateTo(1.3f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
                             chipScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
                         }
                         haptic.perform(HapticType.REACTION, hapticEnabled)
@@ -2595,35 +2359,19 @@ private fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
 private fun DateSeparator(
     label: String, isOneUi: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false
 ) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
-    AnimatedVisibility(visible = visible,
-        enter = fadeIn(tween(400)) + scaleIn(initialScale = 0.85f,
-            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow))) {
-        Box(Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-            if (isOneUi) {
-                Box(modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        if (hasWallpaper) Color.Black.copy(alpha = 0.4f)
-                        else if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8)
-                    )
-                    .padding(horizontal = 14.dp, vertical = 5.dp)) {
-                    Text(label, fontSize = 11.sp, fontWeight = FontWeight.W500,
-                        color = if (hasWallpaper) Color.White
-                        else (if (isDark) OneUiChat.TextSecondaryDark else OneUiChat.TextSecondary))
-                }
-            } else {
-                Surface(color = if (hasWallpaper) Color.Black.copy(alpha = 0.4f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                    shape = MaterialTheme.shapes.extraSmall) {
-                    Text(label, style = MaterialTheme.typography.labelSmall,
-                        color = if (hasWallpaper) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
-                }
-            }
+    Box(Modifier.fillMaxWidth().padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Surface(
+            color = if (hasWallpaper) Color.Black.copy(alpha = 0.4f)
+            else if (isOneUi) (if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8))
+            else MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (hasWallpaper || isDark) Color.White else Color.Black
+            )
         }
     }
 }
@@ -2775,10 +2523,7 @@ private fun SwipeableMessage(
                             totalDrag += dragDeltaX
                             totalDragY += dragDeltaY
 
-                            if (!isDragging && kotlin.math.abs(totalDragY) > kotlin.math.abs(
-                                    totalDrag
-                                )
-                            ) {
+                            if (!isDragging && kotlin.math.abs(totalDragY) > kotlin.math.abs(totalDrag)) {
                                 isVertical = true
                                 break
                             }
@@ -2802,16 +2547,10 @@ private fun SwipeableMessage(
                                     scope.launch {
                                         offsetX.animateTo(
                                             if (isMine) -triggerThreshold * 0.5f else triggerThreshold * 0.5f,
-                                            spring(
-                                                Spring.DampingRatioLowBouncy,
-                                                Spring.StiffnessHigh
-                                            )
+                                            spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh)
                                         )
                                         delay(100)
-                                        offsetX.animateTo(
-                                            0f,
-                                            spring(Spring.DampingRatioMediumBouncy)
-                                        )
+                                        offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
                                     }
                                 }
                             }
@@ -2819,10 +2558,7 @@ private fun SwipeableMessage(
 
                         if (isDragging) {
                             scope.launch {
-                                offsetX.animateTo(
-                                    0f,
-                                    spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
-                                )
+                                offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium))
                             }
                         }
                     }
@@ -2870,10 +2606,7 @@ private fun StickerBottomSheet(
                 .padding(top = 12.dp, bottom = 4.dp)
                 .width(36.dp)
                 .height(4.dp)
-                .background(
-                    MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f),
-                    RoundedCornerShape(2.dp)
-                ))
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f), RoundedCornerShape(2.dp)))
         },
         containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp
     ) {
@@ -2922,10 +2655,7 @@ private fun StickerBottomSheet(
                                     .aspectRatio(1f)
                                     .clip(MaterialTheme.shapes.medium)
                                     .clickable {
-                                        if (hapticEnabled) haptic.perform(
-                                            HapticType.CLICK,
-                                            hapticEnabled
-                                        )
+                                        if (hapticEnabled) haptic.perform(HapticType.CLICK, hapticEnabled)
                                         onStickerSelected(sticker)
                                     }, contentAlignment = Alignment.Center) {
                                     AsyncImage(model = sticker.url, contentDescription = sticker.name,

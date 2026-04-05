@@ -16,6 +16,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         ""
     }
 }
+val currentChannel = "CANARY"
 
 android {
     namespace = "by.iposdev.visorlink"
@@ -26,11 +27,11 @@ android {
         minSdk = 30
         targetSdk = 36
         versionCode = 25
-        versionName = "1.18.0"
+        versionName = "1.19.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"BETA\"")
-        buildConfigField("boolean", "InternalBuild", "false")
+        buildConfigField("String", "CHANNEL", "\"CANARY\"")
+        buildConfigField("boolean", "InternalBuild", "true")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
 
@@ -43,6 +44,9 @@ android {
             versionNameSuffix = "-canary+$commitId"
         }
         release {
+            if (currentChannel == "CANARY") {
+                versionNameSuffix = "-canary+$commitId"
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
