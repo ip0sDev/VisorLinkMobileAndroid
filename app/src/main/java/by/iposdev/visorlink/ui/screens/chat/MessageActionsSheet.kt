@@ -35,13 +35,6 @@ import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
 
-// Обновленный расширенный список реакций
-private val QUICK_REACTIONS = listOf(
-    "👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👏",
-    "🥰", "😍", "🤩", "😭", "🤔", "👀", "💯", "✅",
-    "🙏", "😎", "🤣", "😅", "😡", "💀", "🎊", "⚡"
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageActionSheet(

@@ -374,7 +374,11 @@ sealed class MessageListItem {
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 
-enum class AppTheme { MATERIAL3_EXPRESSIVE, ONE_UI }
+enum class AppTheme {
+    MATERIAL3_EXPRESSIVE,
+    ONE_UI,
+    EXTHRU,
+}
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 data class AppSettings(
     val hapticFeedback: Boolean = true,

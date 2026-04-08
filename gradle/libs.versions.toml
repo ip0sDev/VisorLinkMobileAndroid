@@ -27,6 +27,7 @@ firebaseBom = "34.11.0"
 coroutinesTest = "1.10.2"
 mockitoKotlin = "6.3.0"
 mockitoCore = "5.23.0"
+uiText = "1.10.6"
 
 [libraries]
 # --- AndroidX ---
@@ -85,6 +86,7 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
 mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockitoCore" }
+androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

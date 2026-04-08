@@ -484,6 +484,12 @@ class ChatViewModel(
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.WEBM)
             setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+
+            // ─── Настройки для высокого качества звука ───
+            setAudioChannels(1)               // 1 канал (Моно) — идеально для голоса, убирает лишний шум
+            setAudioSamplingRate(48000)       // 48 kHz — максимальное качество (Fullband), нативный формат Opus
+            setAudioEncodingBitRate(96000)    // 96 kbps — очень высокий битрейт для голоса (без сжатия "как из бочки")
+
             setOutputFile(file.absolutePath)
             prepare()
             start()
