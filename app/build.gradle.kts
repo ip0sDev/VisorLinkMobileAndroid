@@ -16,7 +16,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         ""
     }
 }
-val currentChannel = "CANARY"
+val currentChannel = "NIGHTLY"
 
 android {
     namespace = "by.iposdev.visorlink"
@@ -30,8 +30,8 @@ android {
         versionName = "1.19.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"CANARY\"")
-        buildConfigField("boolean", "InternalBuild", "true")
+        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
+        buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
 

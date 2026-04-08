@@ -317,7 +317,7 @@ private fun ExthruSettingsContent(
     ExthruSectionHeader(stringResource(R.string.settings_section_appearance))
     ExthruCard(isDark) {
         ExthruOptionRow(
-            label = "Exthru", desc = "Neomorphic teal — объёмный интерфейс",
+            label = "Exthru",  desc = "Neomorphic teal — осязаемый и объёмный интерфейс.\n⚠️ Экспериментальная тема, возможна нестабильная работа.",
             icon = Icons.Default.Layers, selected = currentTheme == AppTheme.EXTHRU, isDark = isDark
         ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.EXTHRU) }
 
@@ -774,7 +774,7 @@ private fun OuiSettingsContent(
     OuiCard(isDark) {
         OuiOptionRow(
             label = "Exthru",
-            desc = "Neomorphic teal — объёмный интерфейс",
+            desc = "Neomorphic teal — осязаемый и объёмный интерфейс.\n⚠️ Экспериментальная тема, возможна нестабильная работа.",
             icon = Icons.Default.Layers,
             iconBg = if (isDark) Color(0xFF1A3535) else Color(0xFFD4F0EE),
             iconTint = Color(0xFF2DA89A),
@@ -1324,7 +1324,7 @@ private fun M3eSettingsContent(
     OptionGroup {
         ThemeOption(
             label = "Exthru",
-            description = "Neomorphic teal — объёмный интерфейс",
+            description = "Neomorphic teal — осязаемый и объёмный интерфейс.\n⚠️ Экспериментальная тема, возможна нестабильная работа.",
             icon = Icons.Default.Layers,
             selected = currentTheme == AppTheme.EXTHRU,
             index = 0, total = 3, primaryColor = false
