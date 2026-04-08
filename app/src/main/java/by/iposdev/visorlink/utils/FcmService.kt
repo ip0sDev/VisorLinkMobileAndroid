@@ -72,11 +72,16 @@ class FcmService : FirebaseMessagingService() {
 
         Log.d("FCM", "Showing notification: $title - $body")
 
-        NotificationHelper.showMessageNotification(
-            context = applicationContext,
-            chatId = chatId,
-            senderName = title,
-            messagePreview = body
-        )
+        val isCurrentChat = ActiveChatTracker.activeChatId == chatId
+        if (!isCurrentChat) {
+            NotificationHelper.showMessageNotification(
+                context = applicationContext,
+                chatId = chatId,
+                senderName = title,
+                messagePreview = body
+            )
+        } else {
+            Log.d("FCM", "Suppressed notification: chat $chatId is currently open")
+        }
     }
 }

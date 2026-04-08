@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
@@ -203,7 +204,9 @@ class ChatViewModel(
                             hasMore = lastDoc != null
                         )
                     }
-                    if (_uiState.value.chatType == ChatType.DIRECT) {
+                    if (_uiState.value.chatType == ChatType.DIRECT &&
+                        ActiveChatTracker.activeChatId == chatId
+                    ) {
                         viewModelScope.launch {
                             try { chatRepository.markMessagesAsRead(chatId, messages, currentUid) }
                             catch (_: Exception) {}

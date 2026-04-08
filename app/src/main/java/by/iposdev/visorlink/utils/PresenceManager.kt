@@ -20,6 +20,7 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
     private val presenceRef = rtdb.getReference("presence/$uid")
     private val connectedRef = rtdb.getReference(".info/connected")
     private var connectedListener: ValueEventListener? = null
+    private var isAppInForeground = false
 
     fun attach(lifecycle: Lifecycle) {
         lifecycle.addObserver(this)
@@ -30,26 +31,39 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
         connectedListener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
                 if (snap.getValue(Boolean::class.java) != true) return
-                // Сначала регистрируем onDisconnect, потом помечаем online
+
+                // onDisconnect всегда регистрируем — это серверная гарантия offline при дропе
                 presenceRef.onDisconnect().setValue(
                     mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
                 )
-                presenceRef.setValue(
-                    mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
-                )
+
+                // online: true пишем ТОЛЬКО если приложение на переднем плане.
+                // При фоновых FCM-соединениях RTDB может переподключиться и
+                // вызвать этот колбэк — без флага мы бы ошибочно ставили online.
+                if (isAppInForeground) {
+                    presenceRef.setValue(
+                        mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
+                    )
+                }
+                // Если фон — ничего не пишем. onDisconnect уже гарантирует offline
+                // как только соединение оборвётся.
             }
+
             override fun onCancelled(e: DatabaseError) {}
         }
         connectedRef.addValueEventListener(connectedListener!!)
     }
 
     override fun onStart(owner: LifecycleOwner) {
+        isAppInForeground = true
         presenceRef.setValue(
             mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
         )
     }
 
     override fun onStop(owner: LifecycleOwner) {
+        isAppInForeground = false
+        // Явно пишем offline сразу при уходе в фон, не ждём дропа соединения
         presenceRef.setValue(
             mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
         )
@@ -57,6 +71,7 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
 
     fun detach() {
         connectedListener?.let { connectedRef.removeEventListener(it) }
+        isAppInForeground = false
         presenceRef.setValue(
             mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
         )
@@ -67,11 +82,17 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
             val ref = Firebase.database.getReference("presence/$uid")
             val listener = object : ValueEventListener {
                 override fun onDataChange(snap: DataSnapshot) {
+                    if (!snap.exists()) {
+                        trySend(PresenceData(online = false, lastSeen = null))
+                        return
+                    }
                     val online = snap.child("online").getValue(Boolean::class.java) ?: false
                     val lastSeen = snap.child("lastSeen").getValue(Long::class.java)
                     trySend(PresenceData(online, lastSeen))
                 }
-                override fun onCancelled(e: DatabaseError) { trySend(null) }
+                override fun onCancelled(e: DatabaseError) {
+                    trySend(PresenceData(online = false, lastSeen = null))
+                }
             }
             ref.addValueEventListener(listener)
             awaitClose { ref.removeEventListener(listener) }

@@ -85,6 +85,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.roundToInt
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.utils.ActiveChatTracker
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -164,7 +165,12 @@ fun ChatScreen(
         }
     }
     val canSendMedia = canSendMessage && uiState.myMember?.mediaRestricted != true
-
+    DisposableEffect(chatId) {
+        ActiveChatTracker.activeChatId = chatId
+        onDispose {
+            ActiveChatTracker.activeChatId = null
+        }
+    }
     // ── Автопрокрутка и счётчик непрочитанных ────────────────────────────────
     LaunchedEffect(listState.firstVisibleItemIndex, uiState.messageListItems.size) {
         val layoutInfo = listState.layoutInfo
@@ -181,16 +187,22 @@ fun ChatScreen(
     var unreadCount by remember { mutableIntStateOf(0) }
     LaunchedEffect(showScrollDown) { if (!showScrollDown) unreadCount = 0 }
 
-    val lastMessageId = uiState.messages.lastOrNull()?.id
-    LaunchedEffect(lastMessageId) {
-        if (uiState.messages.isNotEmpty()) {
-            val isMine = uiState.messages.last().senderId == viewModel.currentUid
-            if (isMine) {
+    val messageCount = uiState.messageListItems.size
+    LaunchedEffect(messageCount) {
+        if (messageCount == 0) return@LaunchedEffect
+        val lastMsg = uiState.messages.lastOrNull() ?: return@LaunchedEffect
+        val isMine = lastMsg.senderId == viewModel.currentUid
+        when {
+            isMine -> {
+                // Всегда скроллим вниз при отправке своего сообщения
                 listState.animateScrollToItem(0)
-            } else if (listState.firstVisibleItemIndex <= 1) {
+            }
+            listState.firstVisibleItemIndex <= 1 -> {
+                // Входящее сообщение и мы уже внизу — скроллим
                 if (hapticEnabled) haptic.perform(HapticType.MESSAGE_RECEIVED, hapticEnabled)
                 listState.animateScrollToItem(0)
-            } else {
+            }
+            else -> {
                 unreadCount++
             }
         }
@@ -344,7 +356,7 @@ fun ChatScreen(
                         state = listState,
                         reverseLayout = true,
                         modifier = Modifier.fillMaxSize().then(listBg),
-                        contentPadding = PaddingValues(vertical = 8.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp),
                     ) {
                         items(
                             items = uiState.messageListItems.asReversed(),

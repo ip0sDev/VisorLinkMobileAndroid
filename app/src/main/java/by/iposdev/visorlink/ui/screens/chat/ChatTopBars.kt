@@ -42,7 +42,7 @@ internal fun ExthruChatTopBar(
     uiState: ChatUiState,
     otherUid: String,
     chatId: String,
-    isDark: Boolean, // Добавлен параметр для поддержки темной темы
+    isDark: Boolean,
     canSetWallpaper: Boolean,
     isAdmin: Boolean,
     isOwner: Boolean,
@@ -56,12 +56,11 @@ internal fun ExthruChatTopBar(
         modifier = Modifier.nmDividerBottom(),
         navigationIcon = {
             IconButton(onClick = onNavigateBack) {
-                // Выпуклая кнопка-иконка в стиле Exthru
                 Box(
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
-                        .background(ExthruChat.barBg(isDark)), // Адаптивный фон
+                        .background(ExthruChat.barBg(isDark)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -102,9 +101,9 @@ internal fun ExthruChatTopBar(
                             ChatType.DIRECT -> uiState.otherUser?.displayName ?: ""
                             else -> uiState.chat?.name ?: ""
                         },
-                        fontSize = 18.sp, // Увеличенный размер шрифта
-                        fontWeight = FontWeight.Bold, // Изменено на Bold
-                        color = ExthruChat.textPrimary(isDark), // Адаптивный цвет
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ExthruChat.textPrimary(isDark),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -118,16 +117,24 @@ internal fun ExthruChatTopBar(
                                 is TopbarStatus.Typing -> TypingDots(primaryColor = ExthruChat.Accent)
                                 is TopbarStatus.Online -> Text(
                                     stringResource(R.string.chat_status_online),
-                                    fontSize = 11.sp, color = ExthruChat.Online,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+                                    color = ExthruChat.Online,
                                 )
                                 is TopbarStatus.LastSeen -> Text(
                                     status.ts?.let { ts ->
                                         stringResource(R.string.last_seen,
                                             SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ts)))
                                     } ?: "",
-                                    fontSize = 11.sp, color = ExthruChat.textHint(isDark), // Адаптивный цвет
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Normal,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+                                    color = ExthruChat.textHint(isDark),
                                 )
-                                else -> Text("", fontSize = 11.sp, color = ExthruChat.textHint(isDark)) // Адаптивный цвет
+                                else -> Text("", fontSize = 11.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+                                    color = ExthruChat.textHint(isDark))
                             }
                         }
                         ChatType.GROUP -> {
@@ -136,11 +143,16 @@ internal fun ExthruChatTopBar(
                             Text(buildString {
                                 append(stringResource(R.string.members, memberCount))
                                 if (online > 0) append(stringResource(R.string.online, online))
-                            }, fontSize = 11.sp, color = ExthruChat.textHint(isDark)) // Адаптивный цвет
+                            }, fontSize = 11.sp, fontWeight = FontWeight.Normal,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+                                color = ExthruChat.textHint(isDark))
                         }
                         ChatType.CHANNEL -> Text(
                             stringResource(R.string.subscribers, uiState.chat?.memberCount ?: 0),
-                            fontSize = 11.sp, color = ExthruChat.textHint(isDark), // Адаптивный цвет
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Default,
+                            color = ExthruChat.textHint(isDark),
                         )
                     }
                 }
@@ -150,13 +162,13 @@ internal fun ExthruChatTopBar(
             if (canSetWallpaper) {
                 IconButton(onClick = onWallpaperClick) {
                     Icon(Icons.Default.Wallpaper, contentDescription = stringResource(R.string.wallpaper),
-                        tint = if (uiState.wallpaperUrl != null) ExthruChat.Accent else ExthruChat.textSecondary(isDark)) // Адаптивный цвет
+                        tint = if (uiState.wallpaperUrl != null) ExthruChat.Accent else ExthruChat.textSecondary(isDark))
                 }
             }
             if (uiState.chatType != ChatType.DIRECT && isAdmin) {
                 IconButton(onClick = { onOpenChatSettings(chatId) }) {
                     Icon(Icons.Default.Settings, stringResource(R.string.settings),
-                        tint = ExthruChat.textSecondary(isDark)) // Адаптивный цвет
+                        tint = ExthruChat.textSecondary(isDark))
                 }
             }
             if (uiState.chatType != ChatType.DIRECT && !isOwner) {
@@ -167,8 +179,8 @@ internal fun ExthruChatTopBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = ExthruChat.barBg(isDark), // Адаптивный цвет
-            scrolledContainerColor = ExthruChat.barBg(isDark), // Адаптивный цвет
+            containerColor = ExthruChat.barBg(isDark),
+            scrolledContainerColor = ExthruChat.barBg(isDark),
         ),
     )
 }
