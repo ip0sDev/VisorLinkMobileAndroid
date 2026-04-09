@@ -44,4 +44,6 @@ sealed class Screen(val route: String) {
     object Comments : Screen("comments/{chatId}/{messageId}") {
         fun createRoute(chatId: String, messageId: String) = "comments/$chatId/$messageId"
     }
+    object SavedMessages : Screen("saved_messages")
+    object SavedMessagesSettings : Screen("saved_messages_settings")
 }

@@ -91,8 +91,14 @@ fun VisorLinkNavGraph(
 
         composable(Screen.ChatList.route) {
             ChatListScreen(
-                onOpenChat          = { chatId, otherUid ->
-                    navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
+                onOpenChat = { chatId, otherUid ->
+                    // ПРОВЕРКА: Если это наше Избранное — идем на отдельный экран
+                    if (chatId.startsWith("saved_")) {
+                        navController.navigate(Screen.SavedMessages.route)
+                    } else {
+                        // Обычный чат
+                        navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
+                    }
                 },
                 onOpenSearch        = { navController.navigate(Screen.Search.createRoute(null)) },
                 onOpenProfile       = { navController.navigate(Screen.Profile.route) },
@@ -271,6 +277,20 @@ fun VisorLinkNavGraph(
                     navController.navigate(Screen.ImageViewer.createRoute(url))
                 },
                 hapticEnabled = hapticEnabled
+            )
+        }
+        composable(Screen.SavedMessages.route) {
+            // Импортируй свой экран (пакет может отличаться)
+            by.iposdev.visorlink.ui.screens.saved.SavedMessagesScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onOpenSettings = { navController.navigate(Screen.SavedMessagesSettings.route) }
+            )
+        }
+
+// Экран настроек Избранного
+        composable(Screen.SavedMessagesSettings.route) {
+            by.iposdev.visorlink.ui.screens.saved.SavedMessagesSettingsScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

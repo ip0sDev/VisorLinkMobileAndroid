@@ -48,6 +48,7 @@ fun MessageActionSheet(
     onSaveImage: () -> Unit,
     onSaveVoice: () -> Unit,
     onOpenImage: () -> Unit,
+    onForward: (() -> Unit)? = null,
     onReact: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -159,6 +160,16 @@ fun MessageActionSheet(
                     haptic.perform(HapticType.CLICK, true)
                     onDismiss()
                     onReply()
+                }
+                if (onForward != null && !message.deleted) {
+                    ActionItem(
+                        icon  = Icons.Default.Forward,
+                        label = "Переслать"
+                    ) {
+                        haptic.perform(HapticType.CLICK, true)
+                        onDismiss()
+                        onForward()
+                    }
                 }
             }
 

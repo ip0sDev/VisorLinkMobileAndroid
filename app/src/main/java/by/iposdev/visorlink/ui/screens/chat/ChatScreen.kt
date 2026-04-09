@@ -524,6 +524,7 @@ fun ChatScreen(
                 }
             },
             onOpenImage = { msg.url?.let { onOpenImageViewer(it) } },
+            onForward = null,
             onReact = { emoji -> viewModel.toggleReaction(msg.id, emoji, msg.parsedReactions) },
         )
     }

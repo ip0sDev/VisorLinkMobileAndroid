@@ -101,6 +101,7 @@ fun ChatListScreen(
     // TopBar collapse — скрываем subtitle при прокрутке
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
+
     Scaffold(
         containerColor = when {
             isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
@@ -174,6 +175,7 @@ fun ChatListScreen(
                             .size(42.dp) // Единый строгий размер для всех кнопок
                             .exthruSmallRaisedShadow(isDark)
                             .background(MaterialTheme.colorScheme.surface, CircleShape)
+
 
                         CompositionLocalProvider(LocalContentColor provides iconTint) {
                             val badgeScale = remember { Animatable(if (unreadNotifications > 0) 1f else 0f) }
@@ -342,6 +344,41 @@ fun ChatListScreen(
                         bottom = 88.dp
                     )
                 ) {
+                    // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ
+                    item(key = "saved_messages") {
+                        val savedChat = viewModel.savedMessagesEntry
+
+                        var visible by remember { mutableStateOf(false) }
+                        LaunchedEffect(Unit) { visible = true } // Появляется сразу
+
+                        AnimatedVisibility(
+                            visible = visible,
+                            enter = fadeIn(tween(300)) + expandVertically()
+                        ) {
+                            Column {
+                                ChatListItem(
+                                    chat = savedChat,
+                                    chatType = ChatType.DIRECT,
+                                    currentUid = viewModel.currentUid,
+                                    otherProfile = null, // Для избранного профиль не нужен
+                                    index = -1, // Специальный индекс
+                                    total = chats.size,
+                                    isOneUi = isOneUi,
+                                    isExthru = isExthru,
+                                    isDark = isDark,
+                                    isSavedMessages = true, // Новый флаг
+                                    onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
+                                )
+                                if (isOneUi) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                                        thickness = 0.5.dp,
+                                        color = if (isDark) OneUi.DividerDark else OneUi.Divider
+                                    )
+                                }
+                            }
+                        }
+                    }
                     itemsIndexed(
                         items = chats,
                         key = { _, chat -> chat.id }
@@ -501,6 +538,7 @@ private fun ChatListItem(
     isOneUi: Boolean,
     isExthru: Boolean,
     isDark: Boolean,
+    isSavedMessages: Boolean = false, // Добавили параметр
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -567,20 +605,26 @@ private fun ChatListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(if (isOneUi) 50.dp else 54.dp)) {
-                when (chatType) {
-                    ChatType.DIRECT -> AvatarWithPresence(
-                        avatarUrl = otherProfile?.avatarUrl,
-                        displayName = chat.otherDisplayName(currentUid),
-                        isOnline = otherProfile?.online ?: false,
-                        size = if (isOneUi) 50.dp else 54.dp
-                    )
-                    ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
-                        avatarUrl = chat.avatarUrl,
-                        name = chat.name,
-                        isChannel = chatType == ChatType.CHANNEL,
-                        isExthru = isExthru,
-                        size = if (isOneUi) 50.dp else 54.dp
-                    )
+                if (isSavedMessages) {
+                    // Иконка для Избранного
+                    SavedMessagesIcon(isOneUi, isExthru, isDark, size = if (isOneUi) 50.dp else 54.dp)
+                } else {
+                    when (chatType) {
+                        ChatType.DIRECT -> AvatarWithPresence(
+                            avatarUrl = otherProfile?.avatarUrl,
+                            displayName = chat.otherDisplayName(currentUid),
+                            isOnline = otherProfile?.online ?: false,
+                            size = if (isOneUi) 50.dp else 54.dp
+                        )
+
+                        ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
+                            avatarUrl = chat.avatarUrl,
+                            name = chat.name,
+                            isChannel = chatType == ChatType.CHANNEL,
+                            isExthru = isExthru,
+                            size = if (isOneUi) 50.dp else 54.dp
+                        )
+                    }
                 }
             }
 
@@ -595,8 +639,17 @@ private fun ChatListItem(
                         Text(if (chatType == ChatType.CHANNEL) "📢" else "👥", fontSize = 11.sp)
                     }
                     Text(
-                        text = when (chatType) {
-                            ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" }
+                        text = when {
+                            // 1. Сначала проверяем на "Избранное"
+                            isSavedMessages -> stringResource(R.string.saved_messages_title) // "Избранное"
+
+                            // 2. Если не избранное, проверяем тип DIRECT
+                            chatType == ChatType.DIRECT -> {
+                                chat.otherDisplayName(currentUid)
+                                    .ifEmpty { "@${chat.otherUsername(currentUid)}" }
+                            }
+
+                            // 3. Во всех остальных случаях (группы, каналы) берем имя чата
                             else -> chat.name
                         },
                         fontSize = if (isOneUi) 16.sp else 15.sp,
@@ -943,3 +996,31 @@ private fun formatTime(date: Date): String {
         else -> SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(date)
     }
 }
+    @Composable
+    fun SavedMessagesIcon(
+        isOneUi: Boolean,
+        isExthru: Boolean,
+        isDark: Boolean,
+        size: Dp
+    ) {
+        val bgGradient = when {
+            isExthru -> Brush.linearGradient(listOf(Color(0xFF00C8FF), Color(0xFF007BFF))) // Cyan to Blue
+            else -> Brush.linearGradient(listOf(Color(0xFF6A11CB), Color(0xFF2575FC))) // Deep Purple to Blue
+        }
+
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(bgGradient)
+                .then(if (isExthru) Modifier.graphicsLayer { shadowElevation = 8f } else Modifier),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Bookmark,
+                contentDescription = null,
+                modifier = Modifier.size((size.value * 0.5f).dp),
+                tint = Color.White
+            )
+        }
+    }

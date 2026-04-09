@@ -26,8 +26,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.19.2"
+        versionCode = 29
+        versionName = "1.20.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
@@ -113,6 +113,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.coil.compose)
     implementation(libs.accompanist.permissions)
+    implementation(libs.androidx.biometric)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

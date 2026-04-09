@@ -29,11 +29,18 @@ class ChatListViewModel(
 
     private val _profileCache = MutableStateFlow<Map<String, UserProfile>>(emptyMap())
     val profileCache: StateFlow<Map<String, UserProfile>> = _profileCache.asStateFlow()
+    val savedMessagesEntry: Chat = Chat(
+        id   = "saved_${currentUid}",
+        type = "direct",
+        name = "Избранное",
+        lastMessage = "Нажмите, чтобы открыть",
+    )
 
     init {
         viewModelScope.launch {
             chats.collect { list ->
                 val knownUids = _profileCache.value.keys
+
                 list.filter { it.chatType() == ChatType.DIRECT }
                     .map { it.otherParticipantId(currentUid) }
                     .filter { it.isNotEmpty() && it !in knownUids }

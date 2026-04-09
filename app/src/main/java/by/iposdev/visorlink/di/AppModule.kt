@@ -2,6 +2,8 @@ package by.iposdev.visorlink.di
 
 import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.ChatRepository
+import by.iposdev.visorlink.data.repository.ForwardRepository
+import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.data.repository.StickerPackRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel              // ← NEW
@@ -12,12 +14,14 @@ import by.iposdev.visorlink.ui.screens.comments.CommentsViewModel
 import by.iposdev.visorlink.ui.screens.group.ChatSettingsViewModel
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileViewModel
 import by.iposdev.visorlink.ui.screens.profile.ProfileViewModel
+import by.iposdev.visorlink.ui.screens.saved.SavedMessagesViewModel
 import by.iposdev.visorlink.ui.screens.search.SearchViewModel
 import by.iposdev.visorlink.ui.screens.settings.CacheViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.CacheManager
+import by.iposdev.visorlink.utils.VoicePlayerManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestoreSettings
@@ -58,6 +62,7 @@ val appModule = module {
     // ─── Utils ────────────────────────────────────────────────────────────────
 
     single { CacheManager(androidContext()) }
+    single { VoicePlayerManager(androidContext()) }
 
     // ─── ViewModels ───────────────────────────────────────────────────────────
 
@@ -121,4 +126,8 @@ val appModule = module {
 
     viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
+    single { SavedMessagesRepository(get(), get()) } // Первый get() для Firestore, второй для Storage
+    single { ForwardRepository(get()) }
+
+    viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext()) }
 }

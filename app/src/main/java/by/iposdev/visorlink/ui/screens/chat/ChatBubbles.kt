@@ -253,6 +253,14 @@ internal fun TextBubble(
                         )
                         Spacer(Modifier.height(4.dp))
                     }
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(
+                            forwardFrom = fwd,
+                            isMine      = isMine,
+                            isExthru    = isExthru,
+                            isDark      = isDark
+                        )
+                    }
 
                     if (message.deleted) {
                         Text(

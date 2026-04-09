@@ -1,5 +1,6 @@
 [versions]
 agp = "9.1.0"
+biometric = "1.2.0-alpha05"
 kotlin = "2.3.20"
 coreKtx = "1.18.0"
 junit = "4.13.2"
@@ -31,6 +32,7 @@ uiText = "1.10.6"
 
 [libraries]
 # --- AndroidX ---
+androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-media = { group = "androidx.media", name = "media", version.ref = "mediaVersion" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
@@ -91,4 +93,4 @@ androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", ve
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-google-services = { id = "com.google.gms.google-services", version = "4.4.2" }
+google-services = { id = "com.google.gms.google-services", version = "4.4.4" }

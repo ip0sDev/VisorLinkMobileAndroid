@@ -230,7 +230,8 @@ data class Message(
     val commentsCount: Int = 0,
     // ─── Album ────────────────────────────────────────────────────────────────
     val caption: String? = null,
-    val images: List<AlbumImage> = emptyList()
+    val images: List<AlbumImage> = emptyList(),
+    val forwardFrom: Map<String, Any?>? = null,
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -253,6 +254,18 @@ data class Message(
                     count = (map["count"] as? Long)?.toInt() ?: 0
                 )
             } catch (e: Exception) { null }
+        }
+    val parsedForwardFrom: ForwardFrom?
+        get() = forwardFrom?.let {
+            try {
+                ForwardFrom(
+                    senderId       = it["senderId"] as? String ?: "",
+                    senderUsername = it["senderUsername"] as? String ?: "",
+                    chatId         = it["chatId"] as? String,
+                    chatName       = it["chatName"] as? String,
+                    messageId      = it["messageId"] as? String ?: ""
+                )
+            } catch (_: Exception) { null }
         }
 }
 

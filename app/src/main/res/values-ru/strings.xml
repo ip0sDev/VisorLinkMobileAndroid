@@ -401,4 +401,22 @@
     <string name="some_features_may_be_unavailable_or_behave_unexpectedly">"Некоторые функции могут быть отключены или ограничены "</string>
     <string name="until_you_switch_to_the_official_app">пока вы не перейдете на оффициальный клиент.</string>
     <string name="i_understand">Я принимаю этот риск</string>
+    <string name="saved_messages">Избранное</string>
+    <string name="saved_pin_prompt">Введите PIN-код</string>
+    <string name="saved_pin_wrong">Неверный PIN</string>
+    <string name="saved_pin_set">Установить PIN</string>
+    <string name="saved_pin_disable">Отключить PIN</string>
+    <string name="saved_enc_title">Шифрование текстов</string>
+    <string name="saved_enc_description">Текстовые сообщения зашифрованы на устройстве. Сервер не может их прочитать.</string>
+    <string name="saved_enc_media_warning">Фото и голосовые НЕ шифруются — они хранятся в облаке как обычно.</string>
+    <string name="saved_enc_active">Шифрование включено</string>
+    <string name="saved_enc_active_short">🔐 Тексты зашифрованы</string>
+    <string name="saved_enc_image_warning_confirm">Это фото не будет зашифровано. Продолжить?</string>
+    <string name="saved_enc_wrong_key">Не удалось расшифровать</string>
+    <string name="forward_from">Переслано от @%1$s</string>
+    <string name="forward_from_saved">Переслано из Избранного</string>
+    <string name="forward_not_allowed">Пересылка запрещена</string>
+    <string name="forward_picker_title">Переслать в…</string>
+    <string name="settings_no_forwards">Запретить пересылку</string>
+    <string name="saved_messages_title">Избранное</string>
 </resources>
