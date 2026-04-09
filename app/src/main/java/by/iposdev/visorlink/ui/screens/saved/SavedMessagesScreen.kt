@@ -99,12 +99,17 @@ fun SavedMessagesScreen(
         if (uri != null) editorUri = uri
     }
 
-    LaunchedEffect(Unit) {
-        val settings = viewModel.uiState.value.settings
-        if (settings?.pinEnabled == true && !viewModel.uiState.value.isUnlocked) {
+    // Автоматический запуск биометрии, если экран блокировки активен
+    var autoBioTriggered by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.showPinInput) {
+        if (uiState.showPinInput && !autoBioTriggered && viewModel.hasBiometricPinSaved()) {
+            autoBioTriggered = true
             (context as? FragmentActivity)?.let { activity ->
                 viewModel.launchBiometricUnlock(activity) {}
             }
+        } else if (!uiState.showPinInput) {
+            autoBioTriggered = false // сброс флага, если мы разблокировали чат
         }
     }
 
@@ -124,7 +129,8 @@ fun SavedMessagesScreen(
     if (uiState.showPinInput) {
         PinInputDialog(
             pinError     = uiState.pinError,
-            onPinEntered = { pin, useBio -> viewModel.onPinEntered(pin, useBio) }, // <-- ИЗМЕНЕНО
+            hasBiometric = viewModel.hasBiometricPinSaved(),
+            onPinEntered = { pin, useBio -> viewModel.onPinEntered(pin, useBio) },
             onDismiss    = onNavigateBack,
             onBiometric  = {
                 (context as? FragmentActivity)?.let { activity ->
@@ -405,16 +411,21 @@ private fun SavedEmptyPlaceholder(modifier: Modifier, isEncrypted: Boolean, isEx
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ДИАЛОГ ВВОДА PIN-КОДА
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 private fun PinInputDialog(
     pinError: Boolean,
-    onPinEntered: (String, Boolean) -> Unit, // <-- Теперь передаем 2 параметра
+    hasBiometric: Boolean,
+    onPinEntered: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
     onBiometric: () -> Unit,
     clearError: () -> Unit
 ) {
     var pin by remember { mutableStateOf("") }
-    var useBiometrics by remember { mutableStateOf(false) } // <-- Стейт для чекбокса
+    var useBiometrics by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -440,41 +451,41 @@ private fun PinInputDialog(
                     Text("Неверный PIN-код", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Чекбокс для сохранения биометрии
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { useBiometrics = !useBiometrics }
-                        .padding(vertical = 4.dp)
-                ) {
-                    Checkbox(
-                        checked = useBiometrics,
-                        onCheckedChange = { useBiometrics = it }
-                    )
-                    Text(
-                        "Разрешить вход по биометрии",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                // Если биометрия еще не настроена, показываем чекбокс
+                if (!hasBiometric) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { useBiometrics = !useBiometrics }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = useBiometrics,
+                            onCheckedChange = { useBiometrics = it }
+                        )
+                        Text("Разрешить вход по биометрии", style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = { onPinEntered(pin, useBiometrics) },
-                enabled = pin.length in 4..8 // Кнопка активна, если PIN от 4 до 8 символов
+                enabled = pin.length in 4..8
             ) {
                 Text("Разблокировать")
             }
         },
         dismissButton = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Кнопка отпечатка пальца переехала сюда
-                IconButton(onClick = onBiometric) {
-                    Icon(Icons.Default.Fingerprint, tint = MaterialTheme.colorScheme.primary, contentDescription = "Биометрия")
+                // Если биометрия настроена, показываем кнопку отпечатка внизу
+                if (hasBiometric) {
+                    IconButton(onClick = onBiometric) {
+                        Icon(Icons.Default.Fingerprint, tint = MaterialTheme.colorScheme.primary, contentDescription = "Биометрия")
+                    }
                 }
                 TextButton(onClick = onDismiss) { Text("Отмена") }
             }

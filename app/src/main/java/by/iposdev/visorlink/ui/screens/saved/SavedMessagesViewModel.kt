@@ -101,7 +101,6 @@ class SavedMessagesViewModel(
         }
     }
 
-    // <-- ИЗМЕНЕНО: теперь принимает флаг сохранения для биометрии
     fun onPinEntered(pin: String, enableBiometrics: Boolean) {
         viewModelScope.launch {
             val valid = repository.verifyPin(currentUid, pin)
@@ -147,7 +146,6 @@ class SavedMessagesViewModel(
         val prompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                 viewModelScope.launch {
-                    // Пытаемся достать PIN из нашего Keystore, если нет — пробуем старый метод репозитория
                     val storedPin = getPinFromKeystoreSecurely() ?: repository.getBiometricPin(currentUid) ?: return@launch
 
                     encryptionKey = deriveKeyFromPin(storedPin, currentUid)
@@ -170,6 +168,11 @@ class SavedMessagesViewModel(
     }
 
     // ─── Android Keystore (Безопасное хранение PIN) ──────────────────────────
+
+    fun hasBiometricPinSaved(): Boolean {
+        val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+        return prefs.contains("pin_enc_$currentUid")
+    }
 
     private fun savePinToKeystoreSecurely(pin: String) {
         try {

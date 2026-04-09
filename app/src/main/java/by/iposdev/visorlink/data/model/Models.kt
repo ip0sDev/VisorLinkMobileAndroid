@@ -43,10 +43,19 @@ data class Chat(
     val memberCount: Int = 0,
     val memberIds: List<String> = emptyList(),
     val settings: ChatSettings = ChatSettings(),
-    val lastMessage: String? = null,
+    // ИЗМЕНЕНО: String? -> Any? чтобы принимать и текст, и объект
+    val lastMessage: Any? = null,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null
 ) {
+    fun lastMessageText(): String {
+        return when (lastMessage) {
+            is String -> lastMessage
+            is Map<*, *> -> (lastMessage["text"] as? String) ?: ""
+            else -> ""
+        }
+    }
+
     fun chatType() = when (type) {
         "group"   -> ChatType.GROUP
         "channel" -> ChatType.CHANNEL

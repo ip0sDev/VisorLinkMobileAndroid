@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -669,8 +670,10 @@ private fun ChatListItem(
                     }
                 }
                 Spacer(Modifier.height(3.dp))
+                // ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ ДЛЯ ОТОБРАЖЕНИЯ
+                val messageText = chat.lastMessageText()
                 Text(
-                    chat.lastMessage ?: stringResource(R.string.chatlist_no_messages),
+                    text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                     style = MaterialTheme.typography.bodySmall,
                     color = subColor,
                     maxLines = 1,
@@ -996,31 +999,37 @@ private fun formatTime(date: Date): String {
         else -> SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(date)
     }
 }
-    @Composable
-    fun SavedMessagesIcon(
-        isOneUi: Boolean,
-        isExthru: Boolean,
-        isDark: Boolean,
-        size: Dp
-    ) {
-        val bgGradient = when {
-            isExthru -> Brush.linearGradient(listOf(Color(0xFF00C8FF), Color(0xFF007BFF))) // Cyan to Blue
-            else -> Brush.linearGradient(listOf(Color(0xFF6A11CB), Color(0xFF2575FC))) // Deep Purple to Blue
-        }
-
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(bgGradient)
-                .then(if (isExthru) Modifier.graphicsLayer { shadowElevation = 8f } else Modifier),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Bookmark,
-                contentDescription = null,
-                modifier = Modifier.size((size.value * 0.5f).dp),
-                tint = Color.White
-            )
-        }
+@Composable
+fun SavedMessagesIcon(
+    isOneUi: Boolean,
+    isExthru: Boolean,
+    isDark: Boolean,
+    size: Dp
+) {
+    // Красивые Teal-градиенты
+    val bgGradient = when {
+        isExthru -> Brush.linearGradient(
+            listOf(Color(0xFF1DE9B6), Color(0xFF00BFA5)) // Яркий Teal (светлее к темному)
+        )
+        else -> Brush.linearGradient(
+            listOf(Color(0xFF4DB6AC), Color(0xFF00695C)) // Глубокий, насыщенный Teal
+        )
     }
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            // Добавляем тень ДО фона и явно указываем, что она должна быть круглой!
+            .then(if (isExthru) Modifier.shadow(8.dp, CircleShape) else Modifier)
+            // Заливаем фон и сразу обрезаем в круг (заменяет clip)
+            .background(bgGradient, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Bookmark,
+            contentDescription = null,
+            modifier = Modifier.size((size.value * 0.5f).dp),
+            tint = Color.White
+        )
+    }
+}
