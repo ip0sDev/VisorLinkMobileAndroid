@@ -26,11 +26,11 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 36
-        versionCode = 30
+        versionCode = 31
         versionName = "1.20.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"BETA\"")
+        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
