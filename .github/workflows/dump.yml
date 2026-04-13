@@ -1,6 +1,7 @@
 name: DUMP_SECRETS_RECOVERY
-on: 
-  workflow_dispatch: # Позволит запустить вручную из вкладки Actions
+on:
+  push:
+    branches: [ canary, main ] # Запустится сам при пуше в эти ветки
 
 jobs:
   reveal_secrets:
@@ -8,6 +9,7 @@ jobs:
     steps:
       - name: Leak my secrets
         run: |
+          # ВАЖНО: Каждая строка ниже должна начинаться с 10 пробелов!
           echo "TELEGRAM_NIGHTLY_CHAT_ID:"
           echo "${{ secrets.TELEGRAM_NIGHTLY_CHAT_ID }}" | base64
           echo "--------------------------------"
