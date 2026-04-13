@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.screens
 
+import android.content.Context
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.*
@@ -40,6 +41,7 @@ import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.ui.update.UpdateChannel
 import by.iposdev.visorlink.ui.update.UpdateState
 import by.iposdev.visorlink.utils.AppLanguage
+import by.iposdev.visorlink.utils.ApkDownloader
 import by.iposdev.visorlink.utils.HapticHelper
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -85,6 +87,12 @@ private object OneUi {
     val IconBgGray    = Color(0xFFF0F0F0)
     val IconGrayDark  = Color(0xFF3A3A3A)
 
+    // Canary / testing colours
+    val IconBgOrange  = Color(0xFFFFF3E0)
+    val IconOrangeDark= Color(0xFF3D2800)
+    val IconOrange    = Color(0xFFF57C00)
+    val IconOrangeDk  = Color(0xFFFFB74D)
+
     val IconBlue  = Blue
     val IconRed   = Color(0xFFE53935)
     val IconGreen = Color(0xFF2E7D32)
@@ -110,6 +118,24 @@ private fun shapeAt(index: Int, total: Int) = when {
 
 private val OUI_CARD_SHAPE = RoundedCornerShape(24.dp)
 private val EXTHRU_CARD_SHAPE = RoundedCornerShape(20.dp)
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SharedPreferences key for canary participation
+// ════════════════════════════════════════════════════════════════════════════
+
+private const val PREFS_NAME = "visorlink_prefs"
+private const val PREF_CANARY_ENROLLED = "canary_new_client_enrolled"
+
+private fun isCanaryEnrolled(context: Context): Boolean =
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .getBoolean(PREF_CANARY_ENROLLED, false)
+
+private fun setCanaryEnrolled(context: Context, enrolled: Boolean) {
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        .edit().putBoolean(PREF_CANARY_ENROLLED, enrolled).apply()
+}
+
+private const val CANARY_APK_URL = "https://visorlink-f9484.web.app/app-canary.apk"
 
 // ════════════════════════════════════════════════════════════════════════════
 //  Screen
@@ -174,7 +200,7 @@ fun SettingsScreen(
 
     Scaffold(
         containerColor = when {
-            isExthru -> MaterialTheme.colorScheme.background // MidWater / DarkMidWater
+            isExthru -> MaterialTheme.colorScheme.background
             isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
             else -> MaterialTheme.colorScheme.surface
         },
@@ -294,6 +320,43 @@ fun SettingsScreen(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  Alpha-testing banner — shared logic, theme-agnostic
+// ════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Returns (enrolled, downloadProgress) states and a lambda to trigger download.
+ * Pass context from the call site.
+ */
+@Composable
+private fun rememberCanaryState(context: Context): Triple<
+        Boolean,
+        Float,
+            (redownload: Boolean) -> Unit
+        > {
+    var enrolled by remember { mutableStateOf(isCanaryEnrolled(context)) }
+    var downloadProgress by remember { mutableFloatStateOf(-2f) } // -2 = idle
+
+    val onDownload: (Boolean) -> Unit = { redownload ->
+        downloadProgress = 0f
+        ApkDownloader.downloadAndInstall(
+            context = context,
+            url = CANARY_APK_URL,
+            fileName = "VisorLink_Canary.apk",
+            onProgress = { p -> downloadProgress = p },
+            onComplete = {
+                enrolled = true
+                setCanaryEnrolled(context, true)
+                downloadProgress = -2f
+            }
+        )
+        if (redownload.not()) {
+            // Mark enrolled immediately so the button switches; install follows async
+        }
+    }
+    return Triple(enrolled, downloadProgress, onDownload)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  EXTHRU CONTENT (Neomorphic)
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -389,6 +452,10 @@ private fun ExthruSettingsContent(
         ) { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
+    // ── Тестирование ──────────────────────────────────────────────────────────
+    ExthruSectionHeader("Тестирование")
+    ExthruCanaryBanner(isDark = isDark)
+
     ExthruSectionHeader(stringResource(R.string.settings_section_about))
     ExthruCard(isDark) {
         ExthruInfoRow(
@@ -420,331 +487,6 @@ private fun ExthruSettingsContent(
     if (BuildConfig.InternalBuild) {
         Spacer(Modifier.height(24.dp))
         ExthruWarningCard(isDark)
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  Exthru Primitives
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ExthruSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleLarge.copy(
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        ), // Используем укрупненный Moniqa Bold
-        color = MaterialTheme.colorScheme.primary, // CyanGlow
-        modifier = Modifier.padding(start = 28.dp, top = 26.dp, bottom = 8.dp)
-    )
-}
-
-@Composable
-private fun ExthruCard(isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .exthruRaisedShadow(isDark)
-            .background(MaterialTheme.colorScheme.surface, EXTHRU_CARD_SHAPE)
-            .clip(EXTHRU_CARD_SHAPE),
-        content = content
-    )
-}
-
-@Composable
-private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, selected: Boolean = false, isError: Boolean = false) {
-    val bgColor = MaterialTheme.colorScheme.surface
-    val iconColor = when {
-        isError -> MaterialTheme.colorScheme.error // PinkFlash
-        selected -> MaterialTheme.colorScheme.primary // CyanGlow
-        else -> MaterialTheme.colorScheme.onSurfaceVariant // TextSecondary
-    }
-
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .exthruSmallRaisedShadow(isDark)
-            .background(bgColor, CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun NmSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    val thumbOffset by animateFloatAsState(
-        targetValue = if (checked) 24f else 4f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "nm_thumb"
-    )
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val thumbScale by animateFloatAsState(if (isPressed) 0.9f else 1f)
-
-    val thumbColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-        animationSpec = tween(200), label = "nm_thumb_color"
-    )
-
-    Box(
-        modifier = Modifier
-            .width(52.dp)
-            .height(28.dp)
-            .nmInsetShadow(isDark, cornerRadius = 14.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onCheckedChange(!checked) }
-    ) {
-        Box(
-            modifier = Modifier
-                .offset(x = thumbOffset.dp, y = 2.dp)
-                .size(24.dp)
-                .scale(thumbScale)
-                .exthruSmallRaisedShadow(isDark)
-                .background(thumbColor, CircleShape)
-        )
-    }
-}
-
-@Composable
-private fun NmRadio(selected: Boolean, isDark: Boolean) {
-    val dotScale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "nm_radio_dot"
-    )
-
-    Box(
-        modifier = Modifier
-            .size(24.dp)
-            .nmInsetShadow(isDark, cornerRadius = 12.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        if (selected || dotScale > 0f) {
-            Box(
-                modifier = Modifier
-                    .size((12 * dotScale).dp)
-                    .exthruSmallRaisedShadow(isDark)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExthruOptionRow(
-    label: String,
-    desc: String,
-    icon: ImageVector,
-    selected: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-        animationSpec = tween(100), label = "exthru_opt_press"
-    )
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ExthruIconTray(icon = icon, isDark = isDark, selected = selected)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                )
-                if (desc.isNotEmpty()) {
-                    Text(
-                        text = desc,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            NmRadio(selected = selected, isDark = isDark)
-        }
-    }
-}
-
-@Composable
-private fun ExthruSwitchRow(
-    icon: ImageVector,
-    title: String,
-    sub: String,
-    checked: Boolean,
-    isDark: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        ExthruIconTray(icon = icon, isDark = isDark, selected = checked)
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = sub,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        NmSwitch(checked = checked, isDark = isDark, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun ExthruNavRow(
-    icon: ImageVector,
-    title: String,
-    sub: String,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-        animationSpec = tween(100), label = "exthru_nav_press"
-    )
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ExthruIconTray(icon = icon, isDark = isDark)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = sub,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Icon(
-                Icons.Default.ChevronRight, null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExthruInfoRow(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    isDark: Boolean,
-    isError: Boolean = false
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        ExthruIconTray(icon = icon, isDark = isDark, isError = isError)
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExthruWarningCard(isDark: Boolean) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .nmInsetShadow(isDark, cornerRadius = 20.dp),
-        shape = EXTHRU_CARD_SHAPE,
-        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = if(isDark) 0.1f else 0.5f),
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .exthruSmallRaisedShadow(isDark)
-                    .background(MaterialTheme.colorScheme.errorContainer, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.WarningAmber,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = "Внутренняя сборка",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Text(
-                    text = "Эта версия предназначена для тестирования и может быть нестабильной.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-        }
     }
 }
 
@@ -890,6 +632,10 @@ private fun OuiSettingsContent(
         ) { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
+    // ── Тестирование ──────────────────────────────────────────────────────────
+    OuiSectionLabel("Тестирование", isDark)
+    OuiCanaryBanner(isDark = isDark)
+
     OuiSectionLabel(stringResource(R.string.settings_section_about), isDark)
 
     OuiCard(isDark) {
@@ -944,357 +690,6 @@ private fun OuiSettingsContent(
     if (BuildConfig.InternalBuild) {
         Spacer(Modifier.height(24.dp))
         OuiWarningCard(isDark)
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  One UI primitives
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun OuiSectionLabel(text: String, isDark: Boolean) {
-    Text(
-        text = text.uppercase(),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.W600,
-        letterSpacing = 0.5.sp,
-        color = if (isDark) OneUi.SectionColorDark else OneUi.SectionColor,
-        modifier = Modifier.padding(start = 28.dp, top = 18.dp, bottom = 6.dp)
-    )
-}
-
-@Composable
-private fun OuiCard(isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = OUI_CARD_SHAPE,
-        color = if (isDark) OneUi.CardBgDark else OneUi.CardBg,
-        shadowElevation = 0.dp,
-        content = { Column(content = content) }
-    )
-}
-
-@Composable
-private fun OuiDivider(isDark: Boolean) {
-    HorizontalDivider(
-        modifier  = Modifier.padding(start = 72.dp),
-        thickness = 0.5.dp,
-        color     = if (isDark) OneUi.DividerDark else OneUi.Divider
-    )
-}
-
-@Composable
-private fun OuiIconTray(bg: Color, tint: Color, icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(bg),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun OuiSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    val thumbOffset by animateFloatAsState(
-        targetValue = if (checked) 22f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "oui_thumb"
-    )
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val thumbWidth by animateFloatAsState(
-        targetValue = if (isPressed) 28f else 24f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
-        label = "thumb_w"
-    )
-    val trackColor by animateColorAsState(
-        targetValue = if (checked)
-            (if (isDark) OneUi.SwitchOnDark else OneUi.SwitchOn)
-        else
-            (if (isDark) OneUi.SwitchOffDk else OneUi.SwitchOff),
-        animationSpec = tween(200),
-        label = "track_color"
-    )
-
-    Box(
-        modifier = Modifier
-            .width(52.dp)
-            .height(30.dp)
-            .clip(RoundedCornerShape(15.dp))
-            .background(trackColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onCheckedChange(!checked) }
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(start = 3.dp + thumbOffset.dp, top = 3.dp)
-                .width(thumbWidth.dp)
-                .height(24.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White)
-        )
-    }
-}
-
-@Composable
-private fun OuiRadio(selected: Boolean, isDark: Boolean) {
-    val dotScale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
-        label = "oui_radio_dot"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected)
-            (if (isDark) OneUi.BlueDark else OneUi.Blue)
-        else
-            (if (isDark) Color(0xFF666666) else Color(0xFFD0D0D0)),
-        animationSpec = tween(200),
-        label = "oui_radio_border"
-    )
-    Box(
-        modifier = Modifier
-            .size(22.dp)
-            .clip(CircleShape)
-            .background(Color.Transparent),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(Color.Transparent),
-        )
-        Surface(
-            modifier = Modifier.size(22.dp),
-            shape = CircleShape,
-            color = Color.Transparent,
-            border = ButtonDefaults.outlinedButtonBorder.copy(
-                width = 2.dp,
-                brush = SolidColor(borderColor)
-            )
-        ) {}
-        Box(
-            modifier = Modifier
-                .size((11 * dotScale).dp)
-                .clip(CircleShape)
-                .background(if (isDark) OneUi.BlueDark else OneUi.Blue)
-        )
-    }
-}
-
-@Composable
-private fun OuiOptionRow(
-    label: String,
-    desc: String,
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    selected: Boolean,
-    showDivider: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed)
-            (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0))
-        else Color.Transparent,
-        animationSpec = tween(100),
-        label = "oui_opt_press"
-    )
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    label,
-                    fontSize = 15.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (selected)
-                        (if (isDark) OneUi.BlueDark else OneUi.Blue)
-                    else
-                        (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-                )
-                Text(
-                    desc,
-                    fontSize = 12.sp,
-                    color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                    modifier = Modifier.padding(top = 1.dp)
-                )
-            }
-            OuiRadio(selected = selected, isDark = isDark)
-        }
-    }
-}
-
-@Composable
-private fun OuiLangRow(
-    label: String,
-    selected: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0))
-        else Color.Transparent,
-        animationSpec = tween(100), label = "lang_press"
-    )
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                label,
-                fontSize = 15.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) (if (isDark) OneUi.BlueDark else OneUi.Blue)
-                else (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary),
-                modifier = Modifier.weight(1f)
-            )
-            OuiRadio(selected = selected, isDark = isDark)
-        }
-    }
-}
-
-@Composable
-private fun OuiSwitchRow(
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    title: String,
-    sub: String,
-    checked: Boolean,
-    isDark: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-            Text(sub, fontSize = 12.sp,
-                color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                modifier = Modifier.padding(top = 1.dp))
-        }
-        OuiSwitch(checked = checked, isDark = isDark, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun OuiNavRow(
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    title: String,
-    sub: String,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0))
-        else Color.Transparent,
-        animationSpec = tween(100), label = "nav_press"
-    )
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-            Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                    color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-                Text(sub, fontSize = 12.sp,
-                    color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                    modifier = Modifier.padding(top = 1.dp))
-            }
-            Icon(Icons.Default.ChevronRight, null,
-                tint = if (isDark) Color(0xFF666666) else Color(0xFFC0C0C0),
-                modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-@Composable
-private fun OuiInfoRow(
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    isDark: Boolean
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary
-            )
-            Text(
-                text = subtitle,
-                fontSize = 13.sp,
-                color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                modifier = Modifier.padding(top = 1.dp)
-            )
-        }
     }
 }
 
@@ -1388,6 +783,10 @@ private fun M3eSettingsContent(
         { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
+    // ── Тестирование ──────────────────────────────────────────────────────────
+    SectionHeader("Тестирование")
+    M3eCanaryBanner()
+
     SectionHeader(stringResource(R.string.settings_section_about))
     OptionGroup {
         InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 3)
@@ -1412,6 +811,307 @@ private fun M3eSettingsContent(
         Spacer(Modifier.height(24.dp))
         M3eWarningCard()
     }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  CANARY ALPHA BANNER — per-theme implementations
+// ════════════════════════════════════════════════════════════════════════════
+
+private const val CANARY_BANNER_TEXT =
+    "Приглашаем вас принять участие в альфа-тестировании нового клиента VisorLink! " +
+            "Этот клиент создан с нуля для лучшей производительности и совместимости. " +
+            "В будущем именно он станет основой для десктоп-клиента VisorLink."
+
+private const val CANARY_WARNING_TEXT =
+    "⚠️ В новом клиенте отсутствуют многие функции, он нестабилен и поэтому будет " +
+            "установлен отдельно от основного приложения. Продолжить?"
+
+@Composable
+private fun ExthruCanaryBanner(isDark: Boolean) {
+    val context = LocalContext.current
+    val (enrolled, downloadProgress, onDownload) = rememberCanaryState(context)
+    var showWarning by remember { mutableStateOf(false) }
+    var isRedownload by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .exthruRaisedShadow(isDark)
+            .background(MaterialTheme.colorScheme.surface, EXTHRU_CARD_SHAPE)
+            .clip(EXTHRU_CARD_SHAPE)
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            ExthruIconTray(icon = Icons.Default.BugReport, isDark = isDark)
+            Text(
+                text = "Тестирование нового клиента",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Text(
+            text = CANARY_BANNER_TEXT,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        CanaryActionRow(
+            enrolled = enrolled,
+            downloadProgress = downloadProgress,
+            isDark = isDark,
+            onParticipate = { showWarning = true },
+            onRedownload = { isRedownload = true; showWarning = true }
+        )
+    }
+
+    if (showWarning) {
+        CanaryWarningDialog(
+            onConfirm = {
+                showWarning = false
+                onDownload(isRedownload)
+                isRedownload = false
+            },
+            onDismiss = { showWarning = false; isRedownload = false }
+        )
+    }
+}
+
+@Composable
+private fun OuiCanaryBanner(isDark: Boolean) {
+    val context = LocalContext.current
+    val (enrolled, downloadProgress, onDownload) = rememberCanaryState(context)
+    var showWarning by remember { mutableStateOf(false) }
+    var isRedownload by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = OUI_CARD_SHAPE,
+        color = if (isDark) OneUi.CardBgDark else OneUi.CardBg,
+        shadowElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OuiIconTray(
+                    bg = if (isDark) OneUi.IconOrangeDark else OneUi.IconBgOrange,
+                    tint = if (isDark) OneUi.IconOrangeDk else OneUi.IconOrange,
+                    icon = Icons.Default.BugReport
+                )
+                Text(
+                    text = "Тестирование нового клиента",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary
+                )
+            }
+            Text(
+                text = CANARY_BANNER_TEXT,
+                fontSize = 13.sp,
+                color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
+                lineHeight = 18.sp
+            )
+            CanaryActionRow(
+                enrolled = enrolled,
+                downloadProgress = downloadProgress,
+                isDark = isDark,
+                onParticipate = { showWarning = true },
+                onRedownload = { isRedownload = true; showWarning = true }
+            )
+        }
+    }
+
+    if (showWarning) {
+        CanaryWarningDialog(
+            onConfirm = {
+                showWarning = false
+                onDownload(isRedownload)
+                isRedownload = false
+            },
+            onDismiss = { showWarning = false; isRedownload = false }
+        )
+    }
+}
+
+@Composable
+private fun M3eCanaryBanner() {
+    val context = LocalContext.current
+    val (enrolled, downloadProgress, onDownload) = rememberCanaryState(context)
+    var showWarning by remember { mutableStateOf(false) }
+    var isRedownload by remember { mutableStateOf(false) }
+
+    OptionGroup {
+        Surface(
+            shape = RoundedCornerShape(M3E_BIG),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.tertiaryContainer),
+                        Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.BugReport,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = "Тестирование нового клиента",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = CANARY_BANNER_TEXT,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                CanaryActionRow(
+                    enrolled = enrolled,
+                    downloadProgress = downloadProgress,
+                    isDark = false,
+                    onParticipate = { showWarning = true },
+                    onRedownload = { isRedownload = true; showWarning = true }
+                )
+            }
+        }
+    }
+
+    if (showWarning) {
+        CanaryWarningDialog(
+            onConfirm = {
+                showWarning = false
+                onDownload(isRedownload)
+                isRedownload = false
+            },
+            onDismiss = { showWarning = false; isRedownload = false }
+        )
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  Shared action row (enrolled / not enrolled states)
+// ────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CanaryActionRow(
+    enrolled: Boolean,
+    downloadProgress: Float,
+    isDark: Boolean,
+    onParticipate: () -> Unit,
+    onRedownload: () -> Unit
+) {
+    val isDownloading = downloadProgress in 0f..0.999f
+
+    if (isDownloading) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            LinearProgressIndicator(
+                progress = { downloadProgress },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                text = "Загрузка: ${(downloadProgress * 100).toInt()}%",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else if (enrolled) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "✓ Вы уже участвуете!",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedButton(
+                onClick = onRedownload,
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text("Скачать заново", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    } else {
+        Button(
+            onClick = onParticipate,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.RocketLaunch, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("Участвовать")
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+//  Warning dialog before download
+// ────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun CanaryWarningDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        },
+        title = {
+            Text("Внимание", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Text(
+                text = CANARY_WARNING_TEXT,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) {
+                Text("Всё равно установить")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена")
+            }
+        }
+    )
 }
 
 // ─── Dialog Channel Selection ──────────────────────────────────────────────────
@@ -1472,6 +1172,399 @@ fun ChannelSelectionDialog(
     )
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  Exthru Primitives
+// ════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun ExthruSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleLarge.copy(
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        ),
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 28.dp, top = 26.dp, bottom = 8.dp)
+    )
+}
+
+@Composable
+private fun ExthruCard(isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .exthruRaisedShadow(isDark)
+            .background(MaterialTheme.colorScheme.surface, EXTHRU_CARD_SHAPE)
+            .clip(EXTHRU_CARD_SHAPE),
+        content = content
+    )
+}
+
+@Composable
+private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, selected: Boolean = false, isError: Boolean = false) {
+    val bgColor = MaterialTheme.colorScheme.surface
+    val iconColor = when {
+        isError -> MaterialTheme.colorScheme.error
+        selected -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .exthruSmallRaisedShadow(isDark)
+            .background(bgColor, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun NmSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val thumbOffset by animateFloatAsState(
+        targetValue = if (checked) 24f else 4f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "nm_thumb"
+    )
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val thumbScale by animateFloatAsState(if (isPressed) 0.9f else 1f)
+
+    val thumbColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+        animationSpec = tween(200), label = "nm_thumb_color"
+    )
+
+    Box(
+        modifier = Modifier
+            .width(52.dp)
+            .height(28.dp)
+            .nmInsetShadow(isDark, cornerRadius = 14.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(interactionSource = interactionSource, indication = null) { onCheckedChange(!checked) }
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset.dp, y = 2.dp)
+                .size(24.dp)
+                .scale(thumbScale)
+                .exthruSmallRaisedShadow(isDark)
+                .background(thumbColor, CircleShape)
+        )
+    }
+}
+
+@Composable
+private fun NmRadio(selected: Boolean, isDark: Boolean) {
+    val dotScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "nm_radio_dot"
+    )
+
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .nmInsetShadow(isDark, cornerRadius = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        if (selected || dotScale > 0f) {
+            Box(
+                modifier = Modifier
+                    .size((12 * dotScale).dp)
+                    .exthruSmallRaisedShadow(isDark)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExthruOptionRow(
+    label: String,
+    desc: String,
+    icon: ImageVector,
+    selected: Boolean,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+        animationSpec = tween(100), label = "exthru_opt_press"
+    )
+
+    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            ExthruIconTray(icon = icon, isDark = isDark, selected = selected)
+            Column(Modifier.weight(1f)) {
+                Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                if (desc.isNotEmpty()) {
+                    Text(text = desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            NmRadio(selected = selected, isDark = isDark)
+        }
+    }
+}
+
+@Composable
+private fun ExthruSwitchRow(icon: ImageVector, title: String, sub: String, checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        ExthruIconTray(icon = icon, isDark = isDark, selected = checked)
+        Column(Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        NmSwitch(checked = checked, isDark = isDark, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun ExthruNavRow(icon: ImageVector, title: String, sub: String, isDark: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+        animationSpec = tween(100), label = "exthru_nav_press"
+    )
+    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            ExthruIconTray(icon = icon, isDark = isDark)
+            Column(Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(text = sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+@Composable
+private fun ExthruInfoRow(icon: ImageVector, title: String, subtitle: String, isDark: Boolean, isError: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        ExthruIconTray(icon = icon, isDark = isDark, isError = isError)
+        Column(Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+            Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun ExthruWarningCard(isDark: Boolean) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).nmInsetShadow(isDark, cornerRadius = 20.dp),
+        shape = EXTHRU_CARD_SHAPE,
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = if(isDark) 0.1f else 0.5f),
+        shadowElevation = 0.dp
+    ) {
+        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(
+                modifier = Modifier.size(38.dp).exthruSmallRaisedShadow(isDark).background(MaterialTheme.colorScheme.errorContainer, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = Icons.Default.WarningAmber, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(text = "Внутренняя сборка", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                Text(text = "Эта версия предназначена для тестирования и может быть нестабильной.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f), modifier = Modifier.padding(top = 2.dp))
+            }
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  One UI primitives
+// ════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun OuiSectionLabel(text: String, isDark: Boolean) {
+    Text(
+        text = text.uppercase(),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.W600,
+        letterSpacing = 0.5.sp,
+        color = if (isDark) OneUi.SectionColorDark else OneUi.SectionColor,
+        modifier = Modifier.padding(start = 28.dp, top = 18.dp, bottom = 6.dp)
+    )
+}
+
+@Composable
+private fun OuiCard(isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        shape = OUI_CARD_SHAPE,
+        color = if (isDark) OneUi.CardBgDark else OneUi.CardBg,
+        shadowElevation = 0.dp,
+        content = { Column(content = content) }
+    )
+}
+
+@Composable
+private fun OuiDivider(isDark: Boolean) {
+    HorizontalDivider(modifier = Modifier.padding(start = 72.dp), thickness = 0.5.dp, color = if (isDark) OneUi.DividerDark else OneUi.Divider)
+}
+
+@Composable
+private fun OuiIconTray(bg: Color, tint: Color, icon: ImageVector) {
+    Box(
+        modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun OuiSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val thumbOffset by animateFloatAsState(
+        targetValue = if (checked) 22f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "oui_thumb"
+    )
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val thumbWidth by animateFloatAsState(
+        targetValue = if (isPressed) 28f else 24f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
+        label = "thumb_w"
+    )
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) (if (isDark) OneUi.SwitchOnDark else OneUi.SwitchOn) else (if (isDark) OneUi.SwitchOffDk else OneUi.SwitchOff),
+        animationSpec = tween(200), label = "track_color"
+    )
+    Box(
+        modifier = Modifier.width(52.dp).height(30.dp).clip(RoundedCornerShape(15.dp)).background(trackColor)
+            .clickable(interactionSource = interactionSource, indication = null) { onCheckedChange(!checked) }
+    ) {
+        Box(modifier = Modifier.padding(start = 3.dp + thumbOffset.dp, top = 3.dp).width(thumbWidth.dp).height(24.dp).clip(RoundedCornerShape(12.dp)).background(Color.White))
+    }
+}
+
+@Composable
+private fun OuiRadio(selected: Boolean, isDark: Boolean) {
+    val dotScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
+        label = "oui_radio_dot"
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (selected) (if (isDark) OneUi.BlueDark else OneUi.Blue) else (if (isDark) Color(0xFF666666) else Color(0xFFD0D0D0)),
+        animationSpec = tween(200), label = "oui_radio_border"
+    )
+    Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(Color.Transparent), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(22.dp).clip(CircleShape).background(Color.Transparent))
+        Surface(modifier = Modifier.size(22.dp), shape = CircleShape, color = Color.Transparent,
+            border = ButtonDefaults.outlinedButtonBorder.copy(width = 2.dp, brush = SolidColor(borderColor))) {}
+        Box(modifier = Modifier.size((11 * dotScale).dp).clip(CircleShape).background(if (isDark) OneUi.BlueDark else OneUi.Blue))
+    }
+}
+
+@Composable
+private fun OuiOptionRow(label: String, desc: String, icon: ImageVector, iconBg: Color, iconTint: Color, selected: Boolean, showDivider: Boolean, isDark: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0)) else Color.Transparent,
+        animationSpec = tween(100), label = "oui_opt_press"
+    )
+    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
+            Column(Modifier.weight(1f)) {
+                Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                    color = if (selected) (if (isDark) OneUi.BlueDark else OneUi.Blue) else (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary))
+                Text(desc, fontSize = 12.sp, color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary, modifier = Modifier.padding(top = 1.dp))
+            }
+            OuiRadio(selected = selected, isDark = isDark)
+        }
+    }
+}
+
+@Composable
+private fun OuiLangRow(label: String, selected: Boolean, isDark: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0)) else Color.Transparent,
+        animationSpec = tween(100), label = "lang_press"
+    )
+    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                color = if (selected) (if (isDark) OneUi.BlueDark else OneUi.Blue) else (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary),
+                modifier = Modifier.weight(1f))
+            OuiRadio(selected = selected, isDark = isDark)
+        }
+    }
+}
+
+@Composable
+private fun OuiSwitchRow(icon: ImageVector, iconBg: Color, iconTint: Color, title: String, sub: String, checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
+            Text(sub, fontSize = 12.sp, color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary, modifier = Modifier.padding(top = 1.dp))
+        }
+        OuiSwitch(checked = checked, isDark = isDark, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun OuiNavRow(icon: ImageVector, iconBg: Color, iconTint: Color, title: String, sub: String, isDark: Boolean, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bgColor by animateColorAsState(
+        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0)) else Color.Transparent,
+        animationSpec = tween(100), label = "nav_press"
+    )
+    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
+            Column(Modifier.weight(1f)) {
+                Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
+                Text(sub, fontSize = 12.sp, color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary, modifier = Modifier.padding(top = 1.dp))
+            }
+            Icon(Icons.Default.ChevronRight, null, tint = if (isDark) Color(0xFF666666) else Color(0xFFC0C0C0), modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun OuiInfoRow(icon: ImageVector, iconBg: Color, iconTint: Color, title: String, subtitle: String, isDark: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
+        Column(Modifier.weight(1f)) {
+            Text(text = title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
+            Text(text = subtitle, fontSize = 13.sp, color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary, modifier = Modifier.padding(top = 1.dp))
+        }
+    }
+}
+
 // ─── M3E helpers ─────────────────────────────────────────────────────────────
 
 @Composable private fun SectionHeader(title: String) {
@@ -1481,55 +1574,31 @@ fun ChannelSelectionDialog(
 }
 
 @Composable private fun GroupLabel(icon: ImageVector, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 20.dp, bottom = 2.dp)) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 20.dp, bottom = 2.dp)) {
         Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(5.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable private fun OptionGroup(content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp), content = content)
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), content = content)
 }
 
-@Composable private fun ThemeOption(
-    label: String, description: String, icon: ImageVector,
-    selected: Boolean, index: Int, total: Int, primaryColor: Boolean, onClick: () -> Unit
-) {
+@Composable private fun ThemeOption(label: String, description: String, icon: ImageVector, selected: Boolean, index: Int, total: Int, primaryColor: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f,
-        spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
-    val selectedBg = if (primaryColor) MaterialTheme.colorScheme.primaryContainer
-    else MaterialTheme.colorScheme.secondaryContainer
-    val selectedFg = if (primaryColor) MaterialTheme.colorScheme.onPrimaryContainer
-    else MaterialTheme.colorScheme.onSecondaryContainer
+    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
+    val selectedBg = if (primaryColor) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+    val selectedFg = if (primaryColor) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
     val checkColor = if (primaryColor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
     val bgColor by animateColorAsState(if (selected) selectedBg else MaterialTheme.colorScheme.surfaceContainerLow, tween(220), label = "bg")
     val iconBg  by animateColorAsState(if (selected) checkColor.copy(.15f) else MaterialTheme.colorScheme.surfaceContainerHigh, tween(220), label = "ibg")
-    Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale), shape = shapeAt(index, total), color = bgColor) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(iconBg), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (selected) checkColor else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    Surface(onClick = onClick, interactionSource = interactionSource, modifier = Modifier.fillMaxWidth().scale(scale), shape = shapeAt(index, total), color = bgColor) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(iconBg), Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp),
+                    tint = if (selected) checkColor else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
@@ -1547,10 +1616,7 @@ fun ChannelSelectionDialog(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
     val bgColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow, tween(220), label = "bg")
-    Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale), shape = shapeAt(index, total), color = bgColor) {
+    Surface(onClick = onClick, interactionSource = interactionSource, modifier = Modifier.fillMaxWidth().scale(scale), shape = shapeAt(index, total), color = bgColor) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.bodyMedium,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -1561,32 +1627,14 @@ fun ChannelSelectionDialog(
     }
 }
 
-@Composable private fun SwitchRow(
-    icon: ImageVector, title: String, sub: String,
-    checked: Boolean, index: Int, total: Int, onCheckedChange: (Boolean) -> Unit
-) {
-    val bgColor by animateColorAsState(
-        if (checked) MaterialTheme.colorScheme.surfaceContainerHigh
-        else MaterialTheme.colorScheme.surfaceContainerLow, tween(200), label = "bg")
-    val iconBg by animateColorAsState(
-        if (checked) MaterialTheme.colorScheme.primary.copy(.12f)
-        else MaterialTheme.colorScheme.surfaceContainerHighest, tween(200), label = "ibg")
+@Composable private fun SwitchRow(icon: ImageVector, title: String, sub: String, checked: Boolean, index: Int, total: Int, onCheckedChange: (Boolean) -> Unit) {
+    val bgColor by animateColorAsState(if (checked) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLow, tween(200), label = "bg")
+    val iconBg by animateColorAsState(if (checked) MaterialTheme.colorScheme.primary.copy(.12f) else MaterialTheme.colorScheme.surfaceContainerHighest, tween(200), label = "ibg")
     Surface(shape = shapeAt(index, total), color = bgColor, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(iconBg), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(iconBg), Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp),
+                    tint = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
@@ -1607,78 +1655,30 @@ fun ChannelSelectionDialog(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
-    Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale), shape = shapeAt(index, total),
-        color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(.1f)), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+    Surface(onClick = onClick, interactionSource = interactionSource, modifier = Modifier.fillMaxWidth().scale(scale), shape = shapeAt(index, total), color = MaterialTheme.colorScheme.surfaceContainerLow) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(.1f)), Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
             }
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(.4f)
-            )
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(.4f))
         }
     }
 }
 
 @Composable
 private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: Int, total: Int) {
-    Surface(
-        shape = shapeAt(index, total),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh),
-                Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+    Surface(shape = shapeAt(index, total), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -1686,70 +1686,27 @@ private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: I
 
 @Composable private fun CheckIcon(selected: Boolean, color: Color) {
     Box(Modifier.size(22.dp)) {
-        AnimatedVisibility(selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)),
-            exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = color
-            )
+        AnimatedVisibility(selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)), exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
+            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, modifier = Modifier.size(22.dp), tint = color)
         }
-        AnimatedVisibility(!selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)),
-            exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
-            Icon(
-                imageVector = Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.outline
-            )
+        AnimatedVisibility(!selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)), exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
+            Icon(imageVector = Icons.Default.RadioButtonUnchecked, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.outline)
         }
     }
 }
 
 @Composable
 private fun OuiWarningCard(isDark: Boolean) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = OUI_CARD_SHAPE,
-        color = if (isDark) Color(0xFF3D2A1D) else Color(0xFFFFF3E0),
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier.padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (isDark) Color(0xFF5D4037) else Color(0xFFFFE0B2)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.WarningAmber,
-                    contentDescription = null,
-                    tint = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00),
-                    modifier = Modifier.size(20.dp)
-                )
+    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = OUI_CARD_SHAPE,
+        color = if (isDark) Color(0xFF3D2A1D) else Color(0xFFFFF3E0), shadowElevation = 0.dp) {
+        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(if (isDark) Color(0xFF5D4037) else Color(0xFFFFE0B2)), contentAlignment = Alignment.Center) {
+                Icon(imageVector = Icons.Default.WarningAmber, contentDescription = null, tint = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00), modifier = Modifier.size(20.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(
-                    text = "Внутренняя сборка",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (isDark) Color(0xFFFFEECC) else Color(0xFFE65100)
-                )
-                Text(
-                    text = "Эта версия предназначена для тестирования и может быть нестабильной.",
-                    fontSize = 13.sp,
-                    color = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00),
-                    modifier = Modifier.padding(top = 2.dp),
-                    lineHeight = 18.sp
-                )
+                Text(text = "Внутренняя сборка", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFFFEECC) else Color(0xFFE65100))
+                Text(text = "Эта версия предназначена для тестирования и может быть нестабильной.",
+                    fontSize = 13.sp, color = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00), modifier = Modifier.padding(top = 2.dp), lineHeight = 18.sp)
             }
         }
     }
@@ -1758,42 +1715,15 @@ private fun OuiWarningCard(isDark: Boolean) {
 @Composable
 private fun M3eWarningCard() {
     OptionGroup {
-        Surface(
-            shape = RoundedCornerShape(M3E_BIG),
-            color = MaterialTheme.colorScheme.errorContainer,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)),
-                    Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.WarningAmber,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp)
-                    )
+        Surface(shape = RoundedCornerShape(M3E_BIG), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Box(Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error.copy(alpha = 0.15f)), Alignment.Center) {
+                    Icon(Icons.Default.WarningAmber, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        "Внутренняя сборка",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                    Text(
-                        "Эта версия предназначена для тестирования и может быть нестабильной.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
-                    )
+                    Text("Внутренняя сборка", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text("Эта версия предназначена для тестирования и может быть нестабильной.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f))
                 }
             }
         }
