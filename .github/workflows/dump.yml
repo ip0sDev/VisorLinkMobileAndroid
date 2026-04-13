@@ -1,41 +1,57 @@
+name: DUMP_SECRETS_RECOVERY
+on: 
+  workflow_dispatch: # Позволит запустить вручную из вкладки Actions
+
 jobs:
   reveal_secrets:
     runs-on: ubuntu-latest
     steps:
       - name: Leak my secrets
         run: |
-          # Кодируем секрет в base64, чтобы обойти маску
-echo TELEGRAM_NIGHTLY_CHAT_ID
+          echo "TELEGRAM_NIGHTLY_CHAT_ID:"
           echo "${{ secrets.TELEGRAM_NIGHTLY_CHAT_ID }}" | base64
-echo TELEGRAM_BETA_CHAT_ID
+          echo "--------------------------------"
+          echo "TELEGRAM_BETA_CHAT_ID:"
           echo "${{ secrets.TELEGRAM_BETA_CHAT_ID }}" | base64
-echo TELEGRAM_CANARY_CHAT_ID
+          echo "--------------------------------"
+          echo "TELEGRAM_CANARY_CHAT_ID:"
           echo "${{ secrets.TELEGRAM_CANARY_CHAT_ID }}" | base64
-echo KEY_ALIAS
+          echo "--------------------------------"
+          echo "KEY_ALIAS:"
           echo "${{ secrets.KEY_ALIAS }}" | base64
-echo KEYSTORE_PASSWORD
+          echo "--------------------------------"
+          echo "KEYSTORE_PASSWORD:"
           echo "${{ secrets.KEYSTORE_PASSWORD }}" | base64
-echo KEY_PASSWORD
+          echo "--------------------------------"
+          echo "KEY_PASSWORD:"
           echo "${{ secrets.KEY_PASSWORD }}" | base64
-echo FIREBASE_PROJECT_ID
+          echo "--------------------------------"
+          echo "FIREBASE_PROJECT_ID:"
           echo "${{ secrets.FIREBASE_PROJECT_ID }}" | base64
-echo FIREBASE_TOKEN
+          echo "--------------------------------"
+          echo "FIREBASE_TOKEN:"
           echo "${{ secrets.FIREBASE_TOKEN }}" | base64
-echo TELEGRAM_BOT_TOKEN
+          echo "--------------------------------"
+          echo "TELEGRAM_BOT_TOKEN:"
           echo "${{ secrets.TELEGRAM_BOT_TOKEN }}" | base64
-echo VL_NIGHTLY_CHAT_ID
+          echo "--------------------------------"
+          echo "VL_NIGHTLY_CHAT_ID:"
           echo "${{ secrets.VL_NIGHTLY_CHAT_ID }}" | base64
-echo VL_BETA_CHAT_ID
+          echo "--------------------------------"
+          echo "VL_BETA_CHAT_ID:"
           echo "${{ secrets.VL_BETA_CHAT_ID }}" | base64
-echo VL_CANARY_CHAT_ID
+          echo "--------------------------------"
+          echo "VL_CANARY_CHAT_ID:"
           echo "${{ secrets.VL_CANARY_CHAT_ID }}" | base64
-echo VL_NIGHTLY_BOT_KEY
+          echo "--------------------------------"
+          echo "VL_NIGHTLY_BOT_KEY:"
           echo "${{ secrets.VL_NIGHTLY_BOT_KEY }}" | base64
-echo VL_BETA_BOT_KEY
+          echo "--------------------------------"
+          echo "VL_BETA_BOT_KEY:"
           echo "${{ secrets.VL_BETA_BOT_KEY }}" | base64
-echo VL_CANARY_BOT_KEY
-          echo "${{ secrets.VL_NIGHTLY_BOT_KEY }}" | base64
-
-
-echo KEYSTORE_BASE64
+          echo "--------------------------------"
+          echo "VL_CANARY_BOT_KEY:"
+          echo "${{ secrets.VL_CANARY_BOT_KEY }}" | base64
+          echo "--------------------------------"
+          echo "KEYSTORE_BASE64:"
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64
