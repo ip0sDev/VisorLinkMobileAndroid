@@ -1,6 +1,10 @@
 package by.iposdev.visorlink.ui
 
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.*
 import androidx.navigation.compose.*
 import by.iposdev.visorlink.data.repository.AuthState
@@ -15,10 +19,12 @@ import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
 import by.iposdev.visorlink.ui.screens.comments.CommentsScreen
+import by.iposdev.visorlink.ui.screens.decoy.DecoyHomeScreen
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
 import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.utils.StealthManager
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -29,12 +35,40 @@ fun VisorLinkNavGraph(
     val navController = rememberNavController()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
-    // ── Three-state auth guard (guideline §6) ─────────────────────────────────
-    // Reacts to every AuthState change and replaces the entire back-stack,
-    // so the user can never press Back into a screen they shouldn't see.
+    val context = LocalContext.current
+    val stealthManager = remember { StealthManager(context) }
+
+    // Состояние разблокировки режима скрытия для текущей сессии
+    var isStealthUnlocked by remember { mutableStateOf(false) }
+
+    // ── Блокировка при уходе в фон ─────────────────────────────────────────────
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                // Если приложение свернуто, и стелс включен — снова блокируем
+                if (stealthManager.isEnabled() && isStealthUnlocked) {
+                    isStealthUnlocked = false
+                    navController.navigate("decoy") {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val authState by authViewModel.authState.collectAsState()
 
-    LaunchedEffect(authState) {
+    // ── Three-state auth guard ────────────────────────────────────────────────
+    // Выполняет роутинг в зависимости от статуса авторизации.
+    // Если стелс-режим заблокирован, мы откладываем навигацию авторизации.
+    LaunchedEffect(authState, isStealthUnlocked) {
+        if (stealthManager.isEnabled() && !isStealthUnlocked) {
+            return@LaunchedEffect
+        }
+
         when (authState) {
             is AuthState.NoSession  -> navController.navigate(Screen.Login.route) {
                 popUpTo(0) { inclusive = true }
@@ -49,16 +83,27 @@ fun VisorLinkNavGraph(
     }
 
     // Start destination is resolved synchronously so the first frame is correct.
-    val start = when (authState) {
-        is AuthState.Verified   -> Screen.ChatList.route
-        is AuthState.Unverified -> Screen.VerifyEmail.route
+    val start = when {
+        stealthManager.isEnabled() && !isStealthUnlocked -> "decoy"
+        authState is AuthState.Verified   -> Screen.ChatList.route
+        authState is AuthState.Unverified -> Screen.VerifyEmail.route
         else                    -> Screen.Login.route
     }
 
     NavHost(navController = navController, startDestination = start) {
 
-        // ── Auth ──────────────────────────────────────────────────────────────
+        // ── Decoy (Stealth Mode) ──────────────────────────────────────────────
+        composable("decoy") {
+            DecoyHomeScreen(
+                onUnlockSuccess = {
+                    isStealthUnlocked = true
+                    // При изменении isStealthUnlocked на true сработает LaunchedEffect
+                    // и перенаправит юзера на нужный экран в зависимости от authState
+                }
+            )
+        }
 
+        // ── Auth ──────────────────────────────────────────────────────────────
         composable(Screen.Login.route) {
             LoginScreen(
                 onNavigateToRegister = { navController.navigate(Screen.Register.route) },
@@ -88,11 +133,10 @@ fun VisorLinkNavGraph(
         }
 
         // ── Main app ──────────────────────────────────────────────────────────
-
         composable(Screen.ChatList.route) {
             ChatListScreen(
                 onOpenChat = { chatId, otherUid ->
-                    // ПРОВЕРКА: Если это наше Избранное — идем на отдельный экран
+                    // Если это наше Избранное — идем на отдельный экран
                     if (chatId.startsWith("saved_")) {
                         navController.navigate(Screen.SavedMessages.route)
                     } else {
@@ -279,15 +323,14 @@ fun VisorLinkNavGraph(
                 hapticEnabled = hapticEnabled
             )
         }
+
         composable(Screen.SavedMessages.route) {
-            // Импортируй свой экран (пакет может отличаться)
             by.iposdev.visorlink.ui.screens.saved.SavedMessagesScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onOpenSettings = { navController.navigate(Screen.SavedMessagesSettings.route) }
             )
         }
 
-// Экран настроек Избранного
         composable(Screen.SavedMessagesSettings.route) {
             by.iposdev.visorlink.ui.screens.saved.SavedMessagesSettingsScreen(
                 onNavigateBack = { navController.popBackStack() }

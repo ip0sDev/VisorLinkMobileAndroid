@@ -65,6 +65,7 @@ fun AppUpdateWrapper(
                     context = context,
                     url = state.url,
                     fileName = currentChannel.fileName,
+                    expectedSha256 = state.expectedSha256,
                     onProgress = { p ->
                         if (p < 0f) { downloadError = true; isDownloading = false }
                         else downloadProgress = p
@@ -90,6 +91,7 @@ fun AppUpdateWrapper(
                     context = context,
                     url = state.url,
                     fileName = currentChannel.fileName,
+                    expectedSha256 = state.expectedSha256,
                     onProgress = { p ->
                         if (p < 0f) { downloadError = true; isDownloading = false }
                         else downloadProgress = p
@@ -210,7 +212,6 @@ private fun ChangelogSection(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -239,7 +240,6 @@ private fun ChangelogSection(
                 }
             }
 
-            // Контент
             AnimatedVisibility(
                 visible = expanded || info.tooOld,
                 enter = expandVertically() + fadeIn(tween(200)),

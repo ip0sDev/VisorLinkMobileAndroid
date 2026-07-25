@@ -15,8 +15,24 @@ data class UserProfile(
     val lastSeen: Timestamp? = null,
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
-    val fcmTokens: List<String> = emptyList()
-)
+    val fcmTokens: List<String> = emptyList(),
+
+    val isAdmin: Boolean = false,
+    val isBot: Boolean = false,
+    val botBadge: String = "unverified",
+    val ownerId: String? = null,
+    val bits: Int = 0,
+    val streak: Int = 0,
+    val showStreak: Boolean = true,
+    val proUntil: Timestamp? = null,
+    val trialUsed: Boolean = false,
+    val registeredViaOfficialClient: Boolean = true
+) {
+    fun isProActive(): Boolean {
+        if (proUntil == null) return false
+        return proUntil.toDate().time > System.currentTimeMillis()
+    }
+}
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
@@ -43,7 +59,6 @@ data class Chat(
     val memberCount: Int = 0,
     val memberIds: List<String> = emptyList(),
     val settings: ChatSettings = ChatSettings(),
-    // ИЗМЕНЕНО: String? -> Any? чтобы принимать и текст, и объект
     val lastMessage: Any? = null,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null
@@ -123,8 +138,6 @@ fun canReact(chat: Chat, chatType: ChatType): Boolean {
     if (chatType != ChatType.CHANNEL) return true
     return chat.settings.allowReactions
 }
-
-// ─── v4: Two-level comments-allowed check ─────────────────────────────────────
 
 fun commentsAllowed(channel: Chat, post: Message): Boolean {
     if (channel.settings.allowComments == false) return false
@@ -222,11 +235,9 @@ data class Message(
     val fileName: String? = null,
     val duration: Int? = null,
     val stickerId: String? = null,
-    // ─── Sticker Pack fields ──────────────────────────────────────────────────
     val packId: String? = null,
     val packName: String? = null,
     val packEmoji: String? = null,
-    // ─────────────────────────────────────────────────────────────────────────
     val createdAt: Timestamp? = null,
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
@@ -234,13 +245,24 @@ data class Message(
     val reactions: List<Map<String, Any>> = emptyList(),
     val readBy: List<String> = emptyList(),
     val spoiler: Boolean = false,
-    // ─── v4 ───────────────────────────────────────────────────────────────────
     val commentsEnabled: Boolean? = null,
     val commentsCount: Int = 0,
-    // ─── Album ────────────────────────────────────────────────────────────────
     val caption: String? = null,
     val images: List<AlbumImage> = emptyList(),
     val forwardFrom: Map<String, Any?>? = null,
+
+    // Подарки
+    val redeemed: Boolean = false,
+    val redeemedByUid: String? = null,
+    val redeemedByUsername: String? = null,
+    val giftType: String? = null,
+
+    // CDN / Временные файлы
+    val cdnMediaId: String? = null,
+    val mimeType: String? = null,
+    val uploadProgress: Float? = null,
+    val localFile: java.io.File? = null,
+    val localBytes: ByteArray? = null
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -284,6 +306,9 @@ object MessageType {
     const val VOICE   = "voice"
     const val STICKER = "sticker"
     const val ALBUM   = "album"
+    const val GIFT    = "gift"
+    const val VIDEO   = "video"
+    const val GIF     = "gif"
 }
 
 data class ReplyData(
@@ -310,8 +335,6 @@ data class Reaction(
     fun toMap() = mapOf("emoji" to emoji, "uids" to uids, "count" to count)
 }
 
-// ─── Legacy Sticker (kept for backward compat — old user sticker collection) ──
-
 data class Sticker(
     val id: String = "",
     val url: String = "",
@@ -319,8 +342,6 @@ data class Sticker(
     val storagePath: String = "",
     val createdAt: Timestamp? = null
 )
-
-// ─── v4: Comment ──────────────────────────────────────────────────────────────
 
 data class Comment(
     val id: String = "",
@@ -375,8 +396,6 @@ fun Comment.toCommentReplyData() = CommentReplyData(
     senderUsername = senderUsername
 )
 
-// ─── Presence / Topbar ───────────────────────────────────────────────────────
-
 data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null)
 
 sealed class TopbarStatus {
@@ -387,18 +406,14 @@ sealed class TopbarStatus {
     data class MemberCount(val total: Int, val online: Int) : TopbarStatus()
 }
 
-// ─── Message list items ───────────────────────────────────────────────────────
-
 sealed class MessageListItem {
     data class MessageItem(val message: Message) : MessageListItem()
     data class DateHeader(val label: String) : MessageListItem()
 }
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
-
 enum class AppTheme {
     MATERIAL3_EXPRESSIVE,
-    @Deprecated("Заменяется на BIOLUME/FORGE — оставлено для совместимости с ещё не мигрированными экранами")
+    @Deprecated("Заменяется на BIOLUME/FORGE — оставлено для совместимости")
     ONE_UI,
     @Deprecated("Используй BIOLUME", ReplaceWith("BIOLUME"))
     EXTHRU,
@@ -406,27 +421,25 @@ enum class AppTheme {
     FORGE,
 }
 
-/** true для обеих "осязаемых" (неоморфных) тем — аналог AppTheme.isExthruFamily из Flutter. */
 val AppTheme.isExthruFamily: Boolean
     @Suppress("DEPRECATION")
     get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE || this == AppTheme.EXTHRU
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-// ─── Цветовые пресеты (кастомизация акцентного цвета поверх любой темы) ──────
-
 enum class ColorPreset {
     DEFAULT, PURPLE, BLUE, EMERALD, CRIMSON;
 
     val seedColor: androidx.compose.ui.graphics.Color?
         get() = when (this) {
-            DEFAULT -> null // используем "родной" акцент темы / динамический цвет
+            DEFAULT -> null
             PURPLE  -> androidx.compose.ui.graphics.Color(0xFF831AD4)
             BLUE    -> androidx.compose.ui.graphics.Color(0xFF0EA5E9)
             EMERALD -> androidx.compose.ui.graphics.Color(0xFF10B981)
             CRIMSON -> androidx.compose.ui.graphics.Color(0xFFE11D48)
         }
 }
+
 data class AppSettings(
     val hapticFeedback: Boolean = true,
     val notificationsEnabled: Boolean = true

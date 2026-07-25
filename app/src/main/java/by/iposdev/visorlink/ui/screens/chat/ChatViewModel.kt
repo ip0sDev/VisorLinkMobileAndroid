@@ -10,6 +10,7 @@ import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.ActiveChatTracker
+import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
@@ -35,6 +36,7 @@ import java.util.*
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
+    val tempMessages: List<Message> = emptyList(),
     val messageListItems: List<MessageListItem> = emptyList(),
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = true,
@@ -48,7 +50,7 @@ data class ChatUiState(
     val onlineCount: Int = 0,
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
-    val isCooldown: Boolean = false, // <-- Кулдаун
+    val isCooldown: Boolean = false,
     val error: String? = null,
     val isRecording: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
@@ -195,7 +197,10 @@ class ChatViewModel(
 
             launch {
                 chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
-                    val items = buildMessageList(messages)
+                    val state = _uiState.value
+                    val allMessages = state.tempMessages + messages
+                    val items = buildMessageList(allMessages)
+
                     _uiState.update {
                         it.copy(
                             messages = messages,
@@ -217,7 +222,6 @@ class ChatViewModel(
         }
     }
 
-    // ─── Логика кулдауна (UI) ──────────────────────────────────────────────────
     private fun startCooldown(): Boolean {
         if (_uiState.value.isCooldown) return false
         viewModelScope.launch {
@@ -347,6 +351,89 @@ class ChatViewModel(
         }
     }
 
+    fun sendVideoOrGif(file: java.io.File, isGif: Boolean) {
+        if (!_uiState.value.canSendMedia) return
+        if (!startCooldown()) return
+
+        val type = if (isGif) MessageType.GIF else MessageType.VIDEO
+        val tempId = "temp_${System.currentTimeMillis()}"
+        val reply = _uiState.value.replyingTo?.toReplyData()
+
+        val tempMsg = Message(
+            id = tempId,
+            senderId = currentUid,
+            senderUsername = currentUsername,
+            type = type,
+            localFile = file,
+            uploadProgress = 0.01f,
+            createdAt = com.google.firebase.Timestamp.now(),
+            readBy = listOf(currentUid),
+            deleted = false,
+            replyTo = reply?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) }
+        )
+
+        _uiState.update { state ->
+            val newTemp = state.tempMessages + tempMsg
+            state.copy(
+                tempMessages = newTemp,
+                messageListItems = buildMessageList(newTemp + state.messages)
+            )
+        }
+
+        clearReply()
+
+        viewModelScope.launch {
+            try {
+                val mediaId = CdnService.uploadFile(file) { progress ->
+                    _uiState.update { state ->
+                        val updatedTemp = state.tempMessages.map {
+                            if (it.id == tempId) it.copy(uploadProgress = progress) else it
+                        }
+                        state.copy(
+                            tempMessages = updatedTemp,
+                            messageListItems = buildMessageList(updatedTemp + state.messages)
+                        )
+                    }
+                }
+
+                val msgRef = db.collection("chats").document(chatId).collection("messages").document()
+                val batch = db.batch()
+
+                batch.set(msgRef, mapOf(
+                    "senderId" to currentUid,
+                    "senderUsername" to currentUsername,
+                    "type" to type,
+                    "cdnMediaId" to mediaId,
+                    "fileName" to file.name,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "readBy" to listOf(currentUid),
+                    "deleted" to false,
+                    "replyTo" to tempMsg.replyTo
+                ))
+
+                val preview = if (isGif) "🖼️ GIF" else "🎥 Видео"
+                batch.update(db.collection("chats").document(chatId), mapOf(
+                    "lastMessage" to preview,
+                    "lastMessageAt" to FieldValue.serverTimestamp()
+                ))
+
+                batch.update(db.collection("users").document(currentUid), "lastMessageAt", FieldValue.serverTimestamp())
+                batch.commit().await()
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Ошибка CDN: ${e.message}") }
+            } finally {
+                _uiState.update { state ->
+                    val cleanTemp = state.tempMessages.filter { it.id != tempId }
+                    state.copy(
+                        tempMessages = cleanTemp,
+                        messageListItems = buildMessageList(cleanTemp + state.messages)
+                    )
+                }
+            }
+        }
+    }
+
     fun playVoice(messageId: String, url: String, durationSec: Int) {
         voicePlayer.play(messageId, url, durationSec)
     }
@@ -392,7 +479,7 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         messages = combined,
-                        messageListItems = buildMessageList(combined),
+                        messageListItems = buildMessageList(it.tempMessages + combined),
                         isLoadingMore = false,
                         hasMore = newLastDoc != null,
                         lastDoc = newLastDoc ?: it.lastDoc
@@ -404,12 +491,13 @@ class ChatViewModel(
         }
     }
 
-    private fun buildMessageList(messages: List<Message>): List<MessageListItem> {
+    private fun buildMessageList(allMessages: List<Message>): List<MessageListItem> {
         val result = mutableListOf<MessageListItem>()
         var lastDate: LocalDate? = null
         val today = LocalDate.now()
         val yesterday = today.minusDays(1)
-        for (message in messages) {
+
+        for (message in allMessages) {
             val msgDate = message.createdAt?.toDate()
                 ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: continue
             if (msgDate != lastDate) {
@@ -488,10 +576,9 @@ class ChatViewModel(
             setOutputFormat(MediaRecorder.OutputFormat.WEBM)
             setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
 
-            // ─── Настройки для высокого качества звука ───
-            setAudioChannels(1)               // 1 канал (Моно) — идеально для голоса, убирает лишний шум
-            setAudioSamplingRate(48000)       // 48 kHz — максимальное качество (Fullband), нативный формат Opus
-            setAudioEncodingBitRate(96000)    // 96 kbps — очень высокий битрейт для голоса (без сжатия "как из бочки")
+            setAudioChannels(1)
+            setAudioSamplingRate(48000)
+            setAudioEncodingBitRate(96000)
 
             setOutputFile(file.absolutePath)
             prepare()

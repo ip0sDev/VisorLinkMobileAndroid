@@ -142,62 +142,100 @@ internal fun MessageBubble(
     val isReadByOther = otherUid in message.readBy
     var showPackBanner by remember(message.id) { mutableStateOf(false) }
 
-    when {
-        message.type == MessageType.ALBUM && !message.deleted -> {
-            AlbumBubble(
-                message = message, isMine = isMine, currentUid = currentUid,
-                chatType = chatType, isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-                onAlbumTap = onAlbumTap,
-                onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
-                onLongPressDrag = onLongPressDrag,
-                onLongPressEnd = onLongPressEnd,
-                onReact = onReact, onReplyClick = onReplyClick,
-                onOpenComments = onOpenComments, chat = chat,
-            )
-            return
+    // Визуальное оформление для прогресса загрузки
+    val uploadProgressModifier = if (message.uploadProgress != null) {
+        Modifier.alpha(0.6f)
+    } else Modifier
+
+    // ИСПРАВЛЕНИЕ: Используем CenterEnd и CenterStart вместо CenterRight/CenterLeft
+    Box(
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
+    ) {
+        Box(modifier = uploadProgressModifier) {
+            when {
+                message.type == MessageType.GIFT && !message.deleted -> {
+                    GiftMessage(message = message, chatId = chat?.id ?: "")
+                    return@Box
+                }
+                (message.type == MessageType.VIDEO || message.type == MessageType.GIF) && !message.deleted -> {
+                    VideoBubble(
+                        message = message, isMine = isMine, isReadByOther = isReadByOther,
+                        chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
+                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat
+                    )
+                    return@Box
+                }
+                message.type == MessageType.ALBUM && !message.deleted -> {
+                    AlbumBubble(
+                        message = message, isMine = isMine, currentUid = currentUid,
+                        chatType = chatType, isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                        onAlbumTap = onAlbumTap,
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                    )
+                    return@Box
+                }
+                message.type == MessageType.IMAGE && !message.deleted -> {
+                    ImageBubble(
+                        message = message, isMine = isMine, isReadByOther = isReadByOther,
+                        chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
+                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
+                        onTap = { message.url?.let { onImageTap(it) } },
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                    )
+                    return@Box
+                }
+                message.type == MessageType.STICKER && !message.deleted -> {
+                    StickerBubble(
+                        message = message, isMine = isMine, currentUid = currentUid,
+                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                        hapticEnabled = hapticEnabled, showPackBanner = showPackBanner,
+                        onTogglePackBanner = { showPackBanner = !showPackBanner },
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd, onReact = onReact,
+                    )
+                    return@Box
+                }
+                else -> {
+                    TextBubble(
+                        message = message, isMine = isMine, currentUid = currentUid,
+                        chatType = chatType, hapticEnabled = hapticEnabled, showSenderName = showSenderName,
+                        voicePlayback = voicePlayback, isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                        isReadByOther = isReadByOther, hasWallpaper = hasWallpaper,
+                        onPlayVoice = onPlayVoice, onSeekVoice = onSeekVoice,
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+                        onReact = onReact, onReplyClick = onReplyClick, onMentionClick = onMentionClick,
+                        onOpenComments = onOpenComments, chat = chat,
+                    )
+                }
+            }
         }
-        message.type == MessageType.IMAGE && !message.deleted -> {
-            ImageBubble(
-                message = message, isMine = isMine, isReadByOther = isReadByOther,
-                chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-                hasWallpaper = hasWallpaper,
-                onTap = { message.url?.let { onImageTap(it) } },
-                onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
-                onLongPressDrag = onLongPressDrag,
-                onLongPressEnd = onLongPressEnd,
-                onReact = onReact, onReplyClick = onReplyClick,
-                onOpenComments = onOpenComments, chat = chat,
-            )
-            return
-        }
-        message.type == MessageType.STICKER && !message.deleted -> {
-            StickerBubble(
-                message = message, isMine = isMine, currentUid = currentUid,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-                hapticEnabled = hapticEnabled, showPackBanner = showPackBanner,
-                onTogglePackBanner = { showPackBanner = !showPackBanner },
-                onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
-                onLongPressDrag = onLongPressDrag,
-                onLongPressEnd = onLongPressEnd,
-                onReact = onReact,
-            )
-            return
+
+        // Оверлей загрузки
+        if (message.uploadProgress != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.3f), resolveBubbleShape(isMine, isOneUi)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    progress = { message.uploadProgress ?: 0f },
+                    modifier = Modifier.size(36.dp),
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.3f),
+                )
+            }
         }
     }
-
-    TextBubble(
-        message = message, isMine = isMine, currentUid = currentUid,
-        chatType = chatType, hapticEnabled = hapticEnabled, showSenderName = showSenderName,
-        voicePlayback = voicePlayback, isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-        isReadByOther = isReadByOther, hasWallpaper = hasWallpaper,
-        onPlayVoice = onPlayVoice, onSeekVoice = onSeekVoice,
-        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
-        onLongPressDrag = onLongPressDrag,
-        onLongPressEnd = onLongPressEnd,
-        onReact = onReact, onReplyClick = onReplyClick, onMentionClick = onMentionClick,
-        onOpenComments = onOpenComments, chat = chat,
-    )
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -219,7 +257,7 @@ internal fun TextBubble(
     val linkColor   = resolveLinkColor(isMine, isOneUi, isExthru, isDark)
     val bubbleShape = resolveBubbleShape(isMine, isOneUi)
 
-    val borderColor = by.iposdev.visorlink.ui.screens.chat.ExthruChat.shadowLight(isDark).copy(
+    val borderColor = ExthruChat.shadowLight(isDark).copy(
         alpha = when {
             hasWallpaper -> 0.30f
             isDark       -> 0.08f
@@ -265,7 +303,7 @@ internal fun TextBubble(
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
                 if (showSenderName && !isMine) {
-                    val senderColor = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else MaterialTheme.colorScheme.primary
+                    val senderColor = if (isExthru) ExthruChat.Accent else MaterialTheme.colorScheme.primary
                     Text(
                         "@${message.senderUsername}",
                         style      = if (isExthru) ExthruSenderNameStyle else MaterialTheme.typography.labelSmall,
@@ -332,6 +370,96 @@ internal fun TextBubble(
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+//  Video / GIF Bubble
+// ════════════════════════════════════════════════════════════════════════════════
+
+@Composable
+internal fun VideoBubble(
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
+    onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
+    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+) {
+    val imageShape = if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+    else RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "video_scale")
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
+        horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+    ) {
+        val containerModifier = if (isExthru) {
+            val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
+            Modifier.widthIn(min = 160.dp, max = 260.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
+        } else {
+            Modifier.widthIn(min = 160.dp, max = 260.dp).scale(scale).clip(imageShape)
+        }
+
+        Box(
+            modifier = containerModifier.messageGestures(
+                messageId = message.id,
+                interactionSource = interactionSource,
+                onLongPressStart = onLongPressStart,
+                onLongPressDrag = onLongPressDrag,
+                onLongPressEnd = onLongPressEnd
+            ),
+        ) {
+            // Подключаем CdnMediaViewer
+            CdnMediaViewer(
+                mediaId = message.cdnMediaId,
+                type = message.type,
+                localFile = message.localFile
+            )
+
+            message.replyData?.let { reply ->
+                Box(
+                    modifier = Modifier.fillMaxWidth().align(Alignment.TopStart).background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                        Spacer(Modifier.width(6.dp))
+                        Column {
+                            Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
+                            Text(reply.text ?: "Медиа", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
+                    if (isMine && chatType == ChatType.DIRECT) {
+                        Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
+                    }
+                }
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = message.parsedReactions.isNotEmpty(),
+            enter = slideInVertically(initialOffsetY = { -it / 2 }, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + scaleIn(initialScale = 0.7f, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
+            exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(150)),
+        ) {
+            InlinedReactionRow(
+                reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
+                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
+                onReact = onReact, onShowPicker = { },
+            )
+        }
+
+        if (chatType == ChatType.CHANNEL && !message.deleted && chat != null) {
+            CommentsButton(post = message, channelAllowsComments = chat.settings.allowComments, onClick = onOpenComments)
+        }
+    }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════════
 //  StickerBubble
 // ════════════════════════════════════════════════════════════════════════════════
 
@@ -340,7 +468,7 @@ internal fun StickerBubble(
     message: Message, isMine: Boolean, currentUid: String, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hapticEnabled: Boolean, showPackBanner: Boolean, onTogglePackBanner: () -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit, onReact: (String) -> Unit,
 ) {
-    val timeColor = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    val timeColor = if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "sticker_scale")
@@ -433,10 +561,22 @@ internal fun ImageBubble(
                 onLongPressEnd = onLongPressEnd
             ),
         ) {
-            AsyncImage(
-                model = message.url, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
-            )
+            if (message.localBytes != null) {
+                AsyncImage(
+                    model = message.localBytes, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
+                )
+            } else if (message.localFile != null) {
+                AsyncImage(
+                    model = message.localFile, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
+                )
+            } else {
+                AsyncImage(
+                    model = message.url, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
+                )
+            }
 
             val overlayAlpha by animateFloatAsState(targetValue = if (isSpoiler && !spoilerRevealed) 1f else 0f, animationSpec = tween(300), label = "spoiler_alpha")
             if (overlayAlpha > 0f) {
@@ -678,12 +818,12 @@ private fun AlbumCell(image: AlbumImage, revealed: Boolean, modifier: Modifier, 
 
 internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
-        isExthru && isMine  -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.bubbleMine(isDark)
-        isExthru && !isMine -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.bubbleOther(isDark)
-        isOneUi && isMine && isDark   -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleMineDark
-        isOneUi && isMine             -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleMine
-        isOneUi && !isMine && isDark  -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleOtherDark
-        isOneUi && !isMine            -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleOther
+        isExthru && isMine  -> ExthruChat.bubbleMine(isDark)
+        isExthru && !isMine -> ExthruChat.bubbleOther(isDark)
+        isOneUi && isMine && isDark   -> OneUiChat.BubbleMineDark
+        isOneUi && isMine             -> OneUiChat.BubbleMine
+        isOneUi && !isMine && isDark  -> OneUiChat.BubbleOtherDark
+        isOneUi && !isMine            -> OneUiChat.BubbleOther
         isMine -> Color(0xFF4F46E5)
         else   -> Color(0xFFEEF0FF)
     }
@@ -691,19 +831,19 @@ internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boo
 
 internal fun resolveBubbleTextColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
-        isExthru        -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.textPrimary(isDark)
+        isExthru        -> ExthruChat.textPrimary(isDark)
         isOneUi && isMine           -> Color.White
-        isOneUi && !isMine && isDark -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.TextPrimaryDark
-        isOneUi && !isMine          -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.TextPrimary
+        isOneUi && !isMine && isDark -> OneUiChat.TextPrimaryDark
+        isOneUi && !isMine          -> OneUiChat.TextPrimary
         else -> Color.Unspecified
     }
 }
 
 internal fun resolveLinkColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
-        isExthru        -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent
-        isOneUi && isDark -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BlueDark
-        isOneUi         -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.Blue
+        isExthru        -> ExthruChat.Accent
+        isOneUi && isDark -> OneUiChat.BlueDark
+        isOneUi         -> OneUiChat.Blue
         isMine          -> Color.White
         else            -> Color.Unspecified
     }
@@ -737,18 +877,18 @@ internal fun ReplyPreview(
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(8.dp),
     ) {
-        Box(Modifier.width(3.dp).height(32.dp).background(if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
+        Box(Modifier.width(3.dp).height(32.dp).background(if (isExthru) ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(8.dp))
         Column {
             Text(
                 "@${reply.senderUsername}",
                 style = if (isExthru) ExthruSenderNameStyle else MaterialTheme.typography.labelSmall,
-                color = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary,
+                color = if (isExthru) ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary,
             )
             Text(
                 reply.text ?: "Медиа",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textSecondary(isDark) else if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isExthru) ExthruChat.textSecondary(isDark) else if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -780,7 +920,7 @@ internal fun InlinedReactionRow(
                 } else Modifier
 
                 val bgColor = if (isExthru) {
-                    if (iReacted) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.3f else 0.6f)
+                    if (iReacted) ExthruChat.Accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.3f else 0.6f)
                 } else {
                     if (iReacted) MaterialTheme.colorScheme.primary.copy(0.2f) else MaterialTheme.colorScheme.surfaceVariant
                 }
@@ -803,7 +943,7 @@ internal fun InlinedReactionRow(
                         Text(
                             reaction.count.toString(), fontSize = 12.sp,
                             fontWeight = if (iReacted) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isExthru) (if (iReacted) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else by.iposdev.visorlink.ui.screens.chat.ExthruChat.textSecondary(isDark)) else (if (iReacted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant),
+                            color = if (isExthru) (if (iReacted) ExthruChat.Accent else ExthruChat.textSecondary(isDark)) else (if (iReacted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant),
                         )
                     }
                 }
@@ -830,7 +970,7 @@ internal fun InlinedReactionRow(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("＋", fontSize = 14.sp, color = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("＋", fontSize = 14.sp, color = if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -850,7 +990,7 @@ internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Bo
             Text(
                 text     = label,
                 style    = MaterialTheme.typography.labelSmall,
-                color    = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textSecondary(isDark) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color    = if (isExthru) ExthruChat.textSecondary(isDark) else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -859,7 +999,7 @@ internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Bo
 
 @Composable
 internal fun ReadReceipt(isRead: Boolean, isExthru: Boolean = false, isDark: Boolean = false) {
-    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(15.dp), tint = if (isRead) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark))
+    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(15.dp), tint = if (isRead) ExthruChat.Accent else ExthruChat.textHint(isDark))
 }
 
 @Composable

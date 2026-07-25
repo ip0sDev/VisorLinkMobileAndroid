@@ -14,18 +14,22 @@ import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.FileInputStream
+import java.security.MessageDigest
 
 object ApkDownloader {
 
     /**
      * @param fileName   имя сохраняемого файла (например app-beta.apk)
+     * @param expectedSha256 Хэш для проверки файла (из ответа сервера)
      * @param onProgress 0f..1f прогресс загрузки, -1f = ошибка
-     * @param onComplete вызывается когда файл скачан и запускается установщик
+     * @param onComplete вызывается когда файл скачан и проверен
      */
     fun downloadAndInstall(
         context: Context,
         url: String,
         fileName: String = "VisorLink_Update.apk",
+        expectedSha256: String? = null,
         onProgress: (Float) -> Unit = {},
         onComplete: () -> Unit = {}
     ) {
@@ -107,9 +111,20 @@ object ApkDownloader {
                 }
 
                 if (success) {
-                    onProgress(1f)
-                    onComplete()
-                    installApk(ctx, destination)
+                    Thread {
+                        val hashValid = verifySha256(destination, expectedSha256)
+                        Handler(Looper.getMainLooper()).post {
+                            if (hashValid) {
+                                onProgress(1f)
+                                onComplete()
+                                installApk(ctx, destination)
+                            } else {
+                                destination.delete()
+                                onProgress(-1f)
+                                Toast.makeText(ctx, "Ошибка: Файл поврежден (Checksum mismatch)", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    }.start()
                 } else {
                     onProgress(-1f)
                     Toast.makeText(ctx, "Download failed", Toast.LENGTH_SHORT).show()
@@ -130,6 +145,24 @@ object ApkDownloader {
                 IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
                 ContextCompat.RECEIVER_NOT_EXPORTED
             )
+        }
+    }
+
+    private fun verifySha256(file: File, expectedSha256: String?): Boolean {
+        if (expectedSha256.isNullOrBlank()) return true
+        return try {
+            val digest = MessageDigest.getInstance("SHA-256")
+            FileInputStream(file).use { fis ->
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                while (fis.read(buffer).also { bytesRead = it } != -1) {
+                    digest.update(buffer, 0, bytesRead)
+                }
+            }
+            val hash = digest.digest().joinToString("") { "%02x".format(it) }
+            hash.equals(expectedSha256, ignoreCase = true)
+        } catch (e: Exception) {
+            false
         }
     }
 
