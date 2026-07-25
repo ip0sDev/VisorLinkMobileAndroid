@@ -14,15 +14,15 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.clipPath
 
-// ── Raised shadow — угло-осознанный вариант ───────────────────────────────────
+// ── Raised shadow — угло-осознанный вариант (Улучшено для чистоты) ────────────
 
 fun Modifier.nmRaisedShadow(
     isDark: Boolean = false,
-    shadowRadius: Dp = 8.dp,
-    offsetDp: Dp = 4.dp,
+    shadowRadius: Dp = 10.dp,
+    offsetDp: Dp = 5.dp,
     cornerRadius: Dp = 0.dp,
-    darkAlpha: Float = if (isDark) 0.65f else 0.50f,
-    lightAlpha: Float = if (isDark) 0.08f else 0.70f,
+    darkAlpha: Float = if (isDark) 0.45f else 0.22f, // Тени стали намного мягче
+    lightAlpha: Float = if (isDark) 0.05f else 0.65f,
 ): Modifier = this.drawBehind {
     val radiusPx  = shadowRadius.toPx()
     val offsetPx  = offsetDp.toPx()
@@ -68,13 +68,13 @@ fun Modifier.nmRaisedShadow(
     }
 }
 
-// ── Inset shadow — для поля ввода (скруглённый контейнер) ────────────────────
+// ── Inset shadow — для поля ввода и вдавленных кнопок ────────────────────────
 
 fun Modifier.nmInsetShadow(
     isDark: Boolean = false,
     cornerRadius: Dp = 22.dp,
-    darkAlpha: Float = if (isDark) 0.55f else 0.38f,
-    lightAlpha: Float = if (isDark) 0.06f else 0.50f,
+    darkAlpha: Float = if (isDark) 0.45f else 0.25f, // Более мягкое углубление
+    lightAlpha: Float = if (isDark) 0.05f else 0.60f,
     lineWidthDp: Dp = 1.5.dp,
 ): Modifier = this.drawBehind {
     val lw = lineWidthDp.toPx()
@@ -117,8 +117,8 @@ fun Modifier.nmInsetShadow(
 
 fun Modifier.exthruRaisedShadow(
     isDark: Boolean = false,
-    darkAlpha: Float = if (isDark) 0.65f else 0.50f,
-    lightAlpha: Float = if (isDark) 0.08f else 0.72f,
+    darkAlpha: Float = if (isDark) 0.45f else 0.22f,
+    lightAlpha: Float = if (isDark) 0.05f else 0.65f,
 ) = nmRaisedShadow(
     isDark = isDark,
     shadowRadius = 12.dp,
@@ -130,12 +130,12 @@ fun Modifier.exthruRaisedShadow(
 
 fun Modifier.exthruSmallRaisedShadow(
     isDark: Boolean = false,
-    darkAlpha: Float = if (isDark) 0.60f else 0.45f,
-    lightAlpha: Float = if (isDark) 0.08f else 0.65f,
+    darkAlpha: Float = if (isDark) 0.40f else 0.20f,
+    lightAlpha: Float = if (isDark) 0.05f else 0.60f,
 ) = nmRaisedShadow(
     isDark = isDark,
-    shadowRadius = 6.dp,
-    offsetDp = 3.dp,
+    shadowRadius = 8.dp,
+    offsetDp = 4.dp,
     cornerRadius = 50.dp,
     darkAlpha = darkAlpha,
     lightAlpha = lightAlpha,
@@ -147,8 +147,8 @@ fun Modifier.nmDividerBottom(isDark: Boolean = false): Modifier = this.drawBehin
     val dColor = if (isDark) Biolume.DarkShadowDark else Biolume.ShadowDark
     val lColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
 
-    val darkColor  = dColor.copy(alpha = if (isDark) 0.6f else 0.35f)
-    val lightColor = lColor.copy(alpha = if (isDark) 0.08f else 0.55f)
+    val darkColor  = dColor.copy(alpha = if (isDark) 0.4f else 0.2f)
+    val lightColor = lColor.copy(alpha = if (isDark) 0.05f else 0.5f)
 
     val darkPx  = 1.2.dp.toPx()
     val lightPx = 0.8.dp.toPx()
@@ -169,8 +169,8 @@ fun Modifier.nmDividerTop(isDark: Boolean = false): Modifier = this.drawBehind {
     val dColor = if (isDark) Biolume.DarkShadowDark else Biolume.ShadowDark
     val lColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
 
-    val darkColor  = dColor.copy(alpha = if (isDark) 0.6f else 0.35f)
-    val lightColor = lColor.copy(alpha = if (isDark) 0.08f else 0.55f)
+    val darkColor  = dColor.copy(alpha = if (isDark) 0.4f else 0.2f)
+    val lightColor = lColor.copy(alpha = if (isDark) 0.05f else 0.5f)
 
     val lightPx = 1.2.dp.toPx()
     val darkPx  = 0.8.dp.toPx()
@@ -190,10 +190,9 @@ fun Modifier.nmDividerTop(isDark: Boolean = false): Modifier = this.drawBehind {
 // ── Bubble inner highlight ────────────────────────────────────────────────────
 
 fun Modifier.bubbleInnerHighlight(
-    shape: Shape, // <-- Теперь модификатор требует форму для обрезки
+    shape: Shape,
     isDark: Boolean = false
 ): Modifier = this.drawWithCache {
-    // Создаем контур на основе переданной формы баббла (с учетом всех скруглений)
     val outline = shape.createOutline(size, layoutDirection, this)
     val path = Path().apply { addOutline(outline) }
 
@@ -202,9 +201,7 @@ fun Modifier.bubbleInnerHighlight(
     val lineHeight = 1.2.dp.toPx()
 
     onDrawWithContent {
-        drawContent() // Сначала рисуем сам баббл (и его содержимое)
-
-        // Рисуем блик, жестко обрезая его по скругленным краям баббла
+        drawContent()
         clipPath(path) {
             drawRect(
                 color = lColor.copy(alpha = highlightAlpha),
@@ -212,5 +209,45 @@ fun Modifier.bubbleInnerHighlight(
                 size = androidx.compose.ui.geometry.Size(size.width, lineHeight)
             )
         }
+    }
+}
+
+// ── Forge hard shadow ─────────────────────────────────────────────────────────
+
+fun Modifier.forgeHardShadow(
+    color: Color,
+    offset: Dp = 4.dp,
+): Modifier = this.drawBehind {
+    val offPx = offset.toPx()
+    drawRect(
+        color = color,
+        topLeft = androidx.compose.ui.geometry.Offset(offPx, offPx),
+        size = androidx.compose.ui.geometry.Size(size.width, size.height)
+    )
+}
+
+// ── Accent glow ───────────────────────────────────────────────────────────────
+
+fun Modifier.accentGlowShadow(
+    accent: Color,
+    isPressed: Boolean,
+    cornerRadius: Dp,
+): Modifier = this.drawBehind {
+    val alpha = if (isPressed) 0.25f else 0.08f
+    val blur = if (isPressed) 18.dp.toPx() else 8.dp.toPx()
+    val cr = cornerRadius.toPx()
+
+    drawIntoCanvas { canvas ->
+        val paint = Paint().apply {
+            asFrameworkPaint().apply {
+                isAntiAlias = true
+                color = android.graphics.Color.TRANSPARENT
+                setShadowLayer(blur, 0f, 0f, accent.copy(alpha = alpha).toArgb())
+            }
+        }
+        canvas.drawRoundRect(
+            left = 0f, top = 0f, right = size.width, bottom = size.height,
+            radiusX = cr, radiusY = cr, paint = paint
+        )
     }
 }

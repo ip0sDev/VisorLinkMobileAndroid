@@ -39,10 +39,16 @@ import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
+import by.iposdev.visorlink.ui.components.LocalHazeState
+import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -90,8 +96,9 @@ fun ChatListScreen(
     val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
 
     val currentTheme by themeViewModel.appTheme.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val isOneUi = currentTheme == AppTheme.ONE_UI
-    val isExthru = currentTheme == AppTheme.EXTHRU
+    val isExthru = currentTheme == AppTheme.EXTHRU || currentTheme == AppTheme.BIOLUME
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     val haptic = rememberHaptic()
@@ -102,337 +109,377 @@ fun ChatListScreen(
     // TopBar collapse — скрываем subtitle при прокрутке
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
+    val hazeState = remember { HazeState() }
 
-    Scaffold(
-        containerColor = when {
-            isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
-            isExthru -> MaterialTheme.colorScheme.background // MidWater / DarkMidWater
-            else -> MaterialTheme.colorScheme.surface
-        },
-        topBar = {
-            Surface(
-                color = if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent,
-                modifier = if (isExthru) Modifier.nmDividerBottom(isDark) else Modifier
-            ) {
-                TopAppBar(
-                    title = {
-                        when {
-                            isOneUi -> {
-                                Text(
-                                    stringResource(R.string.chatlist_title),
-                                    fontSize = 26.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = (-0.5).sp,
-                                    color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary
-                                )
-                            }
-                            isExthru -> {
-                                // ИСПРАВЛЕНИЕ 1: Увеличили размер для узкого шрифта Moniqa и задали Bold
-                                Text(
-                                    text = stringResource(R.string.chatlist_title),
-                                    style = MaterialTheme.typography.headlineLarge.copy(
-                                        fontSize = 34.sp,
-                                        fontWeight = FontWeight.Bold
+    val scaffoldBg = when {
+        isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
+        isExthru -> MaterialTheme.colorScheme.background // MidWater / DarkMidWater
+        else -> MaterialTheme.colorScheme.surface
+    }
+
+    CompositionLocalProvider(LocalHazeState provides hazeState) {
+        Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
+            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
+                VlAmbientGlow(appTheme = currentTheme)
+
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    topBar = {
+                        if (isExthru) {
+                            TopAppBar(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .hazeChild(
+                                        state = hazeState,
+                                        style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
                                     )
-                                )
-                            }
-                            else -> {
-                                Column {
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
+                                title = {
                                     Text(
-                                        stringResource(R.string.chatlist_title),
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold
+                                        text = stringResource(R.string.chatlist_title),
+                                        style = MaterialTheme.typography.headlineLarge.copy(
+                                            fontSize = 34.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
                                     )
+                                },
+                                actions = {
+                                    val badgeScale = remember { Animatable(if (unreadNotifications > 0) 1f else 0f) }
+                                    LaunchedEffect(unreadNotifications > 0) {
+                                        if (unreadNotifications > 0) {
+                                            badgeScale.animateTo(1.3f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium))
+                                            badgeScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                        } else {
+                                            badgeScale.animateTo(0f, tween(150))
+                                        }
+                                    }
+
+                                    BadgedBox(
+                                        badge = {
+                                            if (unreadNotifications > 0) {
+                                                Badge(
+                                                    modifier = Modifier.scale(badgeScale.value).offset(x = (-10).dp, y = 10.dp),
+                                                    containerColor = MaterialTheme.colorScheme.error
+                                                ) {
+                                                    Text("$unreadNotifications")
+                                                }
+                                            }
+                                        }
+                                    ) {
+                                        ExthruTopBarButton(
+                                            icon = if (unreadNotifications > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
+                                            isDark = isDark,
+                                            hapticEnabled = hapticEnabled
+                                        ) { onOpenNotifications() }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    ExthruTopBarButton(
+                                        icon = Icons.Default.Search,
+                                        isDark = isDark,
+                                        hapticEnabled = hapticEnabled
+                                    ) { onOpenSearch() }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    ExthruTopBarButton(
+                                        icon = Icons.Outlined.Settings,
+                                        isDark = isDark,
+                                        hapticEnabled = hapticEnabled
+                                    ) { onOpenSettings() }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    AvatarChip(
+                                        avatarUrl = currentUser?.avatarUrl,
+                                        displayName = currentUser?.displayName ?: "",
+                                        isOneUi = false,
+                                        isExthru = true,
+                                        isDark = isDark,
+                                        hapticEnabled = hapticEnabled,
+                                        onClick = { onOpenProfile() }
+                                    )
+
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = Color.Transparent,
+                                    scrolledContainerColor = Color.Transparent
+                                )
+                            )
+                        } else {
+                            Surface(
+                                color = if (isOneUi) (if (isDark) OneUi.PageBgDark else OneUi.PageBg) else MaterialTheme.colorScheme.surface
+                            ) {
+                                TopAppBar(
+                                    title = {
+                                        if (isOneUi) {
+                                            Text(
+                                                stringResource(R.string.chatlist_title),
+                                                fontSize = 26.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = (-0.5).sp,
+                                                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary
+                                            )
+                                        } else {
+                                            Column {
+                                                Text(
+                                                    stringResource(R.string.chatlist_title),
+                                                    style = MaterialTheme.typography.titleLarge,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                AnimatedVisibility(
+                                                    visible = !isScrolled,
+                                                    enter = expandVertically(
+                                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+                                                    ) + fadeIn(tween(200)),
+                                                    exit = shrinkVertically(tween(150)) + fadeOut(tween(100))
+                                                ) {
+                                                    Text(
+                                                        text = if (chats.isEmpty()) "" else "${chats.size} chats",
+                                                        style = MaterialTheme.typography.labelMedium,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
+                                    actions = {
+                                        val iconTint = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else LocalContentColor.current
+                                        val badgeColor = if (isOneUi) OneUi.IconRed else BadgeDefaults.containerColor
+
+                                        CompositionLocalProvider(LocalContentColor provides iconTint) {
+                                            val badgeScale = remember { Animatable(if (unreadNotifications > 0) 1f else 0f) }
+                                            LaunchedEffect(unreadNotifications > 0) {
+                                                if (unreadNotifications > 0) {
+                                                    badgeScale.animateTo(1.3f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium))
+                                                    badgeScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                                                } else {
+                                                    badgeScale.animateTo(0f, tween(150))
+                                                }
+                                            }
+
+                                            BadgedBox(
+                                                badge = {
+                                                    if (unreadNotifications > 0) {
+                                                        Badge(
+                                                            modifier = Modifier.scale(badgeScale.value),
+                                                            containerColor = badgeColor
+                                                        ) { Text("$unreadNotifications") }
+                                                    }
+                                                }
+                                            ) {
+                                                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenNotifications() }) {
+                                                    Icon(if (unreadNotifications > 0) Icons.Default.Notifications else Icons.Outlined.Notifications, stringResource(R.string.notifications_title))
+                                                }
+                                            }
+
+                                            IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSearch() }) {
+                                                Icon(Icons.Default.Search, stringResource(R.string.action_search))
+                                            }
+
+                                            IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
+                                                Icon(Icons.Outlined.Settings, stringResource(R.string.settings_title))
+                                            }
+
+                                            AvatarChip(
+                                                avatarUrl = currentUser?.avatarUrl,
+                                                displayName = currentUser?.displayName ?: "",
+                                                isOneUi = isOneUi,
+                                                isExthru = false,
+                                                isDark = isDark,
+                                                hapticEnabled = hapticEnabled,
+                                                onClick = { onOpenProfile() }
+                                            )
+                                        }
+                                    },
+                                    colors = TopAppBarDefaults.topAppBarColors(
+                                        containerColor = Color.Transparent,
+                                        scrolledContainerColor = Color.Transparent
+                                    )
+                                )
+                            }
+                        }
+                    },
+                    floatingActionButton = {
+                        M3eFab(
+                            showMenu = showFabMenu,
+                            isOneUi = isOneUi,
+                            isExthru = isExthru,
+                            isDark = isDark,
+                            hapticEnabled = hapticEnabled,
+                            onToggle = { showFabMenu = !showFabMenu },
+                            onNewChat = { showFabMenu = false; onOpenSearch() },
+                            onNewGroup = { showFabMenu = false; onCreateChat() },
+                            onFindChannel = { showFabMenu = false; onFindChannel() }
+                        )
+                    }
+                ) { padding ->
+
+                    if (showFabMenu) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = if (isExthru) 0.5f else 0.3f))
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    showFabMenu = false
+                                }
+                        )
+                    }
+
+                    AnimatedContent(
+                        targetState = chats.isEmpty(),
+                        transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                        label = "list_empty_toggle"
+                    ) { isEmpty ->
+                        if (isEmpty) {
+                            EmptyState(
+                                modifier = Modifier.fillMaxSize().padding(padding),
+                                isOneUi = isOneUi,
+                                isExthru = isExthru,
+                                isDark = isDark
+                            )
+                        } else {
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize().padding(padding),
+                                contentPadding = PaddingValues(
+                                    top = if (isExthru) 12.dp else 0.dp,
+                                    bottom = 88.dp
+                                )
+                            ) {
+                                // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ
+                                item(key = "saved_messages") {
+                                    val savedChat = viewModel.savedMessagesEntry
+                                    var visible by remember { mutableStateOf(false) }
+                                    LaunchedEffect(Unit) { visible = true }
+
                                     AnimatedVisibility(
-                                        visible = !isScrolled,
-                                        enter = expandVertically(
+                                        visible = visible,
+                                        enter = fadeIn(tween(300)) + expandVertically()
+                                    ) {
+                                        Column {
+                                            ChatListItem(
+                                                chat = savedChat,
+                                                chatType = ChatType.DIRECT,
+                                                currentUid = viewModel.currentUid,
+                                                otherProfile = null,
+                                                index = -1,
+                                                total = chats.size,
+                                                isOneUi = isOneUi,
+                                                isExthru = isExthru,
+                                                isDark = isDark,
+                                                isSavedMessages = true,
+                                                onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
+                                            )
+                                            if (isOneUi) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                                                    thickness = 0.5.dp,
+                                                    color = if (isDark) OneUi.DividerDark else OneUi.Divider
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                itemsIndexed(
+                                    items = chats,
+                                    key = { _, chat -> chat.id }
+                                ) { index, chat ->
+                                    val chatType = chat.chatType()
+                                    val otherUid = when (chatType) {
+                                        ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                        else -> chat.id
+                                    }
+
+                                    var visible by remember { mutableStateOf(false) }
+                                    LaunchedEffect(Unit) {
+                                        delay((index * 30L).coerceAtMost(180L))
+                                        visible = true
+                                    }
+
+                                    AnimatedVisibility(
+                                        visible = visible,
+                                        enter = slideInVertically(
+                                            initialOffsetY = { it / 3 },
                                             animationSpec = spring(
                                                 dampingRatio = Spring.DampingRatioMediumBouncy,
                                                 stiffness = Spring.StiffnessMediumLow
                                             )
-                                        ) + fadeIn(tween(200)),
-                                        exit = shrinkVertically(tween(150)) + fadeOut(tween(100))
+                                        ) + fadeIn(tween(220))
                                     ) {
-                                        Text(
-                                            text = if (chats.isEmpty()) "" else "${chats.size} chats",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    actions = {
-                        val iconTint = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else LocalContentColor.current
-                        val badgeColor = when {
-                            isOneUi -> OneUi.IconRed
-                            isExthru -> MaterialTheme.colorScheme.error // PinkFlash
-                            else -> BadgeDefaults.containerColor
-                        }
-
-                        // ИСПРАВЛЕНИЕ 2: Чистый модификатор для кнопок без padding'ов, которые ломают форму
-                        val exthruBtnModifier = Modifier
-                            .size(42.dp) // Единый строгий размер для всех кнопок
-                            .exthruSmallRaisedShadow(isDark)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape)
-
-
-                        CompositionLocalProvider(LocalContentColor provides iconTint) {
-                            val badgeScale = remember { Animatable(if (unreadNotifications > 0) 1f else 0f) }
-                            LaunchedEffect(unreadNotifications > 0) {
-                                if (unreadNotifications > 0) {
-                                    badgeScale.animateTo(1.3f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium))
-                                    badgeScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                                } else {
-                                    badgeScale.animateTo(0f, tween(150))
-                                }
-                            }
-
-                            BadgedBox(
-                                badge = {
-                                    if (unreadNotifications > 0) {
-                                        Badge(
-                                            modifier = Modifier.scale(badgeScale.value),
-                                            containerColor = badgeColor
-                                        ) {
-                                            Text("$unreadNotifications")
+                                        Column {
+                                            ChatListItem(
+                                                chat = chat,
+                                                chatType = chatType,
+                                                currentUid = viewModel.currentUid,
+                                                otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                                index = index,
+                                                total = chats.size,
+                                                isOneUi = isOneUi,
+                                                isExthru = isExthru,
+                                                isDark = isDark,
+                                                onClick = { onOpenChat(chat.id, otherUid) }
+                                            )
+                                            if (isOneUi && index < chats.size - 1) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                                                    thickness = 0.5.dp,
+                                                    color = if (isDark) OneUi.DividerDark else OneUi.Divider
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            ) {
-                                IconButton(
-                                    modifier = if (isExthru) exthruBtnModifier else Modifier,
-                                    onClick = {
-                                        haptic.perform(HapticType.CLICK, true)
-                                        onOpenNotifications()
-                                    }
-                                ) {
-                                    Icon(
-                                        if (unreadNotifications > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
-                                        stringResource(R.string.notifications_title),
-                                        modifier = if (isExthru) Modifier.size(20.dp) else Modifier
-                                    )
-                                }
                             }
-
-                            // Добавляем отступы снаружи, а не внутрь модификатора кнопок
-                            if (isExthru) Spacer(modifier = Modifier.width(10.dp))
-
-                            IconButton(
-                                modifier = if (isExthru) exthruBtnModifier else Modifier,
-                                onClick = {
-                                    haptic.perform(HapticType.CLICK, true)
-                                    onOpenSearch()
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Default.Search,
-                                    stringResource(R.string.action_search),
-                                    modifier = if (isExthru) Modifier.size(20.dp) else Modifier
-                                )
-                            }
-
-                            if (isExthru) Spacer(modifier = Modifier.width(10.dp))
-
-                            IconButton(
-                                modifier = if (isExthru) exthruBtnModifier else Modifier,
-                                onClick = {
-                                    haptic.perform(HapticType.CLICK, true)
-                                    onOpenSettings()
-                                }
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Settings,
-                                    stringResource(R.string.settings_title),
-                                    modifier = if (isExthru) Modifier.size(20.dp) else Modifier
-                                )
-                            }
-
-                            if (isExthru) Spacer(modifier = Modifier.width(10.dp))
-
-                            AvatarChip(
-                                avatarUrl = currentUser?.avatarUrl,
-                                displayName = currentUser?.displayName ?: "",
-                                isOneUi = isOneUi,
-                                isExthru = isExthru,
-                                isDark = isDark,
-                                onClick = {
-                                    haptic.perform(HapticType.CLICK, true)
-                                    onOpenProfile()
-                                }
-                            )
-
-                            if (isExthru) Spacer(modifier = Modifier.width(6.dp))
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = when {
-                            isExthru -> Color.Transparent // Surface background handles it
-                            isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
-                            else -> MaterialTheme.colorScheme.surface
-                        },
-                        scrolledContainerColor = when {
-                            isExthru -> Color.Transparent
-                            isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
-                            else -> MaterialTheme.colorScheme.surfaceContainerHigh
-                        }
-                    )
-                )
-            }
-        },
-        floatingActionButton = {
-            M3eFab(
-                showMenu = showFabMenu,
-                isOneUi = isOneUi,
-                isExthru = isExthru,
-                isDark = isDark,
-                onToggle = {
-                    haptic.perform(HapticType.SELECTION, true)
-                    showFabMenu = !showFabMenu
-                },
-                onNewChat = {
-                    haptic.perform(HapticType.CLICK, true)
-                    showFabMenu = false; onOpenSearch()
-                },
-                onNewGroup = {
-                    haptic.perform(HapticType.CLICK, true)
-                    showFabMenu = false; onCreateChat()
-                },
-                onFindChannel = {
-                    haptic.perform(HapticType.CLICK, true)
-                    showFabMenu = false; onFindChannel()
-                }
-            )
-        }
-    ) { padding ->
-
-        if (showFabMenu) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = if (isExthru) 0.5f else 0.3f))
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        haptic.perform(HapticType.CLICK, true)
-                        showFabMenu = false
                     }
-            )
+                }
+            }
         }
+    }
+}
 
-        AnimatedContent(
-            targetState = chats.isEmpty(),
-            transitionSpec = {
-                fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+// ─── Вспомогательные компоненты TopBar для Exthru ──────────────────────────────
+
+@Composable
+private fun ExthruTopBarButton(
+    icon: ImageVector,
+    isDark: Boolean,
+    hapticEnabled: Boolean,
+    onClick: () -> Unit
+) {
+    val haptic = rememberHaptic()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "btn_scale")
+
+    val shadowMod = if (isPressed) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+    } else {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    }
+
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .scale(scale)
+            .then(shadowMod)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+            .clip(CircleShape)
+            .clickable(interactionSource = interactionSource, indication = null) {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                onClick()
             },
-            label = "list_empty_toggle"
-        ) { isEmpty ->
-            if (isEmpty) {
-                EmptyState(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    isOneUi = isOneUi,
-                    isExthru = isExthru,
-                    isDark = isDark
-                )
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(
-                        top = if (isExthru) 12.dp else 0.dp,
-                        bottom = 88.dp
-                    )
-                ) {
-                    // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ
-                    item(key = "saved_messages") {
-                        val savedChat = viewModel.savedMessagesEntry
-
-                        var visible by remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) { visible = true } // Появляется сразу
-
-                        AnimatedVisibility(
-                            visible = visible,
-                            enter = fadeIn(tween(300)) + expandVertically()
-                        ) {
-                            Column {
-                                ChatListItem(
-                                    chat = savedChat,
-                                    chatType = ChatType.DIRECT,
-                                    currentUid = viewModel.currentUid,
-                                    otherProfile = null, // Для избранного профиль не нужен
-                                    index = -1, // Специальный индекс
-                                    total = chats.size,
-                                    isOneUi = isOneUi,
-                                    isExthru = isExthru,
-                                    isDark = isDark,
-                                    isSavedMessages = true, // Новый флаг
-                                    onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
-                                )
-                                if (isOneUi) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(start = 82.dp, end = 16.dp),
-                                        thickness = 0.5.dp,
-                                        color = if (isDark) OneUi.DividerDark else OneUi.Divider
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    itemsIndexed(
-                        items = chats,
-                        key = { _, chat -> chat.id }
-                    ) { index, chat ->
-                        val chatType = chat.chatType()
-                        val otherUid = when (chatType) {
-                            ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
-                            else -> chat.id
-                        }
-
-                        var visible by remember { mutableStateOf(false) }
-                        LaunchedEffect(Unit) {
-                            delay((index * 30L).coerceAtMost(180L))
-                            visible = true
-                        }
-
-                        AnimatedVisibility(
-                            visible = visible,
-                            enter = slideInVertically(
-                                initialOffsetY = { it / 3 },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMediumLow
-                                )
-                            ) + fadeIn(tween(220))
-                        ) {
-                            Column {
-                                ChatListItem(
-                                    chat = chat,
-                                    chatType = chatType,
-                                    currentUid = viewModel.currentUid,
-                                    otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
-                                    index = index,
-                                    total = chats.size,
-                                    isOneUi = isOneUi,
-                                    isExthru = isExthru,
-                                    isDark = isDark,
-                                    onClick = { onOpenChat(chat.id, otherUid) }
-                                )
-                                // В One UI используют тонкий разделитель, в Exthru разделителей нет - только тени
-                                if (isOneUi && index < chats.size - 1) {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(start = 82.dp, end = 16.dp),
-                                        thickness = 0.5.dp,
-                                        color = if (isDark) OneUi.DividerDark else OneUi.Divider
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -479,7 +526,7 @@ private fun EmptyState(
                             .size(100.dp)
                             .scale(breathScale)
                             .exthruSmallRaisedShadow(isDark)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.6f), CircleShape)
                     )
                 } else {
                     Box(
@@ -539,14 +586,14 @@ private fun ChatListItem(
     isOneUi: Boolean,
     isExthru: Boolean,
     isDark: Boolean,
-    isSavedMessages: Boolean = false, // Добавили параметр
+    isSavedMessages: Boolean = false,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val targetScale = when {
-        isPressed && isExthru -> 0.94f
+        isPressed && isExthru -> 0.96f
         isPressed && !isOneUi -> 0.97f
         else -> 1f
     }
@@ -563,41 +610,10 @@ private fun ChatListItem(
         else -> itemShape(index, total)
     }
 
-    val topPad    = if (index == 0 && !isOneUi && !isExthru) 2.dp else if (!isOneUi && !isExthru) 1.dp else 0.dp
-    val bottomPad = if (index == total - 1 && !isOneUi && !isExthru) 2.dp else if (!isOneUi && !isExthru) 1.dp else 0.dp
-
-    val bgColor = when {
-        isOneUi -> if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFE8E8E8)) else Color.Transparent
-        isExthru -> MaterialTheme.colorScheme.surface // DeepWater
-        else -> MaterialTheme.colorScheme.surfaceContainerLow
-    }
-
     val titleColor = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else MaterialTheme.colorScheme.onSurface
     val subColor = if (isOneUi) (if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary) else MaterialTheme.colorScheme.onSurfaceVariant
 
-    val itemModifier = Modifier
-        .fillMaxWidth()
-        .then(
-            when {
-                isOneUi -> Modifier
-                isExthru -> Modifier
-                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                    .exthruRaisedShadow(isDark)
-                else -> Modifier
-                    .padding(horizontal = 12.dp)
-                    .padding(top = topPad, bottom = bottomPad)
-            }
-        )
-        .scale(itemScale)
-
-    Surface(
-        modifier = itemModifier,
-        shape = shape,
-        color = bgColor,
-        tonalElevation = 0.dp,
-        onClick = onClick,
-        interactionSource = interactionSource
-    ) {
+    val innerContent = @Composable {
         Row(
             modifier = Modifier.padding(
                 horizontal = if (isOneUi) 20.dp else 14.dp,
@@ -607,7 +623,6 @@ private fun ChatListItem(
         ) {
             Box(modifier = Modifier.size(if (isOneUi) 50.dp else 54.dp)) {
                 if (isSavedMessages) {
-                    // Иконка для Избранного
                     SavedMessagesIcon(isOneUi, isExthru, isDark, size = if (isOneUi) 50.dp else 54.dp)
                 } else {
                     when (chatType) {
@@ -617,7 +632,6 @@ private fun ChatListItem(
                             isOnline = otherProfile?.online ?: false,
                             size = if (isOneUi) 50.dp else 54.dp
                         )
-
                         ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                             avatarUrl = chat.avatarUrl,
                             name = chat.name,
@@ -636,21 +650,13 @@ private fun ChatListItem(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (chatType != ChatType.DIRECT) {
+                    if (chatType != ChatType.DIRECT && !isSavedMessages) {
                         Text(if (chatType == ChatType.CHANNEL) "📢" else "👥", fontSize = 11.sp)
                     }
                     Text(
                         text = when {
-                            // 1. Сначала проверяем на "Избранное"
-                            isSavedMessages -> stringResource(R.string.saved_messages_title) // "Избранное"
-
-                            // 2. Если не избранное, проверяем тип DIRECT
-                            chatType == ChatType.DIRECT -> {
-                                chat.otherDisplayName(currentUid)
-                                    .ifEmpty { "@${chat.otherUsername(currentUid)}" }
-                            }
-
-                            // 3. Во всех остальных случаях (группы, каналы) берем имя чата
+                            isSavedMessages -> stringResource(R.string.saved_messages_title)
+                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" }
                             else -> chat.name
                         },
                         fontSize = if (isOneUi) 16.sp else 15.sp,
@@ -670,7 +676,6 @@ private fun ChatListItem(
                     }
                 }
                 Spacer(Modifier.height(3.dp))
-                // ИСПОЛЬЗУЕМ НОВУЮ ФУНКЦИЮ ДЛЯ ОТОБРАЖЕНИЯ
                 val messageText = chat.lastMessageText()
                 Text(
                     text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
@@ -680,6 +685,51 @@ private fun ChatListItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+
+    if (isExthru) {
+        val shadowMod = if (isPressed) {
+            Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+        } else {
+            Modifier.exthruRaisedShadow(isDark)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 7.dp)
+                .scale(itemScale)
+                .then(shadowMod)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.6f), shape)
+                .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.2f), shape)
+                .clip(shape)
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+        ) {
+            innerContent()
+        }
+    } else {
+        val topPad    = if (index == 0 && !isOneUi) 2.dp else if (!isOneUi) 1.dp else 0.dp
+        val bottomPad = if (index == total - 1 && !isOneUi) 2.dp else if (!isOneUi) 1.dp else 0.dp
+        val bgColor = if (isOneUi) {
+            if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFE8E8E8)) else Color.Transparent
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = if (isOneUi) 0.dp else 12.dp)
+                .padding(top = topPad, bottom = bottomPad)
+                .scale(itemScale),
+            shape = shape,
+            color = bgColor,
+            tonalElevation = 0.dp,
+            onClick = onClick,
+            interactionSource = interactionSource
+        ) {
+            innerContent()
         }
     }
 }
@@ -693,20 +743,16 @@ private fun AvatarChip(
     isOneUi: Boolean,
     isExthru: Boolean,
     isDark: Boolean,
+    hapticEnabled: Boolean,
     onClick: () -> Unit
 ) {
+    val haptic = rememberHaptic()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val targetScale = when {
-        isPressed && isExthru -> 0.86f // Сильный spring для неоморфизма
-        isPressed -> 0.90f
-        else -> 1f
-    }
-
     val scale by animateFloatAsState(
-        targetValue = targetScale,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
         label = "avatar_press"
     )
 
@@ -722,14 +768,23 @@ private fun AvatarChip(
         else -> MaterialTheme.colorScheme.onPrimaryContainer
     }
 
+    val shadowMod = if (isExthru) {
+        if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+        else Modifier.exthruSmallRaisedShadow(isDark)
+    } else Modifier
+
     Box(
         modifier = Modifier
-            .padding(end = 8.dp)
-            .size(36.dp)
+            .size(42.dp)
             .scale(scale)
-            .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
+            .then(shadowMod)
+            .background(if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f) else Color.Transparent, CircleShape)
+            .border(1.dp, if (isPressed || !isExthru) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
             .clip(CircleShape)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+            .clickable(interactionSource = interactionSource, indication = null) {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                onClick()
+            },
         contentAlignment = Alignment.Center
     ) {
         if (!avatarUrl.isNullOrEmpty()) {
@@ -811,11 +866,13 @@ private fun M3eFab(
     isOneUi: Boolean,
     isExthru: Boolean,
     isDark: Boolean,
+    hapticEnabled: Boolean,
     onToggle: () -> Unit,
     onNewChat: () -> Unit,
     onNewGroup: () -> Unit,
     onFindChannel: () -> Unit
 ) {
+    val haptic = rememberHaptic()
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -828,14 +885,14 @@ private fun M3eFab(
 
         val menuChipBg = when {
             isOneUi -> if (isDark) OneUi.CardBgDark else OneUi.CardBg
-            isExthru -> MaterialTheme.colorScheme.surface // DeepWater
+            isExthru -> MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.6f else 0.85f)
             else -> MaterialTheme.colorScheme.surfaceContainerHigh
         }
         val menuChipText = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else MaterialTheme.colorScheme.onSurface
 
         val menuIconBg = when {
             isOneUi -> if (isDark) OneUi.CardBgDark else OneUi.CardBg
-            isExthru -> MaterialTheme.colorScheme.surface // DeepWater
+            isExthru -> MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.6f else 0.85f)
             else -> MaterialTheme.colorScheme.secondaryContainer
         }
         val menuIconTint = when {
@@ -858,7 +915,7 @@ private fun M3eFab(
                 exit = scaleOut(targetScale = 0.7f, animationSpec = tween(100, delayMillis = ((2 - index) * 30L).toInt())) + fadeOut(tween(80))
             ) {
                 FabMenuItem(
-                    icon = icon, label = label, onClick = action,
+                    icon = icon, label = label, onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); action() },
                     chipBg = menuChipBg, chipText = menuChipText,
                     iconBg = menuIconBg, iconTint = menuIconTint,
                     isExthru = isExthru, isDark = isDark
@@ -866,8 +923,14 @@ private fun M3eFab(
             }
         }
 
-        val fabScale = remember { Animatable(1f) }
-        val fabScope = rememberCoroutineScope()
+        val interactionSource = remember { MutableInteractionSource() }
+        val isPressed by interactionSource.collectIsPressedAsState()
+
+        val fabScale by animateFloatAsState(
+            targetValue = if (isPressed) 0.85f else 1f,
+            animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+            label = "fab_scale"
+        )
 
         val fabBgOpen = when {
             isOneUi -> OneUi.IconRed
@@ -883,41 +946,63 @@ private fun M3eFab(
         val fabContentOpen = if (isOneUi || isExthru) Color.White else MaterialTheme.colorScheme.onErrorContainer
         val fabContentClosed = if (isOneUi || isExthru) Color.White else MaterialTheme.colorScheme.onPrimary
 
-        FloatingActionButton(
-            onClick = {
-                fabScope.launch {
-                    fabScale.animateTo(0.85f, spring(stiffness = Spring.StiffnessHigh, dampingRatio = Spring.DampingRatioNoBouncy))
-                    fabScale.animateTo(1.1f, spring(dampingRatio = Spring.DampingRatioLowBouncy))
-                    fabScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        if (isExthru) {
+            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = if (showMenu) 16.dp else 28.dp) else Modifier.exthruSmallRaisedShadow(isDark)
+
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .scale(fabScale)
+                    .then(shadowMod)
+                    .background(if (showMenu) fabBgOpen else fabBgClosed, if (showMenu) RoundedCornerShape(16.dp) else CircleShape)
+                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), if (showMenu) RoundedCornerShape(16.dp) else CircleShape)
+                    .clip(if (showMenu) RoundedCornerShape(16.dp) else CircleShape)
+                    .clickable(interactionSource = interactionSource, indication = null) {
+                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                        onToggle()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                AnimatedContent(
+                    targetState = showMenu,
+                    transitionSpec = {
+                        scaleIn(initialScale = 0.4f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(150)) togetherWith
+                                scaleOut(targetScale = 0.4f, animationSpec = tween(100)) + fadeOut(tween(80))
+                    },
+                    label = "fab_icon_morph"
+                ) { isOpen ->
+                    val rotation by animateFloatAsState(targetValue = if (isOpen) 45f else 0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "fab_rot")
+                    Icon(
+                        imageVector = if (isOpen) Icons.Default.Close else Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = rotation },
+                        tint = if (isOpen) fabContentOpen else fabContentClosed
+                    )
                 }
-                onToggle()
-            },
-            modifier = Modifier
-                .scale(fabScale.value)
-                .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier),
-            containerColor = if (showMenu) fabBgOpen else fabBgClosed,
-            contentColor = if (showMenu) fabContentOpen else fabContentClosed,
-            shape = if (showMenu) RoundedCornerShape(16.dp) else CircleShape,
-            elevation = if (isExthru) FloatingActionButtonDefaults.elevation(0.dp) else FloatingActionButtonDefaults.elevation()
-        ) {
-            AnimatedContent(
-                targetState = showMenu,
-                transitionSpec = {
-                    scaleIn(initialScale = 0.4f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(150)) togetherWith
-                            scaleOut(targetScale = 0.4f, animationSpec = tween(100)) + fadeOut(tween(80))
-                },
-                label = "fab_icon_morph"
-            ) { isOpen ->
-                val rotation by animateFloatAsState(
-                    targetValue = if (isOpen) 45f else 0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-                    label = "fab_rotation"
-                )
-                Icon(
-                    imageVector = if (isOpen) Icons.Default.Close else Icons.Default.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = rotation }
-                )
+            }
+        } else {
+            FloatingActionButton(
+                onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); onToggle() },
+                modifier = Modifier.scale(fabScale),
+                containerColor = if (showMenu) fabBgOpen else fabBgClosed,
+                contentColor = if (showMenu) fabContentOpen else fabContentClosed,
+                shape = if (showMenu) RoundedCornerShape(16.dp) else CircleShape
+            ) {
+                AnimatedContent(
+                    targetState = showMenu,
+                    transitionSpec = {
+                        scaleIn(initialScale = 0.4f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(tween(150)) togetherWith
+                                scaleOut(targetScale = 0.4f, animationSpec = tween(100)) + fadeOut(tween(80))
+                    },
+                    label = "fab_icon_morph"
+                ) { isOpen ->
+                    val rotation by animateFloatAsState(targetValue = if (isOpen) 45f else 0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "fab_rot")
+                    Icon(
+                        imageVector = if (isOpen) Icons.Default.Close else Icons.Default.Edit,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = rotation }
+                    )
+                }
             }
         }
     }
@@ -946,42 +1031,50 @@ private fun FabMenuItem(
     )
 
     Row(
-        modifier = Modifier.scale(scale),
+        modifier = Modifier.scale(scale).clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        val chipModifier = Modifier
-            .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
+        if (isExthru) {
+            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 12.dp) else Modifier.exthruSmallRaisedShadow(isDark)
+            Box(
+                modifier = Modifier
+                    .then(shadowMod)
+                    .background(chipBg, RoundedCornerShape(12.dp))
+                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = chipText)
+            }
 
-        Surface(
-            modifier = chipModifier,
-            color = chipBg,
-            shape = MaterialTheme.shapes.medium,
-            tonalElevation = if (isExthru) 0.dp else 3.dp,
-            shadowElevation = if (isExthru) 0.dp else 2.dp
-        ) {
-            Text(
-                label,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Medium,
-                color = chipText
-            )
-        }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .then(shadowMod)
+                    .background(iconBg, RoundedCornerShape(14.dp))
+                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), RoundedCornerShape(14.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, modifier = Modifier.size(22.dp), tint = iconTint)
+            }
+        } else {
+            Surface(
+                color = chipBg,
+                shape = MaterialTheme.shapes.medium,
+                shadowElevation = 2.dp
+            ) {
+                Text(label, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = chipText)
+            }
 
-        val iconBtnModifier = Modifier
-            .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
-
-        SmallFloatingActionButton(
-            modifier = iconBtnModifier,
-            onClick = onClick,
-            interactionSource = interactionSource,
-            containerColor = iconBg,
-            contentColor = iconTint,
-            shape = RoundedCornerShape(14.dp),
-            elevation = if (isExthru) FloatingActionButtonDefaults.elevation(0.dp) else FloatingActionButtonDefaults.elevation(2.dp)
-        ) {
-            Icon(icon, null, modifier = Modifier.size(22.dp))
+            SmallFloatingActionButton(
+                onClick = onClick,
+                containerColor = iconBg,
+                contentColor = iconTint,
+                shape = RoundedCornerShape(14.dp),
+                elevation = FloatingActionButtonDefaults.elevation(2.dp)
+            ) {
+                Icon(icon, null, modifier = Modifier.size(22.dp))
+            }
         }
     }
 }
@@ -999,6 +1092,7 @@ private fun formatTime(date: Date): String {
         else -> SimpleDateFormat("dd/MM/yy", Locale.getDefault()).format(date)
     }
 }
+
 @Composable
 fun SavedMessagesIcon(
     isOneUi: Boolean,
@@ -1006,23 +1100,21 @@ fun SavedMessagesIcon(
     isDark: Boolean,
     size: Dp
 ) {
-    // Красивые Teal-градиенты
     val bgGradient = when {
         isExthru -> Brush.linearGradient(
-            listOf(Color(0xFF1DE9B6), Color(0xFF00BFA5)) // Яркий Teal (светлее к темному)
+            listOf(Color(0xFF1DE9B6), Color(0xFF00BFA5))
         )
         else -> Brush.linearGradient(
-            listOf(Color(0xFF4DB6AC), Color(0xFF00695C)) // Глубокий, насыщенный Teal
+            listOf(Color(0xFF4DB6AC), Color(0xFF00695C))
         )
     }
 
     Box(
         modifier = Modifier
             .size(size)
-            // Добавляем тень ДО фона и явно указываем, что она должна быть круглой!
-            .then(if (isExthru) Modifier.shadow(8.dp, CircleShape) else Modifier)
-            // Заливаем фон и сразу обрезаем в круг (заменяет clip)
-            .background(bgGradient, CircleShape),
+            .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier.shadow(8.dp, CircleShape))
+            .background(bgGradient, CircleShape)
+            .border(1.dp, Color.White.copy(alpha = if (isDark) 0.1f else 0.3f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(

@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens
+package by.iposdev.visorlink.ui.screens.settings
 
 import android.content.Context
 import android.widget.Toast
@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
@@ -35,7 +37,11 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.BuildConfig
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
+import by.iposdev.visorlink.ui.components.LocalHazeState
+import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlGlassPanel
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.ui.update.UpdateChannel
@@ -45,6 +51,10 @@ import by.iposdev.visorlink.utils.ApkDownloader
 import by.iposdev.visorlink.utils.HapticHelper
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -87,7 +97,6 @@ private object OneUi {
     val IconBgGray    = Color(0xFFF0F0F0)
     val IconGrayDark  = Color(0xFF3A3A3A)
 
-    // Canary / testing colours
     val IconBgOrange  = Color(0xFFFFF3E0)
     val IconOrangeDark= Color(0xFF3D2800)
     val IconOrange    = Color(0xFFF57C00)
@@ -109,30 +118,22 @@ private val M3E_GAP   = 2.dp
 
 private fun shapeAt(index: Int, total: Int) = when {
     total == 1         -> RoundedCornerShape(M3E_BIG)
-    index == 0         -> RoundedCornerShape(topStart = M3E_BIG, topEnd = M3E_BIG,
-        bottomStart = M3E_SMALL, bottomEnd = M3E_SMALL)
-    index == total - 1 -> RoundedCornerShape(topStart = M3E_SMALL, topEnd = M3E_SMALL,
-        bottomStart = M3E_BIG, bottomEnd = M3E_BIG)
+    index == 0         -> RoundedCornerShape(topStart = M3E_BIG, topEnd = M3E_BIG, bottomStart = M3E_SMALL, bottomEnd = M3E_SMALL)
+    index == total - 1 -> RoundedCornerShape(topStart = M3E_SMALL, topEnd = M3E_SMALL, bottomStart = M3E_BIG, bottomEnd = M3E_BIG)
     else               -> RoundedCornerShape(M3E_SMALL)
 }
 
 private val OUI_CARD_SHAPE = RoundedCornerShape(24.dp)
 private val EXTHRU_CARD_SHAPE = RoundedCornerShape(20.dp)
 
-// ════════════════════════════════════════════════════════════════════════════
-//  SharedPreferences key for canary participation
-// ════════════════════════════════════════════════════════════════════════════
-
 private const val PREFS_NAME = "visorlink_prefs"
 private const val PREF_CANARY_ENROLLED = "canary_new_client_enrolled"
 
 private fun isCanaryEnrolled(context: Context): Boolean =
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .getBoolean(PREF_CANARY_ENROLLED, false)
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).getBoolean(PREF_CANARY_ENROLLED, false)
 
 private fun setCanaryEnrolled(context: Context, enrolled: Boolean) {
-    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        .edit().putBoolean(PREF_CANARY_ENROLLED, enrolled).apply()
+    context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean(PREF_CANARY_ENROLLED, enrolled).apply()
 }
 
 private const val CANARY_APK_URL = "https://visorlink-f9484.web.app/app-canary.apk"
@@ -153,6 +154,7 @@ fun SettingsScreen(
 ) {
     val currentTheme  by themeViewModel.appTheme.collectAsState()
     val currentMode   by themeViewModel.themeMode.collectAsState()
+    val currentPreset by themeViewModel.colorPreset.collectAsState()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val notifEnabled  by themeViewModel.notificationsEnabled.collectAsState()
     val currentLang   by themeViewModel.language.collectAsState()
@@ -160,13 +162,12 @@ fun SettingsScreen(
     val haptic = rememberHaptic()
 
     val isOneUi = currentTheme == AppTheme.ONE_UI
-    val isExthru = currentTheme == AppTheme.EXTHRU
+    val isExthru = currentTheme == AppTheme.EXTHRU || currentTheme == AppTheme.BIOLUME
     val isDark  = MaterialTheme.colorScheme.surface.luminance() < 0.1f
     val isCanary = BuildConfig.CHANNEL.equals("canary", ignoreCase = true)
 
     val buildDate = remember {
-        SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault())
-            .format(Date(BuildConfig.BUILD_TIMESTAMP))
+        SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP))
     }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
@@ -198,111 +199,178 @@ fun SettingsScreen(
         Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
     }
 
-    Scaffold(
-        containerColor = when {
-            isExthru -> MaterialTheme.colorScheme.background
-            isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
-            else -> MaterialTheme.colorScheme.surface
-        },
-        topBar = {
-            Surface(
-                color = if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent,
-                modifier = if (isExthru) Modifier.nmDividerBottom(isDark) else Modifier
-            ) {
-                if (isOneUi) {
-                    TopAppBar(
-                        title = {
-                            Text(stringResource(R.string.settings_title),
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = (-0.5).sp,
-                                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onNavigateBack) {
-                                Box(
-                                    Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null,
-                                        tint = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary,
-                                        modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = if (isDark) OneUi.PageBgDark else OneUi.PageBg,
-                            scrolledContainerColor = if (isDark) OneUi.PageBgDark else OneUi.PageBg
-                        )
-                    )
-                } else {
-                    TopAppBar(
-                        title = {
-                            if (isExthru) {
-                                Text(
-                                    text = stringResource(R.string.settings_title),
-                                    style = MaterialTheme.typography.headlineLarge.copy(
-                                        fontSize = 34.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            } else {
-                                Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold)
-                            }
-                        },
-                        navigationIcon = {
-                            val btnModifier = if (isExthru) Modifier
-                                .padding(start = 12.dp, end = 4.dp)
-                                .size(42.dp)
-                                .exthruSmallRaisedShadow(isDark)
-                                .background(MaterialTheme.colorScheme.surface, CircleShape)
-                            else Modifier
+    val scaffoldBg = when {
+        isExthru -> MaterialTheme.colorScheme.background
+        isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
+        else -> MaterialTheme.colorScheme.surface
+    }
 
-                            IconButton(
-                                onClick = onNavigateBack,
-                                modifier = btnModifier
-                            ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
-                                    stringResource(R.string.action_back),
-                                    modifier = if (isExthru) Modifier.size(20.dp) else Modifier
+    // Состояние Haze для создания эффекта матового стекла поверх анимированного фона
+    val hazeState = remember { HazeState() }
+
+    CompositionLocalProvider(LocalHazeState provides hazeState) {
+        Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
+            // Весь этот слой размывается для дочерних HazeChild
+            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
+                VlAmbientGlow(appTheme = currentTheme)
+
+                Scaffold(
+                    containerColor = Color.Transparent, // Прозрачный, чтобы видеть свечение
+                    topBar = {
+                        if (isExthru) {
+                            TopAppBar(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    // Накладываем блюр напрямую на TopAppBar без дополнительных рамок (VlGlassPanel убрали)
+                                    .hazeChild(
+                                        state = hazeState,
+                                        style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                                    )
+                                    // Полупрозрачная тонировка матового стекла
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
+                                title = {
+                                    Text(
+                                        text = stringResource(R.string.settings_title),
+                                        style = MaterialTheme.typography.headlineLarge.copy(
+                                            fontSize = 34.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                },
+                                navigationIcon = {
+                                    val interactionSource = remember { MutableInteractionSource() }
+                                    val isPressed by interactionSource.collectIsPressedAsState()
+
+                                    // Анимация масштабирования при нажатии
+                                    val scale by animateFloatAsState(
+                                        targetValue = if (isPressed) 0.9f else 1f,
+                                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+                                        label = "back_btn_scale"
+                                    )
+
+                                    // Динамическая смена тени: выпуклая -> вдавленная
+                                    val shadowMod = if (isPressed) {
+                                        Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                                    } else {
+                                        Modifier.exthruSmallRaisedShadow(isDark)
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(start = 12.dp, end = 4.dp)
+                                            .size(42.dp)
+                                            .scale(scale)
+                                            .then(shadowMod)
+                                            .background(
+                                                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f),
+                                                CircleShape
+                                            )
+                                            // Убираем обводку при нажатии для реалистичного эффекта погружения
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f),
+                                                shape = CircleShape
+                                            )
+                                            .clip(CircleShape)
+                                            .clickable(
+                                                interactionSource = interactionSource,
+                                                indication = null,
+                                                onClick = {
+                                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                                    onNavigateBack()
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = "Back",
+                                            modifier = Modifier.size(20.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = Color.Transparent,
+                                    scrolledContainerColor = Color.Transparent
                                 )
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = if (isExthru) Color.Transparent else MaterialTheme.colorScheme.surface
-                        )
-                    )
+                            )
+                        } else if (isOneUi) {
+                            TopAppBar(
+                                title = {
+                                    Text(stringResource(R.string.settings_title),
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = (-0.5).sp,
+                                        color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
+                                },
+                                navigationIcon = {
+                                    IconButton(onClick = {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        onNavigateBack()
+                                    }) {
+                                        Box(
+                                            Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.ArrowBack, null,
+                                                tint = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary,
+                                                modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = if (isDark) OneUi.PageBgDark else OneUi.PageBg,
+                                    scrolledContainerColor = if (isDark) OneUi.PageBgDark else OneUi.PageBg
+                                )
+                            )
+                        } else {
+                            TopAppBar(
+                                title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
+                                navigationIcon = {
+                                    IconButton(onClick = {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        onNavigateBack()
+                                    }) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
+                            )
+                        }
+                    }
+                ) { padding ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .verticalScroll(rememberScrollState())
+                            .padding(bottom = 32.dp)
+                    ) {
+                        when {
+                            isExthru -> ExthruSettingsContent(
+                                currentTheme, currentMode, currentPreset, hapticEnabled, notifEnabled,
+                                currentLang, currentChannel, isCanary, versionString, isDark, haptic, themeViewModel,
+                                onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
+                            )
+                            isOneUi -> OuiSettingsContent(
+                                currentTheme, currentMode, currentPreset, hapticEnabled, notifEnabled,
+                                currentLang, currentChannel, isCanary, versionString, isDark, haptic, themeViewModel,
+                                onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
+                            )
+                            else -> M3eSettingsContent(
+                                currentTheme, currentMode, currentPreset, hapticEnabled, notifEnabled,
+                                currentLang, currentChannel, isCanary, versionString, haptic, themeViewModel,
+                                onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
+                            )
+                        }
+                    }
                 }
-            }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp)
-        ) {
-            when {
-                isExthru -> ExthruSettingsContent(
-                    currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, currentChannel, isCanary, versionString, isDark, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
-                )
-                isOneUi -> OuiSettingsContent(
-                    currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, currentChannel, isCanary, versionString, isDark, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
-                )
-                else -> M3eSettingsContent(
-                    currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, currentChannel, isCanary, versionString, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates, onChannelClick = { showChannelDialog = true }
-                )
             }
         }
     }
@@ -311,30 +379,82 @@ fun SettingsScreen(
         ChannelSelectionDialog(
             currentChannel = currentChannel,
             onDismiss = { showChannelDialog = false },
-            onSelect = {
-                appUpdateViewModel.setChannel(it)
-                showChannelDialog = false
-            }
+            onSelect = { appUpdateViewModel.setChannel(it); showChannelDialog = false }
         )
     }
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Alpha-testing banner — shared logic, theme-agnostic
+//  Color Preset Circle (Анимированный)
 // ════════════════════════════════════════════════════════════════════════════
 
-/**
- * Returns (enrolled, downloadProgress) states and a lambda to trigger download.
- * Pass context from the call site.
- */
 @Composable
-private fun rememberCanaryState(context: Context): Triple<
-        Boolean,
-        Float,
-            (redownload: Boolean) -> Unit
-        > {
+private fun ColorPresetCircle(
+    preset: ColorPreset,
+    isSelected: Boolean,
+    isExthru: Boolean = false,
+    isDark: Boolean = false,
+    onClick: () -> Unit
+) {
+    val isDefault = preset == ColorPreset.DEFAULT
+    val color = preset.seedColor ?: Color.Transparent
+    val cs = MaterialTheme.colorScheme
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else if (isSelected) 1.25f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "scale"
+    )
+
+    val bgModifier = if (isDefault) {
+        Modifier.background(
+            Brush.sweepGradient(listOf(Color.Blue, Color.Magenta, Color.Red, Color(0xFFFFA500), Color.Blue)),
+            CircleShape
+        )
+    } else {
+        Modifier.background(color, CircleShape)
+    }
+
+    // Динамическая смена тени в Exthru: Выпуклая -> Вдавленная
+    val exthruMod = if (isExthru) {
+        if (isSelected || isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+        else Modifier.exthruSmallRaisedShadow(isDark)
+    } else Modifier
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .scale(scale)
+            .then(exthruMod)
+            .then(bgModifier)
+            .border(
+                width = if (isSelected && !isExthru) 3.dp else if (isExthru) 1.dp else 1.dp,
+                color = if (isSelected && !isExthru) cs.onSurface else if (isExthru) Color.White.copy(alpha = if(isDark) 0.05f else 0.3f) else cs.outlineVariant.copy(alpha = 0.3f),
+                shape = CircleShape
+            )
+            .clip(CircleShape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isDefault) {
+            Icon(Icons.Default.Palette, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        } else if (isSelected) {
+            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Alpha-testing banner — shared logic
+// ════════════════════════════════════════════════════════════════════════════
+
+@Composable
+private fun rememberCanaryState(context: Context): Triple<Boolean, Float, (Boolean) -> Unit> {
     var enrolled by remember { mutableStateOf(isCanaryEnrolled(context)) }
-    var downloadProgress by remember { mutableFloatStateOf(-2f) } // -2 = idle
+    var downloadProgress by remember { mutableFloatStateOf(-2f) }
 
     val onDownload: (Boolean) -> Unit = { redownload ->
         downloadProgress = 0f
@@ -349,21 +469,28 @@ private fun rememberCanaryState(context: Context): Triple<
                 downloadProgress = -2f
             }
         )
-        if (redownload.not()) {
-            // Mark enrolled immediately so the button switches; install follows async
-        }
     }
     return Triple(enrolled, downloadProgress, onDownload)
 }
 
+private const val CANARY_BANNER_TEXT =
+    "Приглашаем вас принять участие в альфа-тестировании нового клиента VisorLink! " +
+            "Этот клиент создан с нуля для лучшей производительности и совместимости. " +
+            "В будущем именно он станет основой для десктоп-клиента VisorLink."
+
+private const val CANARY_WARNING_TEXT =
+    "⚠️ В новом клиенте отсутствуют многие функции, он нестабилен и поэтому будет " +
+            "установлен отдельно от основного приложения. Продолжить?"
+
 // ════════════════════════════════════════════════════════════════════════════
-//  EXTHRU CONTENT (Neomorphic)
+//  EXTHRU CONTENT (Glassmorphism & Neomorphism)
 // ════════════════════════════════════════════════════════════════════════════
 
 @Composable
 private fun ExthruSettingsContent(
     currentTheme: AppTheme,
     currentMode: ThemeMode,
+    currentPreset: ColorPreset,
     hapticEnabled: Boolean,
     notifEnabled: Boolean,
     currentLang: AppLanguage,
@@ -377,12 +504,27 @@ private fun ExthruSettingsContent(
     onCheckUpdates: () -> Unit,
     onChannelClick: () -> Unit
 ) {
+    ExthruSectionHeader("Цветовой акцент")
+    ExthruCard(isDark) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            ColorPreset.entries.forEach { preset ->
+                ColorPresetCircle(preset, currentPreset == preset, isExthru = true, isDark = isDark) {
+                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                    vm.setColorPreset(preset)
+                }
+            }
+        }
+    }
+
     ExthruSectionHeader(stringResource(R.string.settings_section_appearance))
     ExthruCard(isDark) {
         ExthruOptionRow(
-            label = "Exthru",  desc = "Neomorphic teal — осязаемый и объёмный интерфейс.\n⚠️ Экспериментальная тема, возможна нестабильная работа.",
-            icon = Icons.Default.Layers, selected = currentTheme == AppTheme.EXTHRU, isDark = isDark
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.EXTHRU) }
+            label = "Biolume",  desc = "Neomorphic teal — осязаемый и объёмный интерфейс.",
+            icon = Icons.Default.Layers, selected = currentTheme == AppTheme.BIOLUME || currentTheme == AppTheme.EXTHRU, isDark = isDark
+        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.BIOLUME) }
 
         ExthruOptionRow(
             label = stringResource(R.string.settings_theme_m3_name), desc = stringResource(R.string.settings_theme_m3_desc),
@@ -452,7 +594,6 @@ private fun ExthruSettingsContent(
         ) { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
-    // ── Тестирование ──────────────────────────────────────────────────────────
     ExthruSectionHeader("Тестирование")
     ExthruCanaryBanner(isDark = isDark)
 
@@ -498,6 +639,7 @@ private fun ExthruSettingsContent(
 private fun OuiSettingsContent(
     currentTheme: AppTheme,
     currentMode: ThemeMode,
+    currentPreset: ColorPreset,
     hapticEnabled: Boolean,
     notifEnabled: Boolean,
     currentLang: AppLanguage,
@@ -511,18 +653,32 @@ private fun OuiSettingsContent(
     onCheckUpdates: () -> Unit,
     onChannelClick: () -> Unit
 ) {
-    OuiSectionLabel(stringResource(R.string.settings_section_appearance), isDark)
+    OuiSectionLabel("Цветовой акцент", isDark)
+    OuiCard(isDark) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            ColorPreset.entries.forEach { preset ->
+                ColorPresetCircle(preset, currentPreset == preset, isExthru = false, isDark = isDark) {
+                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                    vm.setColorPreset(preset)
+                }
+            }
+        }
+    }
 
+    OuiSectionLabel(stringResource(R.string.settings_section_appearance), isDark)
     OuiCard(isDark) {
         OuiOptionRow(
-            label = "Exthru",
-            desc = "Neomorphic teal — осязаемый и объёмный интерфейс.\n⚠️ Экспериментальная тема, возможна нестабильная работа.",
+            label = "Biolume",
+            desc = "Neomorphic teal — осязаемый и объёмный интерфейс.",
             icon = Icons.Default.Layers,
             iconBg = if (isDark) Color(0xFF1A3535) else Color(0xFFD4F0EE),
             iconTint = Color(0xFF2DA89A),
-            selected = currentTheme == AppTheme.EXTHRU,
+            selected = currentTheme == AppTheme.BIOLUME || currentTheme == AppTheme.EXTHRU,
             showDivider = false, isDark = isDark
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.EXTHRU) }
+        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.BIOLUME) }
 
         OuiDivider(isDark)
 
@@ -550,7 +706,6 @@ private fun OuiSettingsContent(
     }
 
     OuiSectionLabel(stringResource(R.string.settings_dark_title), isDark)
-
     OuiCard(isDark) {
         listOf(
             Triple(ThemeMode.SYSTEM, stringResource(R.string.settings_dark_system),
@@ -577,7 +732,6 @@ private fun OuiSettingsContent(
     }
 
     OuiSectionLabel(stringResource(R.string.settings_section_language), isDark)
-
     OuiCard(isDark) {
         listOf(
             AppLanguage.SYSTEM to stringResource(R.string.settings_language_system),
@@ -594,7 +748,6 @@ private fun OuiSettingsContent(
     }
 
     OuiSectionLabel(stringResource(R.string.settings_section_notifications), isDark)
-
     OuiCard(isDark) {
         OuiSwitchRow(
             icon     = Icons.Default.Notifications,
@@ -620,7 +773,6 @@ private fun OuiSettingsContent(
     }
 
     OuiSectionLabel(stringResource(R.string.settings_section_storage), isDark)
-
     OuiCard(isDark) {
         OuiNavRow(
             icon     = Icons.Default.Storage,
@@ -632,12 +784,10 @@ private fun OuiSettingsContent(
         ) { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
-    // ── Тестирование ──────────────────────────────────────────────────────────
     OuiSectionLabel("Тестирование", isDark)
     OuiCanaryBanner(isDark = isDark)
 
     OuiSectionLabel(stringResource(R.string.settings_section_about), isDark)
-
     OuiCard(isDark) {
         OuiInfoRow(
             icon     = Icons.Default.Info,
@@ -701,6 +851,7 @@ private fun OuiSettingsContent(
 private fun M3eSettingsContent(
     currentTheme: AppTheme,
     currentMode: ThemeMode,
+    currentPreset: ColorPreset,
     hapticEnabled: Boolean,
     notifEnabled: Boolean,
     currentLang: AppLanguage,
@@ -713,17 +864,38 @@ private fun M3eSettingsContent(
     onCheckUpdates: () -> Unit,
     onChannelClick: () -> Unit
 ) {
+    SectionHeader("Цветовой акцент")
+    OptionGroup {
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                ColorPreset.entries.forEach { preset ->
+                    ColorPresetCircle(preset, currentPreset == preset, isExthru = false) {
+                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                        vm.setColorPreset(preset)
+                    }
+                }
+            }
+        }
+    }
+
     SectionHeader(stringResource(R.string.settings_section_appearance))
     GroupLabel(Icons.Default.Palette, stringResource(R.string.settings_theme_title))
     Spacer(Modifier.height(4.dp))
     OptionGroup {
         ThemeOption(
-            label = "Exthru",
-            description = "Neomorphic teal — осязаемый и объёмный интерфейс.\n⚠️ Экспериментальная тема, возможна нестабильная работа.",
+            label = "Biolume",
+            description = "Neomorphic teal — осязаемый и объёмный интерфейс.",
             icon = Icons.Default.Layers,
-            selected = currentTheme == AppTheme.EXTHRU,
+            selected = currentTheme == AppTheme.BIOLUME || currentTheme == AppTheme.EXTHRU,
             index = 0, total = 3, primaryColor = false
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.EXTHRU) }
+        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.BIOLUME) }
         Spacer(Modifier.height(M3E_GAP))
         ThemeOption(stringResource(R.string.settings_theme_m3_name),
             stringResource(R.string.settings_theme_m3_desc), Icons.Default.AutoAwesome,
@@ -783,7 +955,6 @@ private fun M3eSettingsContent(
         { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
     }
 
-    // ── Тестирование ──────────────────────────────────────────────────────────
     SectionHeader("Тестирование")
     M3eCanaryBanner()
 
@@ -817,15 +988,6 @@ private fun M3eSettingsContent(
 //  CANARY ALPHA BANNER — per-theme implementations
 // ════════════════════════════════════════════════════════════════════════════
 
-private const val CANARY_BANNER_TEXT =
-    "Приглашаем вас принять участие в альфа-тестировании нового клиента VisorLink! " +
-            "Этот клиент создан с нуля для лучшей производительности и совместимости. " +
-            "В будущем именно он станет основой для десктоп-клиента VisorLink."
-
-private const val CANARY_WARNING_TEXT =
-    "⚠️ В новом клиенте отсутствуют многие функции, он нестабилен и поэтому будет " +
-            "установлен отдельно от основного приложения. Продолжить?"
-
 @Composable
 private fun ExthruCanaryBanner(isDark: Boolean) {
     val context = LocalContext.current
@@ -833,40 +995,36 @@ private fun ExthruCanaryBanner(isDark: Boolean) {
     var showWarning by remember { mutableStateOf(false) }
     var isRedownload by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .exthruRaisedShadow(isDark)
-            .background(MaterialTheme.colorScheme.surface, EXTHRU_CARD_SHAPE)
-            .clip(EXTHRU_CARD_SHAPE)
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ExthruCard(isDark = isDark) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            ExthruIconTray(icon = Icons.Default.BugReport, isDark = isDark)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                ExthruIconTray(icon = Icons.Default.BugReport, isDark = isDark)
+                Text(
+                    text = "Тестирование нового клиента",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             Text(
-                text = "Тестирование нового клиента",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                text = CANARY_BANNER_TEXT,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            CanaryActionRow(
+                enrolled = enrolled,
+                downloadProgress = downloadProgress,
+                isDark = isDark,
+                onParticipate = { showWarning = true },
+                onRedownload = { isRedownload = true; showWarning = true }
             )
         }
-        Text(
-            text = CANARY_BANNER_TEXT,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        CanaryActionRow(
-            enrolled = enrolled,
-            downloadProgress = downloadProgress,
-            isDark = isDark,
-            onParticipate = { showWarning = true },
-            onRedownload = { isRedownload = true; showWarning = true }
-        )
     }
 
     if (showWarning) {
@@ -1173,7 +1331,7 @@ fun ChannelSelectionDialog(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-//  Exthru Primitives
+//  Exthru Primitives (Glassmorphism & Physics Neomorphism)
 // ════════════════════════════════════════════════════════════════════════════
 
 @Composable
@@ -1191,20 +1349,37 @@ private fun ExthruSectionHeader(title: String) {
 
 @Composable
 private fun ExthruCard(isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    val hazeState = LocalHazeState.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .exthruRaisedShadow(isDark)
-            .background(MaterialTheme.colorScheme.surface, EXTHRU_CARD_SHAPE)
-            .clip(EXTHRU_CARD_SHAPE),
+            .clip(EXTHRU_CARD_SHAPE) // <-- СНАЧАЛА обрезаем форму карточки
+            .hazeChild(
+                state = hazeState,
+                style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                // параметр shape = ... отсюда УБРАЛИ
+            )
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f))
+            .border(
+                width = 1.5.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (isDark) 0.15f else 0.5f),
+                        Color.Transparent,
+                        Color.Black.copy(alpha = if (isDark) 0.4f else 0.05f)
+                    )
+                ),
+                shape = EXTHRU_CARD_SHAPE
+            ),
         content = content
     )
 }
 
 @Composable
 private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, selected: Boolean = false, isError: Boolean = false) {
-    val bgColor = MaterialTheme.colorScheme.surface
+    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.7f)
     val iconColor = when {
         isError -> MaterialTheme.colorScheme.error
         selected -> MaterialTheme.colorScheme.primary
@@ -1214,7 +1389,8 @@ private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, selected: Boolean
         modifier = Modifier
             .size(38.dp)
             .exthruSmallRaisedShadow(isDark)
-            .background(bgColor, CircleShape),
+            .background(bgColor, CircleShape)
+            .border(1.dp, Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp))
@@ -1223,36 +1399,65 @@ private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, selected: Boolean
 
 @Composable
 private fun NmSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    val thumbOffset by animateFloatAsState(
-        targetValue = if (checked) 24f else 4f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
-        label = "nm_thumb"
-    )
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val thumbScale by animateFloatAsState(if (isPressed) 0.9f else 1f)
 
-    val thumbColor by animateColorAsState(
-        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-        animationSpec = tween(200), label = "nm_thumb_color"
+    // Пружинная анимация перемещения с отскоком (Bouncy)
+    val thumbOffset by animateFloatAsState(
+        targetValue = if (checked) 26f else 4f,
+        animationSpec = spring(
+            dampingRatio = 0.5f, // 0.5 дает отличный механический отскок
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "nm_thumb_offset"
     )
 
+    // Анимация вдавливания самого тумблера при тапе
+    val thumbScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "nm_thumb_scale"
+    )
+
+    // Цвет внутренней точки (серая -> акцентная)
+    val dotColor by animateColorAsState(
+        targetValue = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+        animationSpec = tween(200),
+        label = "nm_thumb_dot_color"
+    )
+
+    // Вдавленная дорожка (Track)
     Box(
         modifier = Modifier
-            .width(52.dp)
+            .width(54.dp)
             .height(28.dp)
-            .nmInsetShadow(isDark, cornerRadius = 14.dp)
+            .nmInsetShadow(isDark, cornerRadius = 14.dp, darkAlpha = if (isDark) 0.7f else 0.35f)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.2f else 0.4f), RoundedCornerShape(14.dp))
             .clip(RoundedCornerShape(14.dp))
-            .clickable(interactionSource = interactionSource, indication = null) { onCheckedChange(!checked) }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = { onCheckedChange(!checked) }
+            )
     ) {
+        // Выпуклый ползунок (Thumb)
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset.dp, y = 2.dp)
                 .size(24.dp)
                 .scale(thumbScale)
-                .exthruSmallRaisedShadow(isDark)
-                .background(thumbColor, CircleShape)
-        )
+                // Меняем тень: при нажатии тумблер утапливается внутрь
+                .then(if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 12.dp) else Modifier.exthruSmallRaisedShadow(isDark))
+                .background(MaterialTheme.colorScheme.surface, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            // Цветной индикатор
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(dotColor, CircleShape)
+            )
+        }
     }
 }
 
@@ -1267,7 +1472,8 @@ private fun NmRadio(selected: Boolean, isDark: Boolean) {
     Box(
         modifier = Modifier
             .size(24.dp)
-            .nmInsetShadow(isDark, cornerRadius = 12.dp),
+            .nmInsetShadow(isDark, cornerRadius = 12.dp)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.2f else 0.4f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         if (selected || dotScale > 0f) {
@@ -1292,34 +1498,41 @@ private fun ExthruOptionRow(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-        animationSpec = tween(100), label = "exthru_opt_press"
-    )
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, spring(dampingRatio = 0.6f), label = "row_scale")
 
-    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ExthruIconTray(icon = icon, isDark = isDark, selected = selected)
-            Column(Modifier.weight(1f)) {
-                Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
-                if (desc.isNotEmpty()) {
-                    Text(text = desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale) // Физическое проваливание при нажатии
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        ExthruIconTray(icon = icon, isDark = isDark, selected = selected)
+        Column(Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+            if (desc.isNotEmpty()) {
+                Text(text = desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            NmRadio(selected = selected, isDark = isDark)
         }
+        NmRadio(selected = selected, isDark = isDark)
     }
 }
 
 @Composable
 private fun ExthruSwitchRow(icon: ImageVector, title: String, sub: String, checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, spring(dampingRatio = 0.6f), label = "row_scale")
+
     Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = { onCheckedChange(!checked) })
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1336,23 +1549,23 @@ private fun ExthruSwitchRow(icon: ImageVector, title: String, sub: String, check
 private fun ExthruNavRow(icon: ImageVector, title: String, sub: String, isDark: Boolean, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-        animationSpec = tween(100), label = "exthru_nav_press"
-    )
-    Surface(onClick = onClick, interactionSource = interactionSource, color = bgColor, shape = RoundedCornerShape(0.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ExthruIconTray(icon = icon, isDark = isDark)
-            Column(Modifier.weight(1f)) {
-                Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Text(text = sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
+    val scale by animateFloatAsState(if (isPressed) 0.96f else 1f, spring(dampingRatio = 0.6f), label = "row_scale")
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        ExthruIconTray(icon = icon, isDark = isDark)
+        Column(Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            Text(text = sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -1565,6 +1778,23 @@ private fun OuiInfoRow(icon: ImageVector, iconBg: Color, iconTint: Color, title:
     }
 }
 
+@Composable
+private fun OuiWarningCard(isDark: Boolean) {
+    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = OUI_CARD_SHAPE,
+        color = if (isDark) Color(0xFF3D2A1D) else Color(0xFFFFF3E0), shadowElevation = 0.dp) {
+        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(if (isDark) Color(0xFF5D4037) else Color(0xFFFFE0B2)), contentAlignment = Alignment.Center) {
+                Icon(imageVector = Icons.Default.WarningAmber, contentDescription = null, tint = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00), modifier = Modifier.size(20.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(text = "Внутренняя сборка", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFFFEECC) else Color(0xFFE65100))
+                Text(text = "Эта версия предназначена для тестирования и может быть нестабильной.",
+                    fontSize = 13.sp, color = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00), modifier = Modifier.padding(top = 2.dp), lineHeight = 18.sp)
+            }
+        }
+    }
+}
+
 // ─── M3E helpers ─────────────────────────────────────────────────────────────
 
 @Composable private fun SectionHeader(title: String) {
@@ -1691,23 +1921,6 @@ private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: I
         }
         AnimatedVisibility(!selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)), exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
             Icon(imageVector = Icons.Default.RadioButtonUnchecked, contentDescription = null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.outline)
-        }
-    }
-}
-
-@Composable
-private fun OuiWarningCard(isDark: Boolean) {
-    Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), shape = OUI_CARD_SHAPE,
-        color = if (isDark) Color(0xFF3D2A1D) else Color(0xFFFFF3E0), shadowElevation = 0.dp) {
-        Row(modifier = Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Box(modifier = Modifier.size(38.dp).clip(RoundedCornerShape(12.dp)).background(if (isDark) Color(0xFF5D4037) else Color(0xFFFFE0B2)), contentAlignment = Alignment.Center) {
-                Icon(imageVector = Icons.Default.WarningAmber, contentDescription = null, tint = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00), modifier = Modifier.size(20.dp))
-            }
-            Column(Modifier.weight(1f)) {
-                Text(text = "Внутренняя сборка", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFFFEECC) else Color(0xFFE65100))
-                Text(text = "Эта версия предназначена для тестирования и может быть нестабильной.",
-                    fontSize = 13.sp, color = if (isDark) Color(0xFFFFB74D) else Color(0xFFF57C00), modifier = Modifier.padding(top = 2.dp), lineHeight = 18.sp)
-            }
         }
     }
 }

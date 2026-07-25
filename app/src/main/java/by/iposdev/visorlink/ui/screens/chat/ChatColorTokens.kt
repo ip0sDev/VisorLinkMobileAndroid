@@ -27,57 +27,52 @@ internal object OneUiChat {
 }
 
 // ── Exthru Chat color tokens ──────────────────────────────────────────────────
-// Все токены адаптированы под Light (Daylight) и Dark (Midnight).
-// Используйте ExthruChat.tokens(isDark) для получения нужного набора.
 
 internal object ExthruChat {
-    // ── Акценты (универсальны, одинаковы в обеих темах) ──────────────────────
-    val Accent      = Biolume.CyanGlow          // #2DA89A
-    val AccentLight = Biolume.TealLight          // #3DBFB0
-    val AccentDark  = Biolume.TealPulse          // #1D8B7E
-    val Destructive = Biolume.PinkFlash          // #C0392B
-    val Online      = Biolume.MangoGlow          // #27AE60
+    // ── Акценты ──
+    val Accent      = Biolume.CyanGlow
+    val AccentLight = Biolume.TealLight
+    val AccentDark  = Biolume.TealPulse
+    val Destructive = Biolume.PinkFlash
+    val Online      = Biolume.MangoGlow
 
-    // ── Light (Daylight) поверхности ─────────────────────────────────────────
-    val PageBg    = Biolume.MidWater             // #D4E8E6 — основной фон экрана
-    val BarBg     = Biolume.DeepWater            // #CCE2E0 — топ-бар и боттом-бар
-    val CardBg    = Biolume.ShallowWater         // #DDF0EE — карточки
-    val InputBg   = Biolume.AbyssSurface         // #C0DADA — поле ввода (inset)
+    // ── Light (Daylight) поверхности ──
+    val PageBg    = Biolume.MidWater
+    val BarBg     = Biolume.DeepWater
+    val CardBg    = Biolume.ShallowWater
+    val InputBg   = Biolume.AbyssSurface
 
-    // ── Dark (Midnight) поверхности ──────────────────────────────────────────
-    val DarkPageBg  = Biolume.DarkMidWater       // #152E2D — основной фон экрана
-    val DarkBarBg   = Biolume.DarkDeepWater      // #102423 — топ-бар и боттом-бар
-    val DarkCardBg  = Biolume.DarkShallowWater   // #1B3B3A — карточки
-    val DarkInputBg = Biolume.DarkAbyssSurface   // #0B1A1A — поле ввода (inset)
+    // ── Dark (Midnight) поверхности ──
+    val DarkPageBg  = Biolume.DarkMidWater
+    val DarkBarBg   = Biolume.DarkDeepWater
+    val DarkCardBg  = Biolume.DarkShallowWater
+    val DarkInputBg = Biolume.DarkAbyssSurface
 
-    // ── Light пузыри ─────────────────────────────────────────────────────────
-    val BubbleMine  = Biolume.BubbleMine         // #C2DBD8
-    val BubbleOther = Biolume.BubbleOther        // #CDE4E2
+    // ── Light пузыри (сделаны чуть более прозрачными) ──
+    val BubbleMine  = Biolume.BubbleMine.copy(alpha = 0.85f)
+    val BubbleOther = Biolume.BubbleOther.copy(alpha = 0.85f)
 
-    // ── Dark пузыри ──────────────────────────────────────────────────────────
-    val DarkBubbleMine  = Biolume.DarkBubbleMine  // #1C403E
-    val DarkBubbleOther = Biolume.DarkBubbleOther // #15302F
+    // ── Dark пузыри (сделаны чуть более прозрачными) ──
+    val DarkBubbleMine  = Biolume.DarkBubbleMine.copy(alpha = 0.65f)
+    val DarkBubbleOther = Biolume.DarkBubbleOther.copy(alpha = 0.65f)
 
-    // ── Light текст ──────────────────────────────────────────────────────────
-    val TextPrimary   = Biolume.TextPrimary       // #1A4040
-    val TextSecondary = Biolume.TextSecondary     // #2D6060
-    val TextHint      = Biolume.TextHint          // #7AACAA
+    // ── Light текст ──
+    val TextPrimary   = Biolume.TextPrimary
+    val TextSecondary = Biolume.TextSecondary
+    val TextHint      = Biolume.TextHint
 
-    // ── Dark текст ───────────────────────────────────────────────────────────
-    val DarkTextPrimary   = Biolume.DarkTextPrimary    // #E8F5F3
-    val DarkTextSecondary = Biolume.DarkTextSecondary  // #9CBDBA
-    val DarkTextHint      = Biolume.DarkTextHint       // #5A8582
+    // ── Dark текст ──
+    val DarkTextPrimary   = Biolume.DarkTextPrimary
+    val DarkTextSecondary = Biolume.DarkTextSecondary
+    val DarkTextHint      = Biolume.DarkTextHint
 
-    // ── Light тени ───────────────────────────────────────────────────────────
-    val ShadowDark  = Biolume.ShadowDark          // #5C8C88
-    val ShadowLight = Biolume.ShadowLight         // #FFFFFF
+    // ── Тени ──
+    val ShadowDark  = Biolume.ShadowDark
+    val ShadowLight = Biolume.ShadowLight
+    val DarkShadowDark  = Biolume.DarkShadowDark
+    val DarkShadowLight = Biolume.DarkShadowLight
 
-    // ── Dark тени ────────────────────────────────────────────────────────────
-    val DarkShadowDark  = Biolume.DarkShadowDark  // #000000
-    val DarkShadowLight = Biolume.DarkShadowLight // #FFFFFF
-
-    // ── Хелперы для получения адаптивного цвета ───────────────────────────────
-
+    // ── Хелперы ──
     fun pageBg(isDark: Boolean)        = if (isDark) DarkPageBg  else PageBg
     fun barBg(isDark: Boolean)         = if (isDark) DarkBarBg   else BarBg
     fun cardBg(isDark: Boolean)        = if (isDark) DarkCardBg  else CardBg
@@ -93,8 +88,6 @@ internal object ExthruChat {
     fun shadowDark(isDark: Boolean)    = if (isDark) DarkShadowDark  else ShadowDark
     fun shadowLight(isDark: Boolean)   = if (isDark) DarkShadowLight else ShadowLight
 }
-
-// ── Quick reactions list ──────────────────────────────────────────────────────
 
 internal val QUICK_REACTIONS = listOf(
     "👍", "❤️", "😂", "😮", "😢", "🔥", "🎉", "👏",

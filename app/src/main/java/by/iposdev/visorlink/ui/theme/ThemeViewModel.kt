@@ -3,6 +3,7 @@ package by.iposdev.visorlink.ui.theme
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.LocaleHelper
@@ -13,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 private const val PREFS_NAME      = "visorlink_settings"
 private const val KEY_THEME       = "app_theme"
 private const val KEY_THEME_MODE  = "theme_mode"
+private const val KEY_COLOR_PRESET = "color_preset"
 private const val KEY_HAPTIC      = "haptic_feedback"
 private const val KEY_NOTIF       = "notifications_enabled"
 private const val KEY_LANGUAGE    = "app_language"
@@ -32,6 +34,11 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
         ThemeMode.valueOf(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)!!)
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
+
+    private val _colorPreset = MutableStateFlow(
+        ColorPreset.valueOf(prefs.getString(KEY_COLOR_PRESET, ColorPreset.DEFAULT.name)!!)
+    )
+    val colorPreset: StateFlow<ColorPreset> = _colorPreset.asStateFlow()
 
     private val _hapticEnabled = MutableStateFlow(prefs.getBoolean(KEY_HAPTIC, true))
     val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
@@ -64,6 +71,11 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    fun setColorPreset(preset: ColorPreset) {
+        _colorPreset.value = preset
+        prefs.edit().putString(KEY_COLOR_PRESET, preset.name).apply()
     }
 
     fun setHaptic(enabled: Boolean) {

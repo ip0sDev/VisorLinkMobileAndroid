@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -92,6 +93,10 @@ private fun UnofficialClientDialog(
                 usePlatformDefaultWidth = false // Позволяет контролировать ширину вручную
             )
         ) {
+            val dialogWindowProvider = LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider
+            dialogWindowProvider?.window?.setDimAmount(0.6f)
+            dialogWindowProvider?.window?.setBackgroundDrawableResource(android.R.color.transparent)
+
             // Box с padding'ом, чтобы тень карточки поместилась в окно рендера
             Box(
                 modifier = Modifier

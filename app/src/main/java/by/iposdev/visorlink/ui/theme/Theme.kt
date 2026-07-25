@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
@@ -169,6 +170,15 @@ val ShapesExthru = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
+// Forge — neo-brutalist, острые углы везде (радиус = 0 во Flutter-версии)
+val ShapesForge = Shapes(
+    extraSmall = RoundedCornerShape(0.dp),
+    small = RoundedCornerShape(0.dp),
+    medium = RoundedCornerShape(0.dp),
+    large = RoundedCornerShape(0.dp),
+    extraLarge = RoundedCornerShape(0.dp)
+)
+
 // ── Typography ────────────────────────────────────────────────────────────────
 
 val TypographyM3 = Typography(
@@ -206,9 +216,11 @@ val TypographyOneUI = Typography(
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 @Composable
+@Suppress("DEPRECATION")
 fun VisorLinkTheme(
-    appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
+    appTheme: AppTheme = AppTheme.BIOLUME,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
+    colorPreset: ColorPreset = ColorPreset.DEFAULT,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -218,18 +230,27 @@ fun VisorLinkTheme(
         ThemeMode.SYSTEM -> systemDark
     }
 
-    val colorScheme = when (appTheme) {
+    // EXTHRU оставлен как алиас BIOLUME для экранов, которые ещё не мигрировали на новое имя.
+    val resolvedTheme = if (appTheme == AppTheme.EXTHRU) AppTheme.BIOLUME else appTheme
+
+    val baseColorScheme = when (resolvedTheme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT -> {
                 val ctx = LocalContext.current
                 if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
             }
             darkTheme -> DarkM3
             else      -> LightM3
         }
-        AppTheme.ONE_UI  -> if (darkTheme) DarkOneUI else LightOneUI
-        AppTheme.EXTHRU  -> if (darkTheme) ExthruDarkColorScheme else ExthruLightColorScheme
+        AppTheme.ONE_UI -> if (darkTheme) DarkOneUI else LightOneUI
+        AppTheme.BIOLUME -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
+        AppTheme.FORGE -> if (darkTheme) ForgeDarkColorScheme else ForgeLightColorScheme
+        AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme // недостижимо, resolvedTheme выше уже разрешил
     }
+
+    // Кастомный акцентный цвет (пресет) перекрашивает схему поверх любой из 3 тем.
+    // Для M3 с включённым Material You (preset == DEFAULT) пресет не применяется — используется системный динамический цвет.
+    val colorScheme = baseColorScheme.withColorPreset(resolvedTheme, darkTheme, colorPreset)
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -242,15 +263,17 @@ fun VisorLinkTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        shapes = when (appTheme) {
-            AppTheme.ONE_UI -> ShapesOneUI
-            AppTheme.EXTHRU -> ShapesExthru
-            else            -> ShapesM3
+        shapes = when (resolvedTheme) {
+            AppTheme.ONE_UI  -> ShapesOneUI
+            AppTheme.BIOLUME -> ShapesExthru
+            AppTheme.FORGE   -> ShapesForge
+            else             -> ShapesM3
         },
-        typography = when (appTheme) {
-            AppTheme.ONE_UI -> TypographyOneUI
-            AppTheme.EXTHRU -> ExthruTypography
-            else            -> TypographyM3
+        typography = when (resolvedTheme) {
+            AppTheme.ONE_UI  -> TypographyOneUI
+            AppTheme.BIOLUME -> ExthruTypography
+            AppTheme.FORGE   -> ForgeTypography
+            else             -> TypographyM3
         },
         content = content
     )

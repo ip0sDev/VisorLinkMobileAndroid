@@ -5,8 +5,12 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +26,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
@@ -32,13 +38,21 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.ui.components.LocalHazeState
+import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.screens.chat.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.HapticHelper
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -81,7 +95,7 @@ fun SavedMessagesScreen(
     val themeVm: ThemeViewModel = koinViewModel()
     val appTheme by themeVm.appTheme.collectAsState()
     val isOneUi  = appTheme == AppTheme.ONE_UI
-    val isExthru = appTheme == AppTheme.EXTHRU
+    val isExthru = appTheme == AppTheme.EXTHRU || appTheme == AppTheme.BIOLUME
     val isDark   = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     val listState   = rememberLazyListState()
@@ -99,7 +113,6 @@ fun SavedMessagesScreen(
         if (uri != null) editorUri = uri
     }
 
-    // Автоматический запуск биометрии, если экран блокировки активен
     var autoBioTriggered by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.showPinInput) {
@@ -109,7 +122,7 @@ fun SavedMessagesScreen(
                 viewModel.launchBiometricUnlock(activity) {}
             }
         } else if (!uiState.showPinInput) {
-            autoBioTriggered = false // сброс флага, если мы разблокировали чат
+            autoBioTriggered = false
         }
     }
 
@@ -142,120 +155,122 @@ fun SavedMessagesScreen(
         return
     }
 
-    val scaffoldBg = when {
-        isExthru -> ExthruChat.pageBg(isDark)
-        isOneUi  -> if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg
-        else     -> MaterialTheme.colorScheme.background
-    }
+    val hazeState = remember { HazeState() }
+    val scaffoldBg = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
 
-    Scaffold(
-        snackbarHost    = { SnackbarHost(snackbar) },
-        containerColor  = scaffoldBg,
-        topBar = {
-            SavedTopBar(
-                isExthru        = isExthru,
-                isOneUi         = isOneUi,
-                isDark          = isDark,
-                isEncrypted     = uiState.isEncryptionEnabled,
-                isPinEnabled    = uiState.settings?.pinEnabled == true,
-                onNavigateBack  = onNavigateBack,
-                onLock          = { viewModel.lock() },
-                onOpenSettings  = onOpenSettings
-            )
-        },
-        bottomBar = {
-            if (uiState.isUnlocked) {
-                SavedBottomBar(
-                    inputText      = inputText,
-                    isExthru       = isExthru,
-                    isOneUi        = isOneUi,
-                    isDark         = isDark,
-                    isEncrypted    = uiState.isEncryptionEnabled,
-                    isRecording    = uiState.isRecording,
-                    hapticEnabled  = hapticEnabled,
-                    audioPermission = audioPermission,
-                    haptic         = haptic,
-                    onTextChange   = { inputText = it },
-                    onPickImage    = { imagePicker.launch("image/*") },
-                    onSend         = {
-                        val t = inputText.trim()
-                        if (t.isNotBlank()) {
-                            viewModel.saveText(t)
-                            inputText = ""
-                        }
+    CompositionLocalProvider(LocalHazeState provides hazeState) {
+        Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
+            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
+                VlAmbientGlow(appTheme = appTheme)
+
+                Scaffold(
+                    snackbarHost    = { SnackbarHost(snackbar) },
+                    containerColor  = Color.Transparent,
+                    topBar = {
+                        SavedTopBar(
+                            isExthru        = isExthru,
+                            isOneUi         = isOneUi,
+                            isDark          = isDark,
+                            hapticEnabled   = hapticEnabled,
+                            isEncrypted     = uiState.isEncryptionEnabled,
+                            isPinEnabled    = uiState.settings?.pinEnabled == true,
+                            onNavigateBack  = onNavigateBack,
+                            onLock          = { viewModel.lock() },
+                            onOpenSettings  = onOpenSettings
+                        )
                     },
-                    onStartRecord  = { viewModel.startRecording() },
-                    onSendRecord   = { viewModel.stopRecordingAndSend() },
-                    onCancelRecord = { viewModel.cancelRecording() },
-                    onRequestAudioPerm = { audioPermission.launchPermissionRequest() }
-                )
-            }
-        }
-    ) { padding ->
-        val listBg = when {
-            isExthru -> Modifier.background(ExthruChat.pageBg(isDark))
-            isOneUi  -> Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
-            else     -> Modifier
-        }
-
-        when {
-            uiState.isLoading -> {
-                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-            uiState.messages.isEmpty() -> {
-                SavedEmptyPlaceholder(
-                    modifier    = Modifier.fillMaxSize().padding(padding),
-                    isEncrypted = uiState.isEncryptionEnabled,
-                    isExthru    = isExthru,
-                    isDark      = isDark
-                )
-            }
-            else -> {
-                LazyColumn(
-                    state         = listState,
-                    reverseLayout = true,
-                    modifier      = Modifier.fillMaxSize().padding(padding).then(listBg),
-                    contentPadding = PaddingValues(vertical = 8.dp)
-                ) {
-                    items(items = uiState.messages.asReversed(), key = { it.id }) { saved ->
-                        val msg = saved.toMessage(viewModel.currentUid)
-                        SwipeableMessage(
-                            message       = msg,
-                            isMine        = true,
-                            hapticEnabled = hapticEnabled,
-                            isOneUi       = isOneUi,
-                            isExthru      = isExthru,
-                            isDark        = isDark,
-                            onReply       = { }
-                        ) {
-                            MessageBubble(
-                                message        = msg,
-                                isMine         = true,
-                                otherUid       = viewModel.currentUid,
-                                currentUid     = viewModel.currentUid,
-                                chatType       = ChatType.DIRECT,
-                                hapticEnabled  = hapticEnabled,
-                                showSenderName = false,
-                                voicePlayback  = uiState.voicePlayback,
-                                isOneUi        = isOneUi,
+                    bottomBar = {
+                        if (uiState.isUnlocked) {
+                            SavedBottomBar(
+                                inputText      = inputText,
                                 isExthru       = isExthru,
+                                isOneUi        = isOneUi,
                                 isDark         = isDark,
-                                hasWallpaper   = false,
-                                onPlayVoice    = { url, dur -> viewModel.playVoice(msg.id, url, dur) },
-                                onSeekVoice    = { viewModel.seekVoice(it) },
-                                onLongPress    = {
-                                    haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                                    actionMsg = msg
+                                isEncrypted    = uiState.isEncryptionEnabled,
+                                isRecording    = uiState.isRecording,
+                                hapticEnabled  = hapticEnabled,
+                                audioPermission = audioPermission,
+                                haptic         = haptic,
+                                onTextChange   = { inputText = it },
+                                onPickImage    = { imagePicker.launch("image/*") },
+                                onSend         = {
+                                    val t = inputText.trim()
+                                    if (t.isNotBlank()) {
+                                        viewModel.saveText(t)
+                                        inputText = ""
+                                    }
                                 },
-                                onImageTap     = { },
-                                onAlbumTap     = { _, _ -> },
-                                onReact        = { },
-                                onReplyClick   = { },
-                                onMentionClick = { },
-                                chat           = null
+                                onStartRecord  = { viewModel.startRecording() },
+                                onSendRecord   = { viewModel.stopRecordingAndSend() },
+                                onCancelRecord = { viewModel.cancelRecording() },
+                                onRequestAudioPerm = { audioPermission.launchPermissionRequest() }
                             )
+                        }
+                    }
+                ) { padding ->
+                    when {
+                        uiState.isLoading -> {
+                            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator()
+                            }
+                        }
+                        uiState.messages.isEmpty() -> {
+                            SavedEmptyPlaceholder(
+                                modifier    = Modifier.fillMaxSize().padding(padding),
+                                isEncrypted = uiState.isEncryptionEnabled,
+                                isExthru    = isExthru,
+                                isDark      = isDark
+                            )
+                        }
+                        else -> {
+                            LazyColumn(
+                                state         = listState,
+                                reverseLayout = true,
+                                modifier      = Modifier.fillMaxSize().padding(padding),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                items(items = uiState.messages.asReversed(), key = { it.id }) { saved ->
+                                    val msg = saved.toMessage(viewModel.currentUid)
+                                    SwipeableMessage(
+                                        message       = msg,
+                                        isMine        = true,
+                                        hapticEnabled = hapticEnabled,
+                                        isOneUi       = isOneUi,
+                                        isExthru      = isExthru,
+                                        isDark        = isDark,
+                                        onReply       = { }
+                                    ) {
+                                        MessageBubble(
+                                            message        = msg,
+                                            isMine         = true,
+                                            otherUid       = viewModel.currentUid,
+                                            currentUid     = viewModel.currentUid,
+                                            chatType       = ChatType.DIRECT,
+                                            hapticEnabled  = hapticEnabled,
+                                            showSenderName = false,
+                                            voicePlayback  = uiState.voicePlayback,
+                                            isOneUi        = isOneUi,
+                                            isExthru       = isExthru,
+                                            isDark         = isDark,
+                                            hasWallpaper   = false,
+                                            onPlayVoice    = { url, dur -> viewModel.playVoice(msg.id, url, dur) },
+                                            onSeekVoice    = { viewModel.seekVoice(it) },
+                                            onLongPressStart = { offset ->
+                                                haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                                                actionMsg = msg
+                                            },
+                                            onLongPressDrag  = { },
+                                            onLongPressEnd   = { },
+                                            onImageTap     = { },
+                                            onAlbumTap     = { _, _ -> },
+                                            onReact        = { },
+                                            onReplyClick   = { },
+                                            onMentionClick = { },
+                                            chat           = null
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -292,53 +307,131 @@ fun SavedMessagesScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SavedTopBar(
-    isExthru: Boolean, isOneUi: Boolean, isDark: Boolean, isEncrypted: Boolean,
+    isExthru: Boolean, isOneUi: Boolean, isDark: Boolean, hapticEnabled: Boolean, isEncrypted: Boolean,
     isPinEnabled: Boolean, onNavigateBack: () -> Unit, onLock: () -> Unit, onOpenSettings: () -> Unit
 ) {
-    val containerColor = when {
-        isExthru -> ExthruChat.barBg(isDark)
-        isOneUi  -> if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar
-        else     -> MaterialTheme.colorScheme.surface
-    }
-    val titleColor = when {
-        isExthru -> ExthruChat.textPrimary(isDark)
-        isOneUi  -> if (isDark) OneUiChat.TextPrimaryDark else OneUiChat.TextPrimary
-        else     -> MaterialTheme.colorScheme.onSurface
-    }
-    val accentColor = when {
-        isExthru -> ExthruChat.Accent
-        isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
-        else     -> MaterialTheme.colorScheme.primary
-    }
+    val haptic = rememberHaptic()
+    val hazeState = LocalHazeState.current
 
-    TopAppBar(
-        navigationIcon = {
-            IconButton(onClick = onNavigateBack) {
-                if (isExthru) {
-                    Box(modifier = Modifier.size(36.dp).clip(CircleShape).background(ExthruChat.barBg(isDark)), contentAlignment = Alignment.Center) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = accentColor, modifier = Modifier.size(18.dp))
+    if (isExthru) {
+        TopAppBar(
+            modifier = Modifier
+                .fillMaxWidth()
+                .hazeChild(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
+            navigationIcon = {
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_scale")
+                val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                Box(
+                    modifier = Modifier
+                        .padding(start = 12.dp, end = 4.dp)
+                        .size(42.dp)
+                        .scale(scale)
+                        .then(shadowMod)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                        .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                        .clip(CircleShape)
+                        .clickable(interactionSource = interactionSource, indication = null) {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            onNavigateBack()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⭐", fontSize = 20.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Избранное", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
+                        if (isEncrypted) Text("🔐 Зашифровано", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                     }
-                } else {
+                }
+            },
+            actions = {
+                val interactionSourceSettings = remember { MutableInteractionSource() }
+                val isPressedSettings by interactionSourceSettings.collectIsPressedAsState()
+                val scaleSettings by animateFloatAsState(if (isPressedSettings) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "set_scale")
+                val shadowModSettings = if (isPressedSettings) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                if (isPinEnabled) {
+                    val interactionSourceLock = remember { MutableInteractionSource() }
+                    val isPressedLock by interactionSourceLock.collectIsPressedAsState()
+                    val scaleLock by animateFloatAsState(if (isPressedLock) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "lock_scale")
+                    val shadowModLock = if (isPressedLock) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .scale(scaleLock)
+                            .then(shadowModLock)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                            .border(1.dp, if (isPressedLock) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                            .clip(CircleShape)
+                            .clickable(interactionSource = interactionSourceLock, indication = null) {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                onLock()
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Lock, "Lock", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(10.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .padding(end = 12.dp)
+                        .size(42.dp)
+                        .scale(scaleSettings)
+                        .then(shadowModSettings)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                        .border(1.dp, if (isPressedSettings) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                        .clip(CircleShape)
+                        .clickable(interactionSource = interactionSourceSettings, indication = null) {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            onOpenSettings()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Settings, "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
+        )
+    } else {
+        val containerColor = if (isOneUi) (if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar) else MaterialTheme.colorScheme.surface
+        val titleColor = if (isOneUi) (if (isDark) OneUiChat.TextPrimaryDark else OneUiChat.TextPrimary) else MaterialTheme.colorScheme.onSurface
+        val accentColor = if (isOneUi) (if (isDark) OneUiChat.BlueDark else OneUiChat.Blue) else MaterialTheme.colorScheme.primary
+
+        TopAppBar(
+            navigationIcon = {
+                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = titleColor)
                 }
-            }
-        },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("⭐", fontSize = 20.sp)
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Text("Избранное", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = titleColor)
-                    if (isEncrypted) Text("🔐 Зашифровано", fontSize = 10.sp, color = accentColor)
+            },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("⭐", fontSize = 20.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Избранное", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = titleColor)
+                        if (isEncrypted) Text("🔐 Зашифровано", fontSize = 10.sp, color = accentColor)
+                    }
                 }
-            }
-        },
-        actions = {
-            if (isPinEnabled) IconButton(onClick = onLock) { Icon(Icons.Default.Lock, "Lock", tint = accentColor) }
-            IconButton(onClick = onOpenSettings) { Icon(Icons.Default.Settings, "Settings", tint = if (isExthru) ExthruChat.textSecondary(isDark) else titleColor) }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor, scrolledContainerColor = containerColor)
-    )
+            },
+            actions = {
+                if (isPinEnabled) IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLock() }) { Icon(Icons.Default.Lock, "Lock", tint = accentColor) }
+                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) { Icon(Icons.Default.Settings, "Settings", tint = titleColor) }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor, scrolledContainerColor = containerColor)
+        )
+    }
 }
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -394,16 +487,42 @@ private fun SavedMessageActionSheet(onDismiss: () -> Unit, onDelete: () -> Unit)
 private fun SavedEmptyPlaceholder(modifier: Modifier, isEncrypted: Boolean, isExthru: Boolean, isDark: Boolean) {
     val accentColor = if (isExthru) ExthruChat.Accent else MaterialTheme.colorScheme.primary
     val textColor = if (isExthru) ExthruChat.textPrimary(isDark) else MaterialTheme.colorScheme.onSurface
+
+    val infiniteTransition = rememberInfiniteTransition(label = "empty_breath")
+    val breathScale by infiniteTransition.animateFloat(
+        initialValue = 0.92f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "breath"
+    )
+
     Box(modifier, contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("⭐", fontSize = 56.sp, modifier = Modifier.clip(CircleShape).background(accentColor.copy(alpha = 0.12f)).padding(20.dp))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(contentAlignment = Alignment.Center) {
+                if (isExthru) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .scale(breathScale)
+                            .exthruSmallRaisedShadow(isDark)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.6f), CircleShape)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(96.dp)
+                            .scale(breathScale)
+                            .background(accentColor.copy(alpha = 0.2f), CircleShape)
+                    )
+                }
+                Text("⭐", fontSize = 48.sp)
+            }
             Text("Здесь будут ваши сохранённые сообщения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textColor)
             if (isEncrypted) {
-                Surface(shape = RoundedCornerShape(12.dp), color = accentColor.copy(alpha = 0.1f), modifier = Modifier.padding(top = 16.dp, start = 32.dp, end = 32.dp)) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = RoundedCornerShape(16.dp), color = accentColor.copy(alpha = 0.1f), modifier = Modifier.padding(top = 8.dp, start = 32.dp, end = 32.dp)) {
+                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lock, null, modifier = Modifier.size(16.dp), tint = accentColor)
                         Spacer(Modifier.width(8.dp))
-                        Text("Тексты зашифрованы на устройстве", fontSize = 12.sp, color = accentColor)
+                        Text("Тексты зашифрованы на устройстве", fontSize = 13.sp, color = accentColor, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -435,7 +554,6 @@ private fun PinInputDialog(
                 OutlinedTextField(
                     value = pin,
                     onValueChange = {
-                        // Разрешаем вводить только цифры и до 8 символов
                         if (it.length <= 8 && it.all { char -> char.isDigit() }) {
                             pin = it
                             clearError()
@@ -451,7 +569,6 @@ private fun PinInputDialog(
                     Text("Неверный PIN-код", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 }
 
-                // Если биометрия еще не настроена, показываем чекбокс
                 if (!hasBiometric) {
                     Spacer(modifier = Modifier.height(16.dp))
                     Row(
@@ -462,10 +579,7 @@ private fun PinInputDialog(
                             .clickable { useBiometrics = !useBiometrics }
                             .padding(vertical = 4.dp)
                     ) {
-                        Checkbox(
-                            checked = useBiometrics,
-                            onCheckedChange = { useBiometrics = it }
-                        )
+                        Checkbox(checked = useBiometrics, onCheckedChange = { useBiometrics = it })
                         Text("Разрешить вход по биометрии", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -475,13 +589,10 @@ private fun PinInputDialog(
             TextButton(
                 onClick = { onPinEntered(pin, useBiometrics) },
                 enabled = pin.length in 4..8
-            ) {
-                Text("Разблокировать")
-            }
+            ) { Text("Разблокировать") }
         },
         dismissButton = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Если биометрия настроена, показываем кнопку отпечатка внизу
                 if (hasBiometric) {
                     IconButton(onClick = onBiometric) {
                         Icon(Icons.Default.Fingerprint, tint = MaterialTheme.colorScheme.primary, contentDescription = "Биометрия")

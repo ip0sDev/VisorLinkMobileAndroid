@@ -16,21 +16,21 @@ val commitId: String = if (project.hasProperty("commitId")) {
         ""
     }
 }
-val currentChannel = "NIGHTLY"
+val currentChannel = "CANARY"
 
 android {
     namespace = "by.iposdev.visorlink"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
-        targetSdk = 36
-        versionCode = 31
-        versionName = "1.20.1"
+        targetSdk = 37
+        versionCode = 73
+        versionName = "3.0.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
+        buildConfigField("String", "CHANNEL", "\"CANARY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -70,6 +70,9 @@ android {
 dependencies {
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
+    implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)

@@ -233,7 +233,7 @@ jobs:
           jq -n --arg chat "$VL_CHAT_ID" --arg text "$(cat /tmp/vl_message.txt)" '{chatId: $chat, text: $text}' > /tmp/payload.json
 
           # 4. Кидаем вебхук с правильным ключом авторизации
-          curl -s -X POST "https://us-central1-visorlink-f9484.cloudfunctions.net/channelBotWebhook" \
+          curl -s -X POST "https://europe-west1-visorlink-f9484.cloudfunctions.net/channelBotWebhook" \
             -H "Authorization: Bearer ${VL_BOT_KEY}" \
             -H "Content-Type: application/json" \
             -d @/tmp/payload.json

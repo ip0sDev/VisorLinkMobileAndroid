@@ -48,7 +48,7 @@ val appModule = module {
     }
     single { Firebase.auth }
     single { Firebase.storage }
-    single { Firebase.functions("us-central1") }
+    single { Firebase.functions("europe-west1") }
 
     // ─── Repositories ─────────────────────────────────────────────────────────
 

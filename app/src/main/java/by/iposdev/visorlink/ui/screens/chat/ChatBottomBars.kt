@@ -3,8 +3,10 @@ package by.iposdev.visorlink.ui.screens.chat
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,30 +22,32 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.theme.Biolume
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
 import by.iposdev.visorlink.ui.theme.nmDividerTop
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.HapticHelper
 import by.iposdev.visorlink.utils.HapticType
-import coil.compose.AsyncImage
+import by.iposdev.visorlink.utils.rememberHaptic
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeChild
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  Exthru Chat Bottom Bar
+//  Exthru Chat Bottom Bar (Glassmorphism & Physics)
 // ════════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -51,7 +55,7 @@ import kotlinx.coroutines.launch
 internal fun ExthruChatBottomBar(
     uiState: ChatUiState,
     inputText: String,
-    isDark: Boolean = false,                    // ← добавлен параметр тёмной темы
+    isDark: Boolean = false,
     canSendMessage: Boolean,
     canSendMedia: Boolean,
     hapticEnabled: Boolean,
@@ -68,29 +72,28 @@ internal fun ExthruChatBottomBar(
     onClearReply: () -> Unit,
     haptic: HapticHelper,
 ) {
-    val inputShape = RoundedCornerShape(22.dp)
+    val inputShape = RoundedCornerShape(24.dp)
 
-    // Адаптивные цвета на основе isDark
-    val barBg   = ExthruChat.barBg(isDark)
-    val inputBg = ExthruChat.inputBg(isDark)
+    val barBgBase     = ExthruChat.barBg(isDark)
+    val barBg         = barBgBase.copy(alpha = if (isDark) 0.4f else 0.55f)
+    val inputBg       = ExthruChat.inputBg(isDark).copy(alpha = if (isDark) 0.6f else 0.3f)
     val textPrimary   = ExthruChat.textPrimary(isDark)
-    val textSecondary = ExthruChat.textSecondary(isDark)
     val textHint      = ExthruChat.textHint(isDark)
-    val replyBg       = if (isDark) Biolume.DarkAbyssSurface else ExthruChat.InputBg
+
+    val hazeState = LocalHazeState.current
 
     Column(
         modifier = Modifier
-            .background(barBg)
             .nmDividerTop(isDark = isDark)
+            .hazeChild(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
+            .background(barBg)
             .navigationBarsPadding()
             .imePadding(),
     ) {
-        // Restriction banner
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true  -> stringResource(R.string.you_are_muted)
-            uiState.chatType == ChatType.CHANNEL && !canSendMessage ->
-                stringResource(R.string.only_admins_can_post_in_channels)
+            uiState.chatType == ChatType.CHANNEL && !canSendMessage -> stringResource(R.string.only_admins_can_post_in_channels)
             else -> null
         }
         AnimatedVisibility(visible = restriction != null) {
@@ -108,107 +111,58 @@ internal fun ExthruChatBottomBar(
             }
         }
 
-        // Reply banner
         AnimatedVisibility(
             visible = uiState.replyingTo != null,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn(tween(200)),
             exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150)),
         ) {
             uiState.replyingTo?.let { msg ->
-                Row(
+                // ReplyBanner теперь берется из ChatHelpers.kt, но мы стилизуем его контейнер
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(replyBg)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.6f else 0.2f)
+                        .background(ExthruChat.cardBg(isDark).copy(alpha = if (isDark) 0.7f else 0.8f), RoundedCornerShape(16.dp))
+                        .clip(RoundedCornerShape(16.dp))
                 ) {
-                    if (msg.type == MessageType.ALBUM && msg.images.isNotEmpty()) {
-                        AsyncImage(
-                            model = msg.images[0].url, contentDescription = null,
-                            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
-                            contentScale = ContentScale.Crop,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Box(
-                        Modifier.width(3.dp).height(32.dp)
-                            .background(ExthruChat.Accent, RoundedCornerShape(2.dp))
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "@${msg.senderUsername}", fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold, color = ExthruChat.Accent,
-                        )
-                        Text(
-                            when (msg.type) {
-                                MessageType.IMAGE   -> stringResource(R.string.photo)
-                                MessageType.VOICE   -> stringResource(R.string.voice_message)
-                                MessageType.STICKER -> stringResource(R.string.sticker)
-                                MessageType.ALBUM   -> msg.caption ?: "📷 ${msg.images.size} фото"
-                                else -> msg.text ?: stringResource(R.string.media)
-                            },
-                            fontSize = 12.sp, color = textSecondary,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    IconButton(onClick = onClearReply, modifier = Modifier.size(24.dp)) {
-                        Icon(
-                            Icons.Default.Close, null,
-                            tint = textHint, modifier = Modifier.size(18.dp),
-                        )
-                    }
+                    ReplyBanner(message = msg, onDismiss = onClearReply)
                 }
             }
         }
 
-        // Upload progress
         AnimatedVisibility(
             visible = uiState.isUploading,
             enter = expandVertically() + fadeIn(),
             exit  = shrinkVertically() + fadeOut(),
         ) {
-            LinearProgressIndicator(
-                modifier   = Modifier.fillMaxWidth(),
-                color      = ExthruChat.Accent,
-                trackColor = inputBg,
-            )
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = ExthruChat.Accent, trackColor = Color.Transparent)
         }
 
         if (canSendMessage) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 if (!uiState.isRecording) {
                     if (canSendMedia) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .exthruSmallRaisedShadow(isDark = isDark)
-                                .background(barBg, CircleShape)
-                                .clickable(enabled = !uiState.isCooldown) { onAttach() },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.AttachFile, null,
-                                tint = textSecondary, modifier = Modifier.size(20.dp),
-                            )
-                        }
+                        InteractiveExthruButton(
+                            icon = Icons.Default.AttachFile,
+                            isDark = isDark,
+                            hapticEnabled = hapticEnabled,
+                            enabled = !uiState.isCooldown,
+                            onClick = onAttach
+                        )
                         Spacer(Modifier.width(6.dp))
                     }
 
-                    // Поле ввода — inset неоморфизм
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .clip(inputShape)
                             .background(inputBg, inputShape)
-                            .nmInsetShadow(isDark = isDark, cornerRadius = 22.dp)
-                            .padding(end = 8.dp),
+                            .nmInsetShadow(isDark = isDark, cornerRadius = 24.dp, darkAlpha = if(isDark) 0.7f else 0.35f)
+                            .padding(end = 4.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -217,18 +171,12 @@ internal fun ExthruChatBottomBar(
                                 onValueChange = onInputChange,
                                 modifier      = Modifier
                                     .weight(1f)
-                                    .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
-                                maxLines  = 4,
-                                textStyle = TextStyle(
-                                    color    = textPrimary,
-                                    fontSize = 15.sp,
-                                ),
+                                    .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+                                maxLines  = 5,
+                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp),
                                 decorationBox = { inner ->
                                     if (inputText.isEmpty()) {
-                                        Text(
-                                            stringResource(R.string.chat_input_placeholder),
-                                            fontSize = 15.sp, color = textHint,
-                                        )
+                                        Text(stringResource(R.string.chat_input_placeholder), fontSize = 15.sp, color = textHint)
                                     }
                                     inner()
                                 },
@@ -236,23 +184,32 @@ internal fun ExthruChatBottomBar(
                             if (inputText.isNotEmpty()) {
                                 Text(
                                     "${inputText.length}/2000", fontSize = 11.sp,
-                                    color = if (inputText.length >= 2000) ExthruChat.Destructive
-                                    else textHint,
+                                    color = if (inputText.length >= 2000) ExthruChat.Destructive else textHint,
                                     modifier = Modifier.padding(end = 6.dp),
                                 )
                             }
-                            // Стикер-кнопка
+
+                            val intEmoji = remember { MutableInteractionSource() }
+                            val isEmojiPressed by intEmoji.collectIsPressedAsState()
+                            val emojiScale by animateFloatAsState(if (isEmojiPressed) 0.85f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "")
+                            val emojiShadow = if (isEmojiPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier
+
                             Box(
                                 modifier = Modifier
-                                    .size(32.dp)
+                                    .size(36.dp)
+                                    .scale(emojiScale)
+                                    .then(emojiShadow)
                                     .clip(CircleShape)
-                                    .clickable(enabled = !uiState.isCooldown) { onStickerClick() },
+                                    .clickable(interactionSource = intEmoji, indication = null, enabled = !uiState.isCooldown) {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        onStickerClick()
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     Icons.Default.EmojiEmotions, null,
                                     tint = if (showStickerSheet) ExthruChat.Accent else textHint,
-                                    modifier = Modifier.size(20.dp),
+                                    modifier = Modifier.size(22.dp),
                                 )
                             }
                         }
@@ -260,7 +217,6 @@ internal fun ExthruChatBottomBar(
 
                     Spacer(Modifier.width(6.dp))
 
-                    // Кнопка отправки / микрофона
                     AnimatedContent(
                         targetState = inputText.isNotBlank(),
                         transitionSpec = {
@@ -270,39 +226,29 @@ internal fun ExthruChatBottomBar(
                         label = "exthru_send_mic",
                     ) { hasText ->
                         if (hasText) {
-                            ExthruSendButton(
-                                enabled       = !uiState.isCooldown,
-                                isDark        = isDark,
+                            InteractiveExthruSendButton(
+                                enabled = !uiState.isCooldown,
+                                isDark = isDark,
                                 hapticEnabled = hapticEnabled,
-                                haptic        = haptic,
-                                onClick       = onSend,
+                                onClick = onSend
                             )
                         } else {
                             if (canSendMedia) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                        .exthruSmallRaisedShadow(isDark = isDark)
-                                        .background(barBg, CircleShape)
-                                        .clickable(enabled = !uiState.isCooldown) {
-                                            if (audioPermission.status.isGranted) {
-                                                haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                                                onStartRecord()
-                                            } else onRequestAudioPerm()
-                                        },
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    Icon(
-                                        Icons.Default.Mic, null,
-                                        tint = ExthruChat.Accent, modifier = Modifier.size(22.dp),
-                                    )
-                                }
+                                InteractiveExthruMicButton(
+                                    isDark = isDark,
+                                    enabled = !uiState.isCooldown,
+                                    hapticEnabled = hapticEnabled,
+                                    onRequestAudioPerm = onRequestAudioPerm,
+                                    audioPermission = audioPermission,
+                                    onStartRecord = onStartRecord
+                                )
                             } else Spacer(Modifier.size(44.dp))
                         }
                     }
                 } else {
+                    // RecordingBar берется из ChatHelpers.kt
                     RecordingBar(
+                        isExthru      = true,
                         isDark        = isDark,
                         hapticEnabled = hapticEnabled,
                         onCancel      = onCancel,
@@ -314,63 +260,139 @@ internal fun ExthruChatBottomBar(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Exthru Send Button — градиент + raised shadow
-// ════════════════════════════════════════════════════════════════════════════════
+// ── Интерактивные неоморфные кнопки для Exthru ──
 
 @Composable
-private fun ExthruSendButton(
+private fun InteractiveExthruButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    isDark: Boolean,
     enabled: Boolean,
-    isDark: Boolean = false,
     hapticEnabled: Boolean,
-    haptic: HapticHelper,
-    onClick: () -> Unit,
+    onClick: () -> Unit
 ) {
-    val sendScale = remember { Animatable(1f) }
-    val scope = rememberCoroutineScope()
+    val haptic = rememberHaptic()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "btn_scale"
+    )
+
+    val shadowMod = if (isPressed) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+    } else {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    }
 
     Box(
         modifier = Modifier
             .size(44.dp)
-            .scale(sendScale.value)
+            .scale(scale)
+            .then(shadowMod)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
             .clip(CircleShape)
-            .exthruSmallRaisedShadow(isDark = isDark)
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                onClick()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(icon, null, tint = ExthruChat.textSecondary(isDark), modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun InteractiveExthruSendButton(
+    enabled: Boolean,
+    isDark: Boolean,
+    hapticEnabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val haptic = rememberHaptic()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.85f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "send_scale"
+    )
+
+    val shadowMod = if (isPressed) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.8f else 0.5f)
+    } else {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    }
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .scale(scale)
+            .then(shadowMod)
             .background(
-                brush = if (enabled)
-                    Brush.radialGradient(listOf(Biolume.TealLight, Biolume.TealPulse))
-                else
-                    Brush.radialGradient(
-                        listOf(
-                            Biolume.TealLight.copy(alpha = 0.5f),
-                            Biolume.TealPulse.copy(alpha = 0.5f),
-                        )
-                    ),
+                brush = if (enabled) Brush.radialGradient(listOf(Biolume.TealLight, Biolume.TealPulse))
+                else Brush.radialGradient(listOf(Biolume.TealLight.copy(0.5f), Biolume.TealPulse.copy(0.5f))),
                 shape = CircleShape,
             )
-            .clickable(
-                enabled            = enabled,
-                interactionSource  = remember { MutableInteractionSource() },
-                indication         = null,
-            ) {
-                scope.launch {
-                    sendScale.animateTo(0.84f, spring(stiffness = Spring.StiffnessHigh))
-                    sendScale.animateTo(1.06f, spring(Spring.DampingRatioLowBouncy))
-                    sendScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy))
-                }
+            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = 0.2f), CircleShape)
+            .clip(CircleShape)
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
                 haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
                 onClick()
             },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            Icons.AutoMirrored.Filled.Send, null,
-            tint = Color.White, modifier = Modifier.size(20.dp),
-        )
+        Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White, modifier = Modifier.size(20.dp))
+    }
+}
+
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+private fun InteractiveExthruMicButton(
+    isDark: Boolean,
+    enabled: Boolean,
+    hapticEnabled: Boolean,
+    audioPermission: PermissionState,
+    onRequestAudioPerm: () -> Unit,
+    onStartRecord: () -> Unit
+) {
+    val haptic = rememberHaptic()
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "mic_scale"
+    )
+
+    val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .scale(scale)
+            .then(shadowMod)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+            .clip(CircleShape)
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
+                if (audioPermission.status.isGranted) {
+                    haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                    onStartRecord()
+                } else onRequestAudioPerm()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(Icons.Default.Mic, null, tint = ExthruChat.Accent, modifier = Modifier.size(22.dp))
     }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  OneUI Bottom Bar (без изменений)
+//  OneUiChatBottomBar
 // ════════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -404,8 +426,7 @@ internal fun OneUiChatBottomBar(
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true  -> stringResource(R.string.you_are_muted)
-            uiState.chatType == ChatType.CHANNEL && !canSendMessage ->
-                stringResource(R.string.only_admins_can_post_in_channels)
+            uiState.chatType == ChatType.CHANNEL && !canSendMessage -> stringResource(R.string.only_admins_can_post_in_channels)
             else -> null
         }
         AnimatedVisibility(visible = restriction != null) {
@@ -424,45 +445,7 @@ internal fun OneUiChatBottomBar(
             exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150)),
         ) {
             uiState.replyingTo?.let { msg ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(if (isDark) Color(0xFF232B3A) else Color(0xFFEBF1FD))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (msg.type == MessageType.ALBUM && msg.images.isNotEmpty()) {
-                        AsyncImage(
-                            model = msg.images[0].url, contentDescription = null,
-                            modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
-                            contentScale = ContentScale.Crop,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Box(Modifier.width(3.dp).height(32.dp).background(accentColor, RoundedCornerShape(2.dp)))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "@${msg.senderUsername}", fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold, color = accentColor,
-                        )
-                        Text(
-                            when (msg.type) {
-                                MessageType.IMAGE   -> stringResource(R.string.photo)
-                                MessageType.VOICE   -> stringResource(R.string.voice_message)
-                                MessageType.STICKER -> stringResource(R.string.sticker)
-                                MessageType.ALBUM   -> msg.caption ?: "📷 ${msg.images.size} фото"
-                                else -> msg.text ?: stringResource(R.string.media)
-                            },
-                            fontSize = 12.sp,
-                            color = if (isDark) OneUiChat.TextSecondaryDark else OneUiChat.TextSecondary,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    IconButton(onClick = onClearReply, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, null, tint = iconTint, modifier = Modifier.size(18.dp))
-                    }
-                }
+                ReplyBanner(message = msg, onDismiss = onClearReply)
             }
         }
 
@@ -480,9 +463,7 @@ internal fun OneUiChatBottomBar(
 
         if (canSendMessage) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 if (!uiState.isRecording) {
@@ -528,7 +509,7 @@ internal fun OneUiChatBottomBar(
                                 )
                             }
                             IconButton(
-                                onClick  = onStickerClick,
+                                onClick  = { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() },
                                 modifier = Modifier.size(32.dp),
                                 enabled  = !uiState.isCooldown,
                             ) {
@@ -556,14 +537,10 @@ internal fun OneUiChatBottomBar(
                                 modifier = Modifier
                                     .size(44.dp)
                                     .scale(sendScale.value)
-                                    .background(
-                                        if (uiState.isCooldown) accentColor.copy(alpha = 0.5f) else accentColor,
-                                        CircleShape,
-                                    )
+                                    .background(if (uiState.isCooldown) accentColor.copy(alpha = 0.5f) else accentColor, CircleShape)
                                     .clickable(
                                         enabled           = !uiState.isCooldown,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication        = null,
+                                        interactionSource = remember { MutableInteractionSource() }, indication = null,
                                     ) {
                                         sendScope.launch {
                                             sendScale.animateTo(0.80f, spring(stiffness = Spring.StiffnessHigh))
@@ -575,10 +552,7 @@ internal fun OneUiChatBottomBar(
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send, null,
-                                    tint = Color.White, modifier = Modifier.size(20.dp),
-                                )
+                                Icon(Icons.AutoMirrored.Filled.Send, null, tint = Color.White, modifier = Modifier.size(20.dp))
                             }
                         } else {
                             if (canSendMedia) {
@@ -608,7 +582,7 @@ internal fun OneUiChatBottomBar(
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-//  Default (M3) Bottom Bar (без изменений)
+//  Default (M3) Bottom Bar
 // ════════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -636,76 +610,22 @@ internal fun DefaultChatBottomBar(
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true  -> stringResource(R.string.you_are_muted)
-            uiState.chatType == ChatType.CHANNEL && !canSendMessage ->
-                stringResource(R.string.only_admins_can_post_in_channels)
+            uiState.chatType == ChatType.CHANNEL && !canSendMessage -> stringResource(R.string.only_admins_can_post_in_channels)
             else -> null
         }
         AnimatedVisibility(visible = restriction != null) {
             Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    restriction ?: "", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(12.dp), textAlign = TextAlign.Center,
-                )
+                Text(restriction ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.padding(12.dp), textAlign = TextAlign.Center)
             }
         }
 
         AnimatedVisibility(
             visible = uiState.replyingTo != null,
-            enter = slideInVertically(
-                initialOffsetY = { it },
-                animationSpec  = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
-            ) + fadeIn(tween(200)),
-            exit = slideOutVertically(
-                targetOffsetY = { it },
-                animationSpec = tween(180, easing = FastOutLinearInEasing),
-            ) + fadeOut(tween(150)),
+            enter = slideInVertically(initialOffsetY = { it }, animationSpec  = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) + fadeIn(tween(200)),
+            exit = slideOutVertically(targetOffsetY = { it }, animationSpec = tween(180, easing = FastOutLinearInEasing)) + fadeOut(tween(150)),
         ) {
             uiState.replyingTo?.let { msg ->
-                if (msg.type == MessageType.ALBUM) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.primaryContainer)
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (msg.images.isNotEmpty()) {
-                            AsyncImage(
-                                model = msg.images[0].url, contentDescription = null,
-                                modifier = Modifier.size(36.dp).clip(RoundedCornerShape(4.dp)),
-                                contentScale = ContentScale.Crop,
-                            )
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        Icon(
-                            Icons.Default.Reply, null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "@${msg.senderUsername}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                msg.caption ?: "📷 ${msg.images.size} фото",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        IconButton(onClick = onClearReply, modifier = Modifier.size(24.dp)) {
-                            Icon(
-                                Icons.Default.Close, stringResource(R.string.chat_cancel_reply),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            )
-                        }
-                    }
-                } else {
-                    ReplyBanner(msg) { onClearReply() }
-                }
+                ReplyBanner(message = msg, onDismiss = onClearReply)
             }
         }
 
@@ -714,31 +634,19 @@ internal fun DefaultChatBottomBar(
             enter = expandVertically() + fadeIn(),
             exit  = shrinkVertically() + fadeOut(),
         ) {
-            LinearProgressIndicator(
-                modifier   = Modifier.fillMaxWidth(),
-                color      = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primaryContainer,
-            )
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primary, trackColor = MaterialTheme.colorScheme.primaryContainer)
         }
 
         if (canSendMessage) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
                 if (!uiState.isRecording) {
                     if (canSendMedia) {
                         val attachScale = remember { Animatable(0f) }
-                        LaunchedEffect(Unit) {
-                            attachScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow))
-                        }
-                        IconButton(
-                            onClick  = onAttach,
-                            modifier = Modifier.scale(attachScale.value),
-                            enabled  = !uiState.isCooldown,
-                        ) {
+                        LaunchedEffect(Unit) { attachScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow)) }
+                        IconButton(onClick  = onAttach, modifier = Modifier.scale(attachScale.value), enabled  = !uiState.isCooldown) {
                             Icon(Icons.Default.AttachFile, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -754,27 +662,22 @@ internal fun DefaultChatBottomBar(
                     ) {
                         Icon(
                             Icons.Default.EmojiEmotions, null,
-                            tint = if (showStickerSheet) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = if (showStickerSheet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                     OutlinedTextField(
                         value         = inputText,
                         onValueChange = onInputChange,
                         placeholder   = { Text(stringResource(R.string.chat_input_placeholder)) },
-                        modifier      = Modifier.weight(1f).animateContentSize(
-                            animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
-                        ),
-                        maxLines  = 4,
-                        shape     = MaterialTheme.shapes.extraLarge,
+                        modifier      = Modifier.weight(1f).animateContentSize(animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)),
+                        maxLines      = 4,
+                        shape         = MaterialTheme.shapes.extraLarge,
                         supportingText = if (inputText.isNotEmpty()) {
                             {
                                 Text(
                                     "${inputText.length}/2000",
-                                    color = if (inputText.length >= 2000) MaterialTheme.colorScheme.error
-                                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.End,
+                                    color = if (inputText.length >= 2000) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End,
                                 )
                             }
                         } else null,
@@ -783,14 +686,8 @@ internal fun DefaultChatBottomBar(
                     AnimatedContent(
                         targetState = inputText.isNotBlank(),
                         transitionSpec = {
-                            (scaleIn(
-                                initialScale  = 0.6f,
-                                animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow),
-                            ) + fadeIn(tween(150))) togetherWith
-                                    (scaleOut(
-                                        targetScale   = 0.6f,
-                                        animationSpec = spring(stiffness = Spring.StiffnessHigh),
-                                    ) + fadeOut(tween(80)))
+                            (scaleIn(initialScale = 0.6f, animationSpec = spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMediumLow)) + fadeIn(tween(150))) togetherWith
+                                    (scaleOut(targetScale = 0.6f, animationSpec = spring(stiffness = Spring.StiffnessHigh)) + fadeOut(tween(80)))
                         },
                         label = "send_mic",
                     ) { hasText ->
@@ -801,16 +698,8 @@ internal fun DefaultChatBottomBar(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .scale(sendScale.value)
-                                    .background(
-                                        if (uiState.isCooldown) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-                                        else MaterialTheme.colorScheme.primary,
-                                        CircleShape,
-                                    )
-                                    .clickable(
-                                        enabled           = !uiState.isCooldown,
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication        = null,
-                                    ) {
+                                    .background(if (uiState.isCooldown) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.primary, CircleShape)
+                                    .clickable(enabled = !uiState.isCooldown, interactionSource = remember { MutableInteractionSource() }, indication = null) {
                                         sendScope.launch {
                                             sendScale.animateTo(0.82f, spring(stiffness = Spring.StiffnessHigh))
                                             sendScale.animateTo(1.12f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessMedium))
@@ -821,27 +710,18 @@ internal fun DefaultChatBottomBar(
                                     },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.Send, stringResource(R.string.action_send),
-                                    tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(22.dp),
-                                )
+                                Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.action_send), tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(22.dp))
                             }
                         } else {
                             if (canSendMedia) {
                                 IconButton(
                                     onClick  = {
-                                        if (audioPermission.status.isGranted) {
-                                            haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                                            onStartRecord()
-                                        } else onRequestAudioPerm()
+                                        if (audioPermission.status.isGranted) { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onStartRecord() }
+                                        else onRequestAudioPerm()
                                     },
-                                    modifier = Modifier.size(48.dp),
-                                    enabled  = !uiState.isCooldown,
+                                    modifier = Modifier.size(48.dp), enabled  = !uiState.isCooldown,
                                 ) {
-                                    Icon(
-                                        Icons.Default.Mic, stringResource(R.string.chat_input_record),
-                                        tint = MaterialTheme.colorScheme.primary,
-                                    )
+                                    Icon(Icons.Default.Mic, stringResource(R.string.chat_input_record), tint = MaterialTheme.colorScheme.primary)
                                 }
                             } else Spacer(Modifier.size(48.dp))
                         }

@@ -59,10 +59,11 @@ class MainActivity : AppCompatActivity() {
             val authViewModel: AuthViewModel        = koinViewModel()
             val updateViewModel: AppUpdateViewModel = koinViewModel()
 
-            val appTheme  by themeViewModel.appTheme.collectAsState()
-            val themeMode by themeViewModel.themeMode.collectAsState()
+            val appTheme    by themeViewModel.appTheme.collectAsState()
+            val themeMode   by themeViewModel.themeMode.collectAsState()
+            val colorPreset by themeViewModel.colorPreset.collectAsState()
 
-            VisorLinkTheme(appTheme = appTheme, themeMode = themeMode) {
+            VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
                 AppCheckGuard {
                     AppUpdateWrapper(viewModel = updateViewModel) {
                         VisorLinkNavGraph(

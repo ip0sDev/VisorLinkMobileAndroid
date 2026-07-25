@@ -398,10 +398,35 @@ sealed class MessageListItem {
 
 enum class AppTheme {
     MATERIAL3_EXPRESSIVE,
+    @Deprecated("Заменяется на BIOLUME/FORGE — оставлено для совместимости с ещё не мигрированными экранами")
     ONE_UI,
+    @Deprecated("Используй BIOLUME", ReplaceWith("BIOLUME"))
     EXTHRU,
+    BIOLUME,
+    FORGE,
 }
+
+/** true для обеих "осязаемых" (неоморфных) тем — аналог AppTheme.isExthruFamily из Flutter. */
+val AppTheme.isExthruFamily: Boolean
+    @Suppress("DEPRECATION")
+    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE || this == AppTheme.EXTHRU
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+// ─── Цветовые пресеты (кастомизация акцентного цвета поверх любой темы) ──────
+
+enum class ColorPreset {
+    DEFAULT, PURPLE, BLUE, EMERALD, CRIMSON;
+
+    val seedColor: androidx.compose.ui.graphics.Color?
+        get() = when (this) {
+            DEFAULT -> null // используем "родной" акцент темы / динамический цвет
+            PURPLE  -> androidx.compose.ui.graphics.Color(0xFF831AD4)
+            BLUE    -> androidx.compose.ui.graphics.Color(0xFF0EA5E9)
+            EMERALD -> androidx.compose.ui.graphics.Color(0xFF10B981)
+            CRIMSON -> androidx.compose.ui.graphics.Color(0xFFE11D48)
+        }
+}
 data class AppSettings(
     val hapticFeedback: Boolean = true,
     val notificationsEnabled: Boolean = true

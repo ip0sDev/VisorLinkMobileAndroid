@@ -1,17 +1,20 @@
 package by.iposdev.visorlink.utils
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import org.koin.android.ext.android.inject
 
 class FcmService : FirebaseMessagingService() {
@@ -23,10 +26,10 @@ class FcmService : FirebaseMessagingService() {
         super.onNewToken(token)
         Log.d("FCM", "New token received: $token")
 
-        // Сохраняем только если пользователь авторизован
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null) {
             Log.d("FCM", "User not logged in, skipping token save")
+            // Токен будет отправлен позже через AuthStateListener в VisorLinkApp
             return
         }
 
@@ -44,7 +47,6 @@ class FcmService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         Log.d("FCM", "Message received: ${message.data}")
 
-        // Проверяем разрешение
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     applicationContext,
@@ -56,12 +58,18 @@ class FcmService : FirebaseMessagingService() {
             }
         }
 
+        // Проверка общих настроек уведомлений из SharedPreferences
+        val prefs = applicationContext.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("notifications_enabled", true)) {
+            Log.d("FCM", "Notifications are disabled in app settings")
+            return
+        }
+
         val chatId = message.data["chatId"] ?: run {
             Log.w("FCM", "No chatId in data payload")
             return
         }
 
-        // Используем notification payload если есть, иначе data payload
         val title = message.notification?.title
             ?: message.data["senderName"]
             ?: "New message"
@@ -70,18 +78,37 @@ class FcmService : FirebaseMessagingService() {
             ?: message.data["body"]
             ?: "You have a new message"
 
-        Log.d("FCM", "Showing notification: $title - $body")
+        // Если чат открыт на экране прямо сейчас — скрываем уведомление
+        val isCurrentChat = ActiveChatTracker.isAppInForeground && ActiveChatTracker.activeChatId == chatId
+        if (isCurrentChat) {
+            Log.d("FCM", "Suppressed notification: chat $chatId is currently open")
+            return
+        }
 
-        val isCurrentChat = ActiveChatTracker.activeChatId == chatId
-        if (!isCurrentChat) {
+        scope.launch {
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid != null) {
+                // ── Проверка на Mute (заглушенный чат) ──
+                try {
+                    val userDoc = FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
+                    if (userDoc.exists()) {
+                        val mutedChatIds = userDoc.get("mutedChatIds") as? List<String> ?: emptyList()
+                        if (mutedChatIds.contains(chatId)) {
+                            Log.d("FCM", "Suppressed notification: chat $chatId is muted")
+                            return@launch
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("FCM", "Failed to check mute status", e)
+                }
+            }
+
             NotificationHelper.showMessageNotification(
                 context = applicationContext,
                 chatId = chatId,
                 senderName = title,
                 messagePreview = body
             )
-        } else {
-            Log.d("FCM", "Suppressed notification: chat $chatId is currently open")
         }
     }
 }

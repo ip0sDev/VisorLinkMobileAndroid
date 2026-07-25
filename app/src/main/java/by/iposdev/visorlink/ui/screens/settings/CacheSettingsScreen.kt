@@ -3,6 +3,7 @@ package by.iposdev.visorlink.ui.screens.settings
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -20,20 +21,26 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.ui.components.LocalHazeState
+import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.CacheSizeInfo
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -47,7 +54,7 @@ fun CacheSettingsScreen(
     val state by viewModel.state.collectAsState()
 
     val currentTheme by themeViewModel.appTheme.collectAsState()
-    val isExthru = currentTheme == AppTheme.EXTHRU
+    val isExthru = currentTheme == AppTheme.EXTHRU || currentTheme == AppTheme.BIOLUME
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -60,155 +67,224 @@ fun CacheSettingsScreen(
         }
     }
 
-    Scaffold(
-        containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
-        topBar = {
-            Surface(
-                color = if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent,
-                modifier = if (isExthru) Modifier.nmDividerBottom(isDark) else Modifier
-            ) {
-                TopAppBar(
-                    title = {
+    val scaffoldBg = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
+
+    // Состояние Haze для создания эффекта матового стекла поверх анимированного фона
+    val hazeState = remember { HazeState() }
+
+    CompositionLocalProvider(LocalHazeState provides hazeState) {
+        Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
+            // Весь этот слой размывается для дочерних HazeChild
+            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
+                VlAmbientGlow(appTheme = currentTheme)
+
+                Scaffold(
+                    containerColor = Color.Transparent, // Прозрачный, чтобы видеть свечение
+                    topBar = {
                         if (isExthru) {
-                            Text(
-                                text = stringResource(R.string.cache_title),
-                                style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.Bold
+                            TopAppBar(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .hazeChild(
+                                        state = hazeState,
+                                        style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                                    )
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
+                                title = {
+                                    Text(
+                                        text = stringResource(R.string.cache_title),
+                                        style = MaterialTheme.typography.headlineLarge.copy(
+                                            fontSize = 34.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    )
+                                },
+                                navigationIcon = {
+                                    val interactionSource = remember { MutableInteractionSource() }
+                                    val isPressed by interactionSource.collectIsPressedAsState()
+
+                                    val scale by animateFloatAsState(
+                                        targetValue = if (isPressed) 0.9f else 1f,
+                                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+                                        label = "back_btn_scale"
+                                    )
+
+                                    val shadowMod = if (isPressed) {
+                                        Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                                    } else {
+                                        Modifier.exthruSmallRaisedShadow(isDark)
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(start = 12.dp, end = 4.dp)
+                                            .size(42.dp)
+                                            .scale(scale)
+                                            .then(shadowMod)
+                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                                            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                                            .clip(CircleShape)
+                                            .clickable(
+                                                interactionSource = interactionSource,
+                                                indication = null,
+                                                onClick = {
+                                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                                    onNavigateBack()
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                actions = {
+                                    val interactionSource = remember { MutableInteractionSource() }
+                                    val isPressed by interactionSource.collectIsPressedAsState()
+
+                                    val scale by animateFloatAsState(
+                                        targetValue = if (isPressed) 0.9f else 1f,
+                                        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+                                        label = "refresh_btn_scale"
+                                    )
+
+                                    val shadowMod = if (isPressed) {
+                                        Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                                    } else {
+                                        Modifier.exthruSmallRaisedShadow(isDark)
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(end = 12.dp)
+                                            .size(42.dp)
+                                            .scale(scale)
+                                            .then(shadowMod)
+                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                                            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                                            .clip(CircleShape)
+                                            .clickable(
+                                                interactionSource = interactionSource,
+                                                indication = null,
+                                                onClick = {
+                                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                                    viewModel.refreshSizes()
+                                                }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = Color.Transparent,
+                                    scrolledContainerColor = Color.Transparent
                                 )
                             )
                         } else {
-                            Text(stringResource(R.string.cache_title))
-                        }
-                    },
-                    navigationIcon = {
-                        val btnModifier = if (isExthru) Modifier
-                            .padding(start = 12.dp, end = 4.dp)
-                            .size(42.dp)
-                            .exthruSmallRaisedShadow(isDark)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape)
-                        else Modifier
-
-                        IconButton(
-                            onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                onNavigateBack()
-                            },
-                            modifier = btnModifier
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                stringResource(R.string.action_back),
-                                modifier = if (isExthru) Modifier.size(20.dp) else Modifier
+                            TopAppBar(
+                                title = { Text(stringResource(R.string.cache_title)) },
+                                navigationIcon = {
+                                    IconButton(onClick = {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        onNavigateBack()
+                                    }) {
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        viewModel.refreshSizes()
+                                    }) {
+                                        Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
+                                    }
+                                },
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                )
                             )
                         }
                     },
-                    actions = {
-                        val btnModifier = if (isExthru) Modifier
-                            .padding(end = 12.dp)
-                            .size(42.dp)
-                            .exthruSmallRaisedShadow(isDark)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape)
-                        else Modifier
-
-                        IconButton(
-                            onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                viewModel.refreshSizes()
-                            },
-                            modifier = btnModifier
+                    snackbarHost = {
+                        AnimatedVisibility(
+                            visible = state.successMessageRes != null,
+                            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                            exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut()
                         ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                stringResource(R.string.action_refresh),
-                                modifier = if (isExthru) Modifier.size(20.dp) else Modifier
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.BottomCenter
+                            ) {
+                                Surface(
+                                    shape = MaterialTheme.shapes.medium,
+                                    color = MaterialTheme.colorScheme.inverseSurface,
+                                    tonalElevation = 4.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.CheckCircle, null,
+                                            tint = MaterialTheme.colorScheme.inverseOnSurface,
+                                            modifier = Modifier.size(18.dp))
+                                        Text(state.successMessageRes?.let { stringResource(it) } ?: "",
+                                            color = MaterialTheme.colorScheme.inverseOnSurface,
+                                            style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                }
+                            }
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (isExthru) Color.Transparent else MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-        },
-        snackbarHost = {
-            // Success toast через Snackbar
-            AnimatedVisibility(
-                visible = state.successMessageRes != null,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.inverseSurface,
-                        tonalElevation = 4.dp
+                    }
+                ) { padding ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(padding)
+                            .verticalScroll(rememberScrollState())
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CheckCircle, null,
-                                tint = MaterialTheme.colorScheme.inverseOnSurface,
-                                modifier = Modifier.size(18.dp))
-                            Text(state.successMessageRes?.let { stringResource(it) } ?: "",
-                                color = MaterialTheme.colorScheme.inverseOnSurface,
-                                style = MaterialTheme.typography.bodyMedium)
-                        }
+                        // ── Использование кэша ────────────────────────────────────────────
+                        SectionHeader(stringResource(R.string.cache_section_usage), isExthru)
+
+                        CacheUsageCard(
+                            sizes     = state.sizes,
+                            isLoading = state.isLoading,
+                            isExthru  = isExthru,
+                            isDark    = isDark
+                        )
+
+                        // ── Очистка ───────────────────────────────────────────────────────
+                        SectionHeader(stringResource(R.string.cache_section_clear), isExthru)
+
+                        ClearActionsCard(
+                            isClearing    = state.isClearing,
+                            isExthru      = isExthru,
+                            isDark        = isDark,
+                            onClearImages = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
+                            onClearVoice  = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
+                            onClearAll    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() }
+                        )
+
+                        // ── Лимиты ────────────────────────────────────────────────────────
+                        SectionHeader(stringResource(R.string.cache_section_limits), isExthru)
+
+                        LimitsCard(
+                            imageLimitMb  = state.config.maxImageMb,
+                            voiceLimitMb  = state.config.maxVoiceMb,
+                            cacheDays     = state.config.chatCacheDays,
+                            isExthru      = isExthru,
+                            isDark        = isDark,
+                            onImageLimit  = { viewModel.setMaxImageMb(it) },
+                            onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
+                            onCacheDays   = { viewModel.setChatCacheDays(it) }
+                        )
+
+                        Spacer(Modifier.height(32.dp))
                     }
                 }
             }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // ── Использование кэша ────────────────────────────────────────────
-            SectionHeader(stringResource(R.string.cache_section_usage), isExthru)
-
-            CacheUsageCard(
-                sizes     = state.sizes,
-                isLoading = state.isLoading,
-                isExthru  = isExthru,
-                isDark    = isDark
-            )
-
-            // ── Очистка ───────────────────────────────────────────────────────
-            SectionHeader(stringResource(R.string.cache_section_clear), isExthru)
-
-            ClearActionsCard(
-                isClearing    = state.isClearing,
-                isExthru      = isExthru,
-                isDark        = isDark,
-                onClearImages = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
-                onClearVoice  = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
-                onClearAll    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() }
-            )
-
-            // ── Лимиты ────────────────────────────────────────────────────────
-            SectionHeader(stringResource(R.string.cache_section_limits), isExthru)
-
-            LimitsCard(
-                imageLimitMb  = state.config.maxImageMb,
-                voiceLimitMb  = state.config.maxVoiceMb,
-                cacheDays     = state.config.chatCacheDays,
-                isExthru      = isExthru,
-                isDark        = isDark,
-                onImageLimit  = { viewModel.setMaxImageMb(it) },
-                onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
-                onCacheDays   = { viewModel.setChatCacheDays(it) }
-            )
-
-            Spacer(Modifier.height(32.dp))
         }
     }
 }
@@ -223,13 +299,12 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
                 CircularProgressIndicator(
                     modifier   = Modifier.size(32.dp),
                     strokeWidth = 2.5.dp,
-                    trackColor = MaterialTheme.colorScheme.primaryContainer
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         } else {
-            // Суммарный размер — крупно
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp, start = 8.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -251,14 +326,14 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
 
             Spacer(Modifier.height(16.dp))
 
-            // Полоска общего прогресса
             val totalFraction = (sizes.totalMb / 500f).coerceIn(0f, 1f)
 
             val progressModifier = if (isExthru) {
                 Modifier
                     .fillMaxWidth()
                     .height(10.dp)
-                    .nmInsetShadow(isDark, cornerRadius = 5.dp)
+                    .padding(horizontal = 8.dp)
+                    .nmInsetShadow(isDark, cornerRadius = 5.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
                     .clip(RoundedCornerShape(5.dp))
             } else {
                 Modifier
@@ -282,11 +357,12 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
                 Spacer(Modifier.height(24.dp))
             }
 
-            // Детализация по типам
             UsageRow(Icons.Default.Image, stringResource(R.string.cache_row_images), sizes.imagesMb, isExthru, isDark)
             UsageRow(Icons.Default.Mic, stringResource(R.string.cache_row_voice), sizes.voiceMb, isExthru, isDark)
             UsageRow(Icons.Default.GraphicEq, stringResource(R.string.cache_row_waveforms), sizes.waveformMb, isExthru, isDark)
             UsageRow(Icons.Default.ChatBubble, stringResource(R.string.cache_row_chat), sizes.chatMb, isExthru, isDark)
+
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
@@ -296,7 +372,7 @@ private fun UsageRow(icon: ImageVector, label: String, mb: Float, isExthru: Bool
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = if (isExthru) 8.dp else 5.dp),
+            .padding(horizontal = if(isExthru) 4.dp else 0.dp, vertical = if (isExthru) 10.dp else 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -336,6 +412,8 @@ private fun ClearActionsCard(
     var showConfirmAll by remember { mutableStateOf(false) }
 
     SettingsCard(isExthru = isExthru, isDark = isDark, contentPadding = PaddingValues(if (isExthru) 0.dp else 8.dp)) {
+        if (isExthru) Spacer(Modifier.height(8.dp))
+
         ClearButton(
             icon       = Icons.Default.Image,
             label      = stringResource(R.string.cache_clear_images),
@@ -358,7 +436,6 @@ private fun ClearActionsCard(
         )
         if (!isExthru) HorizontalDivider(modifier = Modifier.padding(horizontal = 8.dp), color = MaterialTheme.colorScheme.outline.copy(0.15f))
 
-        // Кнопка «Clear all» с подтверждением
         if (showConfirmAll) {
             Row(
                 modifier = Modifier
@@ -403,6 +480,8 @@ private fun ClearActionsCard(
                 onClick    = { showConfirmAll = true }
             )
         }
+
+        if (isExthru) Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -421,9 +500,15 @@ private fun ClearButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed && !isLoading) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f),
+        label = "clear_btn_scale"
+    )
+
     val bgColor by animateColorAsState(
         targetValue = when {
-            isExthru && isPressed -> MaterialTheme.colorScheme.surfaceVariant
+            isExthru && isPressed -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             isExthru -> Color.Transparent
             else -> MaterialTheme.colorScheme.surfaceVariant
         },
@@ -434,7 +519,7 @@ private fun ClearButton(
         onClick   = onClick,
         color     = bgColor,
         shape     = if (isExthru) RoundedCornerShape(0.dp) else MaterialTheme.shapes.medium,
-        modifier  = Modifier.fillMaxWidth(),
+        modifier  = Modifier.fillMaxWidth().scale(scale),
         enabled   = !isLoading,
         interactionSource = interactionSource
     ) {
@@ -461,7 +546,6 @@ private fun ClearButton(
                 CircularProgressIndicator(
                     modifier   = Modifier.size(20.dp),
                     strokeWidth = 2.dp,
-                    trackColor = MaterialTheme.colorScheme.primaryContainer,
                     color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                 )
             } else {
@@ -502,7 +586,7 @@ private fun LimitsCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
             Spacer(Modifier.height(8.dp))
         } else {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
         }
 
         SliderRow(
@@ -520,7 +604,7 @@ private fun LimitsCard(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
             Spacer(Modifier.height(8.dp))
         } else {
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
         }
 
         SliderRow(
@@ -548,7 +632,7 @@ private fun SliderRow(
     format: (Float) -> String,
     onChange: (Float) -> Unit
 ) {
-    Column {
+    Column(modifier = if (isExthru) Modifier.padding(horizontal = 4.dp, vertical = 4.dp) else Modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -600,13 +684,29 @@ private fun SettingsCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     if (isExthru) {
+        val hazeState = LocalHazeState.current
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 6.dp)
                 .exthruRaisedShadow(isDark)
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
                 .clip(RoundedCornerShape(20.dp))
+                .hazeChild(
+                    state = hazeState,
+                    style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                )
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f))
+                .border(
+                    1.5.dp,
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (isDark) 0.15f else 0.5f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = if (isDark) 0.4f else 0.05f)
+                        )
+                    ),
+                    RoundedCornerShape(20.dp)
+                )
                 .padding(contentPadding),
             content = content
         )
@@ -647,14 +747,15 @@ private fun SectionHeader(title: String, isExthru: Boolean) {
 
 @Composable
 private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, isError: Boolean = false) {
-    val bgColor = MaterialTheme.colorScheme.surface
+    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.7f)
     val iconColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier
             .size(38.dp)
             .exthruSmallRaisedShadow(isDark)
-            .background(bgColor, CircleShape),
+            .background(bgColor, CircleShape)
+            .border(1.dp, Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp))
@@ -665,19 +766,35 @@ private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, isError: Boolean 
 private fun NmButton(text: String, isDestructive: Boolean, isDark: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, label = "btn_scale")
 
-    val bgColor = if (isDestructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surface
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "btn_scale"
+    )
+
+    val bgColor = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.4f else 0.6f)
     val textColor = if (isDestructive) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.primary
+
+    val shadowMod = if (isPressed) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+    } else {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    }
 
     Box(
         modifier = modifier
             .scale(scale)
-            .exthruSmallRaisedShadow(isDark)
+            .then(shadowMod)
             .background(bgColor, RoundedCornerShape(16.dp))
+            .border(
+                1.dp,
+                if (isPressed) Color.Transparent else Color.White.copy(alpha = if(isDark) 0.05f else 0.3f),
+                RoundedCornerShape(16.dp)
+            )
             .clip(RoundedCornerShape(16.dp))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(text, fontWeight = FontWeight.Bold, color = textColor)
