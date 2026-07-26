@@ -61,6 +61,11 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          # Разрешаем кэшировать всё по максимуму
+          cache-read-only: false
+          # Отключаем очистку старых зависимостей в CI для ускорения
+          gradle-home-cache-cleanup: true
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -80,12 +85,15 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Run Tests and Build Release APK
-        run: >
-          ./gradlew testDebugUnitTest assembleRelease
-          -PcommitId=${{ steps.commit.outputs.commit_id }}
-          --parallel
-          --build-cache
-          --no-daemon
+        # Убрали --no-daemon и добавили --configuration-cache
+        # Используем '\' для удобного переноса строк
+        run: |
+          ./gradlew testDebugUnitTest assembleRelease \
+            -PcommitId=${{ steps.commit.outputs.commit_id }} \
+            --parallel \
+            --build-cache \
+            --configuration-cache \
+            -Dorg.gradle.jvmargs="-Xmx5g -XX:+UseParallelGC -Dkotlin.daemon.jvm.options=-Xmx2g"
 
       - name: Sign APK
         id: sign_app
