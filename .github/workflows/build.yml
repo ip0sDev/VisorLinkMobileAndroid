@@ -124,10 +124,10 @@ jobs:
             -F "changelog=${{ steps.commit.outputs.changelog }}")
             
           if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ]; then
-            echo "✅ Успешно загружено на сервер обновлений!"
+            echo "Успешно загружено на сервер обновлений!"
             cat /tmp/response.json
           else
-            echo "❌ Ошибка загрузки (HTTP $HTTP_STATUS)"
+            echo "Ошибка загрузки (HTTP $HTTP_STATUS)"
             cat /tmp/response.json
             exit 1
           fi
