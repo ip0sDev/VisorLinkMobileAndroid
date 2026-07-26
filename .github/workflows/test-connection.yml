@@ -1,7 +1,7 @@
-name: Test CI Connection
+name: Test CI Connection (Service Tokens)
 
 on:
-  workflow_dispatch: # Позволяет запускать Action вручную кнопкой "Run workflow"
+  workflow_dispatch:
 
 jobs:
   test-network:
@@ -11,15 +11,14 @@ jobs:
       - name: Create fake APK
         run: echo "This is just a test file, not a real APK" > dummy.apk
 
-      - name: Send Request to Go Backend
+      - name: Test 1 - WITHOUT Tokens (Should Fail)
         env:
           SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
           API_KEY: ${{ secrets.UPDATER_API_KEY }}
         run: |
-          echo "Testing connection to $SERVER_URL/api/upload..."
+          echo "Отправляем запрос БЕЗ CF-токенов..."
           
-          # Отправляем фейковый файл
-          HTTP_STATUS=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+          HTTP_STATUS=$(curl -sS -o /tmp/response1.json -w "%{http_code}" \
             -A "VisorLink-CI-Bot/1.0" \
             -X POST "$SERVER_URL/api/upload" \
             -H "X-API-Key: $API_KEY" \
@@ -27,24 +26,48 @@ jobs:
             -F "channel=canary" \
             -F "changelog=Test ping" || echo "000")
             
-          echo "========================================"
           echo "HTTP Status Code: $HTTP_STATUS"
-          echo "Server Response:"
-          cat /tmp/response.json || echo "[Empty response]"
-          echo -e "\n========================================"
 
-          # Анализируем результат
-          if [ "$HTTP_STATUS" = "400" ]; then
-            echo "✅ УСПЕХ! Запрос прошел через Cloudflare и дошел до твоего Go-сервера."
-            echo "Сервер отбил его (как и ожидалось), потому что это не настоящий APK."
-            exit 0
-          elif [ "$HTTP_STATUS" = "401" ]; then
-            echo "✅ УСПЕХ! Запрос прошел Cloudflare, но Go-сервер сказал, что API-ключ неверный."
-            exit 0
-          elif [ "$HTTP_STATUS" = "403" ]; then
-            echo "❌ ПРОВАЛ! Cloudflare всё ещё блокирует запрос (капча или защита)."
+          if [ "$HTTP_STATUS" = "403" ] || [ "$HTTP_STATUS" = "302" ]; then
+            echo "✅ УСПЕХ ТЕСТА 1: Cloudflare заблокировал запрос (Bot Fight Mode / Zero Trust работает)."
+          elif [ "$HTTP_STATUS" = "400" ]; then
+            echo "❌ ПРОВАЛ ТЕСТА 1: Запрос прошел без токенов. Вы точно включили Bot Fight Mode обратно?"
             exit 1
           else
-            echo "⚠️ НЕИЗВЕСТНЫЙ СТАТУС: $HTTP_STATUS"
+            echo "⚠️ Неожиданный статус: $HTTP_STATUS"
+            cat /tmp/response1.json
+            exit 1
+          fi
+
+      - name: Test 2 - WITH Tokens (Should Succeed)
+        env:
+          SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
+          API_KEY: ${{ secrets.UPDATER_API_KEY }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+        run: |
+          echo "========================================"
+          echo "Отправляем запрос С CF-токенами..."
+          
+          HTTP_STATUS=$(curl -sS -o /tmp/response2.json -w "%{http_code}" \
+            -A "VisorLink-CI-Bot/1.0" \
+            -X POST "$SERVER_URL/api/upload" \
+            -H "X-API-Key: $API_KEY" \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            -F "file=@dummy.apk" \
+            -F "channel=canary" \
+            -F "changelog=Test ping" || echo "000")
+            
+          echo "HTTP Status Code: $HTTP_STATUS"
+          echo "Server Response:"
+          cat /tmp/response2.json || echo "[Empty response]"
+
+          if [ "$HTTP_STATUS" = "400" ]; then
+            echo -e "\n✅ УСПЕХ ТЕСТА 2! Токены сработали. Запрос пробил Cloudflare и дошел до Go-сервера (ошибка zip)."
+            exit 0
+          else
+            echo -e "\n❌ ПРОВАЛ ТЕСТА 2: Токены не помогли. Статус: $HTTP_STATUS"
+            echo "Проверьте политику Service Auth в Zero Trust!"
             exit 1
           fi
