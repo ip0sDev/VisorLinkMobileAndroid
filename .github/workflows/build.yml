@@ -110,19 +110,24 @@ jobs:
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
+      # ФИНАЛЬНЫЙ ШАГ: ЗАГРУЗКА В КАСТОМНЫЙ UPDATER ЧЕРЕЗ CLOUDFLARE ZERO TRUST
       - name: Upload APK to Custom Updater API
         env:
           SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
           API_KEY: ${{ secrets.UPDATER_API_KEY }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
           CHANGELOG_TEXT: ${{ steps.commit.outputs.changelog }}
         run: |
           echo "Uploading $APK_PATH to $SERVER_URL/api/upload (Channel: $CHANNEL)..."
           
-          # Маскируем curl под Chrome с помощью флага -A
+          # Отправляем cURL запрос с токенами Cloudflare Access
           HTTP_STATUS=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
+            -A "VisorLink-CI-Bot/1.0" \
             -X POST "$SERVER_URL/api/upload" \
             -H "X-API-Key: $API_KEY" \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
             -F "file=@${APK_PATH}" \
             -F "channel=${CHANNEL}" \
             -F "changelog=${CHANGELOG_TEXT}" || echo "000")
