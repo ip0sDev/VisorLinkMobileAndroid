@@ -107,28 +107,34 @@ jobs:
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
-      # НОВЫЙ ШАГ: ЗАГРУЗКА В КАСТОМНЫЙ UPDATER
+      # ИСПРАВЛЕННЫЙ ШАГ: ЗАГРУЗКА В КАСТОМНЫЙ UPDATER
       - name: Upload APK to Custom Updater API
         env:
           SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
           API_KEY: ${{ secrets.UPDATER_API_KEY }}
+          CHANGELOG_TEXT: ${{ steps.commit.outputs.changelog }}
         run: |
           echo "Uploading $APK_PATH to $SERVER_URL/api/upload (Channel: $CHANNEL)..."
           
-          # Отправляем cURL запрос
-          HTTP_STATUS=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+          # Выполняем cURL (-sS покажет ошибку подключения, если она возникнет)
+          # '|| true' не дает bash моментально упасть, позволяя нам прочитать код ответа
+          HTTP_STATUS=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
             -X POST "$SERVER_URL/api/upload" \
             -H "X-API-Key: $API_KEY" \
-            -F "file=@${{ env.APK_PATH }}" \
-            -F "channel=${{ env.CHANNEL }}" \
-            -F "changelog=${{ steps.commit.outputs.changelog }}")
+            -F "file=@${APK_PATH}" \
+            -F "channel=${CHANNEL}" \
+            -F "changelog=${CHANGELOG_TEXT}" || echo "CURL_ERROR")
             
+          echo "Server HTTP Status: $HTTP_STATUS"
+
           if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ]; then
-            echo "Успешно загружено на сервер обновлений!"
+            echo "✅ Успешно загружено на сервер обновлений!"
             cat /tmp/response.json
           else
-            echo "Ошибка загрузки (HTTP $HTTP_STATUS)"
-            cat /tmp/response.json
+            echo "❌ Ошибка загрузки (HTTP Status: $HTTP_STATUS)"
+            if [ -f /tmp/response.json ]; then
+              cat /tmp/response.json
+            fi
             exit 1
           fi
 
