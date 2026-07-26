@@ -1,0 +1,50 @@
+name: Test CI Connection
+
+on:
+  workflow_dispatch: # Позволяет запускать Action вручную кнопкой "Run workflow"
+
+jobs:
+  test-network:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create fake APK
+        run: echo "This is just a test file, not a real APK" > dummy.apk
+
+      - name: Send Request to Go Backend
+        env:
+          SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
+          API_KEY: ${{ secrets.UPDATER_API_KEY }}
+        run: |
+          echo "Testing connection to $SERVER_URL/api/upload..."
+          
+          # Отправляем фейковый файл
+          HTTP_STATUS=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            -A "VisorLink-CI-Bot/1.0" \
+            -X POST "$SERVER_URL/api/upload" \
+            -H "X-API-Key: $API_KEY" \
+            -F "file=@dummy.apk" \
+            -F "channel=canary" \
+            -F "changelog=Test ping" || echo "000")
+            
+          echo "========================================"
+          echo "HTTP Status Code: $HTTP_STATUS"
+          echo "Server Response:"
+          cat /tmp/response.json || echo "[Empty response]"
+          echo -e "\n========================================"
+
+          # Анализируем результат
+          if [ "$HTTP_STATUS" = "400" ]; then
+            echo "✅ УСПЕХ! Запрос прошел через Cloudflare и дошел до твоего Go-сервера."
+            echo "Сервер отбил его (как и ожидалось), потому что это не настоящий APK."
+            exit 0
+          elif [ "$HTTP_STATUS" = "401" ]; then
+            echo "✅ УСПЕХ! Запрос прошел Cloudflare, но Go-сервер сказал, что API-ключ неверный."
+            exit 0
+          elif [ "$HTTP_STATUS" = "403" ]; then
+            echo "❌ ПРОВАЛ! Cloudflare всё ещё блокирует запрос (капча или защита)."
+            exit 1
+          else
+            echo "⚠️ НЕИЗВЕСТНЫЙ СТАТУС: $HTTP_STATUS"
+            exit 1
+          fi
