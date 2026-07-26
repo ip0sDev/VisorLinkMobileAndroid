@@ -61,12 +61,7 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
-        with:
-          # Разрешаем кэшировать всё по максимуму
-          cache-read-only: false
-          # Отключаем очистку старых зависимостей в CI для ускорения
-          gradle-home-cache-cleanup: true
-
+        
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -115,7 +110,6 @@ jobs:
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
           echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
 
-      # ИСПРАВЛЕННЫЙ ШАГ: ЗАГРУЗКА В КАСТОМНЫЙ UPDATER
       - name: Upload APK to Custom Updater API
         env:
           SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
@@ -124,18 +118,18 @@ jobs:
         run: |
           echo "Uploading $APK_PATH to $SERVER_URL/api/upload (Channel: $CHANNEL)..."
           
-          # Выполняем cURL (-sS покажет ошибку подключения, если она возникнет)
-          # '|| true' не дает bash моментально упасть, позволяя нам прочитать код ответа
+          # Маскируем curl под Chrome с помощью флага -A
           HTTP_STATUS=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -X POST "$SERVER_URL/api/upload" \
             -H "X-API-Key: $API_KEY" \
             -F "file=@${APK_PATH}" \
             -F "channel=${CHANNEL}" \
-            -F "changelog=${CHANGELOG_TEXT}" || echo "CURL_ERROR")
+            -F "changelog=${CHANGELOG_TEXT}" || echo "000")
             
           echo "Server HTTP Status: $HTTP_STATUS"
 
-          if [ "$HTTP_STATUS" -eq 200 ] || [ "$HTTP_STATUS" -eq 201 ]; then
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "201" ]; then
             echo "✅ Успешно загружено на сервер обновлений!"
             cat /tmp/response.json
           else
