@@ -22,7 +22,7 @@ object ApkDownloader {
     /**
      * @param fileName   имя сохраняемого файла (например app-beta.apk)
      * @param expectedSha256 Хэш для проверки файла (из ответа сервера)
-     * @param onProgress 0f..1f прогресс загрузки, -1f = ошибка
+     * @param onProgress 0f..1f прогресс загрузки и скорость в байтах/сек, -1f = ошибка
      * @param onComplete вызывается когда файл скачан и проверен
      */
     fun downloadAndInstall(
@@ -30,7 +30,7 @@ object ApkDownloader {
         url: String,
         fileName: String = "VisorLink_Update.apk",
         expectedSha256: String? = null,
-        onProgress: (Float) -> Unit = {},
+        onProgress: (progress: Float, speedBps: Long) -> Unit = { _, _ -> },
         onComplete: () -> Unit = {}
     ) {
         val destination = File(
@@ -53,6 +53,10 @@ object ApkDownloader {
         val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val downloadId = manager.enqueue(request)
 
+        // Переменные для расчета скорости
+        var lastDownloaded = 0L
+        var lastTime = System.currentTimeMillis()
+
         // ── Опрос прогресса каждые 300 мс ───────────────────────────────
         val handler = Handler(Looper.getMainLooper())
         val pollRunnable = object : Runnable {
@@ -74,12 +78,23 @@ object ApkDownloader {
                     when (status) {
                         DownloadManager.STATUS_RUNNING,
                         DownloadManager.STATUS_PENDING -> {
+                            val now = System.currentTimeMillis()
+                            val dt = now - lastTime
+
+                            // Высчитываем скорость (байт в секунду)
+                            val speed = if (dt > 0 && downloaded >= lastDownloaded) {
+                                ((downloaded - lastDownloaded) * 1000L) / dt
+                            } else 0L
+
+                            lastDownloaded = downloaded
+                            lastTime = now
+
                             val progress = if (total > 0) downloaded.toFloat() / total else 0f
-                            onProgress(progress)
+                            onProgress(progress, speed)
                             handler.postDelayed(this, 300)
                         }
                         DownloadManager.STATUS_FAILED -> {
-                            onProgress(-1f)
+                            onProgress(-1f, 0L)
                         }
                         // SUCCESS / PAUSED — ничего, ждём BroadcastReceiver
                         else -> {}
@@ -115,18 +130,18 @@ object ApkDownloader {
                         val hashValid = verifySha256(destination, expectedSha256)
                         Handler(Looper.getMainLooper()).post {
                             if (hashValid) {
-                                onProgress(1f)
+                                onProgress(1f, 0L)
                                 onComplete()
                                 installApk(ctx, destination)
                             } else {
                                 destination.delete()
-                                onProgress(-1f)
+                                onProgress(-1f, 0L)
                                 Toast.makeText(ctx, "Ошибка: Файл поврежден (Checksum mismatch)", Toast.LENGTH_LONG).show()
                             }
                         }
                     }.start()
                 } else {
-                    onProgress(-1f)
+                    onProgress(-1f, 0L)
                     Toast.makeText(ctx, "Download failed", Toast.LENGTH_SHORT).show()
                 }
             }
