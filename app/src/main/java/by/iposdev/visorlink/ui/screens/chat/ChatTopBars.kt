@@ -42,7 +42,8 @@ import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -68,12 +69,15 @@ internal fun ExthruChatTopBar(
     onLeaveClick: () -> Unit,
 ) {
     val hazeState = LocalHazeState.current
+    val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
 
     TopAppBar(
         modifier = Modifier
             .fillMaxWidth()
-            .hazeChild(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
+            .hazeEffect(
+                state = hazeState,
+                style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = HazeTint(topBarBg))
+            ),
         navigationIcon = {
             InteractiveTopBarIcon(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,

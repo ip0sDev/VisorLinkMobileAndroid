@@ -87,6 +87,7 @@ fun SettingsScreen(
     val notifEnabled by themeViewModel.notificationsEnabled.collectAsState()
     val currentLang by themeViewModel.language.collectAsState()
     val currentChannel by appUpdateViewModel.currentChannel.collectAsState()
+    val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
 
     val profile by userRepository.currentUserFlow().collectAsState(initial = null)
 
@@ -259,9 +260,11 @@ fun SettingsScreen(
                         }
 
                         // ── Управление ─────────────────────────────────────────────────────
+                        val totalControls = 3
                         VlSettingsSection(appTheme = currentTheme, title = "Управление") {
-                            VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.NotificationsActive, title = "Push-уведомления", trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 2)
-                            VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.Vibration, title = "Вибрация", trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 2)
+                            VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.NotificationsActive, title = "Push-уведомления", trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = totalControls)
+                            VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.Vibration, title = "Вибрация", trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = totalControls)
+                            VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = totalControls)
                         }
 
                         // ── ПРИВАТНОСТЬ (STEALTH MODE) ─────────────────────────────────────

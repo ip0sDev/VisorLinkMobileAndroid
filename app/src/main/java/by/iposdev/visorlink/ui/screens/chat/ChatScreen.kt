@@ -64,7 +64,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -128,11 +128,11 @@ fun ChatScreen(
 
     val themeVm: ThemeViewModel = koinViewModel()
     val appTheme by themeVm.appTheme.collectAsState()
+    val dynamicInput by themeVm.dynamicChatInput.collectAsState()
     val isOneUi  = appTheme == AppTheme.ONE_UI
     val isExthru = appTheme == AppTheme.EXTHRU || appTheme == AppTheme.BIOLUME
     val isDark   = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
-    // Для демонстрации жестового меню в Exthru. В будущем можно вынести в настройки
     val useGestureMenu = isExthru
 
     val isAdmin  = uiState.myMember?.isAdmin() == true
@@ -184,44 +184,59 @@ fun ChatScreen(
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
-            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
-                VlAmbientGlow(appTheme = appTheme)
-
-                Scaffold(
-                    containerColor = Color.Transparent,
-                    topBar = {
-                        if (isExthru) {
-                            ExthruChatTopBar(
-                                uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark,
-                                canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                                hapticEnabled = hapticEnabled,
-                                onWallpaperClick = { showWallpaperSheet = true },
-                                onNavigateBack = onNavigateBack,
-                                onOpenOtherProfile = onOpenOtherProfile,
-                                onOpenChatSettings = onOpenChatSettings,
-                                onLeaveClick = { showLeaveDialog = true }
-                            )
-                        } else if (isOneUi) {
-                            OneUiChatTopBar(
-                                uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark,
-                                canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                                hapticEnabled = hapticEnabled,
-                                onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
-                                onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
-                                onLeaveClick = { showLeaveDialog = true }
-                            )
-                        } else {
-                            DefaultChatTopBar(
-                                uiState = uiState, otherUid = otherUid, chatId = chatId,
-                                canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                                hapticEnabled = hapticEnabled,
-                                onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
-                                onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
-                                onLeaveClick = { showLeaveDialog = true }
-                            )
-                        }
-                    },
-                    bottomBar = {
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    if (isExthru) {
+                        ExthruChatTopBar(
+                            uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark,
+                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                            hapticEnabled = hapticEnabled,
+                            onWallpaperClick = { showWallpaperSheet = true },
+                            onNavigateBack = onNavigateBack,
+                            onOpenOtherProfile = onOpenOtherProfile,
+                            onOpenChatSettings = onOpenChatSettings,
+                            onLeaveClick = { showLeaveDialog = true }
+                        )
+                    } else if (isOneUi) {
+                        OneUiChatTopBar(
+                            uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark,
+                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                            hapticEnabled = hapticEnabled,
+                            onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
+                            onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
+                            onLeaveClick = { showLeaveDialog = true }
+                        )
+                    } else {
+                        DefaultChatTopBar(
+                            uiState = uiState, otherUid = otherUid, chatId = chatId,
+                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                            hapticEnabled = hapticEnabled,
+                            onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
+                            onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
+                            onLeaveClick = { showLeaveDialog = true }
+                        )
+                    }
+                },
+                bottomBar = {
+                    if (dynamicInput) {
+                        DynamicChatInputBar(
+                            uiState = uiState, inputText = inputText, isDark = isDark, appTheme = appTheme,
+                            canSendMessage = canSendMessage, canSendMedia = canSendMedia,
+                            hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
+                            audioPermission = audioPermission,
+                            onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                            onAttach = { imagePicker.launch("image/*") },
+                            onStickerClick = { showStickerSheet = true },
+                            onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
+                            onStartRecord = { viewModel.startRecording() },
+                            onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
+                            onCancelRecord = { viewModel.cancelRecording() },
+                            onSendRecord = { viewModel.stopRecordingAndSend() },
+                            onClearReply = { viewModel.clearReply() },
+                            haptic = haptic
+                        )
+                    } else {
                         if (isExthru) {
                             ExthruChatBottomBar(
                                 uiState = uiState, inputText = inputText, isDark = isDark,
@@ -275,9 +290,93 @@ fun ChatScreen(
                             )
                         }
                     }
-                ) { innerPadding ->
-                    Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                }
+            ) { innerPadding ->
+                Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
+                    if (uiState.wallpaperUrl != null) {
+                        AsyncImage(model = uiState.wallpaperUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(), alpha = if (isDark) 0.35f else 0.7f)
+                    } else {
+                        VlAmbientGlow(appTheme = appTheme)
+                    }
 
+                    if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
+                        EmptyChatPlaceholder(modifier = Modifier.fillMaxSize(), isExthru = isExthru, isDark = isDark)
+                    } else {
+                        val listBg = when {
+                            uiState.wallpaperUrl != null -> Modifier
+                            isExthru -> Modifier.background(ExthruChat.pageBg(isDark))
+                            isOneUi  -> Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
+                            else     -> Modifier
+                        }
+                        LazyColumn(
+                            state = listState, reverseLayout = true,
+                            userScrollEnabled = contextMenuData == null, // Отключаем скролл, если открыто меню (жесты)
+                            modifier = Modifier.fillMaxSize().then(listBg),
+                            contentPadding = PaddingValues(
+                                top = innerPadding.calculateTopPadding() + 12.dp,
+                                bottom = innerPadding.calculateBottomPadding() + 12.dp
+                            ),
+                        ) {
+                            items(
+                                items = uiState.messageListItems.asReversed(),
+                                key = { item ->
+                                    when (item) {
+                                        is MessageListItem.DateHeader  -> "date_${item.label}"
+                                        is MessageListItem.MessageItem -> item.message.id
+                                    }
+                                }
+                            ) { item ->
+                                when (item) {
+                                    is MessageListItem.DateHeader -> DateSeparator(
+                                        item.label, isOneUi, isExthru, isDark, uiState.wallpaperUrl != null)
+                                    is MessageListItem.MessageItem -> {
+                                        val isMine = item.message.senderId == viewModel.currentUid
+                                        SwipeableMessage(
+                                            message = item.message, isMine = isMine,
+                                            hapticEnabled = hapticEnabled,
+                                            isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                                            onReply = {
+                                                haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                                viewModel.setReplyTo(item.message)
+                                            },
+                                        ) {
+                                            MessageBubble(
+                                                message = item.message, isMine = isMine,
+                                                otherUid = otherUid, currentUid = viewModel.currentUid,
+                                                chatType = uiState.chatType, hapticEnabled = hapticEnabled,
+                                                showSenderName = uiState.chatType != ChatType.DIRECT,
+                                                voicePlayback = uiState.voicePlayback,
+                                                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                                                hasWallpaper = uiState.wallpaperUrl != null,
+                                                onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
+                                                onSeekVoice = { viewModel.seekVoice(it) },
+                                                onLongPressStart = { offset ->
+                                                    contextMenuData = ContextMenuData(item.message, isMine, offset)
+                                                    dragOffset = Offset.Zero
+                                                },
+                                                onLongPressDrag = { delta -> dragOffset += delta },
+                                                onLongPressEnd = {
+                                                    contextMenuData = null
+                                                    dragOffset = Offset.Zero
+                                                },
+                                                onImageTap = onOpenImageViewer,
+                                                onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
+                                                onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
+                                                onReplyClick = onScrollToMessage,
+                                                onMentionClick = onMentionClick,
+                                                onOpenComments = { onOpenComments(item.message.id) },
+                                                chat = uiState.chat,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Top overlays
+                    Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = innerPadding.calculateTopPadding() + 16.dp)) {
                         AnimatedVisibility(
                             visible = uiState.showUnofficialClientWarning,
                             enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()
@@ -294,185 +393,104 @@ fun ChatScreen(
                             }
                         }
 
-                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                            uiState.wallpaperUrl?.let { url ->
-                                AsyncImage(model = url, contentDescription = null, contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize(), alpha = if (isDark) 0.35f else 0.7f)
+                        AnimatedVisibility(
+                            visible = uiState.isLoadingMore,
+                            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                        ) {
+                            val indicatorColor = when {
+                                isExthru -> ExthruChat.Accent
+                                isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
+                                else     -> MaterialTheme.colorScheme.primary
                             }
-
-                            if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
-                                EmptyChatPlaceholder(modifier = Modifier.fillMaxSize(), isExthru = isExthru, isDark = isDark)
-                            } else {
-                                val listBg = when {
-                                    uiState.wallpaperUrl != null -> Modifier
-                                    isExthru -> Modifier.background(ExthruChat.pageBg(isDark))
-                                    isOneUi  -> Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
-                                    else     -> Modifier
-                                }
-                                LazyColumn(
-                                    state = listState, reverseLayout = true,
-                                    userScrollEnabled = contextMenuData == null, // Отключаем скролл, если открыто меню (жесты)
-                                    modifier = Modifier.fillMaxSize().then(listBg),
-                                    contentPadding = PaddingValues(vertical = 12.dp),
-                                ) {
-                                    items(
-                                        items = uiState.messageListItems.asReversed(),
-                                        key = { item ->
-                                            when (item) {
-                                                is MessageListItem.DateHeader  -> "date_${item.label}"
-                                                is MessageListItem.MessageItem -> item.message.id
-                                            }
-                                        }
-                                    ) { item ->
-                                        when (item) {
-                                            is MessageListItem.DateHeader -> DateSeparator(
-                                                item.label, isOneUi, isExthru, isDark, uiState.wallpaperUrl != null)
-                                            is MessageListItem.MessageItem -> {
-                                                val isMine = item.message.senderId == viewModel.currentUid
-                                                SwipeableMessage(
-                                                    message = item.message, isMine = isMine,
-                                                    hapticEnabled = hapticEnabled,
-                                                    isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-                                                    onReply = {
-                                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                                        viewModel.setReplyTo(item.message)
-                                                    },
-                                                ) {
-                                                    MessageBubble(
-                                                        message = item.message, isMine = isMine,
-                                                        otherUid = otherUid, currentUid = viewModel.currentUid,
-                                                        chatType = uiState.chatType, hapticEnabled = hapticEnabled,
-                                                        showSenderName = uiState.chatType != ChatType.DIRECT,
-                                                        voicePlayback = uiState.voicePlayback,
-                                                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-                                                        hasWallpaper = uiState.wallpaperUrl != null,
-                                                        onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
-                                                        onSeekVoice = { viewModel.seekVoice(it) },
-                                                        onLongPressStart = { offset ->
-                                                            contextMenuData = ContextMenuData(item.message, isMine, offset)
-                                                            dragOffset = Offset.Zero
-                                                        },
-                                                        onLongPressDrag = { delta -> dragOffset += delta },
-                                                        onLongPressEnd = {
-                                                            contextMenuData = null
-                                                            dragOffset = Offset.Zero
-                                                        },
-                                                        onImageTap = onOpenImageViewer,
-                                                        onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
-                                                        onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
-                                                        onReplyClick = onScrollToMessage,
-                                                        onMentionClick = onMentionClick,
-                                                        onOpenComments = { onOpenComments(item.message.id) },
-                                                        chat = uiState.chat,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = 16.dp)) {
-                                AnimatedVisibility(
-                                    visible = uiState.isLoadingMore,
-                                    enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                                    exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-                                ) {
-                                    val indicatorColor = when {
-                                        isExthru -> ExthruChat.Accent
-                                        isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
-                                        else     -> MaterialTheme.colorScheme.primary
-                                    }
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
-                                        shadowElevation = 4.dp, modifier = Modifier.size(36.dp),
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = indicatorColor)
-                                        }
-                                    }
-                                }
-                            }
-
-                            androidx.compose.animation.AnimatedVisibility(
-                                visible = showScrollDown,
-                                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp),
-                                enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
-                                exit = scaleOut(tween(150)) + fadeOut(tween(150)),
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
+                                shadowElevation = 4.dp, modifier = Modifier.size(36.dp),
                             ) {
-                                val fabColor = when {
-                                    isExthru -> ExthruChat.Accent
-                                    isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
-                                    else     -> MaterialTheme.colorScheme.primary
+                                Box(contentAlignment = Alignment.Center) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = indicatorColor)
                                 }
-                                Box {
-                                    FloatingActionButton(
-                                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                                        modifier = Modifier.size(44.dp).then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier),
-                                        containerColor = fabColor,
-                                        contentColor = Color.White,
-                                        shape = CircleShape,
-                                        elevation = if (isExthru) FloatingActionButtonDefaults.elevation(0.dp) else FloatingActionButtonDefaults.elevation()
-                                    ) {
-                                        Icon(Icons.Default.KeyboardArrowDown, null)
-                                    }
-                                    if (unreadCount > 0) {
-                                        Box(
-                                            modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
-                                                .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                                .background(Color.Red, CircleShape).padding(horizontal = 3.dp),
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
+                            }
+                        }
+                    }
+
+                    // FAB overlay
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = showScrollDown,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp),
+                        enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
+                        exit = scaleOut(tween(150)) + fadeOut(tween(150)),
+                    ) {
+                        val fabColor = when {
+                            isExthru -> ExthruChat.Accent
+                            isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
+                            else     -> MaterialTheme.colorScheme.primary
+                        }
+                        Box {
+                            FloatingActionButton(
+                                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                                modifier = Modifier.size(44.dp).then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier),
+                                containerColor = fabColor,
+                                contentColor = Color.White,
+                                shape = CircleShape,
+                                elevation = if (isExthru) FloatingActionButtonDefaults.elevation(0.dp) else FloatingActionButtonDefaults.elevation()
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, null)
+                            }
+                            if (unreadCount > 0) {
+                                Box(
+                                    modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
+                                        .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                                        .background(Color.Red, CircleShape).padding(horizontal = 3.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // ─── Оверлей меню сообщения (поверх всего Scaffold) ───
-                contextMenuData?.let { menuData ->
-                    MessageActionOverlay(
-                        contextMenuData = menuData,
-                        currentDragOffset = dragOffset,
-                        isGestureMode = useGestureMenu,
-                        canReact = canReact,
-                        currentUid = viewModel.currentUid,
-                        onDismiss = {
-                            contextMenuData = null
-                            dragOffset = Offset.Zero
-                        },
-                        onReply = {
-                            viewModel.setReplyTo(menuData.message)
-                            contextMenuData = null
-                        },
-                        onDelete = {
-                            showDeleteConfirm = menuData.message.id
-                            contextMenuData = null
-                        },
-                        onSaveImage = {
-                            scope.launch {
-                                val success = saveImageToGallery(context, menuData.message.url ?: "")
-                                Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onSaveVoice = {
-                            scope.launch {
-                                val success = saveVoiceToDownloads(context, menuData.message.url ?: "")
-                                Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it) } },
-                        onForward = null, // В разработке (вызов ForwardPickerDialog)
-                        onReact = { emoji ->
-                            viewModel.toggleReaction(menuData.message.id, emoji, menuData.message.parsedReactions)
+            // ─── Оверлей меню сообщения (поверх всего Scaffold) ───
+            contextMenuData?.let { menuData ->
+                MessageActionOverlay(
+                    contextMenuData = menuData,
+                    currentDragOffset = dragOffset,
+                    isGestureMode = useGestureMenu,
+                    canReact = canReact,
+                    currentUid = viewModel.currentUid,
+                    onDismiss = {
+                        contextMenuData = null
+                        dragOffset = Offset.Zero
+                    },
+                    onReply = {
+                        viewModel.setReplyTo(menuData.message)
+                        contextMenuData = null
+                    },
+                    onDelete = {
+                        showDeleteConfirm = menuData.message.id
+                        contextMenuData = null
+                    },
+                    onSaveImage = {
+                        scope.launch {
+                            val success = saveImageToGallery(context, menuData.message.url ?: "")
+                            Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                         }
-                    )
-                }
-
+                    },
+                    onSaveVoice = {
+                        scope.launch {
+                            val success = saveVoiceToDownloads(context, menuData.message.url ?: "")
+                            Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it) } },
+                    onForward = null, // В разработке (вызов ForwardPickerDialog)
+                    onReact = { emoji ->
+                        viewModel.toggleReaction(menuData.message.id, emoji, menuData.message.parsedReactions)
+                    }
+                )
             }
         }
     }

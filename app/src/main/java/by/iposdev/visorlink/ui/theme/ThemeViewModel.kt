@@ -18,6 +18,7 @@ private const val KEY_COLOR_PRESET = "color_preset"
 private const val KEY_HAPTIC      = "haptic_feedback"
 private const val KEY_NOTIF       = "notifications_enabled"
 private const val KEY_LANGUAGE    = "app_language"
+private const val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
 
 class ThemeViewModel(private val context: Context) : ViewModel() {
 
@@ -45,6 +46,9 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
 
     private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_NOTIF, true))
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    private val _dynamicChatInput = MutableStateFlow(prefs.getBoolean(KEY_DYNAMIC_INPUT, true))
+    val dynamicChatInput: StateFlow<Boolean> = _dynamicChatInput.asStateFlow()
 
     // ── Language ───────────────────────────────────────────────────────────────
 
@@ -86,6 +90,11 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
     fun setNotifications(enabled: Boolean) {
         _notificationsEnabled.value = enabled
         prefs.edit().putBoolean(KEY_NOTIF, enabled).apply()
+    }
+
+    fun setDynamicChatInput(enabled: Boolean) {
+        _dynamicChatInput.value = enabled
+        prefs.edit().putBoolean(KEY_DYNAMIC_INPUT, enabled).apply()
     }
 
     fun setLanguage(language: AppLanguage) {

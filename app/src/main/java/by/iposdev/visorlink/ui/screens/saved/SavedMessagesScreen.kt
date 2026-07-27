@@ -51,8 +51,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberPermissionState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -94,6 +94,7 @@ fun SavedMessagesScreen(
 
     val themeVm: ThemeViewModel = koinViewModel()
     val appTheme by themeVm.appTheme.collectAsState()
+    val dynamicInput by themeVm.dynamicChatInput.collectAsState()
     val isOneUi  = appTheme == AppTheme.ONE_UI
     val isExthru = appTheme == AppTheme.EXTHRU || appTheme == AppTheme.BIOLUME
     val isDark   = MaterialTheme.colorScheme.surface.luminance() < 0.1f
@@ -160,7 +161,7 @@ fun SavedMessagesScreen(
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
-            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
+            Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
                 VlAmbientGlow(appTheme = appTheme)
 
                 Scaffold(
@@ -183,6 +184,7 @@ fun SavedMessagesScreen(
                         if (uiState.isUnlocked) {
                             SavedBottomBar(
                                 inputText      = inputText,
+                                appTheme       = appTheme,
                                 isExthru       = isExthru,
                                 isOneUi        = isOneUi,
                                 isDark         = isDark,
@@ -190,6 +192,7 @@ fun SavedMessagesScreen(
                                 isRecording    = uiState.isRecording,
                                 hapticEnabled  = hapticEnabled,
                                 audioPermission = audioPermission,
+                                dynamicInput   = dynamicInput,
                                 haptic         = haptic,
                                 onTextChange   = { inputText = it },
                                 onPickImage    = { imagePicker.launch("image/*") },
@@ -317,7 +320,7 @@ private fun SavedTopBar(
         TopAppBar(
             modifier = Modifier
                 .fillMaxWidth()
-                .hazeChild(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
+                .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
             navigationIcon = {
                 val interactionSource = remember { MutableInteractionSource() }
@@ -437,35 +440,45 @@ private fun SavedTopBar(
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 private fun SavedBottomBar(
-    inputText: String, isExthru: Boolean, isOneUi: Boolean, isDark: Boolean, isEncrypted: Boolean,
+    inputText: String, appTheme: AppTheme, isExthru: Boolean, isOneUi: Boolean, isDark: Boolean, isEncrypted: Boolean,
     isRecording: Boolean, hapticEnabled: Boolean, audioPermission: com.google.accompanist.permissions.PermissionState,
-    haptic: HapticHelper, onTextChange: (String) -> Unit, onPickImage: () -> Unit, onSend: () -> Unit,
+    dynamicInput: Boolean, haptic: HapticHelper, onTextChange: (String) -> Unit, onPickImage: () -> Unit, onSend: () -> Unit,
     onStartRecord: () -> Unit, onSendRecord: () -> Unit, onCancelRecord: () -> Unit, onRequestAudioPerm: () -> Unit
 ) {
     val syncedState = remember(isRecording) { ChatUiState(isRecording = isRecording, isCooldown = false, isUploading = false) }
 
-    when {
-        isExthru -> ExthruChatBottomBar(
-            uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
-            hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+    if (dynamicInput) {
+        DynamicChatInputBar(
+            uiState = syncedState, inputText = inputText, isDark = isDark, appTheme = appTheme,
+            canSendMessage = true, canSendMedia = true, hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
             onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
-            onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
+            onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancelRecord = onCancelRecord,
             onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
         )
-        isOneUi -> OneUiChatBottomBar(
-            uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
-            hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
-            onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
-            onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
-            onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
-        )
-        else -> DefaultChatBottomBar(
-            uiState = syncedState, inputText = inputText, canSendMessage = true, canSendMedia = true,
-            hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
-            onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
-            onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
-            onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
-        )
+    } else {
+        when {
+            isExthru -> ExthruChatBottomBar(
+                uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
+                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+                onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
+                onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
+                onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
+            )
+            isOneUi -> OneUiChatBottomBar(
+                uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
+                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+                onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
+                onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
+                onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
+            )
+            else -> DefaultChatBottomBar(
+                uiState = syncedState, inputText = inputText, canSendMessage = true, canSendMedia = true,
+                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+                onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
+                onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
+                onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
+            )
+        }
     }
 }
 
