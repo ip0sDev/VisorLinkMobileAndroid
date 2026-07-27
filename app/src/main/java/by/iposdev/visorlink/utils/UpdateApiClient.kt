@@ -66,7 +66,7 @@ object UpdateApiClient {
 
     suspend fun checkUpdate(installId: String, packageName: String, versionCode: Int): UpdateInfo? = withContext(Dispatchers.IO) {
         try {
-            val url = URL("$BASE_URL/check_update?install_id=$installId&package_name=$packageName&version_code=$versionCode")
+            val url = URL("$BASE_URL/check?install_id=$installId&package_name=$packageName&version_code=$versionCode")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "GET"
 
