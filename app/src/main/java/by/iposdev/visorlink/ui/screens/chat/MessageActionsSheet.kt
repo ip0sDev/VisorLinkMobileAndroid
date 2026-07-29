@@ -6,13 +6,12 @@ import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -26,7 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -49,10 +51,15 @@ import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.floor
+import kotlin.math.sqrt
+
+// Вспомогательная функция для расчета дистанции
+private fun Offset.getDistance(): Float = sqrt(this.x * this.x + this.y * this.y)
 
 // Данные о вызове меню
 data class ContextMenuData(
@@ -64,8 +71,8 @@ data class ContextMenuData(
 @Composable
 fun MessageActionOverlay(
     contextMenuData: ContextMenuData,
-    currentDragOffset: Offset,      // Для жестового режима
-    isGestureMode: Boolean,         // Флаг режима из настроек
+    currentDragOffset: Offset,      // Вектор свайпа
+    isGestureMode: Boolean,         // Режим
     canReact: Boolean,
     currentUid: String,
     onDismiss: () -> Unit,
@@ -79,9 +86,8 @@ fun MessageActionOverlay(
     themeVm: ThemeViewModel = koinViewModel()
 ) {
     val appTheme by themeVm.appTheme.collectAsState()
-    val simplifiedGraphics = false // В Kotlin-версии пока нет этого флага в ThemeViewModel
+    val simplifiedGraphics = false
 
-    // Анимация появления фона
     val alpha by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(200),
@@ -105,8 +111,9 @@ fun MessageActionOverlay(
                 onAction = { action, emoji ->
                     when (action) {
                         "reply" -> onReply()
-                        "copy" -> { /* Логика копирования в DisposableEffect */ }
+                        "copy" -> { /* Логика копирования выполняется внутри DisposableEffect */ }
                         "delete" -> onDelete()
+                        "forward" -> onForward?.invoke()
                         "react" -> emoji?.let { onReact(it) }
                     }
                 }
@@ -159,15 +166,16 @@ private fun NormalMessageMenu(
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
-    // Расчет позиции (с clamp, чтобы не уходило за экран)
-    val tapX = data.startOffset.x
-    val tapY = data.startOffset.y
-
+    // Центрирование по X: Свое сообщение прижимаем вправо, чужое - влево
     val expectedWidthPx = with(density) { 260.dp.toPx() }
-    var xOffset = tapX - (expectedWidthPx / 2)
-    val maxX = with(density) { screenWidth.toPx() } - expectedWidthPx - 32f
-    xOffset = xOffset.coerceIn(32f, maxX)
+    val xOffset = if (data.isMine) {
+        with(density) { screenWidth.toPx() } - expectedWidthPx - with(density) { 16.dp.toPx() }
+    } else {
+        with(density) { 16.dp.toPx() }
+    }
 
+    // Расчет позиции Y
+    val tapY = data.startOffset.y
     var yOffset = tapY - with(density) { 20.dp.toPx() }
     var showAbove = true
     if (yOffset < with(density) { 150.dp.toPx() }) {
@@ -177,7 +185,6 @@ private fun NormalMessageMenu(
     val maxY = with(density) { screenHeight.toPx() } - (menuSize.height) - 100f
     if (yOffset > maxY && menuSize.height > 0) yOffset = maxY
 
-    // Анимация выезда
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
 
@@ -189,6 +196,7 @@ private fun NormalMessageMenu(
 
     val hazeState = LocalHazeState.current
     val shape = RoundedCornerShape(if (style.isForge) 0.dp else 20.dp)
+    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
 
     Box(
         modifier = Modifier
@@ -200,18 +208,14 @@ private fun NormalMessageMenu(
             }
             .width(260.dp)
             .onGloballyPositioned { menuSize = it.size }
+            .clip(shape) // Clip перед Haze
             .then(
-                if (simplifiedGraphics) Modifier else Modifier.hazeChild(
+                if (simplifiedGraphics) Modifier.background(bgColor) else Modifier.hazeEffect(
                     state = hazeState,
-                    style = HazeStyle(blurRadius = 24.dp, tint = null)
+                    style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(bgColor)))
                 )
             )
-            .background(
-                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.65f else 0.85f),
-                shape
-            )
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), shape)
-            .clip(shape)
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (canReact && !data.message.deleted) {
@@ -298,72 +302,109 @@ private fun GestureMessageMenu(
     val style = rememberExthruStyle(appTheme)
     val cs = MaterialTheme.colorScheme
 
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val isDark = cs.surface.luminance() < 0.5f
+
+    val screenWidthPx = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
+    val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val density = LocalDensity.current
-
-    val dirX = if (data.isMine) -1 else 1
-    val growDown = data.startOffset.y < with(density) { 300.dp.toPx() }
-
-    val safePadding = with(density) { 20.dp.toPx() }
-    val expectedEmojiGridWidth = with(density) { 190.dp.toPx() }
-
-    var minDx = if (data.isMine) (expectedEmojiGridWidth + with(density) { 65.dp.toPx() } + safePadding) else with(density) { 80.dp.toPx() }
-    var maxDx = if (data.isMine) with(density) { screenWidth.toPx() } - with(density) { 80.dp.toPx() } else with(density) { screenWidth.toPx() } - (expectedEmojiGridWidth + with(density) { 65.dp.toPx() } + safePadding)
-
-    if (minDx > maxDx) {
-        minDx = with(density) { screenWidth.toPx() } / 2
-        maxDx = with(density) { screenWidth.toPx() } / 2
-    }
-
-    val rawDx = data.startOffset.x + (dirX * with(density) { 40.dp.toPx() })
-    val menuOrigin = Offset(rawDx.coerceIn(minDx, maxDx), data.startOffset.y)
 
     val actions = mutableListOf<String>()
     if (canReact) actions.add("react")
     actions.add("reply")
     if (data.message.type == MessageType.TEXT) actions.add("copy")
+    actions.add("forward")
     if (data.isMine) actions.add("delete")
 
-    val gridTopY = if (actions.contains("react")) {
-        val reactIndex = actions.indexOf("react")
-        val reactButtonY = (if (growDown) 1 else -1) * with(density) { 60.dp.toPx() } * (reactIndex + 1)
-        val globalReactY = menuOrigin.y + reactButtonY
-        val panelHeight = with(density) { (((QUICK_REACTIONS.size / 4) * 40) + 28).dp.toPx() }
-        var gTop = globalReactY - (panelHeight / 2)
-        gTop = gTop.coerceIn(with(density) { 40.dp.toPx() }, with(density) { LocalConfiguration.current.screenHeightDp.dp.toPx() } - 40f - panelHeight)
-        gTop - menuOrigin.y
+    // 1. Точные размеры компонентов
+    val btnHalfW = with(density) { 90.dp.toPx() } // Половина ширины кнопки действий
+    val gridW = with(density) { (4 * 40 + 28).dp.toPx() } // Ширина сетки эмодзи
+    val gridH = with(density) { (((QUICK_REACTIONS.size / 4) * 40) + 28).dp.toPx() }
+    val actionStep = with(density) { 60.dp.toPx() }
+    val margin = with(density) { 20.dp.toPx() }
+
+    val dirX = if (data.isMine) -1 else 1
+    val growDown = data.startOffset.y < screenHeightPx / 2f
+    val hasGrid = actions.contains("react")
+
+    // 2. Идеальный Clamping по X (Всегда выровнен по стороне автора сообщения)
+    val menuOriginX = if (data.isMine) {
+        screenWidthPx - margin - btnHalfW
+    } else {
+        margin + btnHalfW
+    }
+
+    // 3. Идеальный Clamping по Y (Центруем вокруг точки нажатия, с защитой от вылета за экран)
+    val totalActionH = actions.size * actionStep
+    val maxNeededH = maxOf(totalActionH, if (hasGrid) gridH else 0f)
+
+    val rawMaxY = if (growDown) screenHeightPx - margin - maxNeededH - btnHalfW else screenHeightPx - margin - btnHalfW
+    val rawMinY = if (growDown) margin + btnHalfW else margin + maxNeededH + btnHalfW
+
+    val safeMinY = minOf(rawMinY, rawMaxY)
+    val safeMaxY = maxOf(rawMinY, rawMaxY)
+    val menuOriginY = data.startOffset.y.coerceIn(safeMinY, safeMaxY)
+
+    val menuOrigin = Offset(menuOriginX, menuOriginY)
+
+    // 4. Позиционирование центров кнопок
+    val actionCenters = actions.mapIndexed { i, action ->
+        val yPos = (if (growDown) 1 else -1) * actionStep * (i + 1)
+        action to Offset(menuOrigin.x, menuOrigin.y + yPos)
+    }.toMap()
+
+    val gridLeftX = if (hasGrid) {
+        if (dirX == 1) menuOrigin.x + btnHalfW + margin
+        else menuOrigin.x - btnHalfW - gridW - margin
     } else 0f
 
-    // Быстрый пересчет выбора при свайпе
-    val dirY = if (growDown) 1 else -1
-    val signedDy = currentDragOffset.y * dirY
-    val signedDx = currentDragOffset.x * dirX
+    val gridTopY = if (hasGrid) {
+        val reactCenterY = actionCenters["react"]!!.y
+        var gTop = reactCenterY - (gridH / 2f)
+        gTop.coerceIn(margin, screenHeightPx - margin - gridH)
+    } else 0f
 
-    val verticalIdx = floor((signedDy - with(density) { 20.dp.toPx() }) / with(density) { 60.dp.toPx() }).toInt()
-    val isReactRow = verticalIdx == actions.indexOf("react")
+    val gridBounds = if (hasGrid) Rect(gridLeftX, gridTopY, gridLeftX + gridW, gridTopY + gridH) else null
 
-    val currentSelection = remember(currentDragOffset, actions) {
+    // 5. Виртуальная позиция пальца (Решает проблему смещения при Clamping'е)
+    val virtualFingerPos = menuOrigin + currentDragOffset
+
+    // 6. Hit-Test: Ищем ближайший элемент к виртуальному пальцу
+    val currentSelection = remember(virtualFingerPos, actions) {
         var newSel = "cancel"
-        if (signedDx > with(density) { 40.dp.toPx() } && actions.contains("react")) {
-            val panelWidth = with(density) { (4 * 40 + 30).dp.toPx() }
-            val dxInside = if (dirX == 1) currentDragOffset.x - with(density) { 65.dp.toPx() } - with(density) { 14.dp.toPx() }
-            else currentDragOffset.x + with(density) { 65.dp.toPx() } + panelWidth - with(density) { 14.dp.toPx() }
+        var foundInGrid = false
 
-            val dyInside = currentDragOffset.y - gridTopY - with(density) { 14.dp.toPx() }
+        // Ищем ближайшую стандартную кнопку (Отмена или Действие)
+        var closestAction = "cancel"
+        var minDistance = (virtualFingerPos - menuOrigin).getDistance()
 
-            val col = floor(dxInside / with(density) { 40.dp.toPx() }).toInt().coerceIn(0, 3)
-            val row = floor(dyInside / with(density) { 40.dp.toPx() }).toInt().coerceIn(0, (QUICK_REACTIONS.size / 4) - 1)
-
-            val idx = (row * 4 + col).coerceIn(0, QUICK_REACTIONS.size - 1)
-            newSel = "react_${QUICK_REACTIONS[idx]}"
-        } else {
-            if (signedDy < with(density) { 20.dp.toPx() } && kotlin.math.abs(currentDragOffset.x) < with(density) { 40.dp.toPx() }) {
-                newSel = "cancel"
-            } else {
-                val idx = verticalIdx.coerceIn(0, actions.size - 1)
-                newSel = actions[idx]
+        actionCenters.forEach { (action, center) ->
+            val dist = (virtualFingerPos - center).getDistance()
+            if (dist < minDistance) {
+                minDistance = dist
+                closestAction = action
             }
         }
+
+        // Проверяем эмодзи-сетку (расширяем хитбокс для удобства)
+        if (hasGrid && gridBounds != null) {
+            val hitBounds = Rect(
+                left = gridBounds.left - 40f, top = gridBounds.top - 40f,
+                right = gridBounds.right + 40f, bottom = gridBounds.bottom + 40f
+            )
+            if (hitBounds.contains(virtualFingerPos)) {
+                val dxInside = virtualFingerPos.x - gridBounds.left - with(density) { 14.dp.toPx() }
+                val dyInside = virtualFingerPos.y - gridBounds.top - with(density) { 14.dp.toPx() }
+
+                val col = floor(dxInside / with(density) { 40.dp.toPx() }).toInt().coerceIn(0, 3)
+                val row = floor(dyInside / with(density) { 40.dp.toPx() }).toInt().coerceIn(0, (QUICK_REACTIONS.size / 4) - 1)
+
+                val idx = (row * 4 + col).coerceIn(0, QUICK_REACTIONS.size - 1)
+                newSel = "react_${QUICK_REACTIONS[idx]}"
+                foundInGrid = true
+            }
+        }
+
+        if (!foundInGrid) newSel = closestAction
         newSel
     }
 
@@ -378,7 +419,7 @@ private fun GestureMessageMenu(
 
     val finalSelection by rememberUpdatedState(currentSelection)
 
-    // При отпускании меню: закрывается оверлей -> вызывается onDispose
+    // При закрытии оверлея вызываем выбранное действие
     DisposableEffect(Unit) {
         onDispose {
             if (finalSelection != "cancel") {
@@ -403,36 +444,51 @@ private fun GestureMessageMenu(
         label = "enter_scale"
     )
 
+    val hazeState = LocalHazeState.current
+    val generalBgColor = cs.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+
+    var cancelSize by remember { mutableStateOf(IntSize.Zero) }
+    val actionSizes = remember { mutableStateMapOf<String, IntSize>() }
+
     // ── РЕНДЕР ПЛАВАЮЩИХ ПУЗЫРЕЙ ──
     Box(Modifier.fillMaxSize()) {
 
         val isCancelSelected = currentSelection == "cancel"
-        val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else cs.surfaceVariant.copy(0.8f)
+        val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else generalBgColor
         val cancelScale by animateFloatAsState(if (isCancelSelected) 1.15f else 1f, spring(dampingRatio = 0.5f), label = "cancel_scale")
 
         Box(
-            Modifier
-                .offset { IntOffset((menuOrigin.x - with(density){24.dp.toPx()}).toInt(), (menuOrigin.y - with(density){24.dp.toPx()}).toInt()) }
-                .scale(cancelScale * enterScale)
-                .background(cancelColor, RoundedCornerShape(20.dp))
-                .border(1.dp, if (isCancelSelected) Color(0xFFFFC107) else cs.outlineVariant, RoundedCornerShape(20.dp))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+            Modifier.offset { IntOffset(menuOrigin.x.toInt() - cancelSize.width / 2, menuOrigin.y.toInt() - cancelSize.height / 2) }
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
+            Box(
+                Modifier
+                    .onGloballyPositioned { cancelSize = it.size }
+                    .graphicsLayer {
+                        scaleX = cancelScale * enterScale
+                        scaleY = cancelScale * enterScale
+                    }
+                    .clip(RoundedCornerShape(20.dp))
+                    .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(cancelColor))))
+                    .border(1.dp, if (isCancelSelected) Color(0xFFFFC107) else cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
-        actions.forEachIndexed { i, action ->
-            val yPos = (if (growDown) 1 else -1) * with(density) { 60.dp.toPx() } * (i + 1)
+        actions.forEach { action ->
             val isSelected = currentSelection == action || (action == "react" && currentSelection.startsWith("react_"))
+            val center = actionCenters[action]!!
 
             val icon = when(action) {
                 "react" -> Icons.Default.AddReaction
                 "reply" -> Icons.Default.Reply
                 "copy" -> Icons.Default.ContentCopy
+                "forward" -> Icons.Default.Forward
                 "delete" -> Icons.Default.Delete
                 else -> Icons.Default.Warning
             }
@@ -440,67 +496,80 @@ private fun GestureMessageMenu(
                 "react" -> "Реакция"
                 "reply" -> stringResource(R.string.action_reply)
                 "copy" -> stringResource(R.string.action_copy_text)
+                "forward" -> "Переслать"
                 "delete" -> stringResource(R.string.action_delete_message)
                 else -> ""
             }
             val color = if (action == "delete") style.destructive else cs.onSurface
-
             val bgColor = if (isSelected) {
                 if (action == "delete") style.destructive else style.accent
-            } else cs.surfaceVariant.copy(alpha = 0.9f)
+            } else generalBgColor
 
             val contentColor = if (isSelected) Color.White else color
             val actionScale by animateFloatAsState(if (isSelected) 1.15f else 1f, spring(dampingRatio = 0.5f), label = "action_scale")
+            val currentSize = actionSizes[action] ?: IntSize.Zero
 
             Box(
-                Modifier
-                    .offset { IntOffset((menuOrigin.x - with(density){24.dp.toPx()}).toInt(), (menuOrigin.y + yPos - with(density){24.dp.toPx()}).toInt()) }
-                    .scale(actionScale * enterScale)
-                    .background(bgColor, RoundedCornerShape(20.dp))
-                    .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                Modifier.offset { IntOffset(center.x.toInt() - currentSize.width / 2, center.y.toInt() - currentSize.height / 2) }
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(icon, null, tint = contentColor, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(text, color = contentColor, fontWeight = FontWeight.Bold)
+                Box(
+                    Modifier
+                        .onGloballyPositioned { actionSizes[action] = it.size }
+                        .graphicsLayer {
+                            scaleX = actionScale * enterScale
+                            scaleY = actionScale * enterScale
+                        }
+                        .clip(RoundedCornerShape(20.dp))
+                        .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(bgColor))))
+                        .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(icon, null, tint = contentColor, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(text, color = contentColor, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
 
-        if (actions.contains("react")) {
+        if (hasGrid) {
             val showGrid = currentSelection == "react" || currentSelection.startsWith("react_")
             val gridScale by animateFloatAsState(if (showGrid) 1f else 0f, spring(dampingRatio = 0.6f), label = "grid_scale")
 
-            val panelWidth = with(density) { (4 * 40 + 30).dp.toPx() }
-            val leftPos = if (dirX == 1) menuOrigin.x + with(density) { 65.dp.toPx() }
-            else menuOrigin.x - with(density) { 65.dp.toPx() } - panelWidth
-
             Box(
-                Modifier
-                    .offset { IntOffset(leftPos.toInt(), (menuOrigin.y + gridTopY).toInt()) }
-                    .scale(gridScale * enterScale)
-                    .background(cs.surfaceVariant.copy(alpha = 0.9f), RoundedCornerShape(24.dp))
-                    .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(24.dp))
-                    .padding(14.dp)
+                Modifier.offset { IntOffset(gridLeftX.toInt(), gridTopY.toInt()) }
             ) {
-                Column {
-                    QUICK_REACTIONS.chunked(4).forEach { row ->
-                        Row {
-                            row.forEach { emoji ->
-                                val isSelected = currentSelection == "react_$emoji"
-                                val emojiScale by animateFloatAsState(if (isSelected) 1.5f else 1f, label = "emoji_scale")
-                                Box(
-                                    Modifier.size(40.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
+                Box(
+                    Modifier
+                        .graphicsLayer {
+                            transformOrigin = TransformOrigin(if (dirX == 1) 0f else 1f, 0.5f)
+                            scaleX = gridScale * enterScale
+                            scaleY = gridScale * enterScale
+                        }
+                        .clip(RoundedCornerShape(24.dp))
+                        .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(generalBgColor))))
+                        .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(24.dp))
+                        .padding(14.dp)
+                ) {
+                    Column {
+                        QUICK_REACTIONS.chunked(4).forEach { row ->
+                            Row {
+                                row.forEach { emoji ->
+                                    val isSelected = currentSelection == "react_$emoji"
+                                    val emojiScale by animateFloatAsState(if (isSelected) 1.5f else 1f, label = "emoji_scale")
                                     Box(
-                                        Modifier
-                                            .scale(emojiScale)
-                                            .background(if (isSelected) style.accent.copy(0.4f) else Color.Transparent, CircleShape)
-                                            .padding(4.dp)
+                                        Modifier.size(40.dp),
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text(emoji, fontSize = 20.sp)
+                                        Box(
+                                            Modifier
+                                                .scale(emojiScale)
+                                                .background(if (isSelected) style.accent.copy(0.4f) else Color.Transparent, CircleShape)
+                                                .padding(4.dp)
+                                        ) {
+                                            Text(emoji, fontSize = 20.sp)
+                                        }
                                     }
                                 }
                             }

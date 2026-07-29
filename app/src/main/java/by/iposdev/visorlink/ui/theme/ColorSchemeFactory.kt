@@ -13,24 +13,29 @@ import by.iposdev.visorlink.data.model.ColorPreset
  *
  * В отличие от Flutter (который перестраивает всю тональную палитру через
  * `ColorScheme.fromSeed`), здесь мы точечно перекрашиваем primary/secondary/
- * tertiary и слегка подмешиваем акцент в фон/поверхность через lerp —
- * это даёт тот же визуальный эффект без завязки на Material Color Utilities.
- *
- * Если [preset] == DEFAULT — схема возвращается как есть (родной акцент темы
- * или динамический Material You цвет на Android 12+).
+ * tertiary и сильно подмешиваем акцент в фон/поверхность через lerp —
+ * это позволяет перебить базовые изумрудные тона темы Biolume, если
+ * пользователь выбрал, например, красный (Crimson) или фиолетовый (Purple).
  */
 fun ColorScheme.withColorPreset(appTheme: AppTheme, isDark: Boolean, preset: ColorPreset): ColorScheme {
     val seed = preset.seedColor ?: return this
     val onSeed = if (seed.luminance() > 0.5f) Color.Black else Color.White
 
+    // Повышенный уровень "вмешивания" (tint) акцентного цвета в фон.
+    // Для темных тем Biolume нужно больше акцента, чтобы перебить родной темно-зеленый.
     val bgTintAlpha = when (appTheme) {
-        AppTheme.FORGE -> 0.05f
-        AppTheme.BIOLUME, AppTheme.EXTHRU -> if (isDark) 0.08f else 0.04f
-        else -> 0.03f
+        AppTheme.FORGE -> 0.12f
+        AppTheme.BIOLUME, AppTheme.EXTHRU -> if (isDark) 0.28f else 0.18f
+        else -> 0.08f
     }
+
+    // Поля ввода (surfaceVariant) и контейнеры выделяем еще сильнее,
+    // чтобы они явно брали на себя выбранный оттенок
+    val variantTintAlpha = bgTintAlpha + 0.12f
 
     val tintedBackground = lerp(background, seed, bgTintAlpha)
     val tintedSurface = lerp(surface, seed, bgTintAlpha)
+    val tintedSurfaceVariant = lerp(surfaceVariant, seed, variantTintAlpha)
     val tintedContainer = lerp(surfaceContainer, seed, bgTintAlpha)
 
     return copy(
@@ -42,13 +47,24 @@ fun ColorScheme.withColorPreset(appTheme: AppTheme, isDark: Boolean, preset: Col
         onSecondary = onSeed,
         tertiary = seed,
         onTertiary = onSeed,
+
         background = tintedBackground,
         onBackground = onBackground,
+
         surface = tintedSurface,
-        surfaceContainer = tintedContainer,
+        onSurface = onSurface,
+
+        // ВАЖНО: Именно из-за отсутствия тонирования этого цвета поля ввода
+        // оставались зелеными. Теперь мы перекрашиваем и их!
+        surfaceVariant = tintedSurfaceVariant,
+        onSurfaceVariant = onSurfaceVariant,
+
+        surfaceContainerLowest = lerp(surfaceContainerLowest, seed, bgTintAlpha),
         surfaceContainerLow = lerp(surfaceContainerLow, seed, bgTintAlpha),
-        surfaceContainerHigh = lerp(surfaceContainerHigh, seed, bgTintAlpha),
-        surfaceContainerHighest = lerp(surfaceContainerHighest, seed, bgTintAlpha),
+        surfaceContainer = tintedContainer,
+        surfaceContainerHigh = lerp(surfaceContainerHigh, seed, variantTintAlpha),
+        surfaceContainerHighest = lerp(surfaceContainerHighest, seed, variantTintAlpha),
+
         inversePrimary = seed,
     )
 }

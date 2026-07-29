@@ -23,8 +23,16 @@ data class SavedMessage(
     val caption: String? = null,
     val images: List<AlbumImage> = emptyList(),
     val spoiler: Boolean = false,
+
     // Пересылка
     val forwardFrom: Map<String, Any?>? = null,
+
+    // Telegram Bot Forwarding
+    val tg_forwarded: Boolean? = null,
+    val tg_forwarded_from: String? = null,
+    val tg_forwarded_from_fallback: String? = null,
+    val isUnofficialClient: Boolean? = null,
+
     // Стикеры
     val stickerId: String? = null,
     val packId: String? = null,
@@ -104,7 +112,15 @@ data class ForwardableMessage(
     val albumItems: List<AlbumImage>? = null,
     val chatId: String? = null,
     val chatName: String? = null,
-    val forwardFrom: ForwardFrom? = null  // уже существующая цепочка (глубина = 1)
+
+    // Пересылка (VisorLink Native)
+    val forwardFrom: ForwardFrom? = null,
+
+    // Пересылка (Telegram Bot Forwarding)
+    val tg_forwarded: Boolean? = null,
+    val tg_forwarded_from: String? = null,
+    val tg_forwarded_from_fallback: String? = null,
+    val isUnofficialClient: Boolean? = null
 ) {
     companion object {
         fun fromMessage(msg: Message, chatId: String, chatName: String?): ForwardableMessage =
@@ -121,7 +137,13 @@ data class ForwardableMessage(
                 packEmoji      = msg.packEmoji,
                 albumItems     = msg.images.takeIf { it.isNotEmpty() },
                 chatId         = chatId,
-                chatName       = chatName
+                chatName       = chatName,
+
+                forwardFrom                = msg.parsedForwardFrom,
+                tg_forwarded               = msg.tg_forwarded,
+                tg_forwarded_from          = msg.tg_forwarded_from,
+                tg_forwarded_from_fallback = msg.tg_forwarded_from_fallback,
+                isUnofficialClient         = msg.isUnofficialClient
             )
 
         fun fromSaved(msg: SavedMessage, uid: String): ForwardableMessage =
@@ -142,7 +164,12 @@ data class ForwardableMessage(
                 albumItems     = msg.images.takeIf { it.isNotEmpty() },
                 chatId         = null,
                 chatName       = "Избранное",
-                forwardFrom    = msg.parsedForwardFrom
+
+                forwardFrom                = msg.parsedForwardFrom,
+                tg_forwarded               = msg.tg_forwarded,
+                tg_forwarded_from          = msg.tg_forwarded_from,
+                tg_forwarded_from_fallback = msg.tg_forwarded_from_fallback,
+                isUnofficialClient         = msg.isUnofficialClient
             )
     }
 }

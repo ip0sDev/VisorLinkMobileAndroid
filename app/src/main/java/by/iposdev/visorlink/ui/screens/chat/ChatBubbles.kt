@@ -147,7 +147,6 @@ internal fun MessageBubble(
         Modifier.alpha(0.6f)
     } else Modifier
 
-    // ИСПРАВЛЕНИЕ: Используем CenterEnd и CenterStart вместо CenterRight/CenterLeft
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
@@ -318,8 +317,12 @@ internal fun TextBubble(
                     Spacer(Modifier.height(4.dp))
                 }
 
-                message.parsedForwardFrom?.let { fwd ->
-                    ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                if (message.tg_forwarded == true) {
+                    TelegramForwardBanner(message = message)
+                } else {
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                    }
                 }
 
                 if (message.deleted) {
@@ -413,16 +416,26 @@ internal fun VideoBubble(
                 localFile = message.localFile
             )
 
-            message.replyData?.let { reply ->
-                Box(
-                    modifier = Modifier.fillMaxWidth().align(Alignment.TopStart).background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                        Spacer(Modifier.width(6.dp))
-                        Column {
-                            Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
-                            Text(reply.text ?: "Медиа", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
+                if (message.tg_forwarded == true) {
+                    TelegramForwardBanner(message = message)
+                } else {
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                    }
+                }
+
+                message.replyData?.let { reply ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text(reply.text ?: "Медиа", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -494,6 +507,15 @@ internal fun StickerBubble(
                     ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onClick = { })
                     Spacer(Modifier.height(4.dp))
                 }
+
+                if (message.tg_forwarded == true) {
+                    TelegramForwardBanner(message = message)
+                } else {
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                    }
+                }
+
                 AsyncImage(model = message.url, contentDescription = null, modifier = Modifier.size(130.dp))
                 Text(
                     message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
@@ -591,16 +613,26 @@ internal fun ImageBubble(
                 }
             }
 
-            message.replyData?.let { reply ->
-                Box(
-                    modifier = Modifier.fillMaxWidth().align(Alignment.TopStart).background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                        Spacer(Modifier.width(6.dp))
-                        Column {
-                            Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
-                            Text(reply.text ?: stringResource(R.string.photo), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
+                if (message.tg_forwarded == true) {
+                    TelegramForwardBanner(message = message)
+                } else {
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                    }
+                }
+
+                message.replyData?.let { reply ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text(reply.text ?: stringResource(R.string.photo), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -689,6 +721,14 @@ fun AlbumBubble(
                         ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onClick = { reply.id?.let { id -> onReplyClick(id) } })
                     }
                     Spacer(Modifier.height(4.dp))
+                }
+
+                if (message.tg_forwarded == true) {
+                    TelegramForwardBanner(message = message)
+                } else {
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                    }
                 }
 
                 AlbumGrid(
@@ -816,6 +856,7 @@ private fun AlbumCell(image: AlbumImage, revealed: Boolean, modifier: Modifier, 
     }
 }
 
+@Composable
 internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
         isExthru && isMine  -> ExthruChat.bubbleMine(isDark)
@@ -824,28 +865,31 @@ internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boo
         isOneUi && isMine             -> OneUiChat.BubbleMine
         isOneUi && !isMine && isDark  -> OneUiChat.BubbleOtherDark
         isOneUi && !isMine            -> OneUiChat.BubbleOther
-        isMine -> Color(0xFF4F46E5)
-        else   -> Color(0xFFEEF0FF)
+        isMine -> MaterialTheme.colorScheme.primary
+        else   -> MaterialTheme.colorScheme.surfaceVariant
     }
 }
 
+@Composable
 internal fun resolveBubbleTextColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
         isExthru        -> ExthruChat.textPrimary(isDark)
         isOneUi && isMine           -> Color.White
         isOneUi && !isMine && isDark -> OneUiChat.TextPrimaryDark
         isOneUi && !isMine          -> OneUiChat.TextPrimary
-        else -> Color.Unspecified
+        isMine -> MaterialTheme.colorScheme.onPrimary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 }
 
+@Composable
 internal fun resolveLinkColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
         isExthru        -> ExthruChat.Accent
         isOneUi && isDark -> OneUiChat.BlueDark
         isOneUi         -> OneUiChat.Blue
         isMine          -> Color.White
-        else            -> Color.Unspecified
+        else            -> MaterialTheme.colorScheme.primary
     }
 }
 

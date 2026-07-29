@@ -76,6 +76,10 @@ private fun SavedMessage.toMessage(currentUid: String): Message = Message(
     deletedAt  = deletedAt,
     createdAt  = createdAt,
     forwardFrom = forwardFrom,
+    tg_forwarded = tg_forwarded,
+    tg_forwarded_from = tg_forwarded_from,
+    tg_forwarded_from_fallback = tg_forwarded_from_fallback,
+    isUnofficialClient = isUnofficialClient,
     readBy     = emptyList(),
     reactions  = emptyList()
 )

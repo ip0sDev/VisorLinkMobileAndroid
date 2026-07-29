@@ -251,6 +251,12 @@ data class Message(
     val images: List<AlbumImage> = emptyList(),
     val forwardFrom: Map<String, Any?>? = null,
 
+    // Telegram Bot Forwarding
+    val tg_forwarded: Boolean? = null,
+    val tg_forwarded_from: String? = null,
+    val tg_forwarded_from_fallback: String? = null,
+    val isUnofficialClient: Boolean? = null,
+
     // Подарки
     val redeemed: Boolean = false,
     val redeemedByUid: String? = null,
@@ -286,6 +292,7 @@ data class Message(
                 )
             } catch (e: Exception) { null }
         }
+
     val parsedForwardFrom: ForwardFrom?
         get() = forwardFrom?.let {
             try {

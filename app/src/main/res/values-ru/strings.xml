@@ -110,7 +110,7 @@
     <string name="stickers_empty_subtitle">Добавьте стикеры в профиле</string>
 
     <!-- Message Action Sheet -->
-    <string name="action_copy_text">Копировать текст</string>
+    <string name="action_copy_text">Копировать</string>
     <string name="action_view_image">Открыть изображение</string>
     <string name="action_save_gallery">Сохранить в галерею</string>
     <string name="action_save_voice">Сохранить голосовое</string>

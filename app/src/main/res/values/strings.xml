@@ -110,7 +110,7 @@
     <string name="stickers_empty_subtitle">Add stickers in your profile</string>
 
     <!-- Message Action Sheet -->
-    <string name="action_copy_text">Copy text</string>
+    <string name="action_copy_text">Copy</string>
     <string name="action_view_image">View image</string>
     <string name="action_save_gallery">Save to gallery</string>
     <string name="action_save_voice">Save voice message</string>

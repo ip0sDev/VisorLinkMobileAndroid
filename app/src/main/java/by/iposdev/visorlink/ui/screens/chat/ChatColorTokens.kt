@@ -1,7 +1,10 @@
 package by.iposdev.visorlink.ui.screens.chat
 
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import by.iposdev.visorlink.ui.theme.Biolume
+import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 
 // ── One UI Chat color tokens ───────────────────────────────────────────────────
 
@@ -26,67 +29,48 @@ internal object OneUiChat {
     val TopBarDark        = Color(0xFF1E1E1E)
 }
 
-// ── Exthru Chat color tokens ──────────────────────────────────────────────────
+// ── Exthru Chat color tokens (Dynamic via MaterialTheme) ─────────────────────
 
 internal object ExthruChat {
     // ── Акценты ──
-    val Accent      = Biolume.CyanGlow
-    val AccentLight = Biolume.TealLight
-    val AccentDark  = Biolume.TealPulse
-    val Destructive = Biolume.PinkFlash
-    val Online      = Biolume.MangoGlow
+    val Accent: Color @Composable get() = MaterialTheme.colorScheme.primary
+    val AccentLight: Color @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+    val AccentDark: Color @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+    val Destructive: Color @Composable get() = MaterialTheme.colorScheme.error
+    val Online: Color @Composable get() = Color(0xFF22C55E) // Стандартный зелёный онлайн
 
-    // ── Light (Daylight) поверхности ──
-    val PageBg    = Biolume.MidWater
-    val BarBg     = Biolume.DeepWater
-    val CardBg    = Biolume.ShallowWater
-    val InputBg   = Biolume.AbyssSurface
+    // ── Поверхности ──
+    @Composable fun pageBg(isDark: Boolean) = MaterialTheme.colorScheme.background
+    @Composable fun barBg(isDark: Boolean) = MaterialTheme.colorScheme.surface
+    @Composable fun cardBg(isDark: Boolean) = MaterialTheme.colorScheme.surfaceVariant
+    @Composable fun inputBg(isDark: Boolean) = MaterialTheme.colorScheme.surfaceContainerHighest
 
-    // ── Dark (Midnight) поверхности ──
-    val DarkPageBg  = Biolume.DarkMidWater
-    val DarkBarBg   = Biolume.DarkDeepWater
-    val DarkCardBg  = Biolume.DarkShallowWater
-    val DarkInputBg = Biolume.DarkAbyssSurface
+    // ── Пузыри (Стиль Exthru уже подмешивает Accent в фон) ──
+    @Composable fun bubbleMine(isDark: Boolean): Color {
+        val style = rememberExthruStyle(AppTheme.BIOLUME)
+        return style.myBubbleBg.copy(alpha = if (isDark) 0.65f else 0.85f)
+    }
 
-    // ── Light пузыри (сделаны чуть более прозрачными) ──
-    val BubbleMine  = Biolume.BubbleMine.copy(alpha = 0.85f)
-    val BubbleOther = Biolume.BubbleOther.copy(alpha = 0.85f)
+    @Composable fun bubbleOther(isDark: Boolean): Color {
+        val style = rememberExthruStyle(AppTheme.BIOLUME)
+        return style.otherBubbleBg.copy(alpha = if (isDark) 0.65f else 0.85f)
+    }
 
-    // ── Dark пузыри (сделаны чуть более прозрачными) ──
-    val DarkBubbleMine  = Biolume.DarkBubbleMine.copy(alpha = 0.65f)
-    val DarkBubbleOther = Biolume.DarkBubbleOther.copy(alpha = 0.65f)
-
-    // ── Light текст ──
-    val TextPrimary   = Biolume.TextPrimary
-    val TextSecondary = Biolume.TextSecondary
-    val TextHint      = Biolume.TextHint
-
-    // ── Dark текст ──
-    val DarkTextPrimary   = Biolume.DarkTextPrimary
-    val DarkTextSecondary = Biolume.DarkTextSecondary
-    val DarkTextHint      = Biolume.DarkTextHint
+    // ── Текст ──
+    @Composable fun textPrimary(isDark: Boolean) = MaterialTheme.colorScheme.onSurface
+    @Composable fun textSecondary(isDark: Boolean) = MaterialTheme.colorScheme.onSurfaceVariant
+    @Composable fun textHint(isDark: Boolean) = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
     // ── Тени ──
-    val ShadowDark  = Biolume.ShadowDark
-    val ShadowLight = Biolume.ShadowLight
-    val DarkShadowDark  = Biolume.DarkShadowDark
-    val DarkShadowLight = Biolume.DarkShadowLight
+    @Composable fun shadowDark(isDark: Boolean): Color {
+        val style = rememberExthruStyle(AppTheme.BIOLUME)
+        return style.darkShadow
+    }
 
-    // ── Хелперы ──
-    fun pageBg(isDark: Boolean)        = if (isDark) DarkPageBg  else PageBg
-    fun barBg(isDark: Boolean)         = if (isDark) DarkBarBg   else BarBg
-    fun cardBg(isDark: Boolean)        = if (isDark) DarkCardBg  else CardBg
-    fun inputBg(isDark: Boolean)       = if (isDark) DarkInputBg else InputBg
-
-    fun bubbleMine(isDark: Boolean)    = if (isDark) DarkBubbleMine  else BubbleMine
-    fun bubbleOther(isDark: Boolean)   = if (isDark) DarkBubbleOther else BubbleOther
-
-    fun textPrimary(isDark: Boolean)   = if (isDark) DarkTextPrimary   else TextPrimary
-    fun textSecondary(isDark: Boolean) = if (isDark) DarkTextSecondary else TextSecondary
-    fun textHint(isDark: Boolean)      = if (isDark) DarkTextHint      else TextHint
-
-    fun shadowDark(isDark: Boolean)    = if (isDark) DarkShadowDark  else ShadowDark
-    fun shadowLight(isDark: Boolean)   = if (isDark) DarkShadowLight else ShadowLight
+    @Composable fun shadowLight(isDark: Boolean): Color {
+        val style = rememberExthruStyle(AppTheme.BIOLUME)
+        return style.lightShadow
+    }
 }
 
 internal val QUICK_REACTIONS = listOf(

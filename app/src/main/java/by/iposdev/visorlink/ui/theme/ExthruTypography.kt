@@ -8,35 +8,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 
-// ── Moniqa Typeface ───────────────────────────────────────────────────────────
-
-val MoniqaFontFamily = FontFamily(
-    Font(R.font.moniqa_regular,  FontWeight.Normal),
-    Font(R.font.moniqa_semibold, FontWeight.SemiBold),
-    Font(R.font.moniqa_bold,     FontWeight.Bold),
-)
-
 // ── Exthru Typography ─────────────────────────────────────────────────────────
 
 val ExthruTypography = Typography(
 
     // ── Display — Moniqa, крупные заголовки ───────────────────────────────────
     displayLarge = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.Bold,
         fontSize     = 57.sp,
         lineHeight   = 64.sp,
         letterSpacing = (-0.25).sp,
     ),
     displayMedium = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.Bold,
         fontSize     = 45.sp,
         lineHeight   = 52.sp,
         letterSpacing = 0.sp,
     ),
     displaySmall = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.SemiBold,
         fontSize     = 36.sp,
         lineHeight   = 44.sp,
@@ -45,21 +37,21 @@ val ExthruTypography = Typography(
 
     // ── Headline — Moniqa ─────────────────────────────────────────────────────
     headlineLarge = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.Bold,
         fontSize     = 32.sp,
         lineHeight   = 40.sp,
         letterSpacing = 0.sp,
     ),
     headlineMedium = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.SemiBold,
         fontSize     = 28.sp,
         lineHeight   = 36.sp,
         letterSpacing = 0.sp,
     ),
     headlineSmall = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.SemiBold,
         fontSize     = 24.sp,
         lineHeight   = 32.sp,
@@ -68,21 +60,21 @@ val ExthruTypography = Typography(
 
     // ── Title — Moniqa ────────────────────────────────────────────────────────
     titleLarge = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.Bold,
         fontSize     = 20.sp,
         lineHeight   = 28.sp,
         letterSpacing = 0.sp,
     ),
     titleMedium = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.Bold,
         fontSize     = 16.sp,
         lineHeight   = 24.sp,
         letterSpacing = 0.sp,
     ),
     titleSmall = TextStyle(
-        fontFamily   = MoniqaFontFamily,
+        fontFamily   = FontFamily.Default,
         fontWeight   = FontWeight.SemiBold,
         fontSize     = 15.sp,
         lineHeight   = 22.sp,
@@ -132,7 +124,7 @@ val ExthruTypography = Typography(
 
 // ── Вспомогательный стиль для имени отправителя в пузыре (Moniqa, 11sp) ──────
 val ExthruSenderNameStyle = TextStyle(
-    fontFamily   = MoniqaFontFamily,
+    fontFamily   = FontFamily.Default,
     fontWeight   = FontWeight.SemiBold,
     fontSize     = 11.sp,
     lineHeight   = 16.sp,

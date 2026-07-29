@@ -45,8 +45,9 @@ import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -75,74 +76,77 @@ fun SavedMessagesSettingsScreen(
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
-            Box(modifier = Modifier.fillMaxSize().haze(state = hazeState)) {
-                VlAmbientGlow(appTheme = currentTheme)
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    if (isExthru) {
+                        val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+                        TopAppBar(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .hazeEffect(
+                                    state = hazeState,
+                                    style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = HazeTint(topBarBg))
+                                ),
+                            title = {
+                                Text(
+                                    "Настройки Избранного",
+                                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                )
+                            },
+                            navigationIcon = {
+                                val interactionSource = remember { MutableInteractionSource() }
+                                val isPressed by interactionSource.collectIsPressedAsState()
+                                val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_scale")
+                                val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
 
-                Scaffold(
-                    containerColor = Color.Transparent,
-                    topBar = {
-                        if (isExthru) {
-                            TopAppBar(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .hazeChild(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
-                                title = {
-                                    Text(
-                                        "Настройки Избранного",
-                                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                                    )
-                                },
-                                navigationIcon = {
-                                    val interactionSource = remember { MutableInteractionSource() }
-                                    val isPressed by interactionSource.collectIsPressedAsState()
-                                    val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_scale")
-                                    val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
-
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(start = 12.dp, end = 4.dp)
-                                            .size(42.dp)
-                                            .scale(scale)
-                                            .then(shadowMod)
-                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                            .clip(CircleShape)
-                                            .clickable(interactionSource = interactionSource, indication = null) {
-                                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                                onNavigateBack()
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                    }
-                                },
-                                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
-                            )
-                        } else {
-                            TopAppBar(
-                                title = { Text("Настройки Избранного") },
-                                navigationIcon = {
-                                    IconButton(onClick = {
-                                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                                        onNavigateBack()
-                                    }) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                                    }
-                                },
-                                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-                            )
-                        }
+                                Box(
+                                    modifier = Modifier
+                                        .padding(start = 12.dp, end = 4.dp)
+                                        .size(42.dp)
+                                        .scale(scale)
+                                        .then(shadowMod)
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                                        .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable(interactionSource = interactionSource, indication = null) {
+                                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                                            onNavigateBack()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
+                        )
+                    } else {
+                        TopAppBar(
+                            title = { Text("Настройки Избранного") },
+                            navigationIcon = {
+                                IconButton(onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    onNavigateBack()
+                                }) {
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                        )
                     }
-                ) { padding ->
+                }
+            ) { padding ->
+                // Обертка-источник для размытия
+                Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
+                    VlAmbientGlow(appTheme = currentTheme)
+
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(padding)
                             .verticalScroll(rememberScrollState())
-                            .padding(bottom = 32.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
+
                         SectionHeader("PIN-защита и шифрование", isExthru)
 
                         SettingsCard(isExthru = isExthru, isDark = isDark) {
@@ -210,6 +214,8 @@ fun SavedMessagesSettingsScreen(
                         AnimatedVisibility(visible = pinEnabled) {
                             WarningBanner(isExthru = isExthru, isDark = isDark)
                         }
+
+                        Spacer(modifier = Modifier.height(padding.calculateBottomPadding() + 32.dp))
                     }
                 }
             }
@@ -372,14 +378,12 @@ private fun SectionHeader(title: String, isExthru: Boolean) {
 @Composable
 private fun SettingsCard(isExthru: Boolean, isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
     if (isExthru) {
-        val hazeState = LocalHazeState.current
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .exthruRaisedShadow(isDark)
                 .clip(RoundedCornerShape(20.dp))
-                .hazeChild(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f))
                 .border(1.5.dp, Brush.linearGradient(listOf(Color.White.copy(alpha = if (isDark) 0.15f else 0.5f), Color.Transparent, Color.Black.copy(alpha = if (isDark) 0.4f else 0.05f))), RoundedCornerShape(20.dp))
                 .padding(vertical = 6.dp),
