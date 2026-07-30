@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.BrokenImage
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,9 +29,13 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -486,6 +491,8 @@ internal fun StickerBubble(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "sticker_scale")
 
+    var isError by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
@@ -516,7 +523,33 @@ internal fun StickerBubble(
                     }
                 }
 
-                AsyncImage(model = message.url, contentDescription = null, modifier = Modifier.size(130.dp))
+                if (isError) {
+                    // Placeholder для удаленного стикера (404)
+                    val stroke = Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f))
+                    val color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    Box(
+                        modifier = Modifier
+                            .size(130.dp)
+                            .drawBehind {
+                                drawRoundRect(color = color, style = stroke, cornerRadius = CornerRadius(16.dp.toPx()))
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Outlined.BrokenImage, contentDescription = null, tint = color)
+                            Spacer(Modifier.height(8.dp))
+                            Text("Стикер удален", fontSize = 12.sp, color = color)
+                        }
+                    }
+                } else {
+                    AsyncImage(
+                        model = message.url,
+                        contentDescription = null,
+                        modifier = Modifier.size(130.dp),
+                        onError = { isError = true }
+                    )
+                }
+
                 Text(
                     message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
                     style = MaterialTheme.typography.labelSmall, color = timeColor, fontSize = 10.sp, modifier = Modifier.padding(top = 2.dp),

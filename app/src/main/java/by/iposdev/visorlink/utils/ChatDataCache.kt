@@ -395,6 +395,7 @@ object ChatDataCache {
                 put("url", s.url)
                 put("emoji", s.emoji)
                 put("storagePath", s.storagePath)
+                put("sortOrder", s.sortOrder)
             })
         }
         put("stickers", sArr)
@@ -408,7 +409,8 @@ object ChatDataCache {
                 id = sObj.getString("id"),
                 url = sObj.getString("url"),
                 emoji = sObj.getString("emoji"),
-                storagePath = sObj.getString("storagePath")
+                storagePath = sObj.optString("storagePath", ""),
+                sortOrder = sObj.optInt("sortOrder", 0)
             )
         }
         return StickerPack(

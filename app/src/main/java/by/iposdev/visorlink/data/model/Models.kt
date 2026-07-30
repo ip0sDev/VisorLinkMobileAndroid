@@ -216,6 +216,7 @@ data class StickerItem(
     val url: String = "",
     val emoji: String = "🎭",
     val storagePath: String = "",
+    val sortOrder: Int = 0,
     val createdAt: Timestamp? = null
 )
 

@@ -85,8 +85,7 @@ fun StickerPickerBottomSheet(
             onCreatePack = { name, emoji ->
                 viewModel.createPack(name, emoji)
             },
-            onDeletePack = { viewModel.deletePack(it) },
-            onRenamePack = { id, n, e -> viewModel.renamePack(id, n, e) },
+            onDeletePack = { packId, isOwner -> viewModel.deletePack(packId, isOwner) },
             onUploadSticker = { packId, uri, emoji ->
                 viewModel.uploadSticker(packId, uri, emoji)
             },
@@ -111,14 +110,12 @@ private fun StickerPickerContent(
     isDark: Boolean,
     onStickerSelected: (packId: String, sticker: StickerItem) -> Unit,
     onCreatePack: (name: String, emoji: String) -> Unit,
-    onDeletePack: (packId: String) -> Unit,
-    onRenamePack: (packId: String, name: String, emoji: String) -> Unit,
+    onDeletePack: (packId: String, isOwner: Boolean) -> Unit,
     onUploadSticker: (packId: String, uri: Uri, emoji: String) -> Unit,
     onDeleteSticker: (packId: String, sticker: StickerItem) -> Unit
 ) {
     var selectedPackIndex by remember { mutableIntStateOf(if (packs.isNotEmpty()) 0 else -1) }
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showRenameDialog by remember { mutableStateOf<StickerPack?>(null) }
     var showDeleteConfirm by remember { mutableStateOf<StickerPack?>(null) }
     var showAddStickerSheet by remember { mutableStateOf<StickerPack?>(null) }
 
@@ -183,10 +180,9 @@ private fun StickerPickerContent(
                 if (selectedPack?.authorId == currentUid) {
                     ThemedIconButton(Icons.Default.Add, MaterialTheme.colorScheme.primary, isExthru, isDark) { showAddStickerSheet = selectedPack }
                     Spacer(Modifier.width(10.dp))
-                    ThemedIconButton(Icons.Default.Edit, MaterialTheme.colorScheme.onSurfaceVariant, isExthru, isDark) { showRenameDialog = selectedPack }
-                    Spacer(Modifier.width(10.dp))
-                    ThemedIconButton(Icons.Default.Delete, MaterialTheme.colorScheme.error, isExthru, isDark) { showDeleteConfirm = selectedPack }
                 }
+                // Кнопка удаления доступна всегда (для своих - удалить, для чужих - убрать из библиотеки)
+                ThemedIconButton(Icons.Default.Delete, MaterialTheme.colorScheme.error, isExthru, isDark) { showDeleteConfirm = selectedPack }
             } else {
                 Text(
                     "Стикеры",
@@ -223,8 +219,7 @@ private fun StickerPickerContent(
                     isExthru = isExthru,
                     isDark = isDark,
                     onSelectPack = { idx -> selectedPackIndex = idx },
-                    onDeletePack = { showDeleteConfirm = it },
-                    onRenamePack = { showRenameDialog = it }
+                    onDeletePack = { showDeleteConfirm = it }
                 )
                 selectedPack != null -> PackContentGrid(
                     pack = selectedPack,
@@ -252,29 +247,17 @@ private fun StickerPickerContent(
         )
     }
 
-    showRenameDialog?.let { pack ->
-        CreatePackDialog(
-            initialName = pack.name, initialEmoji = pack.emoji,
-            title = "Переименовать пак", confirmLabel = "Сохранить",
-            appTheme = appTheme, isExthru = isExthru, isDark = isDark,
-            onDismiss = { showRenameDialog = null },
-            onCreate = { name, emoji ->
-                onRenamePack(pack.id, name, emoji)
-                showRenameDialog = null
-            }
-        )
-    }
-
     showDeleteConfirm?.let { pack ->
+        val isOwner = pack.authorId == currentUid
         VlAlertDialog(
             appTheme = appTheme,
             onDismissRequest = { showDeleteConfirm = null },
-            title = { Text("Удалить пак?") },
-            text = { Text("Пак «${pack.emoji} ${pack.name}» и все его стикеры будут удалены безвозвратно.") },
+            title = { Text(if (isOwner) "Удалить пак?" else "Удалить из моих?") },
+            text = { Text(if (isOwner) "Пак «${pack.emoji} ${pack.name}» и все его стикеры будут удалены безвозвратно." else "Пак «${pack.emoji} ${pack.name}» будет удален из вашей библиотеки.") },
             actions = {
                 VlDialogButton(onClick = { showDeleteConfirm = null }) { Text("Отмена") }
                 VlDialogButton(appTheme = appTheme, isDestructive = true, onClick = {
-                    onDeletePack(pack.id)
+                    onDeletePack(pack.id, isOwner)
                     showDeleteConfirm = null
                     if (selectedPack?.id == pack.id) selectedPackIndex = -1
                 }) { Text("Удалить") }
@@ -399,8 +382,7 @@ private fun PackListView(
     isExthru: Boolean,
     isDark: Boolean,
     onSelectPack: (Int) -> Unit,
-    onDeletePack: (StickerPack) -> Unit,
-    onRenamePack: (StickerPack) -> Unit
+    onDeletePack: (StickerPack) -> Unit
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 8.dp)) {
         items(packs.size, key = { packs[it].id }) { index ->
@@ -410,8 +392,7 @@ private fun PackListView(
                 isOwner = pack.authorId == currentUid,
                 isExthru = isExthru, isDark = isDark,
                 onClick = { onSelectPack(index) },
-                onDelete = { onDeletePack(pack) },
-                onRename = { onRenamePack(pack) }
+                onDelete = { onDeletePack(pack) }
             )
         }
     }
@@ -424,8 +405,7 @@ private fun PackListRow(
     isExthru: Boolean,
     isDark: Boolean,
     onClick: () -> Unit,
-    onDelete: () -> Unit,
-    onRename: () -> Unit
+    onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val haptic = rememberHaptic()
@@ -479,14 +459,15 @@ private fun PackListRow(
         Spacer(Modifier.width(8.dp))
         Text("${pack.stickerCount}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
 
-        if (isOwner) {
-            Spacer(Modifier.width(8.dp))
-            Box {
-                ThemedIconButton(Icons.Default.MoreVert, MaterialTheme.colorScheme.onSurfaceVariant, isExthru, isDark) { showMenu = true }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(text = { Text("Переименовать") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { showMenu = false; onRename() })
-                    DropdownMenuItem(text = { Text("Удалить", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }, onClick = { showMenu = false; onDelete() })
-                }
+        Spacer(Modifier.width(8.dp))
+        Box {
+            ThemedIconButton(Icons.Default.MoreVert, MaterialTheme.colorScheme.onSurfaceVariant, isExthru, isDark) { showMenu = true }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (isOwner) "Удалить пак" else "Удалить из моих", color = MaterialTheme.colorScheme.error) },
+                    leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                    onClick = { showMenu = false; onDelete() }
+                )
             }
         }
     }

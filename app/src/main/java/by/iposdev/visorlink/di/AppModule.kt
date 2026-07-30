@@ -56,7 +56,7 @@ val appModule = module {
     single { AuthRepository(get(), get()) }
     single { ChatRepository(get(), get(), get(), get(), androidContext()) }
     single { UserRepository(get(), get(), get(), get(), androidContext()) }
-    single { StickerPackRepository(get(), get(), get(), get(), androidContext()) }
+    single { StickerPackRepository(get(), androidContext()) }
 
     // ─── Utils ────────────────────────────────────────────────────────────────
 

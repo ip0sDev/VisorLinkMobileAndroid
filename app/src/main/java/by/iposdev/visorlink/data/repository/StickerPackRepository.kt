@@ -2,161 +2,215 @@ package by.iposdev.visorlink.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.StickerItem
 import by.iposdev.visorlink.data.model.StickerPack
 import by.iposdev.visorlink.utils.ChatDataCache
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.DataOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 class StickerPackRepository(
     private val auth: FirebaseAuth,
-    private val db: FirebaseFirestore,
-    private val storage: FirebaseStorage,
-    private val functions: FirebaseFunctions,
     private val context: Context
 ) {
     private val currentUid get() = auth.currentUser!!.uid
+    private val baseUrl = "https://api.visorlink.org"
 
-    fun observeUserPacks(): Flow<List<StickerPack>> = callbackFlow {
-        // --- 1. CACHE FIRST ---
-        launch(Dispatchers.IO) {
+    private val _packsFlow = MutableStateFlow<List<StickerPack>>(emptyList())
+
+    fun observeUserPacks(): Flow<List<StickerPack>> = _packsFlow.asStateFlow()
+
+    suspend fun refreshPacks() = withContext(Dispatchers.IO) {
+        try {
             val cached = ChatDataCache.loadStickerPacks(context, currentUid)
-            if (cached.isNotEmpty()) trySend(cached)
-        }
-
-        val userDataRef = db.collection("users")
-            .document(currentUid)
-            .collection("stickerData")
-            .document("packs")
-
-        val reg = userDataRef.addSnapshotListener { snap, _ ->
-            if (snap == null || !snap.exists()) {
-                trySend(emptyList())
-                return@addSnapshotListener
-            }
-            @Suppress("UNCHECKED_CAST")
-            val packIds = (snap.get("packIds") as? List<String>) ?: emptyList()
-            if (packIds.isEmpty()) {
-                trySend(emptyList())
-                return@addSnapshotListener
+            if (cached.isNotEmpty() && _packsFlow.value.isEmpty()) {
+                _packsFlow.value = cached
             }
 
-            kotlinx.coroutines.GlobalScope.launch {
-                try {
-                    val packs = loadPacksWithStickers(packIds)
-                    trySend(packs)
-                    // --- UPDATE CACHE ---
-                    launch(Dispatchers.IO) { ChatDataCache.saveStickerPacks(context, currentUid, packs) }
-                } catch (_: Exception) {
-                    trySend(emptyList())
+            val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: return@withContext
+            val url = URL("$baseUrl/stickerpacks/my")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.setRequestProperty("Authorization", "Bearer $token")
+
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                val packsArray = json.optJSONArray("packs") ?: JSONArray()
+                val packs = (0 until packsArray.length()).map {
+                    parseStickerPack(packsArray.getJSONObject(it))
                 }
+                _packsFlow.value = packs
+                ChatDataCache.saveStickerPacks(context, currentUid, packs)
             }
-        }
-
-        awaitClose { reg.remove() }
-    }
-
-    private suspend fun loadPacksWithStickers(packIds: List<String>): List<StickerPack> =
-        coroutineScope {
-            packIds.map { packId ->
-                async {
-                    try {
-                        val packDoc = db.collection("stickerPacks").document(packId).get().await()
-                        if (!packDoc.exists()) return@async null
-                        val pack = packDoc.toObject(StickerPack::class.java)?.copy(id = packDoc.id)
-                            ?: return@async null
-                        val stickers = loadStickers(packId)
-                        pack.copy(stickers = stickers)
-                    } catch (_: Exception) { null }
-                }
-            }.awaitAll().filterNotNull()
-        }
-
-    private suspend fun loadStickers(packId: String): List<StickerItem> {
-        val snap = db.collection("stickerPacks").document(packId)
-            .collection("stickers")
-            .get().await()
-        return snap.documents.mapNotNull { doc ->
-            try { doc.toObject(StickerItem::class.java)?.copy(id = doc.id) }
-            catch (_: Exception) { null }
+        } catch (e: Exception) {
+            Log.e("StickerRepo", "Failed to fetch packs", e)
         }
     }
 
-    suspend fun getPackById(packId: String): StickerPack? = try {
-        val doc = db.collection("stickerPacks").document(packId).get().await()
-        if (!doc.exists()) null
-        else doc.toObject(StickerPack::class.java)?.copy(id = doc.id)
-    } catch (_: Exception) { null }
+    private fun parseStickerPack(json: JSONObject): StickerPack {
+        val stickersArray = json.optJSONArray("stickers") ?: JSONArray()
+        val stickers = (0 until stickersArray.length()).map { i ->
+            val sJson = stickersArray.getJSONObject(i)
+            StickerItem(
+                id = sJson.getString("id"),
+                url = sJson.getString("url"),
+                emoji = sJson.getString("emoji"),
+                sortOrder = sJson.optInt("sort_order", 0)
+            )
+        }.sortedBy { it.sortOrder }
 
-    suspend fun hasPack(packId: String): Boolean = try {
-        val doc = db.collection("users").document(currentUid)
-            .collection("stickerData").document("packs").get().await()
-        @Suppress("UNCHECKED_CAST")
-        val ids = (doc.get("packIds") as? List<String>) ?: emptyList()
-        packId in ids
-    } catch (_: Exception) { false }
-
-    suspend fun createPack(name: String, emoji: String): String {
-        val result = functions.getHttpsCallable("createStickerPack")
-            .call(mapOf("name" to name, "emoji" to emoji)).await()
-        return (result.data as Map<*, *>)["packId"] as String
-    }
-
-    suspend fun deletePack(packId: String) {
-        functions.getHttpsCallable("deleteStickerPack")
-            .call(mapOf("packId" to packId)).await()
-    }
-
-    suspend fun addPackToUser(packId: String): String {
-        val result = functions.getHttpsCallable("addStickerPack")
-            .call(mapOf("packId" to packId)).await()
-        return (result.data as Map<*, *>)["packName"] as? String ?: ""
-    }
-
-    suspend fun uploadSticker(packId: String, uri: Uri, emoji: String): StickerItem {
-        val fileName = "${System.currentTimeMillis()}.webp"
-        val storagePath = "stickerPacks/$packId/$currentUid/$fileName"
-        val ref = storage.reference.child(storagePath)
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
-
-        val stickerRef = db.collection("stickerPacks").document(packId)
-            .collection("stickers").document()
-        val data = mapOf(
-            "url" to url,
-            "emoji" to emoji,
-            "storagePath" to storagePath,
-            "createdAt" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+        return StickerPack(
+            id = json.getString("id"),
+            name = json.getString("name"),
+            emoji = json.getString("emoji"),
+            authorId = json.getString("author_id"),
+            authorName = json.getString("author_name"),
+            stickerCount = json.getInt("sticker_count"),
+            stickers = stickers
         )
-        stickerRef.set(data).await()
-
-        db.collection("stickerPacks").document(packId)
-            .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(1)).await()
-
-        return StickerItem(id = stickerRef.id, url = url, emoji = emoji, storagePath = storagePath)
     }
 
-    suspend fun deleteStickerFromPack(packId: String, sticker: StickerItem) {
-        try { storage.reference.child(sticker.storagePath).delete().await() } catch (_: Exception) {}
-        db.collection("stickerPacks").document(packId)
-            .collection("stickers").document(sticker.id).delete().await()
-        db.collection("stickerPacks").document(packId)
-            .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(-1)).await()
+    suspend fun getPackById(packId: String): StickerPack? {
+        return _packsFlow.value.find { it.id == packId }
     }
 
-    suspend fun renamePack(packId: String, name: String, emoji: String) {
-        db.collection("stickerPacks").document(packId)
-            .update(mapOf("name" to name, "emoji" to emoji)).await()
+    suspend fun hasPack(packId: String): Boolean {
+        return _packsFlow.value.any { it.id == packId }
+    }
+
+    suspend fun createPack(name: String, emoji: String): String = withContext(Dispatchers.IO) {
+        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
+        val url = URL("$baseUrl/stickerpacks/create")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Authorization", "Bearer $token")
+        conn.setRequestProperty("Content-Type", "application/json")
+
+        val authorName = ChatDataCache.loadProfile(context, currentUid)?.displayName ?: "User"
+
+        val json = JSONObject().apply {
+            put("name", name)
+            put("emoji", emoji)
+            put("author_name", authorName)
+        }
+
+        conn.outputStream.write(json.toString().toByteArray(Charsets.UTF_8))
+
+        if (conn.responseCode == 200) {
+            val response = conn.inputStream.bufferedReader().readText()
+            val resJson = JSONObject(response)
+            refreshPacks()
+            return@withContext resJson.getString("pack_id")
+        } else {
+            throw Exception("Create pack failed")
+        }
+    }
+
+    suspend fun deletePack(packId: String, isOwner: Boolean) = withContext(Dispatchers.IO) {
+        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
+        val endpoint = if (isOwner) "/stickerpacks/$packId" else "/stickerpacks/$packId/library"
+        val url = URL("$baseUrl$endpoint")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "DELETE"
+        conn.setRequestProperty("Authorization", "Bearer $token")
+
+        if (conn.responseCode == 200) {
+            refreshPacks()
+        } else {
+            throw Exception("Delete pack failed")
+        }
+    }
+
+    suspend fun addPackToUser(packId: String): String = withContext(Dispatchers.IO) {
+        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
+        val url = URL("$baseUrl/stickerpacks/$packId/library")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Authorization", "Bearer $token")
+
+        if (conn.responseCode == 200) {
+            refreshPacks()
+            return@withContext "Pack Added"
+        } else {
+            throw Exception("Add pack failed")
+        }
+    }
+
+    suspend fun uploadSticker(packId: String, uri: Uri, emoji: String): StickerItem = withContext(Dispatchers.IO) {
+        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
+        val boundary = "----VisorLinkStickerBoundary${System.currentTimeMillis()}"
+        val url = URL("$baseUrl/stickerpacks/$packId/add_sticker")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Authorization", "Bearer $token")
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+
+        DataOutputStream(conn.outputStream).use { out ->
+            val crlf = "\r\n"
+            val twoHyphens = "--"
+
+            fun writeField(name: String, value: String) {
+                out.writeBytes("$twoHyphens$boundary$crlf")
+                out.writeBytes("Content-Disposition: form-data; name=\"$name\"$crlf$crlf")
+                out.write(value.toByteArray(Charsets.UTF_8))
+                out.writeBytes(crlf)
+            }
+
+            writeField("emoji", emoji)
+            val fileName = "sticker_${System.currentTimeMillis()}.webp"
+            writeField("name", fileName)
+
+            out.writeBytes("$twoHyphens$boundary$crlf")
+            out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$crlf")
+            out.writeBytes("Content-Type: image/webp$crlf$crlf")
+
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                input.copyTo(out)
+            }
+            out.writeBytes(crlf)
+            out.writeBytes("$twoHyphens$boundary--$crlf")
+            out.flush()
+        }
+
+        if (conn.responseCode == 200) {
+            val response = conn.inputStream.bufferedReader().readText()
+            val json = JSONObject(response)
+            refreshPacks()
+            return@withContext StickerItem(
+                id = json.getString("id"),
+                url = json.getString("url"),
+                emoji = json.getString("emoji"),
+                sortOrder = json.optInt("sort_order", 0)
+            )
+        } else {
+            val err = conn.errorStream?.bufferedReader()?.readText()
+            throw Exception("Upload failed: $err")
+        }
+    }
+
+    suspend fun deleteStickerFromPack(packId: String, sticker: StickerItem) = withContext(Dispatchers.IO) {
+        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
+        val url = URL("$baseUrl/stickerpacks/$packId/stickers/${sticker.id}")
+        val conn = url.openConnection() as HttpURLConnection
+        conn.requestMethod = "DELETE"
+        conn.setRequestProperty("Authorization", "Bearer $token")
+
+        if (conn.responseCode == 200) {
+            refreshPacks()
+        } else {
+            throw Exception("Delete sticker failed")
+        }
     }
 }
