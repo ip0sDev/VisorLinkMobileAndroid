@@ -316,11 +316,11 @@ private fun GestureMessageMenu(
     if (data.isMine) actions.add("delete")
 
     // 1. Точные размеры компонентов
-    val btnHalfW = with(density) { 90.dp.toPx() } // Половина ширины кнопки действий
-    val gridW = with(density) { (4 * 40 + 28).dp.toPx() } // Ширина сетки эмодзи
-    val gridH = with(density) { (((QUICK_REACTIONS.size / 4) * 40) + 28).dp.toPx() }
-    val actionStep = with(density) { 60.dp.toPx() }
-    val margin = with(density) { 20.dp.toPx() }
+    val btnHalfW = with(density) { 75.dp.toPx() } // Половина ширины кнопки действий
+    val gridW = with(density) { (4 * 36 + 20).dp.toPx() } // Ширина сетки эмодзи
+    val gridH = with(density) { (((QUICK_REACTIONS.size / 4) * 36) + 20).dp.toPx() }
+    val actionStep = with(density) { 52.dp.toPx() }
+    val margin = with(density) { 16.dp.toPx() }
 
     val dirX = if (data.isMine) -1 else 1
     val growDown = data.startOffset.y < screenHeightPx / 2f
@@ -353,8 +353,9 @@ private fun GestureMessageMenu(
     }.toMap()
 
     val gridLeftX = if (hasGrid) {
-        if (dirX == 1) menuOrigin.x + btnHalfW + margin
+        val idealX = if (dirX == 1) menuOrigin.x + btnHalfW + margin
         else menuOrigin.x - btnHalfW - gridW - margin
+        idealX.coerceIn(margin, screenWidthPx - gridW - margin)
     } else 0f
 
     val gridTopY = if (hasGrid) {
@@ -392,11 +393,11 @@ private fun GestureMessageMenu(
                 right = gridBounds.right + 40f, bottom = gridBounds.bottom + 40f
             )
             if (hitBounds.contains(virtualFingerPos)) {
-                val dxInside = virtualFingerPos.x - gridBounds.left - with(density) { 14.dp.toPx() }
-                val dyInside = virtualFingerPos.y - gridBounds.top - with(density) { 14.dp.toPx() }
+                val dxInside = virtualFingerPos.x - gridBounds.left - with(density) { 10.dp.toPx() }
+                val dyInside = virtualFingerPos.y - gridBounds.top - with(density) { 10.dp.toPx() }
 
-                val col = floor(dxInside / with(density) { 40.dp.toPx() }).toInt().coerceIn(0, 3)
-                val row = floor(dyInside / with(density) { 40.dp.toPx() }).toInt().coerceIn(0, (QUICK_REACTIONS.size / 4) - 1)
+                val col = floor(dxInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, 3)
+                val row = floor(dyInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, (QUICK_REACTIONS.size / 4) - 1)
 
                 val idx = (row * 4 + col).coerceIn(0, QUICK_REACTIONS.size - 1)
                 newSel = "react_${QUICK_REACTIONS[idx]}"
@@ -470,12 +471,12 @@ private fun GestureMessageMenu(
                     .clip(RoundedCornerShape(20.dp))
                     .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(cancelColor))))
                     .border(1.dp, if (isCancelSelected) Color(0xFFFFC107) else cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                    Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -522,12 +523,12 @@ private fun GestureMessageMenu(
                         .clip(RoundedCornerShape(20.dp))
                         .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(bgColor))))
                         .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(icon, null, tint = contentColor, modifier = Modifier.size(20.dp))
+                        Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(text, color = contentColor, fontWeight = FontWeight.Bold)
+                        Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -550,7 +551,7 @@ private fun GestureMessageMenu(
                         .clip(RoundedCornerShape(24.dp))
                         .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(generalBgColor))))
                         .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(24.dp))
-                        .padding(14.dp)
+                        .padding(10.dp)
                 ) {
                     Column {
                         QUICK_REACTIONS.chunked(4).forEach { row ->
@@ -559,7 +560,7 @@ private fun GestureMessageMenu(
                                     val isSelected = currentSelection == "react_$emoji"
                                     val emojiScale by animateFloatAsState(if (isSelected) 1.5f else 1f, label = "emoji_scale")
                                     Box(
-                                        Modifier.size(40.dp),
+                                        Modifier.size(36.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Box(
@@ -568,7 +569,7 @@ private fun GestureMessageMenu(
                                                 .background(if (isSelected) style.accent.copy(0.4f) else Color.Transparent, CircleShape)
                                                 .padding(4.dp)
                                         ) {
-                                            Text(emoji, fontSize = 20.sp)
+                                            Text(emoji, fontSize = 18.sp)
                                         }
                                     }
                                 }
