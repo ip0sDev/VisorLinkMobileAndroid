@@ -43,7 +43,8 @@ data class SavedMessagesUiState(
     val isEncryptionEnabled: Boolean         = false,
     val isRecording: Boolean                 = false,
     val isUploading: Boolean                 = false,
-    val voicePlayback: VoicePlaybackState    = VoicePlaybackState()
+    val voicePlayback: VoicePlaybackState    = VoicePlaybackState(),
+    val initialDraft: String                 = ""
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -52,7 +53,8 @@ class SavedMessagesViewModel(
     private val repository: SavedMessagesRepository,
     private val auth: FirebaseAuth,
     private val voicePlayer: VoicePlayerManager,
-    private val context: Context
+    private val context: Context,
+    private val draftManager: DraftManager
 ) : ViewModel() {
 
     val currentUid: String get() = auth.currentUser?.uid ?: ""
@@ -68,6 +70,11 @@ class SavedMessagesViewModel(
     private var recordingStart = 0L
 
     init {
+        val draft = draftManager.getDraft("saved_$currentUid")
+        if (draft.isNotEmpty()) {
+            _uiState.update { it.copy(initialDraft = draft) }
+        }
+
         viewModelScope.launch {
             repository.settingsFlow(currentUid).collect { settings ->
                 _uiState.update { it.copy(settings = settings) }
@@ -231,10 +238,15 @@ class SavedMessagesViewModel(
 
     // ─── Стандартные методы отправки ────────────────────────────────────────
 
+    fun onTextChanged(text: String) {
+        draftManager.saveDraft("saved_$currentUid", text)
+    }
+
     fun saveText(text: String) {
         viewModelScope.launch {
             try {
                 repository.saveText(currentUid, text, encryptionKey)
+                draftManager.clearDraft("saved_$currentUid")
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Не удалось сохранить: ${e.message}") }
             }

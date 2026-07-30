@@ -24,13 +24,15 @@ import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
 import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.StealthManager
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun VisorLinkNavGraph(
     authViewModel: AuthViewModel,
-    themeViewModel: ThemeViewModel
+    themeViewModel: ThemeViewModel,
+    appUpdateViewModel: AppUpdateViewModel
 ) {
     val navController = rememberNavController()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -257,7 +259,8 @@ fun VisorLinkNavGraph(
             SettingsScreen(
                 onNavigateBack      = { navController.popBackStack() },
                 onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
-                themeViewModel      = themeViewModel
+                themeViewModel      = themeViewModel,
+                appUpdateViewModel  = appUpdateViewModel
             )
         }
 

@@ -1,6 +1,7 @@
 package by.iposdev.visorlink.ui.theme
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
@@ -19,8 +20,9 @@ private const val KEY_HAPTIC      = "haptic_feedback"
 private const val KEY_NOTIF       = "notifications_enabled"
 private const val KEY_LANGUAGE    = "app_language"
 private const val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
+private const val KEY_COMPACT_LIST  = "compact_chat_list"
 
-class ThemeViewModel(private val context: Context) : ViewModel() {
+class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -50,6 +52,10 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
     private val _dynamicChatInput = MutableStateFlow(prefs.getBoolean(KEY_DYNAMIC_INPUT, true))
     val dynamicChatInput: StateFlow<Boolean> = _dynamicChatInput.asStateFlow()
 
+    // Компактный режим теперь включен по умолчанию
+    private val _compactChatList = MutableStateFlow(prefs.getBoolean(KEY_COMPACT_LIST, true))
+    val compactChatList: StateFlow<Boolean> = _compactChatList.asStateFlow()
+
     // ── Language ───────────────────────────────────────────────────────────────
 
     private val _language = MutableStateFlow(
@@ -61,52 +67,71 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
     val language: StateFlow<AppLanguage> = _language.asStateFlow()
 
     init {
+        // Подписываемся на изменения в настройках, чтобы мгновенно обновлять StateFlow
+        // во ВСЕХ инстансах ThemeViewModel, на любых экранах.
+        prefs.registerOnSharedPreferenceChangeListener(this)
+
         // Применяем сохраненный язык сразу при создании ViewModel
         LocaleHelper.applyLanguage(_language.value)
+    }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (sharedPreferences == null || key == null) return
+        when (key) {
+            KEY_THEME -> _appTheme.value = AppTheme.valueOf(sharedPreferences.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+            KEY_THEME_MODE -> _themeMode.value = ThemeMode.valueOf(sharedPreferences.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)!!)
+            KEY_COLOR_PRESET -> _colorPreset.value = ColorPreset.valueOf(sharedPreferences.getString(KEY_COLOR_PRESET, ColorPreset.DEFAULT.name)!!)
+            KEY_HAPTIC -> _hapticEnabled.value = sharedPreferences.getBoolean(KEY_HAPTIC, true)
+            KEY_NOTIF -> _notificationsEnabled.value = sharedPreferences.getBoolean(KEY_NOTIF, true)
+            KEY_DYNAMIC_INPUT -> _dynamicChatInput.value = sharedPreferences.getBoolean(KEY_DYNAMIC_INPUT, true)
+            KEY_COMPACT_LIST -> _compactChatList.value = sharedPreferences.getBoolean(KEY_COMPACT_LIST, true)
+            KEY_LANGUAGE -> {
+                val langStr = sharedPreferences.getString(KEY_LANGUAGE, null)
+                if (langStr != null) {
+                    _language.value = AppLanguage.fromCode(langStr)
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        prefs.unregisterOnSharedPreferenceChangeListener(this)
+        super.onCleared()
     }
 
     // ── Setters ────────────────────────────────────────────────────────────────
 
     fun setTheme(theme: AppTheme) {
-        _appTheme.value = theme
         prefs.edit().putString(KEY_THEME, theme.name).apply()
     }
 
     fun setThemeMode(mode: ThemeMode) {
-        _themeMode.value = mode
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 
     fun setColorPreset(preset: ColorPreset) {
-        _colorPreset.value = preset
         prefs.edit().putString(KEY_COLOR_PRESET, preset.name).apply()
     }
 
     fun setHaptic(enabled: Boolean) {
-        _hapticEnabled.value = enabled
         prefs.edit().putBoolean(KEY_HAPTIC, enabled).apply()
     }
 
     fun setNotifications(enabled: Boolean) {
-        _notificationsEnabled.value = enabled
         prefs.edit().putBoolean(KEY_NOTIF, enabled).apply()
     }
 
     fun setDynamicChatInput(enabled: Boolean) {
-        _dynamicChatInput.value = enabled
         prefs.edit().putBoolean(KEY_DYNAMIC_INPUT, enabled).apply()
     }
 
+    fun setCompactChatList(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_COMPACT_LIST, enabled).apply()
+    }
+
     fun setLanguage(language: AppLanguage) {
-        // 1. Обновляем StateFlow (для галочек в UI)
-        _language.value = language
-
-        // 2. Сохраняем в настройки (чтобы восстановить при следующем запуске)
         prefs.edit().putString(KEY_LANGUAGE, language.code).apply()
-
-        // 3. Даем команду системе сменить язык приложения.
-        // Это заставит Activity автоматически пересоздаться (на старых Android)
-        // или обновить конфигурацию (на Android 13+), и Compose мгновенно перерисует все stringResource().
+        // Даем команду системе сменить язык приложения (Android 13+ сам обновит конфиг)
         LocaleHelper.applyLanguage(language)
     }
 }

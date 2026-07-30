@@ -93,6 +93,12 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(uiState.initialDraft) {
+        if (uiState.initialDraft.isNotEmpty() && inputText.isEmpty()) {
+            inputText = uiState.initialDraft
+        }
+    }
     var showStickerSheet by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }

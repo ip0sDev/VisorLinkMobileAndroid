@@ -67,8 +67,9 @@ class MainActivity : AppCompatActivity() {
                 AppCheckGuard {
                     AppUpdateWrapper(viewModel = updateViewModel) {
                         VisorLinkNavGraph(
-                            authViewModel  = authViewModel,
-                            themeViewModel = themeViewModel
+                            authViewModel      = authViewModel,
+                            themeViewModel     = themeViewModel,
+                            appUpdateViewModel = updateViewModel
                         )
                     }
                 }

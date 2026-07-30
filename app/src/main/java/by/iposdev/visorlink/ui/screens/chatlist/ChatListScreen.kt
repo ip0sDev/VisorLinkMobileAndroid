@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -94,9 +95,12 @@ fun ChatListScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val profileCache by viewModel.profileCache.collectAsState()
     val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
+    val drafts by viewModel.drafts.collectAsState()
 
     val currentTheme by themeViewModel.appTheme.collectAsState()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val compactList by themeViewModel.compactChatList.collectAsState()
+
     val isOneUi = currentTheme == AppTheme.ONE_UI
     val isExthru = currentTheme == AppTheme.EXTHRU || currentTheme == AppTheme.BIOLUME
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
@@ -353,86 +357,114 @@ fun ChatListScreen(
                                     bottom = 88.dp
                                 )
                             ) {
-                                // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ
+                                // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ (Всегда отдельной карточкой)
                                 item(key = "saved_messages") {
                                     val savedChat = viewModel.savedMessagesEntry
-                                    var visible by remember { mutableStateOf(false) }
-                                    LaunchedEffect(Unit) { visible = true }
+                                    ChatListItem(
+                                        chat = savedChat,
+                                        chatType = ChatType.DIRECT,
+                                        currentUid = viewModel.currentUid,
+                                        otherProfile = null,
+                                        draftText = drafts[savedChat.id],
+                                        index = -1,
+                                        total = chats.size,
+                                        isOneUi = isOneUi,
+                                        isExthru = isExthru,
+                                        isDark = isDark,
+                                        isSavedMessages = true,
+                                        isCompactList = compactList,
+                                        onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
+                                    )
+                                    if (isOneUi) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                                            thickness = 0.5.dp,
+                                            color = if (isDark) OneUi.DividerDark else OneUi.Divider
+                                        )
+                                    } else if (chats.isNotEmpty()) {
+                                        Spacer(Modifier.height(16.dp))
+                                    }
+                                }
 
-                                    AnimatedVisibility(
-                                        visible = visible,
-                                        enter = fadeIn(tween(300)) + expandVertically()
-                                    ) {
-                                        Column {
-                                            ChatListItem(
-                                                chat = savedChat,
-                                                chatType = ChatType.DIRECT,
-                                                currentUid = viewModel.currentUid,
-                                                otherProfile = null,
-                                                index = -1,
-                                                total = chats.size,
-                                                isOneUi = isOneUi,
-                                                isExthru = isExthru,
-                                                isDark = isDark,
-                                                isSavedMessages = true,
-                                                onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
-                                            )
-                                            if (isOneUi) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(start = 82.dp, end = 16.dp),
-                                                    thickness = 0.5.dp,
-                                                    color = if (isDark) OneUi.DividerDark else OneUi.Divider
+                                // 📌 СПИСОК ЧАТОВ
+                                if (compactList && chats.isNotEmpty()) {
+                                    // ── ЕДИНАЯ КАРТОЧКА ДЛЯ ВСЕХ ЧАТОВ ──
+                                    item(key = "compact_chats_card") {
+                                        val shape = RoundedCornerShape(24.dp)
+                                        val shadowMod = if (isExthru) Modifier.exthruRaisedShadow(isDark) else Modifier.shadow(4.dp, shape)
+                                        val bgAlpha = if (isDark) 0.4f else 0.55f
+                                        val borderColor = if (isExthru) Color.White.copy(alpha = if (isDark) 0.05f else 0.2f) else Color.Transparent
+
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = if (isOneUi) 0.dp else 14.dp)
+                                                .padding(bottom = 12.dp)
+                                                .then(shadowMod)
+                                                .background(if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha) else MaterialTheme.colorScheme.surfaceContainerLow, shape)
+                                                .border(1.dp, borderColor, shape)
+                                                .clip(shape)
+                                        ) {
+                                            chats.forEachIndexed { index, chat ->
+                                                val chatType = chat.chatType()
+                                                val otherUid = when (chatType) {
+                                                    ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                                    else -> chat.id
+                                                }
+
+                                                ChatListItemCompact(
+                                                    chat = chat,
+                                                    chatType = chatType,
+                                                    currentUid = viewModel.currentUid,
+                                                    otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                                    draftText = drafts[chat.id],
+                                                    isOneUi = isOneUi,
+                                                    isExthru = isExthru,
+                                                    isDark = isDark,
+                                                    onClick = { onOpenChat(chat.id, otherUid) }
                                                 )
+
+                                                // Внутренний разделитель
+                                                if (index < chats.size - 1) {
+                                                    HorizontalDivider(
+                                                        modifier = Modifier.padding(start = 76.dp, end = 16.dp),
+                                                        thickness = 0.5.dp,
+                                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.2f else 0.4f)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                itemsIndexed(
-                                    items = chats,
-                                    key = { _, chat -> chat.id }
-                                ) { index, chat ->
-                                    val chatType = chat.chatType()
-                                    val otherUid = when (chatType) {
-                                        ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
-                                        else -> chat.id
-                                    }
+                                } else {
+                                    // ── РАЗДЕЛЬНЫЕ КАРТОЧКИ ──
+                                    itemsIndexed(chats, key = { _, chat -> chat.id }) { index, chat ->
+                                        val chatType = chat.chatType()
+                                        val otherUid = when (chatType) {
+                                            ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                            else -> chat.id
+                                        }
 
-                                    var visible by remember { mutableStateOf(false) }
-                                    LaunchedEffect(Unit) {
-                                        delay((index * 30L).coerceAtMost(180L))
-                                        visible = true
-                                    }
+                                        ChatListItem(
+                                            chat = chat,
+                                            chatType = chatType,
+                                            currentUid = viewModel.currentUid,
+                                            otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                            draftText = drafts[chat.id],
+                                            index = index,
+                                            total = chats.size,
+                                            isOneUi = isOneUi,
+                                            isExthru = isExthru,
+                                            isDark = isDark,
+                                            isCompactList = compactList,
+                                            onClick = { onOpenChat(chat.id, otherUid) }
+                                        )
 
-                                    AnimatedVisibility(
-                                        visible = visible,
-                                        enter = slideInVertically(
-                                            initialOffsetY = { it / 3 },
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessMediumLow
+                                        if (isOneUi && index < chats.size - 1) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(start = 82.dp, end = 16.dp),
+                                                thickness = 0.5.dp,
+                                                color = if (isDark) OneUi.DividerDark else OneUi.Divider
                                             )
-                                        ) + fadeIn(tween(220))
-                                    ) {
-                                        Column {
-                                            ChatListItem(
-                                                chat = chat,
-                                                chatType = chatType,
-                                                currentUid = viewModel.currentUid,
-                                                otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
-                                                index = index,
-                                                total = chats.size,
-                                                isOneUi = isOneUi,
-                                                isExthru = isExthru,
-                                                isDark = isDark,
-                                                onClick = { onOpenChat(chat.id, otherUid) }
-                                            )
-                                            if (isOneUi && index < chats.size - 1) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(start = 82.dp, end = 16.dp),
-                                                    thickness = 0.5.dp,
-                                                    color = if (isDark) OneUi.DividerDark else OneUi.Divider
-                                                )
-                                            }
                                         }
                                     }
                                 }
@@ -562,18 +594,7 @@ private fun EmptyState(
     }
 }
 
-// ─── Chat List Item ───────────────────────────────────────────────────────────
-
-private fun itemShape(index: Int, total: Int): RoundedCornerShape {
-    val big = 20
-    val small = 4
-    return when {
-        total == 1 -> RoundedCornerShape(big.dp)
-        index == 0 -> RoundedCornerShape(topStart = big.dp, topEnd = big.dp, bottomStart = small.dp, bottomEnd = small.dp)
-        index == total - 1 -> RoundedCornerShape(topStart = small.dp, topEnd = small.dp, bottomStart = big.dp, bottomEnd = big.dp)
-        else -> RoundedCornerShape(small.dp)
-    }
-}
+// ─── Chat List Item (Standalone) ──────────────────────────────────────────────
 
 @Composable
 private fun ChatListItem(
@@ -581,12 +602,14 @@ private fun ChatListItem(
     chatType: ChatType,
     currentUid: String,
     otherProfile: UserProfile?,
+    draftText: String?,
     index: Int,
     total: Int,
     isOneUi: Boolean,
     isExthru: Boolean,
     isDark: Boolean,
     isSavedMessages: Boolean = false,
+    isCompactList: Boolean = false,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -606,9 +629,17 @@ private fun ChatListItem(
 
     val shape = when {
         isOneUi -> RoundedCornerShape(0.dp)
-        isExthru -> ShapesExthru.medium // 18dp
-        else -> itemShape(index, total)
+        isSavedMessages -> RoundedCornerShape(24.dp)
+        else -> RoundedCornerShape(24.dp)
     }
+
+    val verticalPadding = if (isSavedMessages) {
+        if (isCompactList) 0.dp else 7.dp
+    } else {
+        if (isCompactList) 0.dp else 7.dp
+    }
+
+    val innerPaddingV = if (isCompactList) 10.dp else 14.dp
 
     val titleColor = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else MaterialTheme.colorScheme.onSurface
     val subColor = if (isOneUi) (if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary) else MaterialTheme.colorScheme.onSurfaceVariant
@@ -616,8 +647,8 @@ private fun ChatListItem(
     val innerContent = @Composable {
         Row(
             modifier = Modifier.padding(
-                horizontal = if (isOneUi) 20.dp else 14.dp,
-                vertical = if (isOneUi) 14.dp else 12.dp
+                horizontal = if (isOneUi) 20.dp else 16.dp,
+                vertical = 14.dp
             ),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -659,7 +690,7 @@ private fun ChatListItem(
                             chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" }
                             else -> chat.name
                         },
-                        fontSize = if (isOneUi) 16.sp else 15.sp,
+                        fontSize = if (isOneUi) 16.sp else 16.sp,
                         fontWeight = if (isOneUi) FontWeight.Medium else FontWeight.SemiBold,
                         color = titleColor,
                         maxLines = 1,
@@ -676,41 +707,63 @@ private fun ChatListItem(
                     }
                 }
                 Spacer(Modifier.height(3.dp))
-                val messageText = chat.lastMessageText()
-                Text(
-                    text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = subColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (!draftText.isNullOrEmpty()) {
+                    Row {
+                        Text(
+                            "Черновик: ",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = draftText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = subColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else {
+                    val messageText = chat.lastMessageText()
+                    Text(
+                        text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
 
     if (isExthru) {
         val shadowMod = if (isPressed) {
-            Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
-        } else {
+            Modifier.nmInsetShadow(isDark, cornerRadius = 24.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+        } else if (!isCompactList || isSavedMessages) {
             Modifier.exthruRaisedShadow(isDark)
+        } else {
+            Modifier // No external shadow for individual compact items
         }
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 7.dp)
+                .padding(horizontal = 14.dp, vertical = verticalPadding)
                 .scale(itemScale)
                 .then(shadowMod)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.6f), shape)
-                .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.2f), shape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f), shape)
+                .border(1.dp, if (isPressed || (isCompactList && !isSavedMessages)) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.2f), shape)
                 .clip(shape)
                 .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
         ) {
-            innerContent()
+            Column {
+                innerContent()
+            }
         }
     } else {
-        val topPad    = if (index == 0 && !isOneUi) 2.dp else if (!isOneUi) 1.dp else 0.dp
-        val bottomPad = if (index == total - 1 && !isOneUi) 2.dp else if (!isOneUi) 1.dp else 0.dp
+        val topPad    = if (!isOneUi && !isCompactList) 4.dp else 0.dp
+        val bottomPad = if (!isOneUi && !isCompactList) 4.dp else 0.dp
         val bgColor = if (isOneUi) {
             if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFE8E8E8)) else Color.Transparent
         } else {
@@ -721,7 +774,7 @@ private fun ChatListItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = if (isOneUi) 0.dp else 12.dp)
-                .padding(top = topPad, bottom = bottomPad)
+                .padding(vertical = if (!isOneUi && !isCompactList) 4.dp else 0.dp)
                 .scale(itemScale),
             shape = shape,
             color = bgColor,
@@ -730,6 +783,115 @@ private fun ChatListItem(
             interactionSource = interactionSource
         ) {
             innerContent()
+        }
+    }
+}
+
+// ─── Chat List Item (Compact) ─────────────────────────────────────────────────
+
+@Composable
+private fun ChatListItemCompact(
+    chat: Chat,
+    chatType: ChatType,
+    currentUid: String,
+    otherProfile: UserProfile?,
+    draftText: String?,
+    isOneUi: Boolean,
+    isExthru: Boolean,
+    isDark: Boolean,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val bgHighlight = if (isPressed) {
+        if (isDark) Color.White.copy(0.05f) else Color.Black.copy(0.05f)
+    } else Color.Transparent
+
+    val titleColor = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else MaterialTheme.colorScheme.onSurface
+    val subColor = if (isOneUi) (if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary) else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(bgHighlight)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .padding(horizontal = if (isOneUi) 20.dp else 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(modifier = Modifier.size(if (isOneUi) 50.dp else 54.dp)) {
+            when (chatType) {
+                ChatType.DIRECT -> AvatarWithPresence(
+                    avatarUrl = otherProfile?.avatarUrl,
+                    displayName = chat.otherDisplayName(currentUid),
+                    isOnline = otherProfile?.online ?: false,
+                    size = if (isOneUi) 50.dp else 54.dp
+                )
+                ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
+                    avatarUrl = chat.avatarUrl,
+                    name = chat.name,
+                    isChannel = chatType == ChatType.CHANNEL,
+                    isExthru = isExthru,
+                    size = if (isOneUi) 50.dp else 54.dp
+                )
+            }
+        }
+
+        Spacer(Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (chatType != ChatType.DIRECT) {
+                    Text(if (chatType == ChatType.CHANNEL) "📢" else "👥", fontSize = 11.sp)
+                }
+                Text(
+                    text = if (chatType == ChatType.DIRECT) chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" } else chat.name,
+                    fontSize = if (isOneUi) 16.sp else 16.sp,
+                    fontWeight = if (isOneUi) FontWeight.Medium else FontWeight.SemiBold,
+                    color = titleColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                chat.lastMessageAt?.let {
+                    Text(
+                        formatTime(it.toDate()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = subColor,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            if (!draftText.isNullOrEmpty()) {
+                Row {
+                    Text(
+                        "Черновик: ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = draftText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                val messageText = chat.lastMessageText()
+                Text(
+                    text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -1100,28 +1262,34 @@ fun SavedMessagesIcon(
     isDark: Boolean,
     size: Dp
 ) {
-    val bgGradient = when {
-        isExthru -> Brush.linearGradient(
-            listOf(Color(0xFF1DE9B6), Color(0xFF00BFA5))
+    val accent = MaterialTheme.colorScheme.primary
+    val bgGradient = Brush.linearGradient(
+        colors = listOf(
+            accent.copy(alpha = if (isDark) 0.35f else 0.25f),
+            accent.copy(alpha = if (isDark) 0.15f else 0.05f)
         )
-        else -> Brush.linearGradient(
-            listOf(Color(0xFF4DB6AC), Color(0xFF00695C))
+    )
+    val borderBrush = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = if (isDark) 0.3f else 0.6f),
+            Color.Transparent,
+            accent.copy(alpha = 0.4f)
         )
-    }
+    )
 
     Box(
         modifier = Modifier
             .size(size)
             .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier.shadow(8.dp, CircleShape))
             .background(bgGradient, CircleShape)
-            .border(1.dp, Color.White.copy(alpha = if (isDark) 0.1f else 0.3f), CircleShape),
+            .border(1.5.dp, borderBrush, CircleShape),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.Bookmark,
             contentDescription = null,
-            modifier = Modifier.size((size.value * 0.5f).dp),
-            tint = Color.White
+            modifier = Modifier.size((size.value * 0.45f).dp),
+            tint = accent
         )
     }
 }

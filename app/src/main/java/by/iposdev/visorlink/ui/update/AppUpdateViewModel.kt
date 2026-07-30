@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
 
 enum class UpdateChannel(val id: String, val title: String, val fileName: String) {
     RELEASE("release", "Release", "app-release.apk"),
@@ -72,7 +73,13 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
         // При старте приложения регистрируем устройство и проверяем обновления
         viewModelScope.launch {
             UpdateApiClient.register(installId, _currentChannel.value.id)
-            checkForUpdates()
+            checkForUpdates(isManual = false)
+
+            // Запускаем периодическую проверку каждые 2 часа, пока ViewModel жива
+            while(true) {
+                kotlinx.coroutines.delay((2 * 60 * 1000L).milliseconds)
+                checkForUpdates(isManual = false)
+            }
         }
     }
 
@@ -82,14 +89,17 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
             if (success) {
                 _currentChannel.value = channel
                 prefs.edit().putString("selected_channel", channel.name).apply()
-                checkForUpdates()
+                // После смены канала сразу принудительно проверяем обновления
+                checkForUpdates(isManual = true)
             }
             onResult(success)
         }
     }
 
-    fun checkForUpdates() {
-        _updateState.value = UpdateState.Loading
+    fun checkForUpdates(isManual: Boolean = false, onResult: ((Boolean) -> Unit)? = null) {
+        if (isManual) {
+            _updateState.value = UpdateState.Loading
+        }
         viewModelScope.launch {
             try {
                 val packageName = getApplication<Application>().packageName
@@ -112,12 +122,19 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
                         versionName = updateInfo.versionName,
                         expectedSha256 = updateInfo.sha256
                     )
+                    onResult?.invoke(true)
                 } else {
-                    _updateState.value = UpdateState.None
+                    if (isManual || _updateState.value is UpdateState.Loading) {
+                        _updateState.value = UpdateState.None
+                    }
+                    onResult?.invoke(false)
                 }
             } catch (e: Exception) {
                 Log.e("AppUpdate", "Check update failed", e)
-                _updateState.value = UpdateState.None
+                if (isManual || _updateState.value is UpdateState.Loading) {
+                    _updateState.value = UpdateState.None
+                }
+                onResult?.invoke(false)
             }
         }
     }

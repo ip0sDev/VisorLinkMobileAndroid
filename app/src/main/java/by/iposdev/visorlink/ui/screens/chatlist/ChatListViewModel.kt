@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.DraftManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -12,7 +13,8 @@ import kotlinx.coroutines.launch
 class ChatListViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val draftManager: DraftManager
 ) : ViewModel() {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -26,6 +28,8 @@ class ChatListViewModel(
     val unreadNotificationsCount: StateFlow<Int> = chatRepository.notificationsFlow(currentUid)
         .map { it.size }
         .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    val drafts: StateFlow<Map<String, String>> = draftManager.draftsFlow
 
     private val _profileCache = MutableStateFlow<Map<String, UserProfile>>(emptyMap())
     val profileCache: StateFlow<Map<String, UserProfile>> = _profileCache.asStateFlow()

@@ -12,6 +12,7 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.PresenceManager
+import by.iposdev.visorlink.utils.DraftManager
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
@@ -61,7 +62,8 @@ data class ChatUiState(
     val albumDraft: List<AlbumImageLocal> = emptyList(),
     val albumCaption: String = "",
     val showAlbumPreview: Boolean = false,
-    val singlePickedUri: Uri? = null
+    val singlePickedUri: Uri? = null,
+    val initialDraft: String = ""
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -76,6 +78,7 @@ class ChatViewModel(
     private val auth: FirebaseAuth,
     private val db: com.google.firebase.firestore.FirebaseFirestore,
     private val context: Context,
+    private val draftManager: DraftManager,
     val chatId: String,
     val otherUid: String
 ) : ViewModel() {
@@ -105,6 +108,11 @@ class ChatViewModel(
         viewModelScope.launch {
             userRepository.currentUserFlow().catch { }
                 .collect { currentUsername = it?.username ?: "" }
+        }
+
+        val draft = draftManager.getDraft(chatId)
+        if (draft.isNotEmpty()) {
+            _uiState.update { it.copy(initialDraft = draft) }
         }
 
         viewModelScope.launch {
@@ -517,6 +525,7 @@ class ChatViewModel(
     fun onTextChanged(text: String) {
         if (text.isNotEmpty()) typingManager?.onTyping()
         else typingManager?.stopTyping()
+        draftManager.saveDraft(chatId, text)
     }
 
     fun sendText(text: String) {
@@ -530,6 +539,7 @@ class ChatViewModel(
         viewModelScope.launch {
             typingManager?.stopTyping()
             clearReply()
+            draftManager.clearDraft(chatId)
             try { chatRepository.sendText(chatId, trimmed, currentUsername, reply) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }

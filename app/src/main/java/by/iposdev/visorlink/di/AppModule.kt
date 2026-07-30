@@ -6,7 +6,7 @@ import by.iposdev.visorlink.data.repository.ForwardRepository
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.data.repository.StickerPackRepository
 import by.iposdev.visorlink.data.repository.UserRepository
-import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel              // ← NEW
+import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
@@ -21,6 +21,7 @@ import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.CacheManager
+import by.iposdev.visorlink.utils.DraftManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
@@ -53,27 +54,23 @@ val appModule = module {
     // ─── Repositories ─────────────────────────────────────────────────────────
 
     single { AuthRepository(get(), get()) }
-    single { ChatRepository(get(), get(), get(), get()) }
-    single { UserRepository(get(), get(), get(), get()) }
-
-    // ── Sticker Packs ─────────────────────────────────────────────────────────
-    single { StickerPackRepository(get(), get(), get(), get()) }
+    single { ChatRepository(get(), get(), get(), get(), androidContext()) }
+    single { UserRepository(get(), get(), get(), get(), androidContext()) }
+    single { StickerPackRepository(get(), get(), get(), get(), androidContext()) }
 
     // ─── Utils ────────────────────────────────────────────────────────────────
 
     single { CacheManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
+    single { DraftManager(androidContext()) }
 
     // ─── ViewModels ───────────────────────────────────────────────────────────
 
-    // ─── NEW: App Check ───────────────────────────────────────────────────────
-    // Declared as a single viewModel so that AppCheckManager.validate() is
-    // called exactly once regardless of how many times AppCheckGuard recomposes.
     viewModel { AppCheckViewModel() }
 
     viewModel { AuthViewModel(get()) }
     viewModel { ThemeViewModel(androidContext()) }
-    viewModel { ChatListViewModel(get(), get(), get()) }
+    viewModel { ChatListViewModel(get(), get(), get(), get()) }
 
     viewModel { parameters ->
         ChatViewModel(
@@ -82,12 +79,11 @@ val appModule = module {
             auth           = get(),
             db             = get(),
             context        = androidContext(),
+            draftManager   = get(),
             chatId         = parameters.get(),
             otherUid       = parameters.get()
         )
     }
-
-    // ─── v4: Comments ─────────────────────────────────────────────────────────
 
     viewModel { parameters ->
         CommentsViewModel(
@@ -100,17 +96,11 @@ val appModule = module {
         )
     }
 
-    // ─── Search / Profile / Settings ──────────────────────────────────────────
-
     viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
 
-    // ─── Sticker Packs ────────────────────────────────────────────────────────
-
     viewModel { StickerPackViewModel(get(), get()) }
-
-    // ─── Chat Settings ────────────────────────────────────────────────────────
 
     viewModel { params ->
         ChatSettingsViewModel(
@@ -122,12 +112,10 @@ val appModule = module {
         )
     }
 
-    // ─── App Update / Cache ───────────────────────────────────────────────────
-
     viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
-    single { SavedMessagesRepository(get(), get()) } // Первый get() для Firestore, второй для Storage
+    single { SavedMessagesRepository(get(), get()) }
     single { ForwardRepository(get()) }
 
-    viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext()) }
+    viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }
 }

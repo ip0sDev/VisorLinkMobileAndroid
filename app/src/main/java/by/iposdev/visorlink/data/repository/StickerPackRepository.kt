@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.data.repository
 
+import android.content.Context
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -7,6 +8,7 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.StickerItem
 import by.iposdev.visorlink.data.model.StickerPack
+import by.iposdev.visorlink.utils.ChatDataCache
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
@@ -14,18 +16,25 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 
 class StickerPackRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    private val functions: FirebaseFunctions
+    private val functions: FirebaseFunctions,
+    private val context: Context
 ) {
     private val currentUid get() = auth.currentUser!!.uid
 
-    // ─── Observe user's pack list + eagerly load each pack's stickers ─────────
-
     fun observeUserPacks(): Flow<List<StickerPack>> = callbackFlow {
+        // --- 1. CACHE FIRST ---
+        launch(Dispatchers.IO) {
+            val cached = ChatDataCache.loadStickerPacks(context, currentUid)
+            if (cached.isNotEmpty()) trySend(cached)
+        }
+
         val userDataRef = db.collection("users")
             .document(currentUid)
             .collection("stickerData")
@@ -42,12 +51,13 @@ class StickerPackRepository(
                 trySend(emptyList())
                 return@addSnapshotListener
             }
-            // Fire-and-forget coroutine to load pack details
-            // We use trySend inside a launched coroutine; the outer callbackFlow scope is used.
-            kotlinx.coroutines.GlobalScope.async {
+
+            kotlinx.coroutines.GlobalScope.launch {
                 try {
                     val packs = loadPacksWithStickers(packIds)
                     trySend(packs)
+                    // --- UPDATE CACHE ---
+                    launch(Dispatchers.IO) { ChatDataCache.saveStickerPacks(context, currentUid, packs) }
                 } catch (_: Exception) {
                     trySend(emptyList())
                 }
@@ -83,15 +93,11 @@ class StickerPackRepository(
         }
     }
 
-    // ─── Fetch a single pack by id (for AddStickerPackBanner) ─────────────────
-
     suspend fun getPackById(packId: String): StickerPack? = try {
         val doc = db.collection("stickerPacks").document(packId).get().await()
         if (!doc.exists()) null
         else doc.toObject(StickerPack::class.java)?.copy(id = doc.id)
     } catch (_: Exception) { null }
-
-    // ─── Check if user already has a pack ─────────────────────────────────────
 
     suspend fun hasPack(packId: String): Boolean = try {
         val doc = db.collection("users").document(currentUid)
@@ -100,8 +106,6 @@ class StickerPackRepository(
         val ids = (doc.get("packIds") as? List<String>) ?: emptyList()
         packId in ids
     } catch (_: Exception) { false }
-
-    // ─── Cloud Functions ──────────────────────────────────────────────────────
 
     suspend fun createPack(name: String, emoji: String): String {
         val result = functions.getHttpsCallable("createStickerPack")
@@ -120,8 +124,6 @@ class StickerPackRepository(
         return (result.data as Map<*, *>)["packName"] as? String ?: ""
     }
 
-    // ─── Upload sticker image to Storage, then write to Firestore ─────────────
-
     suspend fun uploadSticker(packId: String, uri: Uri, emoji: String): StickerItem {
         val fileName = "${System.currentTimeMillis()}.webp"
         val storagePath = "stickerPacks/$packId/$currentUid/$fileName"
@@ -139,7 +141,6 @@ class StickerPackRepository(
         )
         stickerRef.set(data).await()
 
-        // increment stickerCount
         db.collection("stickerPacks").document(packId)
             .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(1)).await()
 

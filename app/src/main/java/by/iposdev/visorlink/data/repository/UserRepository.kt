@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.data.repository
 
+import android.content.Context
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
@@ -8,10 +9,14 @@ import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.Sticker
 import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.utils.ChatDataCache
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.google.firebase.Firebase
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -22,19 +27,43 @@ class UserRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    private val functions: FirebaseFunctions
+    private val functions: FirebaseFunctions,
+    private val context: Context
 ) {
     private val currentUid get() = auth.currentUser!!.uid
 
     fun currentUserFlow(): Flow<UserProfile?> = callbackFlow {
         val uid = auth.currentUser?.uid ?: run { trySend(null); close(); return@callbackFlow }
+
+        launch(Dispatchers.IO) {
+            val cached = ChatDataCache.loadProfile(context, uid)
+            if (cached != null) trySend(cached)
+        }
+
         val reg = db.collection("users").document(uid)
-            .addSnapshotListener { snap, _ -> trySend(snap?.toObject(UserProfile::class.java)) }
+            .addSnapshotListener { snap, _ ->
+                val net = snap?.toObject(UserProfile::class.java)
+                trySend(net)
+                if (net != null) launch(Dispatchers.IO) { ChatDataCache.saveProfile(context, net) }
+            }
         awaitClose { reg.remove() }
     }
 
-    suspend fun getUserProfile(uid: String): UserProfile? =
-        db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+    suspend fun getUserProfile(uid: String): UserProfile? = withContext(Dispatchers.IO) {
+        val cached = ChatDataCache.loadProfile(context, uid)
+        if (cached != null) {
+            launch {
+                try {
+                    val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+                    if (net != null) ChatDataCache.saveProfile(context, net)
+                } catch (_: Exception) {}
+            }
+            return@withContext cached
+        }
+        val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+        if (net != null) ChatDataCache.saveProfile(context, net)
+        return@withContext net
+    }
 
     suspend fun findUserByUsername(username: String): UserProfile? {
         val clean = username.lowercase().removePrefix("@").trim()
@@ -99,15 +128,16 @@ class UserRepository(
         db.collection("users").document(currentUid)
             .collection("stickers").document(sticker.id).delete().await()
     }
+
     suspend fun saveFcmToken(token: String) {
         functions.getHttpsCallable("saveFcmToken")
             .call(mapOf("token" to token)).await()
     }
+
     fun clientStatusFlow(uid: String): Flow<Boolean> = callbackFlow {
         val ref = Firebase.database.getReference("users/$uid/clientStatus/isOfficial")
         val listener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
-                // Если значения нет, по умолчанию считаем официальным (чтобы не пугать зря)
                 val isOfficial = snap.getValue(Boolean::class.java) ?: true
                 trySend(isOfficial)
             }
@@ -117,4 +147,5 @@ class UserRepository(
         }
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
-}}
+    }
+}

@@ -64,7 +64,7 @@ class CacheManager(private val context: Context) {
         val images   = dirSizeMb(File(context.cacheDir, CACHE_DIR_IMAGES))
         val voice    = dirSizeMb(File(context.cacheDir, CACHE_DIR_VOICE))
         val waveform = dirSizeMb(File(context.cacheDir, CACHE_DIR_WAVEFORM))
-        val chat     = dirSizeMb(File(context.cacheDir, CACHE_DIR_CHAT))
+        val chat     = dirSizeMb(File(context.cacheDir, CACHE_DIR_CHAT)) + (context.getDatabasePath("visorlink_cache.db").length().toFloat() / (1024 * 1024))
         CacheSizeInfo(
             imagesMb   = images,
             voiceMb    = voice,
@@ -78,14 +78,12 @@ class CacheManager(private val context: Context) {
 
     suspend fun clearImages() = withContext(Dispatchers.IO) {
         clearDir(File(context.cacheDir, CACHE_DIR_IMAGES))
-        // Также чистим Coil memory cache через CoilImageLoader singleton
         AppImageLoader.clearMemoryCache(context)
         Log.d(TAG, "Image cache cleared")
     }
 
     suspend fun clearVoice() = withContext(Dispatchers.IO) {
         clearDir(File(context.cacheDir, CACHE_DIR_VOICE))
-        // Также временные .tmp файлы для анализа спектрограмм
         context.cacheDir.listFiles()
             ?.filter { it.name.startsWith("waveform_") && it.name.endsWith(".tmp") }
             ?.forEach { it.delete() }
@@ -98,7 +96,8 @@ class CacheManager(private val context: Context) {
     }
 
     suspend fun clearChatData() = withContext(Dispatchers.IO) {
-        clearDir(File(context.cacheDir, CACHE_DIR_CHAT))
+        ChatDataCache.clearAll(context) // Очищаем SQLite
+        clearDir(File(context.cacheDir, CACHE_DIR_CHAT)) // Очищаем старую папку (если осталась)
         Log.d(TAG, "Chat data cache cleared")
     }
 
@@ -119,7 +118,6 @@ class CacheManager(private val context: Context) {
         evictDir(File(context.cacheDir, CACHE_DIR_CHAT), 50L)
     }
 
-    // Удаляет старые файлы пока размер папки > maxMb
     private fun evictDir(dir: File, maxMb: Long) {
         if (!dir.exists()) return
         val maxBytes = maxMb * 1024 * 1024
@@ -131,8 +129,6 @@ class CacheManager(private val context: Context) {
             file.delete()
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun dirSizeMb(dir: File): Float {
         if (!dir.exists()) return 0f

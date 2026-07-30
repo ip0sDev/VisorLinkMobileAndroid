@@ -79,7 +79,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
-    appUpdateViewModel: AppUpdateViewModel = koinViewModel(),
+    appUpdateViewModel: AppUpdateViewModel, // Получаем из NavGraph, без koinViewModel()
     userRepository: UserRepository = koinInject(),
     authRepository: AuthRepository = koinInject()
 ) {
@@ -91,6 +91,7 @@ fun SettingsScreen(
     val currentLang by themeViewModel.language.collectAsState()
     val currentChannel by appUpdateViewModel.currentChannel.collectAsState()
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
+    val compactChatList by themeViewModel.compactChatList.collectAsState()
 
     val profile by userRepository.currentUserFlow().collectAsState(initial = null)
 
@@ -134,6 +135,7 @@ fun SettingsScreen(
     val colorNotif = Color(0xFFF59E0B) // Amber
     val colorVibro = Color(0xFFEC4899) // Pink
     val colorDynInput = Color(0xFF10B981) // Emerald
+    val colorCompact = Color(0xFF3B82F6) // Blue
     val colorStealth = Color(0xFF8B5CF6) // Purple
     val colorStealthPin = Color(0xFF6366F1) // Indigo
     val colorStorage = Color(0xFF3B82F6) // Blue
@@ -311,11 +313,12 @@ fun SettingsScreen(
                     }
 
                     // ── Управление ─────────────────────────────────────────────────────
-                    val totalControls = 3
+                    val totalControls = 4
                     VlSettingsSection(appTheme = currentTheme, title = "Управление") {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = "Push-уведомления", trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = totalControls)
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = "Вибрация", trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = totalControls)
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = totalControls)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = totalControls)
                     }
 
                     // ── ПРИВАТНОСТЬ (STEALTH MODE) ─────────────────────────────────────
@@ -385,7 +388,24 @@ fun SettingsScreen(
                     // ── Обновления ─────────────────────────────────────────────────────
                     VlSettingsSection(appTheme = currentTheme, title = "Обновления") {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorUpdateChan, icon = Icons.Default.Science, title = "Канал обновлений", subtitle = "Текущий: ${currentChannel.title}", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showChannelDialog = true }, index = 0, total = 2)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorUpdateCheck, icon = Icons.Default.Sync, title = stringResource(R.string.settings_check_updates), subtitle = stringResource(R.string.settings_check_updates_sub), onClick = { haptic.perform(HapticType.SUCCESS, hapticEnabled); Toast.makeText(context, "Проверка обновлений...", Toast.LENGTH_SHORT).show(); appUpdateViewModel.checkForUpdates() }, index = 1, total = 2)
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = colorUpdateCheck,
+                            icon = Icons.Default.Sync,
+                            title = stringResource(R.string.settings_check_updates),
+                            subtitle = stringResource(R.string.settings_check_updates_sub),
+                            onClick = {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                Toast.makeText(context, "Проверка обновлений...", Toast.LENGTH_SHORT).show()
+                                appUpdateViewModel.checkForUpdates(isManual = true) { hasUpdate ->
+                                    if (!hasUpdate) {
+                                        Toast.makeText(context, "У вас установлена последняя версия", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            index = 1,
+                            total = 2
+                        )
                     }
 
                     // ── Аккаунт ────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.data.repository
 
+import android.content.Context
 import android.net.Uri
 import androidx.core.net.toUri
 import com.google.firebase.auth.FirebaseAuth
@@ -11,6 +12,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.utils.ChatDataCache
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
@@ -18,6 +20,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import java.io.File
 
 private const val PAGE_SIZE = 20L
@@ -26,7 +30,8 @@ class ChatRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    private val functions: FirebaseFunctions
+    private val functions: FirebaseFunctions,
+    private val context: Context
 ) {
     private val currentUid get() = auth.currentUser!!.uid
 
@@ -40,6 +45,12 @@ class ChatRepository(
     // ─── All chats (direct + group + channel) ────────────────────────────────
 
     fun allChatsFlow(uid: String): Flow<List<Chat>> = callbackFlow {
+        // --- 1. MIGHTY CACHE FIRST ---
+        launch(Dispatchers.IO) {
+            val cached = ChatDataCache.loadChatList(context, uid)
+            if (cached.isNotEmpty()) trySend(cached)
+        }
+
         val directChats = mutableListOf<Chat>()
         val groupChats  = mutableListOf<Chat>()
 
@@ -48,6 +59,8 @@ class ChatRepository(
                 .distinctBy { it.id }
                 .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
             trySend(all)
+            // --- SAVE TO CACHE ---
+            launch(Dispatchers.IO) { ChatDataCache.saveChatList(context, uid, all) }
         }
 
         val reg1 = db.collection("chats")
@@ -89,6 +102,12 @@ class ChatRepository(
         chatId: String,
         onUpdate: (List<Message>, DocumentSnapshot?) -> Unit
     ): Flow<Unit> = callbackFlow {
+        // --- 1. MIGHTY CACHE FIRST ---
+        launch(Dispatchers.IO) {
+            val cached = ChatDataCache.loadMessages(context, chatId)
+            if (cached.isNotEmpty()) onUpdate(cached, null)
+        }
+
         val reg = db.collection("chats").document(chatId)
             .collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -104,6 +123,8 @@ class ChatRepository(
                 val lastDoc = snap.documents.lastOrNull()
                 onUpdate(messages, lastDoc)
                 trySend(Unit)
+                // --- SAVE TO CACHE ---
+                launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, messages) }
             }
         awaitClose { reg.remove() }
     }
@@ -308,7 +329,7 @@ class ChatRepository(
         return (result.data as Map<*, *>)["inviteLink"] as String
     }
 
-    // ─── Send messages (СИНХРОНИЗАЦИЯ КУЛДАУНА) ────────────────────────────────
+    // ─── Send messages ────────────────────────────────────────────────────────
 
     suspend fun sendText(
         chatId: String,
@@ -335,10 +356,7 @@ class ChatRepository(
             "lastMessage"   to text,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
-
-        // НОВОЕ: Синхронное обновление профиля для прохождения Firestore Rules (Cooldown)
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
-
         batch.commit().await()
     }
 
@@ -407,8 +425,6 @@ class ChatRepository(
         )
     }
 
-    // ─── Album ────────────────────────────────────────────────────────────────
-
     suspend fun uploadAlbumImages(
         chatId: String,
         items: List<AlbumImageLocal>
@@ -438,7 +454,6 @@ class ChatRepository(
         }
         val result = functions.getHttpsCallable("sendAlbum").call(data).await()
 
-        // Синхронизируем локальный кулдаун, так как Cloud Function не триггерит правила на клиенте
         try {
             db.collection("users").document(currentUid)
                 .update("lastMessageAt", FieldValue.serverTimestamp()).await()
@@ -446,8 +461,6 @@ class ChatRepository(
 
         return (result.data as Map<*, *>)["messageId"] as String
     }
-
-    // ─── Internal helpers ─────────────────────────────────────────────────────
 
     private suspend fun sendExtra(
         chatId: String,
@@ -477,9 +490,7 @@ class ChatRepository(
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
 
-        // НОВОЕ: Синхронное обновление профиля для прохождения Firestore Rules (Cooldown)
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
-
         batch.commit().await()
     }
 
@@ -534,8 +545,6 @@ class ChatRepository(
         ref.update("reactions", updated.map { it.toMap() }).await()
     }
 
-    // ─── v4: Comments Firestore listeners ─────────────────────────────────────
-
     fun listenComments(
         chatId: String,
         messageId: String,
@@ -569,8 +578,6 @@ class ChatRepository(
             }
     }
 
-    // ─── v4: Cloud Function wrappers for comments ─────────────────────────────
-
     suspend fun addComment(
         chatId: String,
         messageId: String,
@@ -595,7 +602,6 @@ class ChatRepository(
         }
         val result = functions.getHttpsCallable("addComment").call(data).await()
 
-        // Синхронизируем локальный кулдаун
         try {
             db.collection("users").document(currentUid)
                 .update("lastMessageAt", FieldValue.serverTimestamp()).await()
