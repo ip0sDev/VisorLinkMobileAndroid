@@ -6,12 +6,15 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,10 +36,12 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.BuildConfig
@@ -44,14 +49,15 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
+import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.theme.ForgeTypography
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
+import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.ui.update.UpdateChannel
 import by.iposdev.visorlink.utils.AppLanguage
@@ -79,9 +85,10 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
-    appUpdateViewModel: AppUpdateViewModel, // Получаем из NavGraph, без koinViewModel()
+    appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
-    authRepository: AuthRepository = koinInject()
+    authRepository: AuthRepository = koinInject(),
+    proViewModel: ProViewModel = koinViewModel()
 ) {
     val currentTheme by themeViewModel.appTheme.collectAsState()
     val currentMode by themeViewModel.themeMode.collectAsState()
@@ -94,6 +101,7 @@ fun SettingsScreen(
     val compactChatList by themeViewModel.compactChatList.collectAsState()
 
     val profile by userRepository.currentUserFlow().collectAsState(initial = null)
+    val proState by proViewModel.uiState.collectAsState()
 
     val context = LocalContext.current
     val haptic = rememberHaptic()
@@ -132,24 +140,37 @@ fun SettingsScreen(
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
 
     // Семантические цвета для иконок
-    val colorNotif = Color(0xFFF59E0B) // Amber
-    val colorVibro = Color(0xFFEC4899) // Pink
-    val colorDynInput = Color(0xFF10B981) // Emerald
-    val colorCompact = Color(0xFF3B82F6) // Blue
-    val colorStealth = Color(0xFF8B5CF6) // Purple
-    val colorStealthPin = Color(0xFF6366F1) // Indigo
-    val colorStorage = Color(0xFF3B82F6) // Blue
-    val colorBots = Color(0xFF14B8A6) // Teal
-    val colorUpdateChan = Color(0xFFF59E0B) // Amber
-    val colorUpdateCheck = Color(0xFF10B981) // Emerald
-    val colorEmail = Color(0xFF64748B) // Slate
-    val colorPassword = Color(0xFFF43F5E) // Rose
+    val colorNotif = Color(0xFFF59E0B)
+    val colorVibro = Color(0xFFEC4899)
+    val colorDynInput = Color(0xFF10B981)
+    val colorCompact = Color(0xFF3B82F6)
+    val colorStealth = Color(0xFF8B5CF6)
+    val colorStealthPin = Color(0xFF6366F1)
+    val colorStorage = Color(0xFF3B82F6)
+    val colorBots = Color(0xFF14B8A6)
+    val colorUpdateChan = Color(0xFFF59E0B)
+    val colorUpdateCheck = Color(0xFF10B981)
+    val colorEmail = Color(0xFF64748B)
+    val colorPassword = Color(0xFFF43F5E)
 
     val hazeState = remember { HazeState() }
     val scaffoldBg = if (currentTheme.isExthruFamily) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
 
+    // Обработка уведомлений PRO
+    LaunchedEffect(proState.successMessage) {
+        proState.successMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            proViewModel.clearMessages()
+        }
+    }
+    LaunchedEffect(proState.error) {
+        proState.error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            proViewModel.clearMessages()
+        }
+    }
+
     CompositionLocalProvider(LocalHazeState provides hazeState) {
-        // Scaffold теперь не оборачивается в haze(), чтобы не было рекурсии
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
@@ -161,10 +182,8 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .hazeChild(
                                 state = hazeState,
-                                // Возвращаем tint = null, чтобы не было ошибки компиляции с ambiguity
                                 style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
                             )
-                            // background накладывается ПОВЕРХ hazeChild, создавая эффект матового стекла
                             .background(topBarBg),
                         title = {
                             Text(
@@ -214,35 +233,28 @@ fun SettingsScreen(
                 }
             }
         ) { padding ->
-            // haze() применяется к корневому Box внутри Scaffold.
-            // ВАЖНО: он стоит ДО .background, чтобы Haze захватывал и фон, и контент.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .let {
-                        if (currentTheme.isExthruFamily) it.haze(state = hazeState) else it
-                    }
+                    .let { if (currentTheme.isExthruFamily) it.haze(state = hazeState) else it }
                     .background(scaffoldBg)
             ) {
                 VlAmbientGlow(appTheme = currentTheme)
 
-                // Список контента настроек
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
                 ) {
-                    // Сдвигаем контент вниз, чтобы он был виден из-под TopBar
                     Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
-                    // ── Профиль ────────────────────────────────────────────────────────
+                    // ── Профиль ──
                     profile?.let { p ->
                         VlSurface(
                             appTheme = currentTheme,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
-                            onClick = { /* To Profile */ }
+                            onClick = { /* To Profile (can be implemented later) */ }
                         ) {
-                            // Отступы перенесены в Row, чтобы внутренний блик отрисовывался ровно по границам
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(20.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -270,7 +282,56 @@ fun SettingsScreen(
                         }
                     }
 
-                    // ── Акцент ────────────────────────────────────────────────────────
+                    // ── PRO ──
+                    profile?.let { p ->
+                        ProStatusBanner(
+                            profile = p,
+                            proViewModel = proViewModel,
+                            proState = proState,
+                            appTheme = currentTheme,
+                            isDark = isDark,
+                            hapticEnabled = hapticEnabled
+                        )
+                    }
+
+                    // ── Кастомизация ──
+                    VlSettingsSection(appTheme = currentTheme, title = "Моя Кастомизация", isPremium = true) {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = Color(0xFFC5A059),
+                            icon = Icons.Default.Brush,
+                            title = "Дизайн профиля и чатов",
+                            subtitle = "Фон, шрифты, баннер, стиль",
+                            index = 0, total = 2,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                if (profile?.isProActive() == true) {
+                                    Toast.makeText(context, "В разработке", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Доступно только с подпиской PRO!", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            icon = Icons.Default.HideImage,
+                            title = "Скрывать чужой дизайн",
+                            subtitle = "Отображать профили в системном стиле",
+                            index = 1, total = 2,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = profile?.ignoreCustomizations ?: false,
+                                    onCheckedChange = { v ->
+                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                        // TODO: Update ignoreCustomizations in Firestore
+                                    }
+                                )
+                            }
+                        )
+                    }
+
+                    // ── Акцент ──
                     VlSettingsSection(appTheme = currentTheme, title = "Цветовой акцент") {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -291,37 +352,36 @@ fun SettingsScreen(
                         }
                     }
 
-                    // ── Внешний вид ────────────────────────────────────────────────────
+                    // ── Внешний вид ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_appearance)) {
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Layers, label = "Biolume", desc = "Органичный неоморфизм", selected = currentTheme == AppTheme.BIOLUME || currentTheme == AppTheme.EXTHRU, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.BIOLUME) })
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.AutoAwesome, label = stringResource(R.string.settings_theme_m3_name), desc = stringResource(R.string.settings_theme_m3_desc), selected = currentTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Shield, label = "Forge", desc = "Квадратный киберпанк, Arasaka", selected = currentTheme == AppTheme.FORGE, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.FORGE) })
                     }
 
-                    // ── Тёмный режим ───────────────────────────────────────────────────
+                    // ── Тёмный режим ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_dark_title)) {
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.LIGHT) })
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.DARK) })
                     }
 
-                    // ── Язык ──────────────────────────────────────────────────────────
+                    // ── Язык ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_language)) {
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setLanguage(AppLanguage.SYSTEM) })
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setLanguage(AppLanguage.EN) })
                         VlOptionRow(appTheme = currentTheme, icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setLanguage(AppLanguage.RU) })
                     }
 
-                    // ── Управление ─────────────────────────────────────────────────────
-                    val totalControls = 4
+                    // ── Управление ──
                     VlSettingsSection(appTheme = currentTheme, title = "Управление") {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = "Push-уведомления", trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = totalControls)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = "Вибрация", trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = totalControls)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = totalControls)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = totalControls)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = "Push-уведомления", trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = "Вибрация", trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = 4)
                     }
 
-                    // ── ПРИВАТНОСТЬ (STEALTH MODE) ─────────────────────────────────────
+                    // ── Приватность ──
                     VlSettingsSection(appTheme = currentTheme, title = "Приватность") {
                         VlSettingsItem(
                             appTheme = currentTheme,
@@ -368,24 +428,24 @@ fun SettingsScreen(
                         }
                     }
 
-                    // ── Память ────────────────────────────────────────────────────────
+                    // ── Память ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_storage)) {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.Storage, title = stringResource(R.string.settings_cache_title), subtitle = stringResource(R.string.settings_cache_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }, index = 0, total = 1)
                     }
 
-                    // ── Боты ───────────────────────────────────────────────────────────
+                    // ── Боты ──
                     VlSettingsSection(appTheme = currentTheme, title = "Боты") {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorBots, icon = Icons.Default.SmartToy, title = "Мои боты", subtitle = "Управление API-ботами", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showBotsManager = true }, index = 0, total = 1)
                     }
 
-                    // ── Администрирование ──────────────────────────────────────────────
+                    // ── Администрирование ──
                     if (profile?.isAdmin == true) {
                         VlSettingsSection(appTheme = currentTheme, title = "Администрирование") {
                             VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.AdminPanelSettings, iconColor = MaterialTheme.colorScheme.error, title = "Admin Panel", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showAdminPanel = true }, index = 0, total = 1)
                         }
                     }
 
-                    // ── Обновления ─────────────────────────────────────────────────────
+                    // ── Обновления ──
                     VlSettingsSection(appTheme = currentTheme, title = "Обновления") {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorUpdateChan, icon = Icons.Default.Science, title = "Канал обновлений", subtitle = "Текущий: ${currentChannel.title}", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showChannelDialog = true }, index = 0, total = 2)
                         VlSettingsItem(
@@ -408,11 +468,9 @@ fun SettingsScreen(
                         )
                     }
 
-                    // ── Аккаунт ────────────────────────────────────────────────────────
+                    // ── Аккаунт ──
                     VlSettingsSection(appTheme = currentTheme, title = "Аккаунт") {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorEmail, icon = Icons.Default.Email, title = "Email", subtitle = profile?.email ?: "", index = 0, total = 4)
-
-                        // ── НОВАЯ КНОПКА TELEGRAM ──
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = Color(0xFF2AABEE),
@@ -443,12 +501,11 @@ fun SettingsScreen(
                                 }
                             }
                         )
-
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorPassword, icon = Icons.Default.Password, title = "Изменить пароль", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showPasswordDialog = true }, index = 2, total = 4)
                         VlSettingsItem(appTheme = currentTheme, iconColor = MaterialTheme.colorScheme.error, icon = Icons.AutoMirrored.Filled.Logout, title = "Выйти из аккаунта", isDestructive = true, onClick = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); showLogoutDialog = true }, index = 3, total = 4)
                     }
 
-                    // ── About ──────────────────────────────────────────────────────────
+                    // ── About ──
                     Spacer(Modifier.height(16.dp))
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -509,9 +566,9 @@ fun SettingsScreen(
 
     // ── ДИАЛОГ TELEGRAM ACCOUNT BINDING ──
     if (showTgBindingDialog) {
-        AlertDialog(
+        VlAlertDialog(
+            appTheme = currentTheme,
             onDismissRequest = { showTgBindingDialog = false },
-            containerColor = if (currentTheme.isExthruFamily) MaterialTheme.colorScheme.surface else AlertDialogDefaults.containerColor,
             title = { Text("Привязка Telegram") },
             text = {
                 Column(
@@ -526,7 +583,7 @@ fun SettingsScreen(
                         Text(
                             text = tgCode!!,
                             style = TextStyle(
-                                fontFamily = ForgeTypography.bodyMedium.fontFamily,
+                                fontFamily = FontFamily.Monospace,
                                 fontSize = 36.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 8.sp
@@ -547,7 +604,7 @@ fun SettingsScreen(
                             Text(
                                 "/start ${tgCode!!}",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                style = TextStyle(fontFamily = ForgeTypography.bodyMedium.fontFamily, fontWeight = FontWeight.Bold)
+                                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                             )
                         }
                         Text(
@@ -558,8 +615,8 @@ fun SettingsScreen(
                     }
                 }
             },
-            confirmButton = {
-                TextButton(onClick = { showTgBindingDialog = false }) {
+            actions = {
+                VlDialogButton(onClick = { showTgBindingDialog = false }, appTheme = currentTheme) {
                     Text("Закрыть", color = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -619,6 +676,177 @@ fun SettingsScreen(
                 }) { Text("Выйти") }
             }
         )
+    }
+}
+
+// ── PRO Status Banner ─────────────────────────────────────────────────────────
+
+@Composable
+private fun ProStatusBanner(
+    profile: UserProfile,
+    proViewModel: ProViewModel,
+    proState: ProUiState,
+    appTheme: AppTheme,
+    isDark: Boolean,
+    hapticEnabled: Boolean
+) {
+    val haptic = rememberHaptic()
+    val isActive = profile.isProActive()
+    val canAfford = profile.bits >= 1000
+
+    val cal = Calendar.getInstance()
+    profile.proUntil?.toDate()?.let { cal.time = it }
+    val isEternalPro = profile.proUntil != null && cal.get(Calendar.YEAR) > 2090
+
+    val goldColor = Color(0xFFC5A059)
+    val cs = MaterialTheme.colorScheme
+    val style = rememberExthruStyle(appTheme)
+
+    fun formatDate(date: java.util.Date?): String {
+        if (date == null) return ""
+        return java.text.SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(date)
+    }
+
+    VlSettingsSection(appTheme = appTheme, title = "VisorLink PRO", isPremium = true) {
+        VlSettingsItem(
+            appTheme = appTheme,
+            icon = if (isActive) Icons.Default.WorkspacePremium else Icons.Default.Stars,
+            iconColor = if (isActive) goldColor else cs.onSurfaceVariant,
+            title = if (isActive) "Статус: Активен" else "Статус: Неактивен",
+            subtitle = if (isEternalPro) "♾️ Бесконечный PRO" else (if (isActive) "До ${formatDate(profile.proUntil?.toDate())}" else "Разблокируйте золотой бейдж"),
+            index = 0, total = if (isActive) 3 else 4
+        )
+
+        VlSettingsItem(
+            appTheme = appTheme,
+            icon = Icons.Default.Toll,
+            iconColor = goldColor,
+            title = "Ваши Биты",
+            trailing = {
+                Text(
+                    profile.bits.toString(),
+                    style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, color = goldColor)
+                )
+            },
+            index = 1, total = if (isActive) 3 else 4
+        )
+
+        VlSettingsItem(
+            appTheme = appTheme,
+            icon = Icons.Default.LocalFireDepartment,
+            iconColor = Color(0xFFE11D48),
+            title = "Стрик: ${profile.streak} дней",
+            subtitle = "Показывать бейдж в чатах",
+            trailing = {
+                VlSwitch(
+                    appTheme = appTheme,
+                    checked = profile.showStreak,
+                    onCheckedChange = { v ->
+                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                        proViewModel.toggleShowStreak(v)
+                    }
+                )
+            },
+            index = 2, total = if (isActive) 3 else 4
+        )
+
+        if (!isActive && !isEternalPro) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "Золотой бейдж PRO, 10 ГБ в облаке и полная кастомизация профиля: ставьте свои фоны, GIF, меняйте шрифты, темы и эмодзи-статусы!",
+                    style = MaterialTheme.typography.bodySmall.copy(color = cs.onSurfaceVariant, fontSize = 13.sp, lineHeight = 18.sp),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
+                    Button(
+                        onClick = {
+                            if (canAfford) {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                proViewModel.buyPro(useTrial = false)
+                            }
+                        },
+                        enabled = canAfford && !proState.isLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = goldColor, contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        if (proState.isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        else Text("Купить PRO (1000 Бит)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                } else {
+                    VlSurface(
+                        appTheme = appTheme,
+                        isButton = true,
+                        customRadius = if (style.isForge) 0.dp else 16.dp,
+                        overrideColor = style.cardBg,
+                        onClick = if (canAfford && !proState.isLoading) {
+                            {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                proViewModel.buyPro(useTrial = false)
+                            }
+                        } else null,
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        if (proState.isLoading) {
+                            CircularProgressIndicator(color = goldColor, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text(
+                                "Купить PRO (1000 Бит)",
+                                color = if (canAfford) goldColor else cs.onSurfaceVariant.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                fontFamily = if (style.isForge) FontFamily.Monospace else null
+                            )
+                        }
+                    }
+                }
+
+                if (!profile.trialUsed) {
+                    Spacer(Modifier.height(12.dp))
+                    if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
+                        OutlinedButton(
+                            onClick = {
+                                if (!proState.isLoading) {
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                    proViewModel.buyPro(useTrial = true)
+                                }
+                            },
+                            enabled = !proState.isLoading,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = goldColor),
+                            border = BorderStroke(1.dp, goldColor),
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text("Активировать Триал (1 день)", fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        VlSurface(
+                            appTheme = appTheme,
+                            isButton = true,
+                            customRadius = if (style.isForge) 0.dp else 16.dp,
+                            overrideColor = style.cardBg,
+                            onClick = if (!proState.isLoading) {
+                                {
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                    proViewModel.buyPro(useTrial = true)
+                                }
+                            } else null,
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
+                        ) {
+                            Text(
+                                "Активировать Триал (1 день)",
+                                color = cs.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                fontFamily = if (style.isForge) FontFamily.Monospace else null
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

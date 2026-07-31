@@ -148,4 +148,17 @@ class UserRepository(
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
     }
+
+    // ─── PRO Subscription ─────────────────────────────────────────────────────
+
+    suspend fun buyPro(useTrial: Boolean) {
+        functions.getHttpsCallable("buyProSubscription")
+            .call(mapOf("useTrial" to useTrial))
+            .await()
+    }
+
+    suspend fun updateShowStreak(show: Boolean) {
+        db.collection("users").document(currentUid)
+            .update("showStreak", show).await()
+    }
 }

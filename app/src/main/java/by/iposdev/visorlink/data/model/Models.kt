@@ -26,7 +26,10 @@ data class UserProfile(
     val showStreak: Boolean = true,
     val proUntil: Timestamp? = null,
     val trialUsed: Boolean = false,
-    val registeredViaOfficialClient: Boolean = true
+    val registeredViaOfficialClient: Boolean = true,
+
+    // ДОБАВЛЕНО:
+    val ignoreCustomizations: Boolean = false
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false

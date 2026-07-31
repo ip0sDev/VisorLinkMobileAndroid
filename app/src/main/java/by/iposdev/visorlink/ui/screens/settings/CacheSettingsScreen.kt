@@ -39,9 +39,8 @@ import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -72,176 +71,181 @@ fun CacheSettingsScreen(
     val hazeState = remember { HazeState() }
 
     CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
-            Scaffold(
-                containerColor = Color.Transparent,
-                topBar = {
-                    if (isExthru) {
-                        val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
-                        TopAppBar(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .hazeEffect(
-                                    state = hazeState,
-                                    style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = HazeTint(topBarBg))
-                                ),
-                            title = {
-                                Text(
-                                    text = stringResource(R.string.cache_title),
-                                    style = MaterialTheme.typography.headlineLarge.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                                )
-                            },
-                            navigationIcon = {
-                                val interactionSource = remember { MutableInteractionSource() }
-                                val isPressed by interactionSource.collectIsPressedAsState()
-                                val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_btn_scale")
-                                val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                if (isExthru) {
+                    val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+                    TopAppBar(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .hazeChild(
+                                state = hazeState,
+                                style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                            )
+                            .background(topBarBg),
+                        title = {
+                            Text(
+                                text = stringResource(R.string.cache_title),
+                                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                            )
+                        },
+                        navigationIcon = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_btn_scale")
+                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
 
-                                Box(
-                                    modifier = Modifier
-                                        .padding(start = 12.dp, end = 4.dp)
-                                        .size(42.dp)
-                                        .scale(scale)
-                                        .then(shadowMod)
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                        .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                        .clip(CircleShape)
-                                        .clickable(
-                                            interactionSource = interactionSource,
-                                            indication = null,
-                                            onClick = {
-                                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                                onNavigateBack()
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                            actions = {
-                                val interactionSource = remember { MutableInteractionSource() }
-                                val isPressed by interactionSource.collectIsPressedAsState()
-                                val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "refresh_btn_scale")
-                                val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 12.dp, end = 4.dp)
+                                    .size(42.dp)
+                                    .scale(scale)
+                                    .then(shadowMod)
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null,
+                                        onClick = {
+                                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                                            onNavigateBack()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        },
+                        actions = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "refresh_btn_scale")
+                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
 
-                                Box(
-                                    modifier = Modifier
-                                        .padding(end = 12.dp)
-                                        .size(42.dp)
-                                        .scale(scale)
-                                        .then(shadowMod)
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                        .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                        .clip(CircleShape)
-                                        .clickable(
-                                            interactionSource = interactionSource,
-                                            indication = null,
-                                            onClick = {
-                                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                                viewModel.refreshSizes()
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
-                        )
-                    } else {
-                        TopAppBar(
-                            title = { Text(stringResource(R.string.cache_title)) },
-                            navigationIcon = {
-                                IconButton(onClick = {
-                                    haptic.perform(HapticType.CLICK, hapticEnabled)
-                                    onNavigateBack()
-                                }) {
-                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
-                                }
-                            },
-                            actions = {
-                                IconButton(onClick = {
-                                    haptic.perform(HapticType.CLICK, hapticEnabled)
-                                    viewModel.refreshSizes()
-                                }) {
-                                    Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-                        )
-                    }
-                },
-                snackbarHost = {
-                    AnimatedVisibility(
-                        visible = state.successMessageRes != null,
-                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                        exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-                    ) {
-                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
-                            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.inverseSurface, tonalElevation = 4.dp) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.size(18.dp))
-                                    Text(state.successMessageRes?.let { stringResource(it) } ?: "", color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium)
-                                }
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 12.dp)
+                                    .size(42.dp)
+                                    .scale(scale)
+                                    .then(shadowMod)
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                                    .clip(CircleShape)
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null,
+                                        onClick = {
+                                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                                            viewModel.refreshSizes()
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Refresh, "Refresh", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.cache_title)) },
+                        navigationIcon = {
+                            IconButton(onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                onNavigateBack()
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                viewModel.refreshSizes()
+                            }) {
+                                Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
+                }
+            },
+            snackbarHost = {
+                AnimatedVisibility(
+                    visible = state.successMessageRes != null,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
+                        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.inverseSurface, tonalElevation = 4.dp) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.size(18.dp))
+                                Text(state.successMessageRes?.let { stringResource(it) } ?: "", color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium)
                             }
                         }
                     }
                 }
-            ) { padding ->
-                // Обертка-источник для размытия
-                Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
-                    VlAmbientGlow(appTheme = currentTheme)
+            }
+        ) { padding ->
+            // Обертка-источник для размытия
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .let { if (isExthru) it.haze(state = hazeState) else it }
+                    .background(scaffoldBg)
+            ) {
+                VlAmbientGlow(appTheme = currentTheme)
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
-                        // ── Использование кэша ────────────────────────────────────────────
-                        SectionHeader(stringResource(R.string.cache_section_usage), isExthru)
+                    // ── Использование кэша ────────────────────────────────────────────
+                    SectionHeader(stringResource(R.string.cache_section_usage), isExthru)
 
-                        CacheUsageCard(
-                            sizes     = state.sizes,
-                            isLoading = state.isLoading,
-                            isExthru  = isExthru,
-                            isDark    = isDark
-                        )
+                    CacheUsageCard(
+                        sizes     = state.sizes,
+                        isLoading = state.isLoading,
+                        isExthru  = isExthru,
+                        isDark    = isDark
+                    )
 
-                        // ── Очистка ───────────────────────────────────────────────────────
-                        SectionHeader(stringResource(R.string.cache_section_clear), isExthru)
+                    // ── Очистка ───────────────────────────────────────────────────────
+                    SectionHeader(stringResource(R.string.cache_section_clear), isExthru)
 
-                        ClearActionsCard(
-                            isClearing    = state.isClearing,
-                            isExthru      = isExthru,
-                            isDark        = isDark,
-                            onClearImages = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
-                            onClearVoice  = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
-                            onClearAll    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() }
-                        )
+                    ClearActionsCard(
+                        isClearing    = state.isClearing,
+                        isExthru      = isExthru,
+                        isDark        = isDark,
+                        onClearImages = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
+                        onClearVoice  = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
+                        onClearAll    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() }
+                    )
 
-                        // ── Лимиты ────────────────────────────────────────────────────────
-                        SectionHeader(stringResource(R.string.cache_section_limits), isExthru)
+                    // ── Лимиты ────────────────────────────────────────────────────────
+                    SectionHeader(stringResource(R.string.cache_section_limits), isExthru)
 
-                        LimitsCard(
-                            imageLimitMb  = state.config.maxImageMb,
-                            voiceLimitMb  = state.config.maxVoiceMb,
-                            cacheDays     = state.config.chatCacheDays,
-                            isExthru      = isExthru,
-                            isDark        = isDark,
-                            onImageLimit  = { viewModel.setMaxImageMb(it) },
-                            onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
-                            onCacheDays   = { viewModel.setChatCacheDays(it) }
-                        )
+                    LimitsCard(
+                        imageLimitMb  = state.config.maxImageMb,
+                        voiceLimitMb  = state.config.maxVoiceMb,
+                        cacheDays     = state.config.chatCacheDays,
+                        isExthru      = isExthru,
+                        isDark        = isDark,
+                        onImageLimit  = { viewModel.setMaxImageMb(it) },
+                        onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
+                        onCacheDays   = { viewModel.setChatCacheDays(it) }
+                    )
 
-                        Spacer(modifier = Modifier.height(padding.calculateBottomPadding() + 32.dp))
-                    }
+                    Spacer(modifier = Modifier.height(padding.calculateBottomPadding() + 32.dp))
                 }
             }
         }
