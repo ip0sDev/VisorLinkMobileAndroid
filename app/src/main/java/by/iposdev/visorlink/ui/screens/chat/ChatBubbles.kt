@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -214,6 +215,7 @@ internal fun MessageBubble(
             }
         }
 
+        // Оверлей загрузки поверх баббла
         if (message.uploadProgress != null) {
             Box(
                 modifier = Modifier
@@ -366,6 +368,138 @@ internal fun TextBubble(
     }
 }
 
+// ── ИДЕАЛЬНОЕ МАСШТАБИРОВАНИЕ ФОТО БЕЗ ОБРЕЗКИ ──
+@Composable
+internal fun ImageBubble(
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false, onTap: (String) -> Unit,
+    onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
+    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+) {
+    val imageShape = if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+    else RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "image_scale")
+
+    val isSpoiler = message.spoiler == true
+    var spoilerRevealed by remember(message.id) { mutableStateOf(false) }
+    val blurRadius by animateDpAsState(targetValue = if (isSpoiler && !spoilerRevealed) 20.dp else 0.dp, animationSpec = tween(300), label = "spoiler_blur")
+    val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
+        horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
+    ) {
+        val containerModifier = if (isExthru) {
+            val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
+            // Разрешаем контейнеру стягиваться по контенту (убрано min=160.dp)
+            Modifier.widthIn(max = 280.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
+        } else {
+            Modifier.widthIn(max = 280.dp).scale(scale).clip(imageShape)
+        }
+
+        Box(
+            modifier = containerModifier.messageGestures(
+                messageId = message.id,
+                interactionSource = interactionSource,
+                onTap = { if (isSpoiler && !spoilerRevealed) spoilerRevealed = true else resolvedUrl?.let { onTap(it) } },
+                onLongPressStart = onLongPressStart,
+                onLongPressDrag = onLongPressDrag,
+                onLongPressEnd = onLongPressEnd
+            ),
+        ) {
+            // sizeIn задает допустимые рамки, а ContentScale.Crop идеально в них вписывается.
+            val imgModifier = Modifier
+                .sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
+
+            if (message.localBytes != null) {
+                AsyncImage(
+                    model = message.localBytes, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = imgModifier
+                )
+            } else if (message.localFile != null) {
+                AsyncImage(
+                    model = message.localFile, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = imgModifier
+                )
+            } else {
+                AsyncImage(
+                    model = resolvedUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = imgModifier
+                )
+            }
+
+            val overlayAlpha by animateFloatAsState(targetValue = if (isSpoiler && !spoilerRevealed) 1f else 0f, animationSpec = tween(300), label = "spoiler_alpha")
+            if (overlayAlpha > 0f) {
+                Box(
+                    modifier = Modifier.matchParentSize().alpha(overlayAlpha).background(Color.Black.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(Icons.Default.VisibilityOff, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                        Text(stringResource(R.string.tap_to_reveal), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
+                if (message.tg_forwarded == true) {
+                    TelegramForwardBanner(message = message)
+                } else {
+                    message.parsedForwardFrom?.let { fwd ->
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                    }
+                }
+
+                message.replyData?.let { reply ->
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                            Spacer(Modifier.width(6.dp))
+                            Column {
+                                Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text(reply.text ?: stringResource(R.string.photo), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Box(
+                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
+                    if (isMine && chatType == ChatType.DIRECT) {
+                        Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
+                    }
+                }
+            }
+        }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visible = message.parsedReactions.isNotEmpty(),
+            enter = slideInVertically(initialOffsetY = { -it / 2 }, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + scaleIn(initialScale = 0.7f, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
+            exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(150)),
+        ) {
+            InlinedReactionRow(
+                reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
+                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
+                onReact = onReact, onShowPicker = { },
+            )
+        }
+
+        if (chatType == ChatType.CHANNEL && !message.deleted && chat != null) {
+            CommentsButton(post = message, channelAllowsComments = chat.settings.allowComments, onClick = onOpenComments)
+        }
+    }
+}
+
 @Composable
 internal fun VideoBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
@@ -385,9 +519,9 @@ internal fun VideoBubble(
     ) {
         val containerModifier = if (isExthru) {
             val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
-            Modifier.widthIn(min = 160.dp, max = 260.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
+            Modifier.widthIn(max = 280.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
         } else {
-            Modifier.widthIn(min = 160.dp, max = 260.dp).scale(scale).clip(imageShape)
+            Modifier.widthIn(max = 280.dp).scale(scale).clip(imageShape)
         }
 
         Box(
@@ -402,7 +536,8 @@ internal fun VideoBubble(
             CdnMediaViewer(
                 mediaId = message.cdnMediaId,
                 type = message.type,
-                localFile = message.localFile
+                localFile = message.localFile,
+                modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp)
             )
 
             Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
@@ -549,130 +684,6 @@ internal fun StickerBubble(
                 isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
                 onReact = onReact, onShowPicker = { },
             )
-        }
-    }
-}
-
-@Composable
-internal fun ImageBubble(
-    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false, onTap: (String) -> Unit,
-    onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
-    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
-) {
-    val imageShape = if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
-    else RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "image_scale")
-
-    val isSpoiler = message.spoiler == true
-    var spoilerRevealed by remember(message.id) { mutableStateOf(false) }
-    val blurRadius by animateDpAsState(targetValue = if (isSpoiler && !spoilerRevealed) 20.dp else 0.dp, animationSpec = tween(300), label = "spoiler_blur")
-    val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
-
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
-        horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
-    ) {
-        val containerModifier = if (isExthru) {
-            val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
-            Modifier.widthIn(min = 160.dp, max = 260.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
-        } else {
-            Modifier.widthIn(min = 160.dp, max = 260.dp).scale(scale).clip(imageShape)
-        }
-
-        Box(
-            modifier = containerModifier.messageGestures(
-                messageId = message.id,
-                interactionSource = interactionSource,
-                onTap = { if (isSpoiler && !spoilerRevealed) spoilerRevealed = true else resolvedUrl?.let { onTap(it) } },
-                onLongPressStart = onLongPressStart,
-                onLongPressDrag = onLongPressDrag,
-                onLongPressEnd = onLongPressEnd
-            ),
-        ) {
-            if (message.localBytes != null) {
-                AsyncImage(
-                    model = message.localBytes, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
-                )
-            } else if (message.localFile != null) {
-                AsyncImage(
-                    model = message.localFile, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
-                )
-            } else {
-                AsyncImage(
-                    model = resolvedUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
-                )
-            }
-
-            val overlayAlpha by animateFloatAsState(targetValue = if (isSpoiler && !spoilerRevealed) 1f else 0f, animationSpec = tween(300), label = "spoiler_alpha")
-            if (overlayAlpha > 0f) {
-                Box(
-                    modifier = Modifier.matchParentSize().alpha(overlayAlpha).background(Color.Black.copy(alpha = 0.55f)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Icons.Default.VisibilityOff, null, tint = Color.White, modifier = Modifier.size(32.dp))
-                        Text(stringResource(R.string.tap_to_reveal), color = Color.White, style = MaterialTheme.typography.labelMedium)
-                    }
-                }
-            }
-
-            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
-                if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message)
-                } else {
-                    message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
-                    }
-                }
-
-                message.replyData?.let { reply ->
-                    Box(
-                        modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.5f)).clickable { reply.id?.let { id -> onReplyClick(id) } }.padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.width(3.dp).height(28.dp).background(Color.White, RoundedCornerShape(2.dp)))
-                            Spacer(Modifier.width(6.dp))
-                            Column {
-                                Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.SemiBold)
-                                Text(reply.text ?: stringResource(R.string.photo), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Box(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
-                    if (isMine && chatType == ChatType.DIRECT) {
-                        Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
-                    }
-                }
-            }
-        }
-
-        androidx.compose.animation.AnimatedVisibility(
-            visible = message.parsedReactions.isNotEmpty(),
-            enter = slideInVertically(initialOffsetY = { -it / 2 }, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + scaleIn(initialScale = 0.7f, animationSpec = spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
-            exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(150)),
-        ) {
-            InlinedReactionRow(
-                reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
-                onReact = onReact, onShowPicker = { },
-            )
-        }
-
-        if (chatType == ChatType.CHANNEL && !message.deleted && chat != null) {
-            CommentsButton(post = message, channelAllowsComments = chat.settings.allowComments, onClick = onOpenComments)
         }
     }
 }
@@ -842,7 +853,12 @@ private fun AlbumCell(image: AlbumImage, revealed: Boolean, modifier: Modifier, 
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = { if (isSpoiler) onReveal() else onTap() })
     ) {
-        AsyncImage(model = resolvedUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier))
+        AsyncImage(
+            model = resolvedUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
+        )
         androidx.compose.animation.AnimatedVisibility(visible = isSpoiler, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.40f)), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

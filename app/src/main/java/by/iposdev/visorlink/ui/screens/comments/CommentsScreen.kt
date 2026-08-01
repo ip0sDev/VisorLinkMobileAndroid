@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
@@ -34,10 +33,10 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.ui.screens.chat.resolveCdnUrl
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
@@ -79,7 +78,6 @@ fun CommentsScreen(
 
     val commentsAllowed = uiState.commentsAllowed(channel)
 
-    // Auto-scroll to bottom when new comment arrives
     val commentCount = uiState.comments.size
     LaunchedEffect(commentCount) {
         if (commentCount > 0) listState.scrollToItem(commentCount - 1)
@@ -95,24 +93,14 @@ fun CommentsScreen(
                 },
                 title = {
                     Column {
-                        Text(
-                            "Comments",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Text("Comments", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         val count = uiState.commentCount
                         if (count > 0) {
-                            Text(
-                                "$count comment${if (count == 1) "" else "s"}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 11.sp
-                            )
+                            Text("$count comment${if (count == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                         }
                     }
                 },
                 actions = {
-                    // Admin toggle — show current state and let admin flip it
                     if (uiState.isAdmin) {
                         val post = uiState.post
                         val enabled = post?.commentsEnabled != false
@@ -121,18 +109,14 @@ fun CommentsScreen(
                             viewModel.toggleComments(enabled)
                         }) {
                             Icon(
-                                imageVector = if (enabled) Icons.Default.SpeakerNotesOff
-                                else Icons.Default.SpeakerNotes,
+                                imageVector = if (enabled) Icons.Default.SpeakerNotesOff else Icons.Default.SpeakerNotes,
                                 contentDescription = if (enabled) "Disable comments" else "Enable comments",
-                                tint = if (enabled) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.primary
+                                tint = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         },
         bottomBar = {
@@ -143,20 +127,10 @@ fun CommentsScreen(
                     .imePadding()
             ) {
                 if (!commentsAllowed) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            "Comments are disabled",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(16.dp),
-                            textAlign = TextAlign.Center
-                        )
+                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
+                        Text("Comments are disabled", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(16.dp), textAlign = TextAlign.Center)
                     }
                 } else {
-                    // Reply banner
                     AnimatedVisibility(
                         visible = uiState.replyingTo != null,
                         enter = slideInVertically(initialOffsetY = { it }) + fadeIn(tween(200)),
@@ -167,16 +141,12 @@ fun CommentsScreen(
                         }
                     }
 
-                    // Upload progress
                     AnimatedVisibility(visible = uiState.isUploading, enter = expandVertically(), exit = shrinkVertically()) {
                         LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     }
 
-                    // Input row
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.Bottom
                     ) {
                         if (!uiState.isRecording) {
@@ -216,11 +186,7 @@ fun CommentsScreen(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            Icons.AutoMirrored.Filled.Send, "Send",
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                            modifier = Modifier.size(22.dp)
-                                        )
+                                        Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(22.dp))
                                     }
                                 } else {
                                     IconButton(
@@ -239,13 +205,10 @@ fun CommentsScreen(
                                 }
                             }
                         } else {
-                            // Recording bar (reuse same pattern from ChatScreen)
                             CommentsRecordingBar(
                                 hapticEnabled = hapticEnabled,
                                 onCancel = { viewModel.cancelRecording() },
-                                onSend = {
-                                    viewModel.stopRecordingAndSend()
-                                }
+                                onSend = { viewModel.stopRecordingAndSend() }
                             )
                         }
                     }
@@ -255,12 +218,9 @@ fun CommentsScreen(
     ) { padding ->
         LazyColumn(
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
+            modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            // Post preview at top
             uiState.post?.let { post ->
                 item(key = "post_preview") {
                     PostPreview(
@@ -275,22 +235,13 @@ fun CommentsScreen(
 
             if (uiState.comments.isEmpty()) {
                 item(key = "empty_comments") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(40.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.ChatBubbleOutline, null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f))
+                            Icon(Icons.Default.ChatBubbleOutline, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.3f))
                             Spacer(Modifier.height(8.dp))
-                            Text("No comments yet", style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f))
+                            Text("No comments yet", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f))
                             if (commentsAllowed) {
-                                Text("Be the first to comment", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f))
+                                Text("Be the first to comment", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f))
                             }
                         }
                     }
@@ -303,10 +254,7 @@ fun CommentsScreen(
 
                 AnimatedVisibility(
                     visible = true,
-                    enter = slideInVertically(
-                        initialOffsetY = { 48 },
-                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-                    ) + fadeIn(tween(180))
+                    enter = slideInVertically(initialOffsetY = { 48 }, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(tween(180))
                 ) {
                     CommentBubble(
                         comment = comment,
@@ -320,9 +268,7 @@ fun CommentsScreen(
                             haptic.perform(HapticType.SELECTION, hapticEnabled)
                             viewModel.setReplyTo(comment)
                         },
-                        onReact = { emoji ->
-                            viewModel.toggleReaction(comment.id, emoji, comment.parsedReactions)
-                        },
+                        onReact = { emoji -> viewModel.toggleReaction(comment.id, emoji, comment.parsedReactions) },
                         onDelete = { showDeleteConfirm = comment.id },
                         onScrollToReply = { replyId ->
                             val index = uiState.comments.indexOfFirst { it.id == replyId }
@@ -337,7 +283,6 @@ fun CommentsScreen(
         }
     }
 
-    // Delete confirm dialog
     showDeleteConfirm?.let { commentId ->
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
@@ -355,9 +300,7 @@ fun CommentsScreen(
         )
     }
 
-    // Image editor before sending with spoiler toggle
     editorUri?.let { uri ->
-        // Reuse existing ImageEditorScreen from the chat package
         by.iposdev.visorlink.ui.screens.chat.ImageEditorScreen(
             uri = uri,
             onNavigateBack = { editorUri = null },
@@ -376,8 +319,6 @@ fun CommentsScreen(
     }
 }
 
-// ─── Post preview at top of comments ─────────────────────────────────────────
-
 @Composable
 private fun PostPreview(
     post: Message,
@@ -387,47 +328,30 @@ private fun PostPreview(
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         when {
-            post.deleted -> Text(
-                "This post was deleted",
-                style = MaterialTheme.typography.bodyMedium,
-                fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f)
-            )
-            post.type == MessageType.IMAGE && post.url != null -> {
-                SpoilerImage(
-                    url = post.url,
-                    spoiler = post.spoiler,
-                    isRevealed = post.id in revealedSpoilers,
-                    onReveal = onReveal,
-                    onFullscreen = { onImageTap(post.url) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 200.dp)
-                )
+            post.deleted -> Text("This post was deleted", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
+            post.type == MessageType.IMAGE -> {
+                val resolvedUrl = resolveCdnUrl(post.cdnMediaId, post.url)
+                if (resolvedUrl != null) {
+                    SpoilerImage(
+                        url = resolvedUrl,
+                        spoiler = post.spoiler,
+                        isRevealed = post.id in revealedSpoilers,
+                        onReveal = onReveal,
+                        onFullscreen = { onImageTap(resolvedUrl) }
+                    )
+                }
             }
             post.type == MessageType.TEXT && !post.text.isNullOrEmpty() -> {
-                Text(
-                    text = post.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 6,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(text = post.text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 6, overflow = TextOverflow.Ellipsis)
             }
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            post.createdAt?.toDate()?.let {
-                SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(it)
-            } ?: "",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = 10.sp
+            post.createdAt?.toDate()?.let { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()).format(it) } ?: "",
+            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 10.sp
         )
     }
 }
-
-// ─── Comment bubble ───────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -448,17 +372,12 @@ private fun CommentBubble(
     onSeekVoice: (Float) -> Unit
 ) {
     val haptic = rememberHaptic()
-    val bubbleColor = if (isMine) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.surfaceVariant
-    val textColor = if (isMine) MaterialTheme.colorScheme.onPrimary
-    else MaterialTheme.colorScheme.onSurfaceVariant
-    val bubbleShape = if (isMine) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
-    else RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
+    val bubbleColor = if (isMine) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val textColor = if (isMine) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    val bubbleShape = if (isMine) RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp) else RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp)
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
         Box(
@@ -470,145 +389,87 @@ private fun CommentBubble(
                     onClick = {},
                     onLongClick = {
                         haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                        // Show action: reply or delete
                         onReply()
                     }
                 )
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp)) {
-                // Author name — incoming only
                 if (!isMine) {
                     Text(
                         "@${comment.senderUsername}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        fontFamily = FontFamily.Monospace,
-                        modifier = Modifier.padding(bottom = 2.dp)
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold, fontFamily = FontFamily.Monospace, modifier = Modifier.padding(bottom = 2.dp)
                     )
                 }
 
-                // Reply preview
                 comment.replyTo?.let { reply ->
-                    CommentReplyPreview(
-                        reply = reply,
-                        isMine = isMine,
-                        onClick = { onScrollToReply(reply.id) }
-                    )
+                    CommentReplyPreview(reply = reply, isMine = isMine, onClick = { onScrollToReply(reply.id) })
                     Spacer(Modifier.height(4.dp))
                 }
 
-                // Content
                 when {
-                    comment.deleted -> Text(
-                        "Message deleted",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontStyle = FontStyle.Italic,
-                        color = textColor.copy(alpha = 0.6f)
-                    )
-                    comment.type == MessageType.IMAGE && comment.url != null ->
-                        SpoilerImage(
-                            url = comment.url,
-                            spoiler = comment.spoiler,
-                            isRevealed = isRevealed,
-                            onReveal = onReveal,
-                            onFullscreen = { onImageTap(comment.url) },
-                            modifier = Modifier
-                                .widthIn(max = 240.dp)
-                                .heightIn(max = 280.dp)
-                        )
-                    comment.type == MessageType.VOICE && comment.url != null ->
+                    comment.deleted -> Text("Message deleted", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = textColor.copy(alpha = 0.6f))
+                    comment.type == MessageType.IMAGE -> {
+                        val resolvedUrl = resolveCdnUrl(comment.fileName, comment.url) // В комментариях пока используется url, но логика остаётся для совместимости
+                        if (resolvedUrl != null) {
+                            SpoilerImage(
+                                url = resolvedUrl,
+                                spoiler = comment.spoiler,
+                                isRevealed = isRevealed,
+                                onReveal = onReveal,
+                                onFullscreen = { onImageTap(resolvedUrl) }
+                            )
+                        }
+                    }
+                    comment.type == MessageType.VOICE && comment.url != null -> {
                         by.iposdev.visorlink.ui.screens.chat.VoiceBubbleCompact(
-                            messageId = comment.id,
-                            url = comment.url,
-                            durationSec = comment.duration ?: 0,
-                            tint = textColor,
-                            playback = voicePlayback,
-                            onPlay = onPlayVoice,
-                            onSeek = onSeekVoice
+                            messageId = comment.id, url = comment.url, durationSec = comment.duration ?: 0,
+                            tint = textColor, playback = voicePlayback, onPlay = onPlayVoice, onSeek = onSeekVoice
                         )
-                    comment.type == MessageType.TEXT ->
-                        Text(
-                            comment.text ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = textColor
-                        )
+                    }
+                    comment.type == MessageType.TEXT -> Text(comment.text ?: "", style = MaterialTheme.typography.bodyMedium, color = textColor)
                 }
 
-                // Timestamp + actions
                 Row(
                     modifier = Modifier.align(Alignment.End),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        comment.createdAt?.toDate()?.let {
-                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(it)
-                        } ?: "",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = textColor.copy(alpha = 0.6f),
-                        fontSize = 10.sp
+                        comment.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                        style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
                     )
                     if (isMine && !comment.deleted) {
-                        Icon(
-                            Icons.Default.Delete, "Delete",
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clickable { onDelete() },
-                            tint = textColor.copy(alpha = 0.5f)
-                        )
+                        Icon(Icons.Default.Delete, "Delete", modifier = Modifier.size(14.dp).clickable { onDelete() }, tint = textColor.copy(alpha = 0.5f))
                     }
                     if (!comment.deleted) {
-                        Icon(
-                            Icons.Default.Reply, "Reply",
-                            modifier = Modifier
-                                .size(14.dp)
-                                .clickable { onReply() },
-                            tint = textColor.copy(alpha = 0.5f)
-                        )
+                        Icon(Icons.Default.Reply, "Reply", modifier = Modifier.size(14.dp).clickable { onReply() }, tint = textColor.copy(alpha = 0.5f))
                     }
                 }
             }
         }
 
-        // Reactions row
         AnimatedVisibility(
             visible = comment.parsedReactions.isNotEmpty(),
             enter = scaleIn(initialScale = 0.7f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)) + fadeIn(),
             exit = scaleOut(targetScale = 0.7f) + fadeOut(tween(150))
         ) {
-            CommentReactionRow(
-                reactions = comment.parsedReactions,
-                currentUid = currentUid,
-                hapticEnabled = hapticEnabled,
-                onReact = onReact
-            )
+            CommentReactionRow(reactions = comment.parsedReactions, currentUid = currentUid, hapticEnabled = hapticEnabled, onReact = onReact)
         }
     }
 }
 
-// ─── Reaction row for comments ────────────────────────────────────────────────
-
 @Composable
-private fun CommentReactionRow(
-    reactions: List<Reaction>,
-    currentUid: String,
-    hapticEnabled: Boolean,
-    onReact: (String) -> Unit
-) {
+private fun CommentReactionRow(reactions: List<Reaction>, currentUid: String, hapticEnabled: Boolean, onReact: (String) -> Unit) {
     val haptic = rememberHaptic()
     Row(modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         reactions.forEach { reaction ->
             key(reaction.emoji) {
                 val iReacted = currentUid in reaction.uids
                 Surface(
-                    onClick = {
-                        haptic.perform(HapticType.REACTION, hapticEnabled)
-                        onReact(reaction.emoji)
-                    },
+                    onClick = { haptic.perform(HapticType.REACTION, hapticEnabled); onReact(reaction.emoji) },
                     shape = RoundedCornerShape(12.dp),
-                    color = if (iReacted) MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant,
+                    color = if (iReacted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                     border = if (iReacted) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null,
                     tonalElevation = if (iReacted) 2.dp else 0.dp
                 ) {
@@ -618,13 +479,7 @@ private fun CommentReactionRow(
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Text(reaction.emoji, fontSize = 14.sp)
-                        Text(
-                            reaction.count.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = if (iReacted) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (iReacted) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(reaction.count.toString(), style = MaterialTheme.typography.labelSmall, fontWeight = if (iReacted) FontWeight.SemiBold else FontWeight.Normal, color = if (iReacted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -632,118 +487,60 @@ private fun CommentReactionRow(
     }
 }
 
-// ─── Reply preview inside comment bubble ──────────────────────────────────────
-
 @Composable
-private fun CommentReplyPreview(
-    reply: CommentReplyData,
-    isMine: Boolean,
-    onClick: () -> Unit
-) {
+private fun CommentReplyPreview(reply: CommentReplyData, isMine: Boolean, onClick: () -> Unit) {
     val accent = if (isMine) Color.White.copy(0.25f) else MaterialTheme.colorScheme.primary.copy(0.12f)
     val nameColor = if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary
     val textColor = if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraSmall)
-            .background(accent)
-            .clickable(onClick = onClick)
-            .padding(6.dp)
+        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraSmall).background(accent).clickable(onClick = onClick).padding(6.dp)
     ) {
         Box(Modifier.width(3.dp).height(28.dp).background(nameColor, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(6.dp))
         Column {
-            Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall,
-                color = nameColor, fontWeight = FontWeight.SemiBold)
-            Text(
-                reply.text ?: when (reply.type) {
-                    MessageType.IMAGE -> "📷 Image"
-                    MessageType.VOICE -> "🎤 Voice"
-                    else -> ""
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
+            Text("@${reply.senderUsername}", style = MaterialTheme.typography.labelSmall, color = nameColor, fontWeight = FontWeight.SemiBold)
+            Text(reply.text ?: when (reply.type) { MessageType.IMAGE -> "📷 Image"; MessageType.VOICE -> "🎤 Voice"; else -> "" }, style = MaterialTheme.typography.bodySmall, color = textColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-// ─── Reply banner in input area ───────────────────────────────────────────────
-
 @Composable
 private fun CommentReplyBanner(comment: Comment, onDismiss: () -> Unit) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primaryContainer)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primaryContainer).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(Icons.Default.Reply, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("@${comment.senderUsername}", style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-            Text(
-                when (comment.type) {
-                    MessageType.IMAGE -> "📷 Photo"
-                    MessageType.VOICE -> "🎤 Voice"
-                    else -> comment.text ?: ""
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
+            Text("@${comment.senderUsername}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            Text(when (comment.type) { MessageType.IMAGE -> "📷 Photo"; MessageType.VOICE -> "🎤 Voice"; else -> comment.text ?: "" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Default.Close, "Cancel reply",
-                tint = MaterialTheme.colorScheme.onPrimaryContainer)
-        }
+        IconButton(onClick = onDismiss, modifier = Modifier.size(24.dp)) { Icon(Icons.Default.Close, "Cancel reply", tint = MaterialTheme.colorScheme.onPrimaryContainer) }
     }
 }
 
-// ─── Recording bar in comments ────────────────────────────────────────────────
-
 @Composable
-private fun CommentsRecordingBar(
-    hapticEnabled: Boolean,
-    onCancel: () -> Unit,
-    onSend: () -> Unit
-) {
+private fun CommentsRecordingBar(hapticEnabled: Boolean, onCancel: () -> Unit, onSend: () -> Unit) {
     val haptic = rememberHaptic()
     var elapsed by remember { mutableIntStateOf(0) }
-    val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(
-        initialValue = 1f, targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse),
-        label = "dot_alpha"
-    )
+    val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(initialValue = 1f, targetValue = 0.2f, animationSpec = infiniteRepeatable(tween(600), RepeatMode.Reverse), label = "dot_alpha")
     LaunchedEffect(Unit) { while (true) { delay(1000); elapsed++ } }
 
     Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { haptic.perform(HapticType.ERROR, hapticEnabled); onCancel() }) {
-            Icon(Icons.Default.Delete, "Cancel", tint = MaterialTheme.colorScheme.error)
-        }
+        IconButton(onClick = { haptic.perform(HapticType.ERROR, hapticEnabled); onCancel() }) { Icon(Icons.Default.Delete, "Cancel", tint = MaterialTheme.colorScheme.error) }
         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(10.dp).background(Color.Red.copy(dotAlpha), CircleShape))
             Spacer(Modifier.width(8.dp))
-            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
+            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
         }
         Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-                .clickable { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSend() },
+            modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, CircleShape).clickable { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSend() },
             contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = MaterialTheme.colorScheme.onPrimary)
-        }
+        ) { Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = MaterialTheme.colorScheme.onPrimary) }
     }
 }
-
-// ─── SpoilerImage — shared between CommentsScreen and post bubble ─────────────
 
 @Composable
 fun SpoilerImage(
@@ -776,13 +573,13 @@ fun SpoilerImage(
             model = url,
             contentDescription = null,
             modifier = Modifier
-                .fillMaxWidth()
+                .sizeIn(minWidth = 100.dp, minHeight = 100.dp, maxWidth = 280.dp, maxHeight = 500.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
                 .graphicsLayerAlpha(alpha),
             contentScale = ContentScale.Crop
         )
 
-        // Spoiler overlay
         AnimatedVisibility(
             visible = spoiler && !isRevealed,
             modifier = Modifier.matchParentSize(),
@@ -790,34 +587,18 @@ fun SpoilerImage(
             exit = fadeOut(tween(350))
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("🙈", fontSize = 28.sp)
-                    Text(
-                        "SPOILER",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        letterSpacing = 2.sp
-                    )
-                    Text(
-                        "tap to reveal",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
+                    Text("SPOILER", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White, letterSpacing = 2.sp)
+                    Text("tap to reveal", style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.6f))
                 }
             }
         }
     }
 }
 
-// Modifier extension used in SpoilerImage
 private fun Modifier.graphicsLayerAlpha(alpha: Float): Modifier =
     this.then(Modifier.graphicsLayer { this.alpha = alpha })
