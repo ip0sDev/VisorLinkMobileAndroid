@@ -18,8 +18,10 @@ import by.iposdev.visorlink.data.model.SavedMessagesSettings
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.utils.*
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -29,8 +31,6 @@ import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
-
-// ─── UI State ─────────────────────────────────────────────────────────────────
 
 data class SavedMessagesUiState(
     val messages: List<SavedMessage>         = emptyList(),
@@ -46,8 +46,6 @@ data class SavedMessagesUiState(
     val voicePlayback: VoicePlaybackState    = VoicePlaybackState(),
     val initialDraft: String                 = ""
 )
-
-// ─── ViewModel ────────────────────────────────────────────────────────────────
 
 class SavedMessagesViewModel(
     private val repository: SavedMessagesRepository,
@@ -115,7 +113,7 @@ class SavedMessagesViewModel(
                 if (enableBiometrics) {
                     savePinToKeystoreSecurely(pin)
                 }
-                encryptionKey = deriveKeyFromPin(pin, currentUid)
+                encryptionKey = deriveKey(pin, currentUid)
                 lastUnlockTime = System.currentTimeMillis()
                 _uiState.update { it.copy(isUnlocked = true, showPinInput = false, pinError = false) }
                 startMessagesFlow()
@@ -155,7 +153,7 @@ class SavedMessagesViewModel(
                 viewModelScope.launch {
                     val storedPin = getPinFromKeystoreSecurely() ?: repository.getBiometricPin(currentUid) ?: return@launch
 
-                    encryptionKey = deriveKeyFromPin(storedPin, currentUid)
+                    encryptionKey = deriveKey(storedPin, currentUid)
                     lastUnlockTime = System.currentTimeMillis()
                     _uiState.update { it.copy(isUnlocked = true, showPinInput = false) }
                     startMessagesFlow()
@@ -173,8 +171,6 @@ class SavedMessagesViewModel(
             .build()
         prompt.authenticate(info)
     }
-
-    // ─── Android Keystore (Безопасное хранение PIN) ──────────────────────────
 
     fun hasBiometricPinSaved(): Boolean {
         val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
@@ -236,7 +232,15 @@ class SavedMessagesViewModel(
         }
     }
 
-    // ─── Стандартные методы отправки ────────────────────────────────────────
+    suspend fun decryptMediaToCache(message: SavedMessage): ByteArray? = withContext(Dispatchers.IO) {
+        if (message.encrypted != true || encryptionKey == null || message.cdnMediaId == null) return@withContext null
+        try {
+            val url = CdnService.getFileUrl(message.cdnMediaId)
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            val encryptedBytes = connection.inputStream.readBytes()
+            decryptBytes(encryptedBytes, message.iv ?: return@withContext null, encryptionKey!!)
+        } catch (e: Exception) { null }
+    }
 
     fun onTextChanged(text: String) {
         draftManager.saveDraft("saved_$currentUid", text)
@@ -353,7 +357,6 @@ class SavedMessagesViewModel(
             repository.disablePin(currentUid)
             encryptionKey = null
             _uiState.update { it.copy(isEncryptionEnabled = false) }
-            // Очищаем Keystore при выключении PIN
             val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
             prefs.edit().remove("pin_iv_$currentUid").remove("pin_enc_$currentUid").apply()
         }
@@ -371,11 +374,5 @@ class SavedMessagesViewModel(
         super.onCleared()
         try { recorder?.apply { stop(); release() } } catch (_: Exception) {}
         voicePlayer.release()
-    }
-
-    private fun deriveKeyFromPin(pin: String, salt: String): SecretKey {
-        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        val spec = PBEKeySpec(pin.toCharArray(), salt.toByteArray(), 10000, 256)
-        return SecretKeySpec(factory.generateSecret(spec).encoded, "AES")
     }
 }

@@ -1,3 +1,4 @@
+// utils/CdnService.kt
 package by.iposdev.visorlink.utils
 
 import com.google.firebase.auth.FirebaseAuth
@@ -36,14 +37,32 @@ object CdnService {
         }
     }
 
-    suspend fun uploadFile(file: File, isVault: Boolean = false, onProgress: ((Float) -> Unit)? = null): String = withContext(Dispatchers.IO) {
-        val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
+    suspend fun getFileUrl(cdnMediaId: String): String {
+        val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: ""
+        return "$BASE_URL/f/$cdnMediaId?token=$token"
+    }
+
+    suspend fun uploadFile(
+        file: File,
+        mimeType: String,
+        isVault: Boolean = false,
+        forceRefreshAuth: Boolean = false,
+        onProgress: ((Float) -> Unit)? = null
+    ): String = withContext(Dispatchers.IO) {
+        val auth = FirebaseAuth.getInstance()
+        val token = auth.currentUser?.getIdToken(forceRefreshAuth)?.await()?.token ?: throw Exception("No auth token")
         val zone = if (isVault) "vault" else "public"
 
         // 1. Считаем хэш
         val digest = MessageDigest.getInstance("SHA-256")
-        val bytes = file.readBytes()
-        val hash = digest.digest(bytes).joinToString("") { "%02x".format(it) }
+        val buffer = ByteArray(8192)
+        FileInputStream(file).use { fis ->
+            var bytesRead: Int
+            while (fis.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        val hash = digest.digest().joinToString("") { "%02x".format(it) }
 
         // 2. Формируем Multipart-запрос
         val boundary = "----VisorLinkBoundary${System.currentTimeMillis()}"
@@ -66,28 +85,20 @@ object CdnService {
             writeField("zone", zone)
             writeField("hash", hash)
             writeField("original_name", file.name)
-
-            val mimeType = when {
-                file.name.endsWith(".mp4", true) -> "video/mp4"
-                file.name.endsWith(".webm", true) -> "video/webm"
-                file.name.endsWith(".gif", true) -> "image/gif"
-                else -> "image/jpeg"
-            }
             writeField("mime_type", mimeType)
 
-            // Запись файла с прогрессом
             out.writeBytes("$twoHyphens$boundary$crlf")
             out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"${file.name}\"$crlf")
             out.writeBytes("Content-Type: $mimeType$crlf$crlf")
 
             FileInputStream(file).use { input ->
-                val buffer = ByteArray(4096)
+                val ioBuffer = ByteArray(8192)
                 var bytesRead: Int
                 var totalRead = 0L
                 val fileLength = file.length()
 
-                while (input.read(buffer).also { bytesRead = it } != -1) {
-                    out.write(buffer, 0, bytesRead)
+                while (input.read(ioBuffer).also { bytesRead = it } != -1) {
+                    out.write(ioBuffer, 0, bytesRead)
                     totalRead += bytesRead
                     onProgress?.invoke(totalRead.toFloat() / fileLength)
                 }
@@ -97,12 +108,26 @@ object CdnService {
             out.flush()
         }
 
-        if (connection.responseCode == 200) {
-            val responseJson = JSONObject(connection.inputStream.bufferedReader().readText())
-            responseJson.getString("media_id")
-        } else {
-            val errorText = connection.errorStream?.bufferedReader()?.readText() ?: ""
-            throw Exception(JSONObject(errorText).optString("error", "Ошибка загрузки"))
+        val code = connection.responseCode
+        when (code) {
+            200 -> {
+                val responseJson = JSONObject(connection.inputStream.bufferedReader().readText())
+                responseJson.getString("media_id")
+            }
+            401 -> {
+                if (!forceRefreshAuth) {
+                    // Ретрай с обновлением токена
+                    uploadFile(file, mimeType, isVault, forceRefreshAuth = true, onProgress)
+                } else {
+                    throw Exception("Unauthorized: Ошибка авторизации")
+                }
+            }
+            413 -> throw Exception("Превышена квота облака. Удалите старые файлы или приобретите PRO")
+            503 -> throw Exception("Сервер временно перегружен. Повторите попытку позже")
+            else -> {
+                val errorText = connection.errorStream?.bufferedReader()?.readText() ?: ""
+                throw Exception(JSONObject(errorText).optString("error", "Ошибка загрузки ($code)"))
+            }
         }
     }
 }

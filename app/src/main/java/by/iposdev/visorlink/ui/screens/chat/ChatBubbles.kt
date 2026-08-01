@@ -68,10 +68,6 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Кастомный модификатор жестов (Идеальная синхронизация Tap + Drag)
-// ════════════════════════════════════════════════════════════════════════════════
-
 fun Modifier.messageGestures(
     messageId: String,
     interactionSource: MutableInteractionSource,
@@ -112,10 +108,6 @@ fun Modifier.messageGestures(
         }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  MessageBubble — роутер
-// ════════════════════════════════════════════════════════════════════════════════
-
 @Composable
 internal fun MessageBubble(
     message: Message,
@@ -147,7 +139,6 @@ internal fun MessageBubble(
     val isReadByOther = otherUid in message.readBy
     var showPackBanner by remember(message.id) { mutableStateOf(false) }
 
-    // Визуальное оформление для прогресса загрузки
     val uploadProgressModifier = if (message.uploadProgress != null) {
         Modifier.alpha(0.6f)
     } else Modifier
@@ -189,7 +180,7 @@ internal fun MessageBubble(
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
                         isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
-                        onTap = { message.url?.let { onImageTap(it) } },
+                        onTap = { url -> onImageTap(url) },
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
@@ -223,7 +214,6 @@ internal fun MessageBubble(
             }
         }
 
-        // Оверлей загрузки
         if (message.uploadProgress != null) {
             Box(
                 modifier = Modifier
@@ -241,10 +231,6 @@ internal fun MessageBubble(
         }
     }
 }
-
-// ════════════════════════════════════════════════════════════════════════════════
-//  TextBubble
-// ════════════════════════════════════════════════════════════════════════════════
 
 @Composable
 internal fun TextBubble(
@@ -334,7 +320,10 @@ internal fun TextBubble(
                     Text(stringResource(R.string.chat_message_deleted), style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = textColor.copy(alpha = 0.6f))
                 } else when (message.type) {
                     MessageType.TEXT  -> LinkifiedText(text = message.text ?: "", color = textColor, linkColor = linkColor, onMentionClick = onMentionClick)
-                    MessageType.VOICE -> VoiceBubble(messageId = message.id, url = message.url ?: "", durationSec = message.duration ?: 0, tint = textColor, playback = voicePlayback, onPlay = onPlayVoice, onSeek = onSeekVoice)
+                    MessageType.VOICE -> {
+                        val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
+                        VoiceBubble(messageId = message.id, url = resolvedUrl ?: "", durationSec = message.duration ?: 0, tint = textColor, playback = voicePlayback, onPlay = onPlayVoice, onSeek = onSeekVoice)
+                    }
                 }
 
                 Row(
@@ -377,10 +366,6 @@ internal fun TextBubble(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Video / GIF Bubble
-// ════════════════════════════════════════════════════════════════════════════════
-
 @Composable
 internal fun VideoBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
@@ -414,7 +399,6 @@ internal fun VideoBubble(
                 onLongPressEnd = onLongPressEnd
             ),
         ) {
-            // Подключаем CdnMediaViewer
             CdnMediaViewer(
                 mediaId = message.cdnMediaId,
                 type = message.type,
@@ -476,11 +460,6 @@ internal fun VideoBubble(
     }
 }
 
-
-// ════════════════════════════════════════════════════════════════════════════════
-//  StickerBubble
-// ════════════════════════════════════════════════════════════════════════════════
-
 @Composable
 internal fun StickerBubble(
     message: Message, isMine: Boolean, currentUid: String, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hapticEnabled: Boolean, showPackBanner: Boolean, onTogglePackBanner: () -> Unit,
@@ -490,6 +469,7 @@ internal fun StickerBubble(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "sticker_scale")
+    val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
 
     var isError by remember { mutableStateOf(false) }
 
@@ -524,7 +504,6 @@ internal fun StickerBubble(
                 }
 
                 if (isError) {
-                    // Placeholder для удаленного стикера (404)
                     val stroke = Stroke(width = 4f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f))
                     val color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     Box(
@@ -543,7 +522,7 @@ internal fun StickerBubble(
                     }
                 } else {
                     AsyncImage(
-                        model = message.url,
+                        model = resolvedUrl,
                         contentDescription = null,
                         modifier = Modifier.size(130.dp),
                         onError = { isError = true }
@@ -574,13 +553,9 @@ internal fun StickerBubble(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  ImageBubble
-// ════════════════════════════════════════════════════════════════════════════════
-
 @Composable
 internal fun ImageBubble(
-    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false, onTap: () -> Unit,
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false, onTap: (String) -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
@@ -594,6 +569,7 @@ internal fun ImageBubble(
     val isSpoiler = message.spoiler == true
     var spoilerRevealed by remember(message.id) { mutableStateOf(false) }
     val blurRadius by animateDpAsState(targetValue = if (isSpoiler && !spoilerRevealed) 20.dp else 0.dp, animationSpec = tween(300), label = "spoiler_blur")
+    val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -610,7 +586,7 @@ internal fun ImageBubble(
             modifier = containerModifier.messageGestures(
                 messageId = message.id,
                 interactionSource = interactionSource,
-                onTap = { if (isSpoiler && !spoilerRevealed) spoilerRevealed = true else onTap() },
+                onTap = { if (isSpoiler && !spoilerRevealed) spoilerRevealed = true else resolvedUrl?.let { onTap(it) } },
                 onLongPressStart = onLongPressStart,
                 onLongPressDrag = onLongPressDrag,
                 onLongPressEnd = onLongPressEnd
@@ -628,7 +604,7 @@ internal fun ImageBubble(
                 )
             } else {
                 AsyncImage(
-                    model = message.url, contentDescription = null, contentScale = ContentScale.Crop,
+                    model = resolvedUrl, contentDescription = null, contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 320.dp).then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier),
                 )
             }
@@ -700,10 +676,6 @@ internal fun ImageBubble(
         }
     }
 }
-
-// ════════════════════════════════════════════════════════════════════════════════
-//  AlbumBubble
-// ════════════════════════════════════════════════════════════════════════════════
 
 @Composable
 fun AlbumBubble(
@@ -807,10 +779,6 @@ fun AlbumBubble(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Вспомогательные визуальные модули
-// ════════════════════════════════════════════════════════════════════════════════
-
 @Composable
 private fun AlbumGrid(images: List<AlbumImage>, revealedIndices: Set<Int>, onReveal: (Int) -> Unit, onTap: (Int) -> Unit) {
     val gap = 2.dp
@@ -867,12 +835,14 @@ private fun AlbumGrid(images: List<AlbumImage>, revealedIndices: Set<Int>, onRev
 private fun AlbumCell(image: AlbumImage, revealed: Boolean, modifier: Modifier, onTap: () -> Unit, onReveal: () -> Unit) {
     val isSpoiler = image.spoiler && !revealed
     val blurRadius by animateDpAsState(targetValue = if (isSpoiler) 10.dp else 0.dp, animationSpec = tween(300), label = "cell_blur")
+    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url)
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = { if (isSpoiler) onReveal() else onTap() })
     ) {
-        AsyncImage(model = image.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier))
+        AsyncImage(model = resolvedUrl, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier))
         androidx.compose.animation.AnimatedVisibility(visible = isSpoiler, enter = fadeIn(tween(200)), exit = fadeOut(tween(200))) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.40f)), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {

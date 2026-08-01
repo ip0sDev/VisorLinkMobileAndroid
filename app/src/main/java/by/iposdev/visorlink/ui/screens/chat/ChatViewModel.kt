@@ -16,16 +16,15 @@ import by.iposdev.visorlink.utils.DraftManager
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
-import com.google.firebase.database.database
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.storage.storage
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -76,7 +75,7 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val db: com.google.firebase.firestore.FirebaseFirestore,
+    private val db: FirebaseFirestore,
     private val context: Context,
     private val draftManager: DraftManager,
     val chatId: String,
@@ -258,13 +257,18 @@ class ChatViewModel(
                 _uiState.update { it.copy(isUploading = true) }
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
-                val storagePath = "chats/$chatId/wallpapers/${docId}_${System.currentTimeMillis()}.jpg"
-                val storageRef = Firebase.storage.reference.child(storagePath)
-                storageRef.putFile(uri).await()
-                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                val tempFile = java.io.File(context.cacheDir, "wallpaper_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                }
+
+                val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = false)
+                tempFile.delete()
+
+                val downloadUrl = "${CdnService.BASE_URL}/p/$mediaId"
                 val data = hashMapOf(
                     "url" to downloadUrl,
-                    "storagePath" to storageRef.path,
                     "setBy" to currentUid,
                     "setAt" to FieldValue.serverTimestamp()
                 )
@@ -285,13 +289,7 @@ class ChatViewModel(
                 _uiState.update { it.copy(isUploading = true) }
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
-                val docRef = db.collection("chats").document(chatId).collection("wallpapers").document(docId)
-                val snap = docRef.get().await()
-                val storagePath = snap.getString("storagePath")
-                docRef.delete().await()
-                if (storagePath != null) {
-                    Firebase.storage.getReference(storagePath).delete().await()
-                }
+                db.collection("chats").document(chatId).collection("wallpapers").document(docId).delete().await()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Failed to remove wallpaper: ${e.message}") }
             } finally {
@@ -392,7 +390,7 @@ class ChatViewModel(
 
         viewModelScope.launch {
             try {
-                val mediaId = CdnService.uploadFile(file) { progress ->
+                val mediaId = CdnService.uploadFile(file, if (isGif) "image/gif" else "video/mp4", isVault = false) { progress ->
                     _uiState.update { state ->
                         val updatedTemp = state.tempMessages.map {
                             if (it.id == tempId) it.copy(uploadProgress = progress) else it
@@ -460,9 +458,9 @@ class ChatViewModel(
 
     private fun startGroupOnlineCount(memberIds: List<String>) {
         onlineCountListener?.let {
-            Firebase.database.getReference("presence").removeEventListener(it)
+            FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
         }
-        val presenceRef = Firebase.database.getReference("presence")
+        val presenceRef = FirebaseDatabase.getInstance().getReference("presence")
         onlineCountListener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
                 val count = memberIds.count { uid ->
@@ -667,7 +665,7 @@ class ChatViewModel(
     override fun onCleared() {
         typingManager?.cleanup()
         onlineCountListener?.let {
-            Firebase.database.getReference("presence").removeEventListener(it)
+            FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
         }
         wallpaperListener?.remove()
         voicePlayer.release()

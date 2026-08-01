@@ -1,3 +1,4 @@
+// di/AppModule.kt
 package by.iposdev.visorlink.di
 
 import by.iposdev.visorlink.data.repository.AuthRepository
@@ -30,15 +31,12 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
-import com.google.firebase.storage.storage
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
-
-    // ─── Firebase ─────────────────────────────────────────────────────────────
 
     single {
         Firebase.firestore.also { db ->
@@ -49,23 +47,16 @@ val appModule = module {
         }
     }
     single { Firebase.auth }
-    single { Firebase.storage }
     single { Firebase.functions("europe-west1") }
 
-    // ─── Repositories ─────────────────────────────────────────────────────────
-
     single { AuthRepository(get(), get()) }
-    single { ChatRepository(get(), get(), get(), get(), androidContext()) }
-    single { UserRepository(get(), get(), get(), get(), androidContext()) }
+    single { ChatRepository(get(), get(), get(), androidContext()) }
+    single { UserRepository(get(), get(), get(), androidContext()) }
     single { StickerPackRepository(get(), androidContext()) }
-
-    // ─── Utils ────────────────────────────────────────────────────────────────
 
     single { CacheManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
     single { DraftManager(androidContext()) }
-
-    // ─── ViewModels ───────────────────────────────────────────────────────────
 
     viewModel { AppCheckViewModel() }
 
@@ -115,11 +106,12 @@ val appModule = module {
 
     viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
-    single { SavedMessagesRepository(get(), get()) }
+
+    // Передаем Context для работы с файлами
+    single { SavedMessagesRepository(get(), androidContext()) }
     single { ForwardRepository(get()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }
 
-    // ─── ДОБАВЛЕНО ───
     viewModel { ProViewModel(get()) }
 }

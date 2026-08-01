@@ -185,14 +185,16 @@ data class TagSearchResult(
 // ─── Album Image ──────────────────────────────────────────────────────────────
 
 data class AlbumImage(
-    val url: String = "",
+    val url: String? = null,
+    val cdnMediaId: String? = null,
     val fileName: String = "",
     val spoiler: Boolean = false
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
-        "url"      to url,
-        "fileName" to fileName,
-        "spoiler"  to spoiler
+        "url"        to url,
+        "cdnMediaId" to cdnMediaId,
+        "fileName"   to fileName,
+        "spoiler"    to spoiler
     )
 }
 

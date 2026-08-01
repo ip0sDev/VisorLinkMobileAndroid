@@ -1,5 +1,7 @@
+// data/repository/SavedMessageRepository.kt
 package by.iposdev.visorlink.data.repository
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.google.firebase.firestore.FieldValue
@@ -7,23 +9,21 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import by.iposdev.visorlink.data.model.*
-import by.iposdev.visorlink.utils.decryptText
-import by.iposdev.visorlink.utils.encryptText
-import by.iposdev.visorlink.utils.hashPin
-import com.google.firebase.storage.FirebaseStorage
+import by.iposdev.visorlink.utils.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 import javax.crypto.SecretKey
 
 class SavedMessagesRepository(
     private val db: FirebaseFirestore,
-    private val storage: FirebaseStorage
+    private val context: Context
 ) {
-
-    // ─── Settings ─────────────────────────────────────────────────────────────
 
     suspend fun loadSettings(uid: String): SavedMessagesSettings? {
         val snap = db.collection("savedMessagesSettings").document(uid).get().await()
@@ -33,27 +33,16 @@ class SavedMessagesRepository(
     fun settingsFlow(uid: String): Flow<SavedMessagesSettings?> = callbackFlow {
         val reg = db.collection("savedMessagesSettings").document(uid)
             .addSnapshotListener { snap, _ ->
-                val settings = if (snap?.exists() == true)
-                    snap.toObject(SavedMessagesSettings::class.java) else null
+                val settings = if (snap?.exists() == true) snap.toObject(SavedMessagesSettings::class.java) else null
                 trySend(settings)
             }
         awaitClose { reg.remove() }
     }
 
-    // ─── PIN ──────────────────────────────────────────────────────────────────
-
     suspend fun setPin(uid: String, pin: String) {
         val hash = hashPin(pin, uid)
         db.collection("savedMessagesSettings").document(uid)
-            .set(
-                mapOf(
-                    "pinEnabled"        to true,
-                    "pinHash"           to hash,
-                    "lockTimeout"       to 5,
-                    "updatedAt"         to FieldValue.serverTimestamp()
-                ),
-                SetOptions.merge()
-            ).await()
+            .set(mapOf("pinEnabled" to true, "pinHash" to hash, "lockTimeout" to 5, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
     }
 
     suspend fun verifyPin(uid: String, enteredPin: String): Boolean {
@@ -63,68 +52,32 @@ class SavedMessagesRepository(
     }
 
     suspend fun disablePin(uid: String) {
-        db.collection("savedMessagesSettings").document(uid)
-            .update(
-                mapOf(
-                    "pinEnabled"        to false,
-                    "pinHash"           to FieldValue.delete(),
-                    "updatedAt"         to FieldValue.serverTimestamp()
-                )
-            ).await()
+        db.collection("savedMessagesSettings").document(uid).update(mapOf("pinEnabled" to false, "pinHash" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()
     }
 
     suspend fun updateLockTimeout(uid: String, minutes: Int) {
-        db.collection("savedMessagesSettings").document(uid)
-            .set(
-                mapOf("lockTimeout" to minutes, "updatedAt" to FieldValue.serverTimestamp()),
-                SetOptions.merge()
-            ).await()
+        db.collection("savedMessagesSettings").document(uid).set(mapOf("lockTimeout" to minutes, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
     }
 
-    // ─── Messages Flow ────────────────────────────────────────────────────────
-
     fun messagesFlow(uid: String, key: SecretKey?): Flow<List<SavedMessage>> = callbackFlow {
-        val reg = db.collection("savedMessages").document(uid)
-            .collection("messages")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
+        val reg = db.collection("savedMessages").document(uid).collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snap, _ ->
                 val messages = snap?.documents?.mapNotNull { doc ->
-                    try {
-                        doc.toObject(SavedMessage::class.java)
-                            ?.copy(id = doc.id)
-                            ?.let { msg -> decryptIfNeeded(msg, key) }
-                    } catch (e: Exception) {
-                        Log.e("SavedRepo", "Ошибка парсинга документа ${doc.id}: ${e.message}", e)
-                        null
-                    }
+                    try { doc.toObject(SavedMessage::class.java)?.copy(id = doc.id)?.let { msg -> decryptIfNeeded(msg, key) } } catch (e: Exception) { null }
                 } ?: emptyList()
                 trySend(messages)
             }
         awaitClose { reg.remove() }
     }
 
-    // ─── Save text ────────────────────────────────────────────────────────────
-
-    suspend fun saveText(
-        uid: String,
-        text: String,
-        key: SecretKey?,
-        forwardFrom: ForwardFrom? = null
-    ) {
+    suspend fun saveText(uid: String, text: String, key: SecretKey?, forwardFrom: ForwardFrom? = null) {
         val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
         val data = buildMap<String, Any?> {
-            put("senderId",  uid)
-            put("type",      MessageType.TEXT)
-            put("createdAt", FieldValue.serverTimestamp())
-            put("deleted",   false)
+            put("senderId",  uid); put("type", MessageType.TEXT); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
             forwardFrom?.let { put("forwardFrom", it.toMap()) }
-
             if (key != null) {
                 val (ct, iv) = encryptText(text, key)
-                put("encrypted",     true)
-                put("encryptedText", ct)
-                put("iv",            iv)
-                // "text" намеренно не добавляем
+                put("encrypted", true); put("encryptedText", ct); put("iv", iv)
             } else {
                 put("text", text)
             }
@@ -132,32 +85,44 @@ class SavedMessagesRepository(
         msgRef.set(data).await()
     }
 
-    // ─── Save media (image/voice/sticker/album) ───────────────────────────────
+    suspend fun saveImage(uid: String, uri: Uri, caption: String? = null, key: SecretKey? = null, isSpoiler: Boolean = false, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
+        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "image.jpg"}"
+        val bytes = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@withContext
+        val (uploadBytes, ivStr) = if (key != null) {
+            val (encBytes, iv) = encryptBytes(bytes, key)
+            encBytes to iv
+        } else {
+            bytes to null
+        }
+        val tempFile = File(context.cacheDir, fileName).apply { writeBytes(uploadBytes) }
+        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = true)
+        tempFile.delete()
 
-    suspend fun saveMedia(
-        uid: String,
-        type: String,
-        url: String,
-        fileName: String? = null,
-        duration: Int? = null,
-        caption: String? = null,
-        images: List<AlbumImage>? = null,
-        stickerId: String? = null,
-        packId: String? = null,
-        packName: String? = null,
-        packEmoji: String? = null,
-        spoiler: Boolean = false,
-        forwardFrom: ForwardFrom? = null,
-        // ключ не используется для медиа, но может использоваться для caption
-        key: SecretKey? = null
+        saveMediaMeta(uid, MessageType.IMAGE, mediaId, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, ivStr)
+    }
+
+    suspend fun saveVoice(uid: String, uri: Uri, durationSec: Int, key: SecretKey? = null, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
+        val bytes = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@withContext
+        val (uploadBytes, ivStr) = if (key != null) {
+            val (encBytes, iv) = encryptBytes(bytes, key)
+            encBytes to iv
+        } else {
+            bytes to null
+        }
+        val tempFile = File(context.cacheDir, "voice_${System.currentTimeMillis()}.webm").apply { writeBytes(uploadBytes) }
+        val mediaId = CdnService.uploadFile(tempFile, "audio/webm", isVault = true)
+        tempFile.delete()
+
+        saveMediaMeta(uid, MessageType.VOICE, mediaId, null, durationSec, null, emptyList(), null, null, null, null, false, forwardFrom, key, ivStr)
+    }
+
+    private suspend fun saveMediaMeta(
+        uid: String, type: String, cdnMediaId: String, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?
     ) {
         val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
         val data = buildMap<String, Any?> {
-            put("senderId",  uid)
-            put("type",      type)
-            put("createdAt", FieldValue.serverTimestamp())
-            put("deleted",   false)
-            put("url",       url)
+            put("senderId", uid); put("type", type); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
+            put("cdnMediaId", cdnMediaId)
             if (fileName != null) put("fileName", fileName)
             if (duration != null) put("duration", duration)
             if (spoiler) put("spoiler", true)
@@ -165,16 +130,20 @@ class SavedMessagesRepository(
             if (packId != null) put("packId", packId)
             if (packName != null) put("packName", packName)
             if (packEmoji != null) put("packEmoji", packEmoji)
-            if (images != null) put("images", images.map { it.toMap() })
+            if (images.isNotEmpty()) put("images", images.map { it.toMap() })
             forwardFrom?.let { put("forwardFrom", it.toMap()) }
 
-            // caption — шифруем если ключ есть
+            // Если шифровали сам файл
+            if (fileIv != null) {
+                put("encrypted", true)
+                put("iv", fileIv)
+            }
+            // Шифруем caption
             if (!caption.isNullOrBlank()) {
                 if (key != null) {
                     val (ct, iv) = encryptText(caption, key)
                     put("encryptedCaption", ct)
-                    put("iv",               iv)
-                    put("encrypted",        true)
+                    if (fileIv == null) { put("encrypted", true); put("iv", iv) }
                 } else {
                     put("caption", caption)
                 }
@@ -183,90 +152,19 @@ class SavedMessagesRepository(
         msgRef.set(data).await()
     }
 
-    // ─── Delete ───────────────────────────────────────────────────────────────
-
     suspend fun deleteMessage(uid: String, messageId: String) {
-        db.collection("savedMessages").document(uid)
-            .collection("messages").document(messageId)
-            .update(
-                mapOf(
-                    "deleted"   to true,
-                    "deletedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+        db.collection("savedMessages").document(uid).collection("messages").document(messageId).update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
     }
-
-    // ─── Internal: decrypt in-memory if needed ────────────────────────────────
 
     private fun decryptIfNeeded(msg: SavedMessage, key: SecretKey?): SavedMessage {
         if (msg.encrypted != true) return msg
-        if (key == null) return msg  // заблокировано — текст не показываем
-        val ct = msg.encryptedText ?: return msg
+        if (key == null) return msg
+        val ct = msg.encryptedText
         val iv = msg.iv ?: return msg
-        val plaintext = decryptText(ct, iv, key) ?: return msg  // null → ошибка расшифровки
+        val plaintext = ct?.let { decryptText(it, iv, key) }
         val caption = msg.encryptedCaption?.let { decryptText(it, iv, key) }
-        return msg.copy(text = plaintext, caption = caption ?: msg.caption)
-    }
-    // ─── Save Image ───────────────────────────────────────────────────────────
-
-    suspend fun saveImage(
-        uid: String,
-        uri: Uri,
-        caption: String? = null,
-        key: SecretKey? = null,
-        isSpoiler: Boolean = false,
-        forwardFrom: ForwardFrom? = null
-    ) {
-        // 1. Загружаем в Storage (папка savedMessages/UID/media)
-        val fileName = "img_${System.currentTimeMillis()}_${uri.lastPathSegment}"
-        val ref = storage.reference.child("savedMessages/$uid/media/$fileName")
-
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
-
-        // 2. Сохраняем метаданные в Firestore через твой метод saveMedia
-        saveMedia(
-            uid = uid,
-            type = MessageType.IMAGE,
-            url = url,
-            fileName = uri.lastPathSegment ?: "image.jpg",
-            caption = caption,
-            spoiler = isSpoiler,
-            forwardFrom = forwardFrom,
-            key = key
-        )
+        return msg.copy(text = plaintext ?: msg.text, caption = caption ?: msg.caption)
     }
 
-    // ─── Save Voice ───────────────────────────────────────────────────────────
-
-    suspend fun saveVoice(
-        uid: String,
-        uri: Uri, // Изменили с File на Uri
-        durationSec: Int,
-        key: SecretKey? = null,
-        forwardFrom: ForwardFrom? = null
-    ) {
-        val fileName = "voice_${System.currentTimeMillis()}.webm"
-        val ref = storage.reference.child("savedMessages/$uid/media/$fileName")
-
-        // Теперь просто передаем uri напрямую
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
-
-        saveMedia(
-            uid = uid,
-            type = MessageType.VOICE,
-            url = url,
-            duration = durationSec,
-            forwardFrom = forwardFrom,
-            key = key
-        )
-    }
-    suspend fun getBiometricPin(uid: String): String? {
-        // Биометрия без хранения plain-PIN невозможна без Keystore-ключа.
-        // Возвращаем null — биометрия тогда только разблокирует UI,
-        // но ключ шифрования не восстанавливается (текст недоступен до PIN-ввода).
-        // Для полноценной биометрии нужно хранить PIN в Android Keystore.
-        return null
-    }
+    suspend fun getBiometricPin(uid: String): String? = null
 }

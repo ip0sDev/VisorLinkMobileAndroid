@@ -56,13 +56,15 @@ import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
-private fun SavedMessage.toMessage(currentUid: String): Message = Message(
+private fun SavedMessage.toMessage(currentUid: String, decryptedBytes: ByteArray? = null): Message = Message(
     id         = id,
     senderId   = currentUid,
     senderUsername = "",
     type       = type,
     text       = text,
     url        = url,
+    cdnMediaId = cdnMediaId,
+    localBytes = decryptedBytes ?: localBytes,
     fileName   = fileName,
     duration   = duration,
     caption    = caption,
@@ -237,7 +239,16 @@ fun SavedMessagesScreen(
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
                                 items(items = uiState.messages.asReversed(), key = { it.id }) { saved ->
-                                    val msg = saved.toMessage(viewModel.currentUid)
+                                    var decryptedBytes by remember(saved.id) { mutableStateOf<ByteArray?>(null) }
+
+                                    LaunchedEffect(saved) {
+                                        if (saved.encrypted == true && saved.cdnMediaId != null && decryptedBytes == null) {
+                                            decryptedBytes = viewModel.decryptMediaToCache(saved)
+                                        }
+                                    }
+
+                                    val msg = saved.toMessage(viewModel.currentUid, decryptedBytes)
+
                                     SwipeableMessage(
                                         message       = msg,
                                         isMine        = true,

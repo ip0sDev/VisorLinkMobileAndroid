@@ -1,3 +1,4 @@
+// data/repository/UserRepository.kt
 package by.iposdev.visorlink.data.repository
 
 import android.content.Context
@@ -6,10 +7,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.Sticker
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.utils.ChatDataCache
+import by.iposdev.visorlink.utils.CdnService
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -22,11 +23,12 @@ import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
+import java.io.File
+import java.io.FileOutputStream
 
 class UserRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
-    private val storage: FirebaseStorage,
     private val functions: FirebaseFunctions,
     private val context: Context
 ) {
@@ -73,13 +75,20 @@ class UserRepository(
         return getUserProfile(uid)
     }
 
-    suspend fun uploadAvatar(uri: Uri): String {
-        val ref = storage.reference.child("avatars/$currentUid/avatar")
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
+    suspend fun uploadAvatar(uri: Uri): String = withContext(Dispatchers.IO) {
+        val tempFile = File(context.cacheDir, "avatar_${System.currentTimeMillis()}.jpg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+        }
+
+        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = false)
+        tempFile.delete()
+
+        val url = "${CdnService.BASE_URL}/p/$mediaId"
+
         db.collection("users").document(currentUid)
             .update("avatarUrl", url, "updatedAt", FieldValue.serverTimestamp()).await()
-        return url
+        return@withContext url
     }
 
     suspend fun checkUsername(username: String): Pair<Boolean, String?> {
@@ -110,21 +119,24 @@ class UserRepository(
         awaitClose { reg.remove() }
     }
 
-    suspend fun uploadSticker(uri: Uri, name: String) {
-        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment}"
-        val storagePath = "stickers/$currentUid/$fileName"
-        val ref = storage.reference.child(storagePath)
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
+    suspend fun uploadSticker(uri: Uri, name: String) = withContext(Dispatchers.IO) {
+        val tempFile = File(context.cacheDir, "sticker_${System.currentTimeMillis()}.webp")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+        }
+
+        val mediaId = CdnService.uploadFile(tempFile, "image/webp", isVault = false)
+        tempFile.delete()
+
+        val url = "${CdnService.BASE_URL}/p/$mediaId"
         db.collection("users").document(currentUid).collection("stickers").add(mapOf(
-            "url" to url, "name" to name,
-            "storagePath" to storagePath,
+            "url" to url,
+            "name" to name,
             "createdAt" to FieldValue.serverTimestamp()
         )).await()
     }
 
     suspend fun deleteSticker(sticker: Sticker) {
-        storage.reference.child(sticker.storagePath).delete().await()
         db.collection("users").document(currentUid)
             .collection("stickers").document(sticker.id).delete().await()
     }
@@ -148,8 +160,6 @@ class UserRepository(
         ref.addValueEventListener(listener)
         awaitClose { ref.removeEventListener(listener) }
     }
-
-    // ─── PRO Subscription ─────────────────────────────────────────────────────
 
     suspend fun buyPro(useTrial: Boolean) {
         functions.getHttpsCallable("buyProSubscription")

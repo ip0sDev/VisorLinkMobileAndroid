@@ -10,9 +10,9 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
-import com.google.firebase.storage.FirebaseStorage
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.utils.ChatDataCache
+import by.iposdev.visorlink.utils.CdnService
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
@@ -22,14 +22,15 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.FileOutputStream
 
 private const val PAGE_SIZE = 20L
 
 class ChatRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
-    private val storage: FirebaseStorage,
     private val functions: FirebaseFunctions,
     private val context: Context
 ) {
@@ -42,10 +43,7 @@ class ChatRepository(
         db.collection("chats").document(chatId).get().await().exists()
     } catch (e: Exception) { false }
 
-    // ─── All chats (direct + group + channel) ────────────────────────────────
-
     fun allChatsFlow(uid: String): Flow<List<Chat>> = callbackFlow {
-        // --- 1. MIGHTY CACHE FIRST ---
         launch(Dispatchers.IO) {
             val cached = ChatDataCache.loadChatList(context, uid)
             if (cached.isNotEmpty()) trySend(cached)
@@ -59,34 +57,25 @@ class ChatRepository(
                 .distinctBy { it.id }
                 .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
             trySend(all)
-            // --- SAVE TO CACHE ---
             launch(Dispatchers.IO) { ChatDataCache.saveChatList(context, uid, all) }
         }
 
-        val reg1 = db.collection("chats")
-            .whereArrayContains("participants", uid)
+        val reg1 = db.collection("chats").whereArrayContains("participants", uid)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snap, _ ->
                 directChats.clear()
                 snap?.documents?.forEach { doc ->
-                    try {
-                        doc.toObject(Chat::class.java)?.copy(id = doc.id)
-                            ?.let { directChats.add(it) }
-                    } catch (_: Exception) {}
+                    try { doc.toObject(Chat::class.java)?.copy(id = doc.id)?.let { directChats.add(it) } } catch (_: Exception) {}
                 }
                 merge()
             }
 
-        val reg2 = db.collection("chats")
-            .whereArrayContains("memberIds", uid)
+        val reg2 = db.collection("chats").whereArrayContains("memberIds", uid)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snap, _ ->
                 groupChats.clear()
                 snap?.documents?.forEach { doc ->
-                    try {
-                        doc.toObject(Chat::class.java)?.copy(id = doc.id)
-                            ?.let { groupChats.add(it) }
-                    } catch (_: Exception) {}
+                    try { doc.toObject(Chat::class.java)?.copy(id = doc.id)?.let { groupChats.add(it) } } catch (_: Exception) {}
                 }
                 merge()
             }
@@ -96,68 +85,41 @@ class ChatRepository(
 
     fun chatsFlow(uid: String) = allChatsFlow(uid)
 
-    // ─── Messages ─────────────────────────────────────────────────────────────
-
-    fun latestMessagesFlow(
-        chatId: String,
-        onUpdate: (List<Message>, DocumentSnapshot?) -> Unit
-    ): Flow<Unit> = callbackFlow {
-        // --- 1. MIGHTY CACHE FIRST ---
+    fun latestMessagesFlow(chatId: String, onUpdate: (List<Message>, DocumentSnapshot?) -> Unit): Flow<Unit> = callbackFlow {
         launch(Dispatchers.IO) {
             val cached = ChatDataCache.loadMessages(context, chatId)
             if (cached.isNotEmpty()) onUpdate(cached, null)
         }
 
-        val reg = db.collection("chats").document(chatId)
-            .collection("messages")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .limit(PAGE_SIZE)
+        val reg = db.collection("chats").document(chatId).collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
             .addSnapshotListener { snap, error ->
                 if (error != null || snap == null) return@addSnapshotListener
-                val messages = snap.documents
-                    .mapNotNull { doc ->
-                        try { doc.toObject(Message::class.java)?.copy(id = doc.id) }
-                        catch (_: Exception) { null }
-                    }
-                    .reversed()
+                val messages = snap.documents.mapNotNull { doc ->
+                    try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
+                }.reversed()
                 val lastDoc = snap.documents.lastOrNull()
                 onUpdate(messages, lastDoc)
                 trySend(Unit)
-                // --- SAVE TO CACHE ---
                 launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, messages) }
             }
         awaitClose { reg.remove() }
     }
 
-    suspend fun loadOlderMessages(
-        chatId: String,
-        startAfterDoc: DocumentSnapshot
-    ): Pair<List<Message>, DocumentSnapshot?> {
-        val snap = db.collection("chats").document(chatId)
-            .collection("messages")
-            .orderBy("createdAt", Query.Direction.DESCENDING)
-            .startAfter(startAfterDoc)
-            .limit(PAGE_SIZE)
-            .get().await()
-        val messages = snap.documents
-            .mapNotNull { doc ->
-                try { doc.toObject(Message::class.java)?.copy(id = doc.id) }
-                catch (_: Exception) { null }
-            }
-            .reversed()
-        val newLastDoc = snap.documents.lastOrNull()
-        return Pair(messages, if (snap.documents.size >= PAGE_SIZE) newLastDoc else null)
+    suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> {
+        val snap = db.collection("chats").document(chatId).collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING).startAfter(startAfterDoc).limit(PAGE_SIZE).get().await()
+        val messages = snap.documents.mapNotNull { doc ->
+            try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
+        }.reversed()
+        return Pair(messages, if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
     }
 
-    // ─── Members ──────────────────────────────────────────────────────────────
-
     fun membersFlow(chatId: String): Flow<List<Member>> = callbackFlow {
-        val reg = db.collection("chats").document(chatId)
-            .collection("members")
+        val reg = db.collection("chats").document(chatId).collection("members")
             .addSnapshotListener { snap, _ ->
                 val members = snap?.documents?.mapNotNull { doc ->
-                    try { doc.toObject(Member::class.java)?.copy(uid = doc.id) }
-                    catch (_: Exception) { null }
+                    try { doc.toObject(Member::class.java)?.copy(uid = doc.id) } catch (_: Exception) { null }
                 } ?: emptyList()
                 trySend(members)
             }
@@ -165,21 +127,15 @@ class ChatRepository(
     }
 
     suspend fun getMyMemberData(chatId: String): Member? {
-        val snap = db.collection("chats").document(chatId)
-            .collection("members").document(currentUid).get().await()
+        val snap = db.collection("chats").document(chatId).collection("members").document(currentUid).get().await()
         return snap.toObject(Member::class.java)?.copy(uid = snap.id)
     }
 
-    // ─── Invites / Notifications ──────────────────────────────────────────────
-
     fun pendingInvitesFlow(uid: String): Flow<List<GroupInvite>> = callbackFlow {
-        val reg = db.collection("invites")
-            .whereEqualTo("invitedUid", uid)
-            .whereEqualTo("status", "pending")
+        val reg = db.collection("invites").whereEqualTo("invitedUid", uid).whereEqualTo("status", "pending")
             .addSnapshotListener { snap, _ ->
                 val invites = snap?.documents?.mapNotNull { doc ->
-                    try { doc.toObject(GroupInvite::class.java)?.copy(id = doc.id) }
-                    catch (_: Exception) { null }
+                    try { doc.toObject(GroupInvite::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
                 } ?: emptyList()
                 trySend(invites)
             }
@@ -187,31 +143,19 @@ class ChatRepository(
     }
 
     fun notificationsFlow(uid: String): Flow<List<AppNotification>> = callbackFlow {
-        val reg = db.collection("users").document(uid)
-            .collection("notifications")
-            .whereEqualTo("read", false)
+        val reg = db.collection("users").document(uid).collection("notifications").whereEqualTo("read", false)
             .addSnapshotListener { snap, _ ->
                 val notifs = snap?.documents?.mapNotNull { doc ->
-                    try { doc.toObject(AppNotification::class.java)?.copy(id = doc.id) }
-                    catch (_: Exception) { null }
+                    try { doc.toObject(AppNotification::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
                 } ?: emptyList()
                 trySend(notifs)
             }
         awaitClose { reg.remove() }
     }
 
-    fun onlineStatusFlow(uid: String): Flow<Pair<Boolean, com.google.firebase.Timestamp?>> =
-        callbackFlow {
-            trySend(Pair(false, null))
-            awaitClose {}
-        }
-
-    // ─── Create / find direct chat ────────────────────────────────────────────
-
     suspend fun findOrCreateChat(currentUserProfile: UserProfile, targetUid: String): String {
         val targetDoc = db.collection("users").document(targetUid).get().await()
-        val targetUser = targetDoc.toObject(UserProfile::class.java)
-            ?: throw Exception("User not found")
+        val targetUser = targetDoc.toObject(UserProfile::class.java) ?: throw Exception("User not found")
         val chatId = getChatId(currentUserProfile.uid, targetUid)
         val chatDoc = db.collection("chats").document(chatId).get().await()
         if (!chatDoc.exists()) {
@@ -219,14 +163,8 @@ class ChatRepository(
                 "type"            to "direct",
                 "participants"    to listOf(currentUserProfile.uid, targetUid),
                 "participantData" to mapOf(
-                    currentUserProfile.uid to mapOf(
-                        "username"    to currentUserProfile.username,
-                        "displayName" to currentUserProfile.displayName
-                    ),
-                    targetUid to mapOf(
-                        "username"    to targetUser.username,
-                        "displayName" to targetUser.displayName
-                    )
+                    currentUserProfile.uid to mapOf("username" to currentUserProfile.username, "displayName" to currentUserProfile.displayName),
+                    targetUid to mapOf("username" to targetUser.username, "displayName" to targetUser.displayName)
                 ),
                 "createdAt"      to FieldValue.serverTimestamp(),
                 "lastMessageAt"  to FieldValue.serverTimestamp(),
@@ -236,24 +174,14 @@ class ChatRepository(
         return chatId
     }
 
-    // ─── Cloud Functions ──────────────────────────────────────────────────────
-
-    suspend fun createChat(
-        type: String,
-        name: String,
-        tag: String,
-        description: String = ""
-    ): Pair<String, String> {
-        val result = functions.getHttpsCallable("createChat")
-            .call(mapOf("type" to type, "name" to name, "tag" to tag, "description" to description))
-            .await()
+    suspend fun createChat(type: String, name: String, tag: String, description: String = ""): Pair<String, String> {
+        val result = functions.getHttpsCallable("createChat").call(mapOf("type" to type, "name" to name, "tag" to tag, "description" to description)).await()
         val data = result.data as Map<*, *>
         return Pair(data["chatId"] as String, data["inviteLink"] as String)
     }
 
     suspend fun findByTag(tag: String): TagSearchResult {
-        val result = functions.getHttpsCallable("findByTag")
-            .call(mapOf("tag" to tag)).await()
+        val result = functions.getHttpsCallable("findByTag").call(mapOf("tag" to tag)).await()
         val data = result.data as Map<*, *>
         if (data["found"] != true) return TagSearchResult(found = false)
         return TagSearchResult(
@@ -270,78 +198,52 @@ class ChatRepository(
     }
 
     suspend fun joinByTag(tag: String): String {
-        val result = functions.getHttpsCallable("joinByTag")
-            .call(mapOf("tag" to tag)).await()
+        val result = functions.getHttpsCallable("joinByTag").call(mapOf("tag" to tag)).await()
         return (result.data as Map<*, *>)["chatId"] as String
     }
 
     suspend fun joinByInvite(token: String): Pair<String, String> {
-        val result = functions.getHttpsCallable("joinByInvite")
-            .call(mapOf("token" to token)).await()
+        val result = functions.getHttpsCallable("joinByInvite").call(mapOf("token" to token)).await()
         val data = result.data as Map<*, *>
         return Pair(data["chatId"] as String, data["chatType"] as? String ?: "group")
     }
 
     suspend fun inviteUser(chatId: String, username: String) {
-        functions.getHttpsCallable("inviteUser")
-            .call(mapOf("chatId" to chatId, "targetUsername" to username)).await()
+        functions.getHttpsCallable("inviteUser").call(mapOf("chatId" to chatId, "targetUsername" to username)).await()
     }
 
     suspend fun respondToInvite(inviteId: String, accept: Boolean): String? {
-        val result = functions.getHttpsCallable("respondToInvite")
-            .call(mapOf("inviteId" to inviteId, "accept" to accept)).await()
+        val result = functions.getHttpsCallable("respondToInvite").call(mapOf("inviteId" to inviteId, "accept" to accept)).await()
         return (result.data as Map<*, *>)["chatId"] as? String
     }
 
     suspend fun leaveChat(chatId: String) {
-        functions.getHttpsCallable("leaveChat")
-            .call(mapOf("chatId" to chatId)).await()
+        functions.getHttpsCallable("leaveChat").call(mapOf("chatId" to chatId)).await()
     }
 
-    suspend fun moderateUser(
-        chatId: String,
-        targetUid: String,
-        action: String,
-        durationMinutes: Int? = null
-    ) {
-        functions.getHttpsCallable("moderateUser")
-            .call(mapOf(
-                "chatId"          to chatId,
-                "targetUid"       to targetUid,
-                "action"          to action,
-                "durationMinutes" to durationMinutes
-            )).await()
+    suspend fun moderateUser(chatId: String, targetUid: String, action: String, durationMinutes: Int? = null) {
+        functions.getHttpsCallable("moderateUser").call(mapOf("chatId" to chatId, "targetUid" to targetUid, "action" to action, "durationMinutes" to durationMinutes)).await()
     }
 
     suspend fun setMemberRole(chatId: String, targetUid: String, role: String) {
-        functions.getHttpsCallable("setMemberRole")
-            .call(mapOf("chatId" to chatId, "targetUid" to targetUid, "role" to role)).await()
+        functions.getHttpsCallable("setMemberRole").call(mapOf("chatId" to chatId, "targetUid" to targetUid, "role" to role)).await()
     }
 
     suspend fun updateChatSettings(chatId: String, params: Map<String, Any?>) {
-        functions.getHttpsCallable("updateChatSettings")
-            .call(params + mapOf("chatId" to chatId)).await()
+        functions.getHttpsCallable("updateChatSettings").call(params + mapOf("chatId" to chatId)).await()
     }
 
     suspend fun regenerateInviteLink(chatId: String): String {
-        val result = functions.getHttpsCallable("regenerateInviteLink")
-            .call(mapOf("chatId" to chatId)).await()
+        val result = functions.getHttpsCallable("regenerateInviteLink").call(mapOf("chatId" to chatId)).await()
         return (result.data as Map<*, *>)["inviteLink"] as String
     }
 
-    // ─── Send messages ────────────────────────────────────────────────────────
-
-    suspend fun sendText(
-        chatId: String,
-        text: String,
-        senderUsername: String,
-        replyTo: ReplyData?
-    ) {
+    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
         val userRef = db.collection("users").document(currentUid)
 
         val batch  = db.batch()
-        batch.set(msgRef, mutableMapOf<String, Any?>(
+        batch.set(msgRef, mapOf(
             "senderId"       to currentUid,
             "senderUsername" to senderUsername,
             "type"           to MessageType.TEXT,
@@ -360,92 +262,60 @@ class ChatRepository(
         batch.commit().await()
     }
 
-    suspend fun sendImage(
-        chatId: String,
-        uri: Uri,
-        senderUsername: String,
-        replyTo: ReplyData?,
-        isSpoiler: Boolean = false
-    ) {
-        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment}"
-        val ref      = storage.reference.child("chats/$chatId/$fileName")
-        ref.putFile(uri).await()
-        val url = ref.downloadUrl.await().toString()
+    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false) = withContext(Dispatchers.IO) {
+        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "image.jpg"}"
+        val tempFile = File(context.cacheDir, fileName)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+        }
+        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg")
+        tempFile.delete()
 
         val extra = mutableMapOf<String, Any?>(
-            "type"     to MessageType.IMAGE,
-            "url"      to url,
-            "fileName" to (uri.lastPathSegment ?: "image")
+            "type"       to MessageType.IMAGE,
+            "cdnMediaId" to mediaId,
+            "fileName"   to fileName
         )
         if (isSpoiler) extra["spoiler"] = true
-
         sendExtra(chatId, extra, "📷 Image", senderUsername, replyTo)
     }
 
-    suspend fun sendVoice(
-        chatId: String,
-        file: File,
-        durationSec: Int,
-        senderUsername: String,
-        replyTo: ReplyData?
-    ) {
-        val path = "chats/$chatId/voice_${System.currentTimeMillis()}.webm"
-        val ref  = storage.reference.child(path)
-        ref.putFile(Uri.fromFile(file)).await()
-        val url = ref.downloadUrl.await().toString()
+    suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?) = withContext(Dispatchers.IO) {
+        val mediaId = CdnService.uploadFile(file, "audio/webm")
         sendExtra(chatId, mapOf(
-            "type"     to MessageType.VOICE,
-            "url"      to url,
-            "duration" to durationSec
+            "type"       to MessageType.VOICE,
+            "cdnMediaId" to mediaId,
+            "duration"   to durationSec
         ), "🎤 Voice message", senderUsername, replyTo)
     }
 
-    suspend fun sendSticker(
-        chatId: String,
-        sticker: StickerItem,
-        packId: String,
-        packName: String,
-        packEmoji: String,
-        senderUsername: String,
-        replyTo: ReplyData?
-    ) {
-        sendExtra(
-            chatId,
-            mapOf(
-                "type"      to MessageType.STICKER,
-                "url"       to sticker.url,
-                "stickerId" to sticker.id,
-                "packId"    to packId,
-                "packName"  to packName,
-                "packEmoji" to packEmoji
-            ),
-            "$packEmoji Sticker",
-            senderUsername,
-            replyTo
-        )
+    suspend fun sendSticker(chatId: String, sticker: StickerItem, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
+        sendExtra(chatId, mapOf(
+            "type"      to MessageType.STICKER,
+            "url"       to sticker.url,
+            "stickerId" to sticker.id,
+            "packId"    to packId,
+            "packName"  to packName,
+            "packEmoji" to packEmoji
+        ), "$packEmoji Sticker", senderUsername, replyTo)
     }
 
-    suspend fun uploadAlbumImages(
-        chatId: String,
-        items: List<AlbumImageLocal>
-    ): List<AlbumImage> = coroutineScope {
+    suspend fun uploadAlbumImages(chatId: String, items: List<AlbumImageLocal>): List<AlbumImage> = coroutineScope {
         items.map { item ->
-            async {
+            async(Dispatchers.IO) {
                 val fileName = "${System.currentTimeMillis()}_${item.uri.lastPathSegment ?: "photo.jpg"}"
-                val ref = storage.reference.child("chats/$chatId/$fileName")
-                ref.putFile(item.uri).await()
-                val url = ref.downloadUrl.await().toString()
-                AlbumImage(url = url, fileName = fileName, spoiler = item.spoiler)
+                val tempFile = File(context.cacheDir, fileName)
+                context.contentResolver.openInputStream(item.uri)?.use { input ->
+                    FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                }
+                val mediaId = CdnService.uploadFile(tempFile, "image/jpeg")
+                tempFile.delete()
+                AlbumImage(cdnMediaId = mediaId, fileName = fileName, spoiler = item.spoiler)
             }
         }.awaitAll()
     }
 
-    suspend fun sendAlbum(
-        chatId: String,
-        images: List<AlbumImage>,
-        caption: String?,
-        replyTo: ReplyData?
-    ): String {
+    suspend fun sendAlbum(chatId: String, images: List<AlbumImage>, caption: String?, replyTo: ReplyData?): String {
         val data = buildMap<String, Any?> {
             put("chatId",  chatId)
             put("images",  images.map { it.toMap() })
@@ -453,26 +323,15 @@ class ChatRepository(
             if (replyTo != null) put("replyTo", replyTo.toMap())
         }
         val result = functions.getHttpsCallable("sendAlbum").call(data).await()
-
-        try {
-            db.collection("users").document(currentUid)
-                .update("lastMessageAt", FieldValue.serverTimestamp()).await()
-        } catch (_: Exception) {}
-
+        try { db.collection("users").document(currentUid).update("lastMessageAt", FieldValue.serverTimestamp()).await() } catch (_: Exception) {}
         return (result.data as Map<*, *>)["messageId"] as String
     }
 
-    private suspend fun sendExtra(
-        chatId: String,
-        extra: Map<String, Any?>,
-        preview: String,
-        senderUsername: String,
-        replyTo: ReplyData?
-    ) {
+    private suspend fun sendExtra(chatId: String, extra: Map<String, Any?>, preview: String, senderUsername: String, replyTo: ReplyData?) {
         val msgRef = db.collection("chats").document(chatId).collection("messages").document()
         val userRef = db.collection("users").document(currentUid)
 
-        val msg    = mutableMapOf<String, Any?>(
+        val msg = mutableMapOf<String, Any?>(
             "senderId"       to currentUid,
             "senderUsername" to senderUsername,
             "createdAt"      to FieldValue.serverTimestamp(),
@@ -485,24 +344,17 @@ class ChatRepository(
 
         val batch = db.batch()
         batch.set(msgRef, msg)
-        batch.update(db.collection("chats").document(chatId), mapOf(
-            "lastMessage"   to preview,
-            "lastMessageAt" to FieldValue.serverTimestamp()
-        ))
-
+        batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to preview, "lastMessageAt" to FieldValue.serverTimestamp()))
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
     }
 
     suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {
-        val unread = messages.filter {
-            it.senderId != uid && !it.readBy.contains(uid) && !it.deleted
-        }
+        val unread = messages.filter { it.senderId != uid && !it.readBy.contains(uid) && !it.deleted }
         if (unread.isEmpty()) return
         val batch = db.batch()
         for (msg in unread) {
-            val ref = db.collection("chats").document(chatId)
-                .collection("messages").document(msg.id)
+            val ref = db.collection("chats").document(chatId).collection("messages").document(msg.id)
             batch.update(ref, "readBy", FieldValue.arrayUnion(uid))
         }
         batch.commit().await()
@@ -510,34 +362,19 @@ class ChatRepository(
 
     suspend fun deleteMessage(chatId: String, messageId: String) {
         db.collection("chats").document(chatId).collection("messages").document(messageId)
-            .update(mapOf(
-                "deleted"   to true,
-                "deletedAt" to FieldValue.serverTimestamp()
-            )).await()
+            .update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
     }
 
-    suspend fun toggleReaction(
-        chatId: String,
-        messageId: String,
-        emoji: String,
-        currentReactions: List<Reaction>
-    ) {
-        val ref      = db.collection("chats").document(chatId)
-            .collection("messages").document(messageId)
+    suspend fun toggleReaction(chatId: String, messageId: String, emoji: String, currentReactions: List<Reaction>) {
+        val ref = db.collection("chats").document(chatId).collection("messages").document(messageId)
         val existing = currentReactions.find { it.emoji == emoji }
         val updated  = if (existing != null) {
             if (currentUid in existing.uids) {
                 val newUids = existing.uids - currentUid
                 if (newUids.isEmpty()) currentReactions.filter { it.emoji != emoji }
-                else currentReactions.map {
-                    if (it.emoji == emoji) it.copy(uids = newUids, count = newUids.size) else it
-                }
+                else currentReactions.map { if (it.emoji == emoji) it.copy(uids = newUids, count = newUids.size) else it }
             } else {
-                currentReactions.map {
-                    if (it.emoji == emoji)
-                        it.copy(uids = it.uids + currentUid, count = it.count + 1)
-                    else it
-                }
+                currentReactions.map { if (it.emoji == emoji) it.copy(uids = it.uids + currentUid, count = it.count + 1) else it }
             }
         } else {
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
@@ -545,55 +382,26 @@ class ChatRepository(
         ref.update("reactions", updated.map { it.toMap() }).await()
     }
 
-    fun listenComments(
-        chatId: String,
-        messageId: String,
-        onUpdate: (List<Comment>) -> Unit
-    ): ListenerRegistration {
-        return db.collection("chats").document(chatId)
-            .collection("messages").document(messageId)
-            .collection("comments")
-            .orderBy("createdAt", Query.Direction.ASCENDING)
+    fun listenComments(chatId: String, messageId: String, onUpdate: (List<Comment>) -> Unit): ListenerRegistration {
+        return db.collection("chats").document(chatId).collection("messages").document(messageId)
+            .collection("comments").orderBy("createdAt", Query.Direction.ASCENDING)
             .addSnapshotListener { snap, error ->
                 if (error != null || snap == null) return@addSnapshotListener
-                val comments = snap.documents.mapNotNull { doc ->
-                    try { doc.toObject(Comment::class.java)?.copy(id = doc.id) }
-                    catch (_: Exception) { null }
-                }
+                val comments = snap.documents.mapNotNull { doc -> try { doc.toObject(Comment::class.java)?.copy(id = doc.id) } catch (_: Exception) { null } }
                 onUpdate(comments)
             }
     }
 
-    fun listenPost(
-        chatId: String,
-        messageId: String,
-        onUpdate: (Message) -> Unit
-    ): ListenerRegistration {
-        return db.collection("chats").document(chatId)
-            .collection("messages").document(messageId)
-            .addSnapshotListener { snap, _ ->
-                snap?.toObject(Message::class.java)
-                    ?.copy(id = snap.id)
-                    ?.let(onUpdate)
-            }
+    fun listenPost(chatId: String, messageId: String, onUpdate: (Message) -> Unit): ListenerRegistration {
+        return db.collection("chats").document(chatId).collection("messages").document(messageId)
+            .addSnapshotListener { snap, _ -> snap?.toObject(Message::class.java)?.copy(id = snap.id)?.let(onUpdate) }
     }
 
-    suspend fun addComment(
-        chatId: String,
-        messageId: String,
-        type: String,
-        text: String? = null,
-        url: String? = null,
-        fileName: String? = null,
-        duration: Int? = null,
-        spoiler: Boolean = false,
-        replyTo: CommentReplyData? = null
-    ): String {
+    suspend fun addComment(chatId: String, messageId: String, type: String, text: String? = null, cdnMediaId: String? = null, url: String? = null, fileName: String? = null, duration: Int? = null, spoiler: Boolean = false, replyTo: CommentReplyData? = null): String {
         val data = buildMap<String, Any?> {
-            put("chatId", chatId)
-            put("messageId", messageId)
-            put("type", type)
+            put("chatId", chatId); put("messageId", messageId); put("type", type)
             if (text != null) put("text", text)
+            if (cdnMediaId != null) put("cdnMediaId", cdnMediaId)
             if (url != null) put("url", url)
             if (fileName != null) put("fileName", fileName)
             if (duration != null) put("duration", duration)
@@ -601,30 +409,15 @@ class ChatRepository(
             if (replyTo != null) put("replyTo", replyTo.toMap())
         }
         val result = functions.getHttpsCallable("addComment").call(data).await()
-
-        try {
-            db.collection("users").document(currentUid)
-                .update("lastMessageAt", FieldValue.serverTimestamp()).await()
-        } catch (_: Exception) {}
-
+        try { db.collection("users").document(currentUid).update("lastMessageAt", FieldValue.serverTimestamp()).await() } catch (_: Exception) {}
         return (result.data as Map<*, *>)["commentId"] as String
     }
 
     suspend fun togglePostComments(chatId: String, messageId: String, enabled: Boolean) {
-        functions.getHttpsCallable("togglePostComments").call(mapOf(
-            "chatId"    to chatId,
-            "messageId" to messageId,
-            "enabled"   to enabled
-        )).await()
+        functions.getHttpsCallable("togglePostComments").call(mapOf("chatId" to chatId, "messageId" to messageId, "enabled" to enabled)).await()
     }
 
-    suspend fun toggleCommentReaction(
-        chatId: String,
-        messageId: String,
-        commentId: String,
-        emoji: String,
-        currentReactions: List<Reaction>
-    ) {
+    suspend fun toggleCommentReaction(chatId: String, messageId: String, commentId: String, emoji: String, currentReactions: List<Reaction>) {
         val existing = currentReactions.find { it.emoji == emoji }
         val updated  = if (existing == null) {
             currentReactions + Reaction(emoji, listOf(currentUid), 1)
@@ -636,63 +429,30 @@ class ChatRepository(
                 else r.copy(uids = r.uids + currentUid, count = r.count + 1)
             }.filter { it.count > 0 }
         }
-        db.collection("chats").document(chatId)
-            .collection("messages").document(messageId)
+        db.collection("chats").document(chatId).collection("messages").document(messageId)
             .collection("comments").document(commentId)
-            .update("reactions", updated.map { it.toMap() })
-            .await()
+            .update("reactions", updated.map { it.toMap() }).await()
     }
 
     suspend fun deleteComment(chatId: String, messageId: String, commentId: String) {
-        db.collection("chats").document(chatId)
-            .collection("messages").document(messageId)
+        db.collection("chats").document(chatId).collection("messages").document(messageId)
             .collection("comments").document(commentId)
-            .update(mapOf(
-                "deleted"   to true,
-                "deletedAt" to FieldValue.serverTimestamp()
-            )).await()
+            .update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
     }
 
-    suspend fun uploadAndCommentImage(
-        chatId: String,
-        messageId: String,
-        file: Uri,
-        spoiler: Boolean,
-        replyTo: CommentReplyData? = null
-    ) {
-        val filename   = "${System.currentTimeMillis()}_${file.lastPathSegment}"
-        val storageRef = storage.reference.child("chats/$chatId/comments/$filename")
-        storageRef.putFile(file).await()
-        val url = storageRef.downloadUrl.await().toString()
-        addComment(
-            chatId    = chatId,
-            messageId = messageId,
-            type      = MessageType.IMAGE,
-            url       = url,
-            fileName  = filename,
-            spoiler   = spoiler,
-            replyTo   = replyTo
-        )
+    suspend fun uploadAndCommentImage(chatId: String, messageId: String, file: Uri, spoiler: Boolean, replyTo: CommentReplyData? = null) = withContext(Dispatchers.IO) {
+        val fileName = "${System.currentTimeMillis()}_${file.lastPathSegment ?: "image.jpg"}"
+        val tempFile = File(context.cacheDir, fileName)
+        context.contentResolver.openInputStream(file)?.use { input ->
+            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+        }
+        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg")
+        tempFile.delete()
+        addComment(chatId = chatId, messageId = messageId, type = MessageType.IMAGE, cdnMediaId = mediaId, fileName = fileName, spoiler = spoiler, replyTo = replyTo)
     }
 
-    suspend fun uploadAndCommentVoice(
-        chatId: String,
-        messageId: String,
-        audioFile: File,
-        durationSeconds: Int,
-        replyTo: CommentReplyData? = null
-    ) {
-        val path       = "chats/$chatId/comments/voice_${System.currentTimeMillis()}.webm"
-        val storageRef = storage.reference.child(path)
-        storageRef.putFile(audioFile.toUri()).await()
-        val url = storageRef.downloadUrl.await().toString()
-        addComment(
-            chatId    = chatId,
-            messageId = messageId,
-            type      = MessageType.VOICE,
-            url       = url,
-            duration  = durationSeconds,
-            replyTo   = replyTo
-        )
+    suspend fun uploadAndCommentVoice(chatId: String, messageId: String, audioFile: File, durationSeconds: Int, replyTo: CommentReplyData? = null) = withContext(Dispatchers.IO) {
+        val mediaId = CdnService.uploadFile(audioFile, "audio/webm")
+        addComment(chatId = chatId, messageId = messageId, type = MessageType.VOICE, cdnMediaId = mediaId, duration = durationSeconds, replyTo = replyTo)
     }
 }

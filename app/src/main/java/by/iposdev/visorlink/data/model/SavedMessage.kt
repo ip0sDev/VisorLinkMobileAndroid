@@ -8,40 +8,32 @@ data class SavedMessage(
     val id: String = "",
     val senderId: String = "",
     val type: String = MessageType.TEXT,
-    // Открытый текст (только если encrypted != true)
     val text: String? = null,
-    // Зашифрованные поля (AES-GCM-256, только если encrypted = true)
     val encrypted: Boolean? = null,
     val encryptedText: String? = null,
     val encryptedCaption: String? = null,
     val iv: String? = null,
-    // Медиа (не шифруется)
     val url: String? = null,
-    val storagePath: String? = null,
+    val cdnMediaId: String? = null, // ДОБАВЛЕНО
     val fileName: String? = null,
     val duration: Int? = null,
     val caption: String? = null,
     val images: List<AlbumImage> = emptyList(),
     val spoiler: Boolean = false,
-
-    // Пересылка
     val forwardFrom: Map<String, Any?>? = null,
-
-    // Telegram Bot Forwarding
     val tg_forwarded: Boolean? = null,
     val tg_forwarded_from: String? = null,
     val tg_forwarded_from_fallback: String? = null,
     val isUnofficialClient: Boolean? = null,
-
-    // Стикеры
     val stickerId: String? = null,
     val packId: String? = null,
     val packName: String? = null,
     val packEmoji: String? = null,
-    // Служебные
     val deleted: Boolean = false,
-    val deletedAt: Timestamp? = null,
-    val createdAt: Timestamp? = null
+    val deletedAt: com.google.firebase.Timestamp? = null,
+    val createdAt: com.google.firebase.Timestamp? = null,
+    // Временные/Локальные данные для расшифровки на лету в UI
+    val localBytes: ByteArray? = null
 ) {
 
     val parsedForwardFrom: ForwardFrom?

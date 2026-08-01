@@ -1,3 +1,4 @@
+// utils/CryptoUtils.kt
 package by.iposdev.visorlink.utils
 
 import android.util.Base64
@@ -11,10 +12,6 @@ import javax.crypto.spec.SecretKeySpec
 
 // ─── PIN Hashing ──────────────────────────────────────────────────────────────
 
-/**
- * SHA-256(pin + ":" + uid) → hex строка для хранения в Firestore.
- * Plaintext PIN никогда не сохраняется.
- */
 fun hashPin(pin: String, uid: String): String {
     val input = "$pin:$uid"
     val digest = MessageDigest.getInstance("SHA-256")
@@ -24,11 +21,6 @@ fun hashPin(pin: String, uid: String): String {
 
 // ─── Key Derivation (PBKDF2) ─────────────────────────────────────────────────
 
-/**
- * Деривирует AES-256 ключ из PIN + uid через PBKDF2WithHmacSHA256.
- * uid используется как детерминированная соль (domain separation).
- * 200 000 итераций — рекомендуется OWASP для PIN/password.
- */
 fun deriveKey(pin: String, uid: String): SecretKey {
     val salt = uid.padEnd(16, '0').substring(0, 16).toByteArray(Charsets.UTF_8)
     val spec = PBEKeySpec(pin.toCharArray(), salt, 200_000, 256)
@@ -41,15 +33,11 @@ fun deriveKey(pin: String, uid: String): SecretKey {
     }
 }
 
-// ─── AES-GCM-256 Encrypt/Decrypt ─────────────────────────────────────────────
+// ─── AES-GCM-256 Encrypt/Decrypt (Text) ──────────────────────────────────────
 
-private const val GCM_TAG_LENGTH = 128   // бит
-private const val GCM_IV_LENGTH  = 12    // байт — стандарт для GCM
+private const val GCM_TAG_LENGTH = 128
+private const val GCM_IV_LENGTH  = 12
 
-/**
- * Шифрует текст ключом. Возвращает Pair(Base64(шифртекст), Base64(IV)).
- * IV генерируется случайно для каждого сообщения.
- */
 fun encryptText(plaintext: String, key: SecretKey): Pair<String, String> {
     val iv = ByteArray(GCM_IV_LENGTH).also { java.security.SecureRandom().nextBytes(it) }
     val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -61,13 +49,27 @@ fun encryptText(plaintext: String, key: SecretKey): Pair<String, String> {
     )
 }
 
-/**
- * Расшифровывает текст ключом. Возвращает null если ключ неверный или данные повреждены.
- */
 fun decryptText(ciphertextB64: String, ivB64: String, key: SecretKey): String? = try {
     val ciphertext = Base64.decode(ciphertextB64, Base64.NO_WRAP)
     val iv         = Base64.decode(ivB64, Base64.NO_WRAP)
     val cipher     = Cipher.getInstance("AES/GCM/NoPadding")
     cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
     String(cipher.doFinal(ciphertext), Charsets.UTF_8)
+} catch (_: Exception) { null }
+
+// ─── AES-GCM-256 Encrypt/Decrypt (Bytes for Files) ───────────────────────────
+
+fun encryptBytes(plaintext: ByteArray, key: SecretKey): Pair<ByteArray, String> {
+    val iv = ByteArray(GCM_IV_LENGTH).also { java.security.SecureRandom().nextBytes(it) }
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+    val ciphertext = cipher.doFinal(plaintext)
+    return Pair(ciphertext, Base64.encodeToString(iv, Base64.NO_WRAP))
+}
+
+fun decryptBytes(ciphertext: ByteArray, ivB64: String, key: SecretKey): ByteArray? = try {
+    val iv = Base64.decode(ivB64, Base64.NO_WRAP)
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+    cipher.doFinal(ciphertext)
 } catch (_: Exception) { null }

@@ -57,6 +57,7 @@ import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.ui.theme.Biolume
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
+import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -65,6 +66,17 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+@Composable
+fun resolveCdnUrl(cdnMediaId: String?, fallbackUrl: String?): String? {
+    var resolvedUrl by remember(cdnMediaId, fallbackUrl) { mutableStateOf(fallbackUrl) }
+    LaunchedEffect(cdnMediaId) {
+        if (cdnMediaId != null) {
+            resolvedUrl = CdnService.getFileUrl(cdnMediaId)
+        }
+    }
+    return resolvedUrl
+}
 
 @Composable
 fun TypingDots(primaryColor: Color = Color.Unspecified) {
@@ -212,8 +224,8 @@ fun SwipeableMessage(
     )
 
     val replyIconColor = when {
-        isExthru -> ExthruChat.Accent
-        isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
+        isExthru -> Biolume.CyanGlow
+        isOneUi  -> if (isDark) Color(0xFF4D90F0) else Color(0xFF1259C3)
         else     -> MaterialTheme.colorScheme.primary
     }
 
@@ -247,7 +259,6 @@ fun SwipeableMessage(
                             val change = event.changes.firstOrNull() ?: break
                             if (!change.pressed) break
 
-                            // Если нажатие было перехвачено жестовым меню сообщений - игнорируем
                             if (change.isConsumed) {
                                 isDragging = false
                                 break
