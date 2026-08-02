@@ -13,14 +13,15 @@ import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.utils.DraftManager
+import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
@@ -203,24 +204,30 @@ class ChatViewModel(
             }
 
             launch {
-                chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
-                    val state = _uiState.value
-                    val allMessages = state.tempMessages + messages
-                    val items = buildMessageList(allMessages)
+                chatRepository.latestMessagesFlow(chatId) { latestMessages, latestLastDoc ->
+                    _uiState.update { state ->
+                        val latestMap = latestMessages.associateBy { it.id }
+                        val olderMessages = state.messages.filter { it.id !in latestMap }
+                        val combined = (olderMessages + latestMessages).sortedBy { it.createdAt?.seconds ?: 0L }
 
-                    _uiState.update {
-                        it.copy(
-                            messages = messages,
+                        val allMessages = combined + state.tempMessages
+                        val items = buildMessageList(allMessages)
+
+                        state.copy(
+                            messages = combined,
                             messageListItems = items,
-                            lastDoc = lastDoc,
-                            hasMore = lastDoc != null
+                            lastDoc = if (olderMessages.isNotEmpty()) state.lastDoc else latestLastDoc,
+                            hasMore = if (olderMessages.isNotEmpty()) state.hasMore else (latestLastDoc != null)
                         )
                     }
-                    if (_uiState.value.chatType == ChatType.DIRECT &&
-                        ActiveChatTracker.activeChatId == chatId
-                    ) {
+
+                    // ── ИСПРАВЛЕНИЕ: Отмечаем прочитанным во ВСЕХ чатах, а не только DIRECT ──
+                    if (ActiveChatTracker.activeChatId == chatId) {
                         viewModelScope.launch {
-                            try { chatRepository.markMessagesAsRead(chatId, messages, currentUid) }
+                            try {
+                                chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
+                                NotificationHelper.clearNotification(context, chatId)
+                            }
                             catch (_: Exception) {}
                         }
                     }
@@ -382,7 +389,7 @@ class ChatViewModel(
             val newTemp = state.tempMessages + tempMsg
             state.copy(
                 tempMessages = newTemp,
-                messageListItems = buildMessageList(newTemp + state.messages)
+                messageListItems = buildMessageList(state.messages + newTemp)
             )
         }
 
@@ -397,7 +404,7 @@ class ChatViewModel(
                         }
                         state.copy(
                             tempMessages = updatedTemp,
-                            messageListItems = buildMessageList(updatedTemp + state.messages)
+                            messageListItems = buildMessageList(state.messages + updatedTemp)
                         )
                     }
                 }
@@ -433,7 +440,7 @@ class ChatViewModel(
                     val cleanTemp = state.tempMessages.filter { it.id != tempId }
                     state.copy(
                         tempMessages = cleanTemp,
-                        messageListItems = buildMessageList(cleanTemp + state.messages)
+                        messageListItems = buildMessageList(state.messages + cleanTemp)
                     )
                 }
             }
@@ -485,11 +492,20 @@ class ChatViewModel(
                 _uiState.update {
                     it.copy(
                         messages = combined,
-                        messageListItems = buildMessageList(it.tempMessages + combined),
+                        messageListItems = buildMessageList(combined + it.tempMessages),
                         isLoadingMore = false,
                         hasMore = newLastDoc != null,
                         lastDoc = newLastDoc ?: it.lastDoc
                     )
+                }
+
+                // ── ИСПРАВЛЕНИЕ: Отмечаем прочитанными в любом типе чата, чистим уведы ──
+                if (ActiveChatTracker.activeChatId == chatId) {
+                    try {
+                        chatRepository.markMessagesAsRead(chatId, older, currentUid)
+                        NotificationHelper.clearNotification(context, chatId)
+                    }
+                    catch (_: Exception) {}
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoadingMore = false, error = e.message) }
@@ -624,7 +640,20 @@ class ChatViewModel(
 
     fun deleteMessage(messageId: String) {
         viewModelScope.launch {
-            try { chatRepository.deleteMessage(chatId, messageId) }
+            try {
+                chatRepository.deleteMessage(chatId, messageId)
+
+                // Optimistic Local Update
+                _uiState.update { state ->
+                    val newMessages = state.messages.map {
+                        if (it.id == messageId) it.copy(deleted = true) else it
+                    }
+                    state.copy(
+                        messages = newMessages,
+                        messageListItems = buildMessageList(newMessages + state.tempMessages)
+                    )
+                }
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
@@ -632,7 +661,37 @@ class ChatViewModel(
     fun toggleReaction(messageId: String, emoji: String, currentReactions: List<Reaction>) {
         if (!_uiState.value.canReact) return
         viewModelScope.launch {
-            try { chatRepository.toggleReaction(chatId, messageId, emoji, currentReactions) }
+            try {
+                chatRepository.toggleReaction(chatId, messageId, emoji, currentReactions)
+
+                // Optimistic Local Update
+                _uiState.update { state ->
+                    val updatedReactions = currentReactions.toMutableList()
+                    val existing = updatedReactions.find { it.emoji == emoji }
+                    if (existing != null) {
+                        if (currentUid in existing.uids) {
+                            val newUids = existing.uids - currentUid
+                            if (newUids.isEmpty()) updatedReactions.remove(existing)
+                            else updatedReactions[updatedReactions.indexOf(existing)] = existing.copy(uids = newUids, count = newUids.size)
+                        } else {
+                            updatedReactions[updatedReactions.indexOf(existing)] = existing.copy(uids = existing.uids + currentUid, count = existing.count + 1)
+                        }
+                    } else {
+                        updatedReactions.add(Reaction(emoji, listOf(currentUid), 1))
+                    }
+
+                    val newMessages = state.messages.map { msg ->
+                        if (msg.id == messageId) {
+                            val newRaw = updatedReactions.map { it.toMap() }
+                            msg.copy(reactions = newRaw)
+                        } else msg
+                    }
+                    state.copy(
+                        messages = newMessages,
+                        messageListItems = buildMessageList(newMessages + state.tempMessages)
+                    )
+                }
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }

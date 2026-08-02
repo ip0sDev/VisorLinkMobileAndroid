@@ -49,7 +49,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
@@ -214,7 +213,6 @@ internal fun MessageBubble(
             }
         }
 
-        // Оверлей загрузки поверх баббла
         if (message.uploadProgress != null) {
             Box(
                 modifier = Modifier
@@ -248,7 +246,7 @@ internal fun TextBubble(
     val linkColor   = resolveLinkColor(isMine, isOneUi, isExthru, isDark)
     val bubbleShape = resolveBubbleShape(isMine, isOneUi)
 
-    val borderColor = ExthruChat.shadowLight(isDark).copy(
+    val borderColor = by.iposdev.visorlink.ui.screens.chat.ExthruChat.shadowLight(isDark).copy(
         alpha = when {
             hasWallpaper -> 0.30f
             isDark       -> 0.08f
@@ -294,7 +292,7 @@ internal fun TextBubble(
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
                 if (showSenderName && !isMine) {
-                    val senderColor = if (isExthru) ExthruChat.Accent else MaterialTheme.colorScheme.primary
+                    val senderColor = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else MaterialTheme.colorScheme.primary
                     Text(
                         "@${message.senderUsername}",
                         style      = if (isExthru) ExthruSenderNameStyle else MaterialTheme.typography.labelSmall,
@@ -467,7 +465,7 @@ internal fun StickerBubble(
     message: Message, isMine: Boolean, currentUid: String, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hapticEnabled: Boolean, showPackBanner: Boolean, onTogglePackBanner: () -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit, onReact: (String) -> Unit,
 ) {
-    val timeColor = if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    val timeColor = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "sticker_scale")
@@ -481,7 +479,7 @@ internal fun StickerBubble(
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 260.dp) // Жестко ограничиваем ширину, чтобы ReplyPreview не раздувался на весь экран
+                .widthIn(max = 260.dp)
                 .scale(scale)
                 .messageGestures(
                     messageId = message.id,
@@ -875,12 +873,12 @@ private fun AlbumCell(image: AlbumImage, revealed: Boolean, modifier: Modifier, 
 @Composable
 internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
-        isExthru && isMine  -> ExthruChat.bubbleMine(isDark)
-        isExthru && !isMine -> ExthruChat.bubbleOther(isDark)
-        isOneUi && isMine && isDark   -> OneUiChat.BubbleMineDark
-        isOneUi && isMine             -> OneUiChat.BubbleMine
-        isOneUi && !isMine && isDark  -> OneUiChat.BubbleOtherDark
-        isOneUi && !isMine            -> OneUiChat.BubbleOther
+        isExthru && isMine  -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.bubbleMine(isDark)
+        isExthru && !isMine -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.bubbleOther(isDark)
+        isOneUi && isMine && isDark   -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleMineDark
+        isOneUi && isMine             -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleMine
+        isOneUi && !isMine && isDark  -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleOtherDark
+        isOneUi && !isMine            -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BubbleOther
         isMine -> MaterialTheme.colorScheme.primary
         else   -> MaterialTheme.colorScheme.surfaceVariant
     }
@@ -889,10 +887,10 @@ internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boo
 @Composable
 internal fun resolveBubbleTextColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
-        isExthru        -> ExthruChat.textPrimary(isDark)
+        isExthru        -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.textPrimary(isDark)
         isOneUi && isMine           -> Color.White
-        isOneUi && !isMine && isDark -> OneUiChat.TextPrimaryDark
-        isOneUi && !isMine          -> OneUiChat.TextPrimary
+        isOneUi && !isMine && isDark -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.TextPrimaryDark
+        isOneUi && !isMine          -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.TextPrimary
         isMine -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -901,9 +899,9 @@ internal fun resolveBubbleTextColor(isMine: Boolean, isOneUi: Boolean, isExthru:
 @Composable
 internal fun resolveLinkColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
     return when {
-        isExthru        -> ExthruChat.Accent
-        isOneUi && isDark -> OneUiChat.BlueDark
-        isOneUi         -> OneUiChat.Blue
+        isExthru        -> by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent
+        isOneUi && isDark -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.BlueDark
+        isOneUi         -> by.iposdev.visorlink.ui.screens.chat.OneUiChat.Blue
         isMine          -> Color.White
         else            -> MaterialTheme.colorScheme.primary
     }
@@ -930,25 +928,25 @@ internal fun ReplyPreview(
 
     Row(
         modifier = Modifier
-            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth, теперь предпросмотр "обтягивает" контент
+            .widthIn(min = 60.dp, max = 260.dp)
             .scale(scale)
             .then(bgModifier)
             .clip(RoundedCornerShape(10.dp))
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(8.dp),
     ) {
-        Box(Modifier.width(3.dp).height(32.dp).background(if (isExthru) ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
+        Box(Modifier.width(3.dp).height(32.dp).background(if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(8.dp))
         Column {
             Text(
                 "@${reply.senderUsername}",
                 style = if (isExthru) ExthruSenderNameStyle else MaterialTheme.typography.labelSmall,
-                color = if (isExthru) ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary,
+                color = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else if (isMine) Color.White.copy(0.9f) else MaterialTheme.colorScheme.primary,
             )
             Text(
                 reply.text ?: "Медиа",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isExthru) ExthruChat.textSecondary(isDark) else if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textSecondary(isDark) else if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -980,7 +978,7 @@ internal fun InlinedReactionRow(
                 } else Modifier
 
                 val bgColor = if (isExthru) {
-                    if (iReacted) ExthruChat.Accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.3f else 0.6f)
+                    if (iReacted) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.3f else 0.6f)
                 } else {
                     if (iReacted) MaterialTheme.colorScheme.primary.copy(0.2f) else MaterialTheme.colorScheme.surfaceVariant
                 }
@@ -1003,7 +1001,7 @@ internal fun InlinedReactionRow(
                         Text(
                             reaction.count.toString(), fontSize = 12.sp,
                             fontWeight = if (iReacted) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isExthru) (if (iReacted) ExthruChat.Accent else ExthruChat.textSecondary(isDark)) else (if (iReacted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant),
+                            color = if (isExthru) (if (iReacted) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else by.iposdev.visorlink.ui.screens.chat.ExthruChat.textSecondary(isDark)) else (if (iReacted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant),
                         )
                     }
                 }
@@ -1030,7 +1028,7 @@ internal fun InlinedReactionRow(
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("＋", fontSize = 14.sp, color = if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("＋", fontSize = 14.sp, color = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -1050,7 +1048,7 @@ internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Bo
             Text(
                 text     = label,
                 style    = MaterialTheme.typography.labelSmall,
-                color    = if (isExthru) ExthruChat.textSecondary(isDark) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color    = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textSecondary(isDark) else MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = FontWeight.SemiBold
             )
         }
@@ -1059,7 +1057,7 @@ internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Bo
 
 @Composable
 internal fun ReadReceipt(isRead: Boolean, isExthru: Boolean = false, isDark: Boolean = false) {
-    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(15.dp), tint = if (isRead) ExthruChat.Accent else ExthruChat.textHint(isDark))
+    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(15.dp), tint = if (isRead) by.iposdev.visorlink.ui.screens.chat.ExthruChat.Accent else by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark))
 }
 
 @Composable

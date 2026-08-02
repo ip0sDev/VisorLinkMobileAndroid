@@ -229,10 +229,13 @@ fun SwipeableMessage(
         else     -> MaterialTheme.colorScheme.primary
     }
 
+    // Динамическое выравнивание иконки в зависимости от стороны свайпа
+    val align = if (offsetX.value > 0) Alignment.CenterStart else if (offsetX.value < 0) Alignment.CenterEnd else (if (isMine) Alignment.CenterEnd else Alignment.CenterStart)
+
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
-                .align(if (isMine) Alignment.CenterStart else Alignment.CenterEnd)
+                .align(align)
                 .padding(horizontal = 16.dp).size(36.dp).scale(replyIconScale)
                 .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), CircleShape),
             contentAlignment = Alignment.Center,
@@ -244,11 +247,11 @@ fun SwipeableMessage(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
                 .pointerInput(message.id) {
-                    var totalDrag = 0f
+                    var totalDragX = 0f
                     var totalDragY = 0f
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        totalDrag = 0f
+                        totalDragX = 0f
                         totalDragY = 0f
                         didTrigger = false
                         var isDragging = false
@@ -266,26 +269,30 @@ fun SwipeableMessage(
 
                             val dragDeltaX = change.position.x - change.previousPosition.x
                             val dragDeltaY = change.position.y - change.previousPosition.y
-                            totalDrag += dragDeltaX
+                            totalDragX += dragDeltaX
                             totalDragY += dragDeltaY
 
-                            if (!isDragging && abs(totalDragY) > abs(totalDrag)) {
+                            if (!isDragging && abs(totalDragY) > abs(totalDragX)) {
                                 isVertical = true; break
                             }
                             if (isVertical) break
 
-                            if (abs(totalDrag) > 10f) {
+                            if (abs(totalDragX) > 10f) {
                                 isDragging = true
                                 change.consume()
-                                val target = if (isMine) (offsetX.value + dragDeltaX).coerceIn(-maxOffset, 0f) else (offsetX.value + dragDeltaX).coerceIn(0f, maxOffset)
+
+                                // Свайп в любую из двух сторон!
+                                val target = (offsetX.value + dragDeltaX).coerceIn(-maxOffset, maxOffset)
                                 scope.launch { offsetX.snapTo(target) }
 
                                 if (abs(offsetX.value) >= triggerThreshold && !didTrigger) {
                                     didTrigger = true
                                     haptic.perform(HapticType.SELECTION, hapticEnabled)
                                     onReply()
+
+                                    val bounceBackTarget = if (offsetX.value > 0) triggerThreshold * 0.5f else -triggerThreshold * 0.5f
                                     scope.launch {
-                                        offsetX.animateTo(if (isMine) -triggerThreshold * 0.5f else triggerThreshold * 0.5f, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
+                                        offsetX.animateTo(bounceBackTarget, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
                                         delay(100)
                                         offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
                                     }

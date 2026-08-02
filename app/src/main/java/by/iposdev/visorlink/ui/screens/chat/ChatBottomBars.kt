@@ -20,6 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -50,10 +52,6 @@ import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Dynamic Chat Bottom Bar (Flutter Style)
-// ════════════════════════════════════════════════════════════════════════════════
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun DynamicChatInputBar(
@@ -66,6 +64,7 @@ fun DynamicChatInputBar(
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
+    focusRequester: FocusRequester,
     onInputChange: (String) -> Unit,
     onAttach: () -> Unit,
     onStickerClick: () -> Unit,
@@ -87,7 +86,6 @@ fun DynamicChatInputBar(
     val outerShape = RoundedCornerShape(if (isForge) 0.dp else 28.dp)
     val innerShape = RoundedCornerShape(if (isForge) 0.dp else 20.dp)
 
-    // Уменьшена альфа, чтобы блюр был более прозрачным и эффектным
     val outerBg = when {
         isExthru -> if (isForge) style.inputBg else cs.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.5f)
         isOneUi -> if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar
@@ -113,7 +111,6 @@ fun DynamicChatInputBar(
     Column(
         modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
     ) {
-        // Restriction Banner
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true  -> stringResource(R.string.you_are_muted)
@@ -144,7 +141,6 @@ fun DynamicChatInputBar(
                     .then(if (isExthru && !isForge) Modifier.border(1.dp, Color.White.copy(0.1f), outerShape) else Modifier)
                     .padding(horizontal = 8.dp, vertical = 8.dp)
             ) {
-                // Reply Preview
                 AnimatedVisibility(visible = uiState.replyingTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     uiState.replyingTo?.let { msg ->
                         Box(
@@ -171,14 +167,12 @@ fun DynamicChatInputBar(
                     }
                 }
 
-                // Upload Progress
                 AnimatedVisibility(visible = uiState.isUploading, enter = expandVertically(), exit = shrinkVertically()) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(4.dp)), color = accentColor, trackColor = Color.Transparent)
                 }
 
                 if (canSendMessage) {
                     if (uiState.isRecording) {
-                        // Recording Bar
                         var elapsed by remember { mutableIntStateOf(0) }
                         val dotAlpha by rememberInfiniteTransition(label = "").animateFloat(
                             initialValue = 1f, targetValue = 0.2f,
@@ -215,7 +209,6 @@ fun DynamicChatInputBar(
                         }
                     } else {
                         Row(verticalAlignment = Alignment.Bottom) {
-                            // Attach & Emoji
                             AnimatedVisibility(
                                 visible = inputText.isBlank(),
                                 enter = expandHorizontally(expandFrom = Alignment.End, clip = true) + fadeIn(tween(200)),
@@ -233,7 +226,6 @@ fun DynamicChatInputBar(
                                 }
                             }
 
-                            // TextField Box
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -248,6 +240,7 @@ fun DynamicChatInputBar(
                                         onValueChange = onInputChange,
                                         modifier = Modifier
                                             .weight(1f)
+                                            .focusRequester(focusRequester)
                                             .padding(top = 12.dp, bottom = 12.dp, end = 4.dp),
                                         maxLines = 5,
                                         textStyle = TextStyle(color = if (isDark) Color.White else Color.Black, fontSize = 15.sp, fontFamily = if(isForge) FontFamily.Monospace else null),
@@ -311,10 +304,6 @@ fun DynamicChatInputBar(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Exthru Chat Bottom Bar (Legacy - Static Style)
-// ════════════════════════════════════════════════════════════════════════════════
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 internal fun ExthruChatBottomBar(
@@ -326,6 +315,7 @@ internal fun ExthruChatBottomBar(
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
+    focusRequester: FocusRequester,
     onInputChange: (String) -> Unit,
     onAttach: () -> Unit,
     onStickerClick: () -> Unit,
@@ -434,6 +424,7 @@ internal fun ExthruChatBottomBar(
                                 onValueChange = onInputChange,
                                 modifier      = Modifier
                                     .weight(1f)
+                                    .focusRequester(focusRequester)
                                     .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
                                 maxLines  = 5,
                                 textStyle = TextStyle(color = textPrimary, fontSize = 15.sp),
@@ -521,8 +512,6 @@ internal fun ExthruChatBottomBar(
         }
     }
 }
-
-// ── Интерактивные неоморфные кнопки для Exthru ──
 
 @Composable
 private fun InteractiveExthruButton(
@@ -654,10 +643,6 @@ private fun InteractiveExthruMicButton(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  OneUiChatBottomBar
-// ════════════════════════════════════════════════════════════════════════════════
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 internal fun OneUiChatBottomBar(
@@ -669,6 +654,7 @@ internal fun OneUiChatBottomBar(
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
+    focusRequester: FocusRequester,
     onInputChange: (String) -> Unit,
     onAttach: () -> Unit,
     onStickerClick: () -> Unit,
@@ -748,6 +734,7 @@ internal fun OneUiChatBottomBar(
                                 value = inputText, onValueChange = onInputChange,
                                 modifier = Modifier
                                     .weight(1f)
+                                    .focusRequester(focusRequester)
                                     .padding(start = 16.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
                                 maxLines  = 4,
                                 textStyle = TextStyle(
@@ -844,10 +831,6 @@ internal fun OneUiChatBottomBar(
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════════
-//  Default (M3) Bottom Bar
-// ════════════════════════════════════════════════════════════════════════════════
-
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 internal fun DefaultChatBottomBar(
@@ -858,6 +841,7 @@ internal fun DefaultChatBottomBar(
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
+    focusRequester: FocusRequester,
     onInputChange: (String) -> Unit,
     onAttach: () -> Unit,
     onStickerClick: () -> Unit,
@@ -932,7 +916,7 @@ internal fun DefaultChatBottomBar(
                         value         = inputText,
                         onValueChange = onInputChange,
                         placeholder   = { Text(stringResource(R.string.chat_input_placeholder)) },
-                        modifier      = Modifier.weight(1f).animateContentSize(animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)),
+                        modifier      = Modifier.weight(1f).focusRequester(focusRequester).animateContentSize(animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)),
                         maxLines      = 4,
                         shape         = MaterialTheme.shapes.extraLarge,
                         supportingText = if (inputText.isNotEmpty()) {

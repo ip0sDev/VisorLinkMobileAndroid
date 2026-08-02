@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -90,6 +91,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
     val context = LocalContext.current
+    val focusRequester = remember { FocusRequester() }
 
     var inputText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
@@ -99,12 +101,20 @@ fun ChatScreen(
             inputText = uiState.initialDraft
         }
     }
+
+    LaunchedEffect(uiState.replyingTo) {
+        if (uiState.replyingTo != null && !uiState.isRecording) {
+            delay(100)
+            try { focusRequester.requestFocus() } catch (e: Exception) {}
+        }
+    }
+
     var showStickerSheet by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
-    // Контекстное меню сообщений (новое)
+    // Контекстное меню сообщений
     var contextMenuData by remember { mutableStateOf<ContextMenuData?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
@@ -162,22 +172,36 @@ fun ChatScreen(
         }
     }
 
-    val showScrollDown by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    var unreadCount by remember { mutableIntStateOf(0) }
-    LaunchedEffect(showScrollDown) { if (!showScrollDown) unreadCount = 0 }
+    // ── ИСПРАВЛЕННАЯ ЛОГИКА АВТОСКРОЛЛА ──
+    val newestMessage = (uiState.messageListItems.lastOrNull() as? MessageListItem.MessageItem)?.message
+    val newestMessageId = newestMessage?.id
 
-    val messageCount = uiState.messageListItems.size
-    LaunchedEffect(messageCount) {
-        if (messageCount == 0) return@LaunchedEffect
-        val lastMsg = uiState.messages.lastOrNull() ?: return@LaunchedEffect
-        val isMine = lastMsg.senderId == viewModel.currentUid
-        when {
-            isMine -> listState.animateScrollToItem(0)
-            listState.firstVisibleItemIndex <= 1 -> {
-                if (hapticEnabled) haptic.perform(HapticType.MESSAGE_RECEIVED, hapticEnabled)
-                listState.animateScrollToItem(0)
-            }
-            else -> unreadCount++
+    var isInitialLoad by remember { mutableStateOf(true) }
+    val isAtBottom by remember { derivedStateOf { listState.firstVisibleItemIndex <= 1 } }
+    val showScrollDown by remember { derivedStateOf { listState.firstVisibleItemIndex > 1 } }
+
+    var unreadCount by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(showScrollDown) {
+        if (!showScrollDown) unreadCount = 0
+    }
+
+    LaunchedEffect(newestMessageId) {
+        if (newestMessageId == null) return@LaunchedEffect
+
+        if (isInitialLoad) {
+            isInitialLoad = false
+            return@LaunchedEffect
+        }
+
+        val isMine = newestMessage?.senderId == viewModel.currentUid
+        if (isMine) {
+            listState.animateScrollToItem(0)
+        } else if (isAtBottom) {
+            if (hapticEnabled) haptic.perform(HapticType.MESSAGE_RECEIVED, hapticEnabled)
+            listState.animateScrollToItem(0)
+        } else {
+            unreadCount++
         }
     }
 
@@ -230,7 +254,7 @@ fun ChatScreen(
                             uiState = uiState, inputText = inputText, isDark = isDark, appTheme = appTheme,
                             canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                             hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                            audioPermission = audioPermission,
+                            audioPermission = audioPermission, focusRequester = focusRequester,
                             onInputChange = { inputText = it; viewModel.onTextChanged(it) },
                             onAttach = { imagePicker.launch("image/*") },
                             onStickerClick = { showStickerSheet = true },
@@ -248,7 +272,7 @@ fun ChatScreen(
                                 uiState = uiState, inputText = inputText, isDark = isDark,
                                 canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                                 hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                                audioPermission = audioPermission,
+                                audioPermission = audioPermission, focusRequester = focusRequester,
                                 onInputChange = { inputText = it; viewModel.onTextChanged(it) },
                                 onAttach = { imagePicker.launch("image/*") },
                                 onStickerClick = { showStickerSheet = true },
@@ -265,7 +289,7 @@ fun ChatScreen(
                                 uiState = uiState, inputText = inputText, isDark = isDark,
                                 canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                                 hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                                audioPermission = audioPermission,
+                                audioPermission = audioPermission, focusRequester = focusRequester,
                                 onInputChange = { inputText = it; viewModel.onTextChanged(it) },
                                 onAttach = { imagePicker.launch("image/*") },
                                 onStickerClick = { showStickerSheet = true },
@@ -282,7 +306,7 @@ fun ChatScreen(
                                 uiState = uiState, inputText = inputText,
                                 canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                                 hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                                audioPermission = audioPermission,
+                                audioPermission = audioPermission, focusRequester = focusRequester,
                                 onInputChange = { inputText = it; viewModel.onTextChanged(it) },
                                 onAttach = { imagePicker.launch("image/*") },
                                 onStickerClick = { showStickerSheet = true },
@@ -317,7 +341,7 @@ fun ChatScreen(
                         }
                         LazyColumn(
                             state = listState, reverseLayout = true,
-                            userScrollEnabled = contextMenuData == null, // Отключаем скролл, если открыто меню (жесты)
+                            userScrollEnabled = contextMenuData == null,
                             modifier = Modifier.fillMaxSize().then(listBg),
                             contentPadding = PaddingValues(
                                 top = innerPadding.calculateTopPadding() + 12.dp,
@@ -421,37 +445,71 @@ fun ChatScreen(
                         }
                     }
 
-                    // FAB overlay
+                    // ── КРАСИВАЯ КНОПКА СКРОЛЛА ВНИЗ ──
                     androidx.compose.animation.AnimatedVisibility(
                         visible = showScrollDown,
                         modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp),
                         enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
                         exit = scaleOut(tween(150)) + fadeOut(tween(150)),
                     ) {
-                        val fabColor = when {
-                            isExthru -> ExthruChat.Accent
-                            isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
-                            else     -> MaterialTheme.colorScheme.primary
-                        }
-                        Box {
-                            FloatingActionButton(
-                                onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                                modifier = Modifier.size(44.dp).then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier),
-                                containerColor = fabColor,
-                                contentColor = Color.White,
-                                shape = CircleShape,
-                                elevation = if (isExthru) FloatingActionButtonDefaults.elevation(0.dp) else FloatingActionButtonDefaults.elevation()
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowDown, null)
-                            }
-                            if (unreadCount > 0) {
+                        if (isExthru) {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "fab_scale")
+                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                            Box {
                                 Box(
-                                    modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
-                                        .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                        .background(Color.Red, CircleShape).padding(horizontal = 3.dp),
-                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .scale(scale)
+                                        .then(shadowMod)
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
+                                        .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
+                                        .clip(CircleShape)
+                                        .clickable(interactionSource = interactionSource, indication = null) {
+                                            scope.launch { listState.animateScrollToItem(0) }
+                                        },
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Icon(Icons.Default.KeyboardArrowDown, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                                }
+                                if (unreadCount > 0) {
+                                    Box(
+                                        modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
+                                            .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                                            .background(Color.Red, CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        } else {
+                            val fabColor = when {
+                                isOneUi  -> if (isDark) Color(0xFF4D90F0) else Color(0xFF1259C3)
+                                else     -> MaterialTheme.colorScheme.primary
+                            }
+                            Box {
+                                FloatingActionButton(
+                                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                                    modifier = Modifier.size(44.dp),
+                                    containerColor = fabColor,
+                                    contentColor = Color.White,
+                                    shape = CircleShape,
+                                    elevation = FloatingActionButtonDefaults.elevation()
+                                ) {
+                                    Icon(Icons.Default.KeyboardArrowDown, null)
+                                }
+                                if (unreadCount > 0) {
+                                    Box(
+                                        modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
+                                            .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                                            .background(Color.Red, CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }

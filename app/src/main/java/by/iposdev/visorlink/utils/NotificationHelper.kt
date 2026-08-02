@@ -22,6 +22,8 @@ object NotificationHelper {
     private const val CHANNEL_MESSAGES    = "messages"
     private const val CHANNEL_MESSAGES_NAME = "Messages"
     private const val TAG = "NotificationHelper"
+    private const val GROUP_KEY = "by.iposdev.visorlink.MESSAGES"
+    private const val SUMMARY_ID = 9999
 
     fun createChannels(context: Context) {
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -105,10 +107,10 @@ object NotificationHelper {
             inboxStyle.setSummaryText("+${history.size} новых")
         }
         history.forEach { inboxStyle.addLine(it) }
-        // ──────────────────────────────────────────
 
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
+        // Само уведомление чата
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(senderName)
@@ -118,13 +120,27 @@ object NotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setGroup(GROUP_KEY) // ГРУППИРОВКА
             .setVibrate(longArrayOf(0, 150, 80, 150))
             .setSound(soundUri)
             .setFullScreenIntent(pendingIntent, true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
+        // Сводное уведомление для группы (чтобы Android не удалял все чаты разом)
+        val summaryNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setStyle(NotificationCompat.InboxStyle().setSummaryText("Новые сообщения"))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setGroup(GROUP_KEY)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .build()
+
+        with(NotificationManagerCompat.from(context)) {
+            notify(notificationId, notification)
+            notify(SUMMARY_ID, summaryNotification)
+        }
     }
 
     fun clearNotification(context: Context, chatId: String) {

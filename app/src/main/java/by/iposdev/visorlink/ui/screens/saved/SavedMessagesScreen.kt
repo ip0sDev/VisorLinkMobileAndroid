@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -461,11 +462,13 @@ private fun SavedBottomBar(
     onStartRecord: () -> Unit, onSendRecord: () -> Unit, onCancelRecord: () -> Unit, onRequestAudioPerm: () -> Unit
 ) {
     val syncedState = remember(isRecording) { ChatUiState(isRecording = isRecording, isCooldown = false, isUploading = false) }
+    val focusRequester = remember { FocusRequester() }
 
     if (dynamicInput) {
         DynamicChatInputBar(
             uiState = syncedState, inputText = inputText, isDark = isDark, appTheme = appTheme,
             canSendMessage = true, canSendMedia = true, hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+            focusRequester = focusRequester,
             onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
             onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancelRecord = onCancelRecord,
             onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
@@ -474,21 +477,21 @@ private fun SavedBottomBar(
         when {
             isExthru -> ExthruChatBottomBar(
                 uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
-                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission, focusRequester = focusRequester,
                 onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
                 onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
                 onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
             )
             isOneUi -> OneUiChatBottomBar(
                 uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
-                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission, focusRequester = focusRequester,
                 onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
                 onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
                 onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
             )
             else -> DefaultChatBottomBar(
                 uiState = syncedState, inputText = inputText, canSendMessage = true, canSendMedia = true,
-                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission,
+                hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission, focusRequester = focusRequester,
                 onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
                 onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,
                 onSendRecord = onSendRecord, onClearReply = { }, haptic = haptic
