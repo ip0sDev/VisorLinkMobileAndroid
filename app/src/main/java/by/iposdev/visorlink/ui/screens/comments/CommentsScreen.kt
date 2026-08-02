@@ -494,7 +494,12 @@ private fun CommentReplyPreview(reply: CommentReplyData, isMine: Boolean, onClic
     val textColor = if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
-        modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.extraSmall).background(accent).clickable(onClick = onClick).padding(6.dp)
+        modifier = Modifier
+            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth()
+            .clip(MaterialTheme.shapes.extraSmall)
+            .background(accent)
+            .clickable(onClick = onClick)
+            .padding(6.dp)
     ) {
         Box(Modifier.width(3.dp).height(28.dp).background(nameColor, RoundedCornerShape(2.dp)))
         Spacer(Modifier.width(6.dp))
@@ -573,7 +578,7 @@ fun SpoilerImage(
             model = url,
             contentDescription = null,
             modifier = Modifier
-                .sizeIn(minWidth = 100.dp, minHeight = 100.dp, maxWidth = 280.dp, maxHeight = 500.dp)
+                .sizeIn(minWidth = 100.dp, minHeight = 100.dp, maxWidth = 280.dp, maxHeight = 500.dp) // Идеальный crop внутри границ
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
                 .graphicsLayerAlpha(alpha),

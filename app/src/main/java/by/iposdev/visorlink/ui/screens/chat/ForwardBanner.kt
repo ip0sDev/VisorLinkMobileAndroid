@@ -27,10 +27,6 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.ForwardFrom
 import by.iposdev.visorlink.data.model.Message
 
-/**
- * Плашка «Переслано от @username · ChatName» для отображения в MessageBubble.
- * Размещается перед контентом сообщения.
- */
 @Composable
 fun ForwardBanner(
     forwardFrom: ForwardFrom,
@@ -58,7 +54,7 @@ fun ForwardBanner(
 
     Row(
         modifier = Modifier
-            .fillMaxWidth()
+            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth
             .clip(RoundedCornerShape(6.dp))
             .background(bgColor)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
@@ -82,9 +78,6 @@ fun ForwardBanner(
     Spacer(Modifier.height(4.dp))
 }
 
-/**
- * Специальная плашка для сообщений, пересланных из Telegram бота.
- */
 @Composable
 fun TelegramForwardBanner(
     message: Message,
@@ -98,24 +91,20 @@ fun TelegramForwardBanner(
 
     Row(
         modifier = modifier
-            .fillMaxWidth()
+            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth
             .padding(bottom = 4.dp)
             .drawBehind {
                 drawIntoCanvas { canvas ->
                     val paint = Paint().apply {
                         asFrameworkPaint().apply {
                             color = android.graphics.Color.TRANSPARENT
-                            // Тень: 0px 4px 12px rgba(42, 171, 238, 0.35)
                             setShadowLayer(
                                 12.dp.toPx(), 0f, 4.dp.toPx(),
                                 android.graphics.Color.argb((0.35f * 255).toInt(), 42, 171, 238)
                             )
                         }
                     }
-                    canvas.drawRoundRect(
-                        0f, 0f, size.width, size.height,
-                        6.dp.toPx(), 6.dp.toPx(), paint
-                    )
+                    canvas.drawRoundRect(0f, 0f, size.width, size.height, 6.dp.toPx(), 6.dp.toPx(), paint)
                 }
             }
             .background(
@@ -147,7 +136,6 @@ fun TelegramForwardBanner(
     }
 }
 
-// SVG иконка Telegram
 private var _telegramIcon: ImageVector? = null
 val TelegramIcon: ImageVector
     get() {
