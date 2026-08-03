@@ -80,7 +80,7 @@ fun ChatScreen(
     onOpenOtherProfile: (String) -> Unit,
     onOpenStickers: (onSelect: (Sticker) -> Unit) -> Unit,
     onOpenChatSettings: (chatId: String) -> Unit = {},
-    onOpenImageViewer: (url: String) -> Unit = {},
+    onOpenImageViewer: (url: String, type: String) -> Unit = { _, _ -> },
     onMentionClick: (String) -> Unit = {},
     onOpenComments: (messageId: String) -> Unit = {},
     hapticEnabled: Boolean = true,
@@ -164,15 +164,6 @@ fun ChatScreen(
         onDispose { ActiveChatTracker.activeChatId = null }
     }
 
-    LaunchedEffect(listState.firstVisibleItemIndex, uiState.messageListItems.size) {
-        val layoutInfo = listState.layoutInfo
-        val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-        if (uiState.messageListItems.isNotEmpty() && lastVisibleItemIndex >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {
-            viewModel.loadMore()
-        }
-    }
-
-    // ── ИСПРАВЛЕННАЯ ЛОГИКА АВТОСКРОЛЛА ──
     val newestMessage = (uiState.messageListItems.lastOrNull() as? MessageListItem.MessageItem)?.message
     val newestMessageId = newestMessage?.id
 
@@ -348,15 +339,22 @@ fun ChatScreen(
                                 bottom = innerPadding.calculateBottomPadding() + 12.dp
                             ),
                         ) {
-                            items(
+                            itemsIndexed(
                                 items = uiState.messageListItems.asReversed(),
-                                key = { item ->
+                                key = { _, item ->
                                     when (item) {
                                         is MessageListItem.DateHeader  -> "date_${item.label}"
                                         is MessageListItem.MessageItem -> item.message.id
                                     }
                                 }
-                            ) { item ->
+                            ) { index, item ->
+                                // ИСПРАВЛЕНИЕ ПАГИНАЦИИ: Железобетонный триггер в рендере списка
+                                if (index >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {
+                                    LaunchedEffect(index) {
+                                        viewModel.loadMore()
+                                    }
+                                }
+
                                 when (item) {
                                     is MessageListItem.DateHeader -> DateSeparator(
                                         item.label, isOneUi, isExthru, isDark, uiState.wallpaperUrl != null)
@@ -390,7 +388,7 @@ fun ChatScreen(
                                                     contextMenuData = null
                                                     dragOffset = Offset.Zero
                                                 },
-                                                onImageTap = onOpenImageViewer,
+                                                onMediaTap = onOpenImageViewer,
                                                 onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
                                                 onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
                                                 onReplyClick = onScrollToMessage,
@@ -549,7 +547,7 @@ fun ChatScreen(
                             Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                         }
                     },
-                    onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it) } },
+                    onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it, menuData.message.type) } },
                     onForward = null, // В разработке (вызов ForwardPickerDialog)
                     onReact = { emoji ->
                         viewModel.toggleReaction(menuData.message.id, emoji, menuData.message.parsedReactions)

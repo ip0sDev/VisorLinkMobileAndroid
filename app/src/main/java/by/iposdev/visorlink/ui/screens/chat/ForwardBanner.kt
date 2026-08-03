@@ -33,6 +33,7 @@ fun ForwardBanner(
     isMine: Boolean,
     isExthru: Boolean = false,
     isDark: Boolean = false,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
 ) {
     val accentColor = when {
@@ -53,8 +54,8 @@ fun ForwardBanner(
     }
 
     Row(
-        modifier = Modifier
-            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth
+        modifier = modifier
+            .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .background(bgColor)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
@@ -91,7 +92,7 @@ fun TelegramForwardBanner(
 
     Row(
         modifier = modifier
-            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth
+            .fillMaxWidth()
             .padding(bottom = 4.dp)
             .drawBehind {
                 drawIntoCanvas { canvas ->

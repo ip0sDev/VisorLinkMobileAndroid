@@ -57,7 +57,7 @@ fun CommentsScreen(
     messageId: String,
     channel: Chat?,
     onNavigateBack: () -> Unit,
-    onOpenImageViewer: (url: String) -> Unit = {},
+    onOpenImageViewer: (url: String, type: String) -> Unit = { _, _ -> },
     hapticEnabled: Boolean = true
 ) {
     val viewModel: CommentsViewModel = koinViewModel(parameters = { parametersOf(chatId, messageId) })
@@ -227,7 +227,7 @@ fun CommentsScreen(
                         post = post,
                         revealedSpoilers = uiState.revealedSpoilers,
                         onReveal = { viewModel.revealSpoiler(post.id) },
-                        onImageTap = { url -> onOpenImageViewer(url) }
+                        onImageTap = { url -> onOpenImageViewer(url, post.type) }
                     )
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 }
@@ -274,7 +274,7 @@ fun CommentsScreen(
                             val index = uiState.comments.indexOfFirst { it.id == replyId }
                             if (index >= 0) scope.launch { listState.animateScrollToItem(index) }
                         },
-                        onImageTap = { url -> onOpenImageViewer(url) },
+                        onImageTap = { url -> onOpenImageViewer(url, comment.type) },
                         onPlayVoice = { url, dur -> viewModel.playVoice(comment.id, url, dur) },
                         onSeekVoice = { viewModel.seekVoice(it) }
                     )
@@ -329,7 +329,7 @@ private fun PostPreview(
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         when {
             post.deleted -> Text("This post was deleted", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
-            post.type == MessageType.IMAGE -> {
+            post.type == MessageType.IMAGE || post.type == MessageType.VIDEO || post.type == MessageType.GIF -> {
                 val resolvedUrl = resolveCdnUrl(post.cdnMediaId, post.url)
                 if (resolvedUrl != null) {
                     SpoilerImage(
@@ -409,7 +409,7 @@ private fun CommentBubble(
 
                 when {
                     comment.deleted -> Text("Message deleted", style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = textColor.copy(alpha = 0.6f))
-                    comment.type == MessageType.IMAGE -> {
+                    comment.type == MessageType.IMAGE || comment.type == MessageType.VIDEO || comment.type == MessageType.GIF -> {
                         val resolvedUrl = resolveCdnUrl(comment.fileName, comment.url) // В комментариях пока используется url, но логика остаётся для совместимости
                         if (resolvedUrl != null) {
                             SpoilerImage(
@@ -495,7 +495,7 @@ private fun CommentReplyPreview(reply: CommentReplyData, isMine: Boolean, onClic
 
     Row(
         modifier = Modifier
-            .widthIn(min = 60.dp, max = 260.dp) // Убрали fillMaxWidth()
+            .widthIn(min = 60.dp, max = 260.dp)
             .clip(MaterialTheme.shapes.extraSmall)
             .background(accent)
             .clickable(onClick = onClick)
@@ -578,7 +578,7 @@ fun SpoilerImage(
             model = url,
             contentDescription = null,
             modifier = Modifier
-                .sizeIn(minWidth = 100.dp, minHeight = 100.dp, maxWidth = 280.dp, maxHeight = 500.dp) // Идеальный crop внутри границ
+                .sizeIn(minWidth = 100.dp, minHeight = 100.dp, maxWidth = 280.dp, maxHeight = 500.dp)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
                 .graphicsLayerAlpha(alpha),

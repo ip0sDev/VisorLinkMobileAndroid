@@ -280,7 +280,7 @@ fun SavedMessagesScreen(
                                             },
                                             onLongPressDrag  = { },
                                             onLongPressEnd   = { },
-                                            onImageTap     = { },
+                                            onMediaTap     = { _, _ -> },
                                             onAlbumTap     = { _, _ -> },
                                             onReact        = { },
                                             onReplyClick   = { },

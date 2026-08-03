@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import coil.Coil
 import coil.ImageLoader
+import coil.decode.VideoFrameDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
@@ -73,6 +74,10 @@ object AppImageLoader {
             .build()
 
         return ImageLoader.Builder(context)
+            .components {
+                // Добавляем декодер для поддержки превью видео
+                add(VideoFrameDecoder.Factory())
+            }
             .okHttpClient(okhttp)
             // Disk cache — для картинок (аватарки, фото из чатов)
             .diskCache {

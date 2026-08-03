@@ -37,11 +37,23 @@ class AuthRepository(
             }
         }
 
-        val authListener    = FirebaseAuth.AuthStateListener    { trySend(currentState()) }
-        val tokenListener   = FirebaseAuth.IdTokenListener      { trySend(currentState()) }
+        // ИСПРАВЛЕНИЕ: Используем классические анонимные классы (object : Interface)
+        // вместо лямбд. Это обходит баг компилятора Kotlin с UnknownInitialization.
+        val authListener = object : FirebaseAuth.AuthStateListener {
+            override fun onAuthStateChanged(firebaseAuth: FirebaseAuth) {
+                trySend(currentState())
+            }
+        }
+
+        val tokenListener = object : FirebaseAuth.IdTokenListener {
+            override fun onIdTokenChanged(firebaseAuth: FirebaseAuth) {
+                trySend(currentState())
+            }
+        }
 
         auth.addAuthStateListener(authListener)
         auth.addIdTokenListener(tokenListener)
+
         awaitClose {
             auth.removeAuthStateListener(authListener)
             auth.removeIdTokenListener(tokenListener)

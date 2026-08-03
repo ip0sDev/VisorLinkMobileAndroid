@@ -176,8 +176,8 @@ fun VisorLinkNavGraph(
                 onOpenChatSettings = { cId ->
                     navController.navigate(Screen.ChatSettings.createRoute(cId))
                 },
-                onOpenImageViewer  = { url ->
-                    navController.navigate(Screen.ImageViewer.createRoute(url))
+                onOpenImageViewer  = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
                 },
                 onMentionClick     = { usernameOrTag ->
                     navController.navigate(Screen.Search.createRoute(usernameOrTag))
@@ -195,12 +195,19 @@ fun VisorLinkNavGraph(
                 navArgument("url") {
                     type = NavType.StringType
                     nullable = false
+                },
+                navArgument("type") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = "image"
                 }
             )
         ) { backStackEntry ->
             val url = backStackEntry.arguments?.getString("url") ?: return@composable
+            val type = backStackEntry.arguments?.getString("type") ?: "image"
             ImageViewerScreen(
                 url            = url,
+                type           = type,
                 onNavigateBack = { navController.popBackStack() }
             )
         }
@@ -320,8 +327,8 @@ fun VisorLinkNavGraph(
                 messageId         = messageId,
                 channel           = channel,
                 onNavigateBack    = { navController.popBackStack() },
-                onOpenImageViewer = { url ->
-                    navController.navigate(Screen.ImageViewer.createRoute(url))
+                onOpenImageViewer = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
                 },
                 hapticEnabled = hapticEnabled
             )

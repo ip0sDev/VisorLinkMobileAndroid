@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
@@ -208,20 +209,23 @@ class ChatViewModel(
                     _uiState.update { state ->
                         val latestMap = latestMessages.associateBy { it.id }
                         val olderMessages = state.messages.filter { it.id !in latestMap }
-                        val combined = (olderMessages + latestMessages).sortedBy { it.createdAt?.seconds ?: 0L }
+                        val combined = (olderMessages + latestMessages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
 
                         val allMessages = combined + state.tempMessages
                         val items = buildMessageList(allMessages)
 
+                        // ИСПРАВЛЕНИЕ: Восстанавливаем курсор из сети (latestLastDoc), если кэш (state.lastDoc) пустой
+                        val newLastDoc = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.lastDoc else latestLastDoc
+                        val newHasMore = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.hasMore else (latestLastDoc != null)
+
                         state.copy(
                             messages = combined,
                             messageListItems = items,
-                            lastDoc = if (olderMessages.isNotEmpty()) state.lastDoc else latestLastDoc,
-                            hasMore = if (olderMessages.isNotEmpty()) state.hasMore else (latestLastDoc != null)
+                            lastDoc = newLastDoc,
+                            hasMore = newHasMore
                         )
                     }
 
-                    // ── ИСПРАВЛЕНИЕ: Отмечаем прочитанным во ВСЕХ чатах, а не только DIRECT ──
                     if (ActiveChatTracker.activeChatId == chatId) {
                         viewModelScope.launch {
                             try {
@@ -482,24 +486,38 @@ class ChatViewModel(
     }
 
     fun loadMore() {
-        val state = _uiState.value
-        if (!state.hasMore || state.isLoadingMore || state.lastDoc == null) return
+        var currentLastDoc: DocumentSnapshot? = null
+
+        // Защита от дублей: блокируем дальнейшие вызовы пока грузим
+        _uiState.update { state ->
+            if (!state.hasMore || state.isLoadingMore || state.lastDoc == null) {
+                return@update state
+            }
+            currentLastDoc = state.lastDoc
+            state.copy(isLoadingMore = true)
+        }
+
+        if (currentLastDoc == null) return
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingMore = true) }
             try {
-                val (older, newLastDoc) = chatRepository.loadOlderMessages(chatId, state.lastDoc)
-                val combined = older + state.messages
-                _uiState.update {
-                    it.copy(
+                val (older, newLastDoc) = chatRepository.loadOlderMessages(chatId, currentLastDoc!!)
+
+                _uiState.update { currentState ->
+                    val olderFiltered = older.filter { oldMsg ->
+                        currentState.messages.none { it.id == oldMsg.id }
+                    }
+                    val combined = (olderFiltered + currentState.messages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+
+                    currentState.copy(
                         messages = combined,
-                        messageListItems = buildMessageList(combined + it.tempMessages),
+                        messageListItems = buildMessageList(combined + currentState.tempMessages),
                         isLoadingMore = false,
                         hasMore = newLastDoc != null,
-                        lastDoc = newLastDoc ?: it.lastDoc
+                        lastDoc = newLastDoc ?: currentState.lastDoc
                     )
                 }
 
-                // ── ИСПРАВЛЕНИЕ: Отмечаем прочитанными в любом типе чата, чистим уведы ──
                 if (ActiveChatTracker.activeChatId == chatId) {
                     try {
                         chatRepository.markMessagesAsRead(chatId, older, currentUid)
@@ -508,7 +526,8 @@ class ChatViewModel(
                     catch (_: Exception) {}
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoadingMore = false, error = e.message) }
+                Log.e("ChatViewModel", "Pagination error", e)
+                _uiState.update { it.copy(isLoadingMore = false, error = "Ошибка загрузки: ${e.message}") }
             }
         }
     }

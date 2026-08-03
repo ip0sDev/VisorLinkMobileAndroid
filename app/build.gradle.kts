@@ -26,7 +26,7 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 88
+        versionCode = 89
         versionName = "3.0.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
@@ -119,6 +119,7 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.media3.exoplayer) // или 1.3.0+
     implementation(libs.androidx.media3.ui)
+    implementation(libs.coil.video)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

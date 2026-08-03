@@ -126,7 +126,7 @@ internal fun MessageBubble(
     onLongPressStart: (Offset) -> Unit,
     onLongPressDrag: (Offset) -> Unit,
     onLongPressEnd: () -> Unit,
-    onImageTap: (url: String) -> Unit,
+    onMediaTap: (url: String, type: String) -> Unit,
     onAlbumTap: (images: List<AlbumImage>, startIndex: Int) -> Unit,
     onReact: (String) -> Unit,
     onReplyClick: (String) -> Unit,
@@ -159,6 +159,7 @@ internal fun MessageBubble(
                         isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+                        onMediaTap = onMediaTap,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat
                     )
                     return@Box
@@ -179,7 +180,7 @@ internal fun MessageBubble(
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
                         isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
-                        onTap = { url -> onImageTap(url) },
+                        onTap = { url -> onMediaTap(url, MessageType.IMAGE) },
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
@@ -308,10 +309,10 @@ internal fun TextBubble(
                 }
 
                 if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message)
+                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
                 } else {
                     message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
                     }
                 }
 
@@ -369,6 +370,7 @@ internal fun TextBubble(
 internal fun VideoBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
+    onMediaTap: (String, String) -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
     val imageShape = if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
@@ -377,6 +379,8 @@ internal fun VideoBubble(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.94f else 1f, spring(dampingRatio = 0.5f), label = "video_scale")
+
+    val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -393,6 +397,7 @@ internal fun VideoBubble(
             modifier = containerModifier.messageGestures(
                 messageId = message.id,
                 interactionSource = interactionSource,
+                onTap = { resolvedUrl?.let { onMediaTap(it, message.type) } },
                 onLongPressStart = onLongPressStart,
                 onLongPressDrag = onLongPressDrag,
                 onLongPressEnd = onLongPressEnd
@@ -402,15 +407,16 @@ internal fun VideoBubble(
                 mediaId = message.cdnMediaId,
                 type = message.type,
                 localFile = message.localFile,
-                modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp)
+                modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
+                onClick = { resolvedUrl?.let { onMediaTap(it, message.type) } }
             )
 
-            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
+            Column(modifier = Modifier.matchParentSize()) {
                 if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message)
+                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
                 } else {
                     message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
                     }
                 }
 
@@ -497,10 +503,10 @@ internal fun StickerBubble(
                 }
 
                 if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message)
+                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
                 } else {
                     message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
                     }
                 }
 
@@ -628,12 +634,12 @@ internal fun ImageBubble(
                 }
             }
 
-            Column(modifier = Modifier.fillMaxWidth().align(Alignment.TopStart)) {
+            Column(modifier = Modifier.matchParentSize()) {
                 if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message)
+                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
                 } else {
                     message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
                     }
                 }
 
@@ -735,10 +741,10 @@ fun AlbumBubble(
                 }
 
                 if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message)
+                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
                 } else {
                     message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark)
+                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
                     }
                 }
 
