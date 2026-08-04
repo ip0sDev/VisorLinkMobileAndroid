@@ -274,7 +274,8 @@ data class Message(
     val mimeType: String? = null,
     val uploadProgress: Float? = null,
     val localFile: java.io.File? = null,
-    val localBytes: ByteArray? = null
+    val localBytes: ByteArray? = null,
+    val status: String = "sent"
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -324,6 +325,12 @@ object MessageType {
     const val GIF     = "gif"
 }
 
+object SendStatus {
+    const val SENDING = "sending"
+    const val SENT    = "sent"
+    const val ERROR   = "error"
+}
+
 data class ReplyData(
     val id: String,
     val type: String,
@@ -370,7 +377,8 @@ data class Comment(
     val reactions: List<Map<String, Any>> = emptyList(),
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
-    val createdAt: Timestamp? = null
+    val createdAt: Timestamp? = null,
+    val status: String = "sent"
 ) {
     val parsedReactions: List<Reaction>
         get() = reactions.mapNotNull { map ->

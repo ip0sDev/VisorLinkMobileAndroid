@@ -8,7 +8,7 @@ import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 
 // ── One UI Chat color tokens ───────────────────────────────────────────────────
 
-internal object OneUiChat {
+object OneUiChat {
     val Blue              = Color(0xFF1259C3)
     val BlueDark          = Color(0xFF4D90F0)
     val PageBg            = Color(0xFFF4F4F4)
@@ -31,7 +31,7 @@ internal object OneUiChat {
 
 // ── Exthru Chat color tokens (Dynamic via MaterialTheme) ─────────────────────
 
-internal object ExthruChat {
+object ExthruChat {
     // ── Акценты ──
     val Accent: Color @Composable get() = MaterialTheme.colorScheme.primary
     val AccentLight: Color @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)

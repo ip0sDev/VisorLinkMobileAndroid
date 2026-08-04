@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import by.iposdev.visorlink.BuildConfig
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.ui.theme.*
@@ -61,8 +62,10 @@ fun AppCheckGuard(
     // Основной контент приложения рендерится всегда
     content()
 
-    // Показываем диалог только если проверка провалена И пользователь еще не закрыл его
-    if (state is AppCheckManager.State.Invalid && !isDismissed) {
+    val isDebug = BuildConfig.DEBUG
+
+    // Показываем диалог только если проверка провалена И пользователь еще не закрыл его И это не дебаг-сборка
+    if (state is AppCheckManager.State.Invalid && !isDismissed && !isDebug) {
         val haptic = rememberHaptic()
 
         UnofficialClientDialog(

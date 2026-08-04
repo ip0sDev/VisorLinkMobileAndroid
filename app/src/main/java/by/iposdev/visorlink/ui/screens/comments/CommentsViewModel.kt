@@ -12,6 +12,7 @@ import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.*
@@ -21,6 +22,7 @@ import java.io.File
 data class CommentsUiState(
     val post: Message? = null,
     val comments: List<Comment> = emptyList(),
+    val tempComments: List<Comment> = emptyList(),
     val revealedSpoilers: Set<String> = emptySet(),
     val replyingTo: Comment? = null,
     val isUploading: Boolean = false,
@@ -37,7 +39,7 @@ data class CommentsUiState(
     }
 
     val isAdmin get() = myMember?.isAdmin() ?: false
-    val commentCount get() = post?.commentsCount ?: comments.size
+    val commentCount get() = post?.commentsCount ?: (comments.size + tempComments.size)
 }
 
 class CommentsViewModel(
@@ -95,7 +97,23 @@ class CommentsViewModel(
         }
         // Listen to comments subcollection
         commentsListener = chatRepository.listenComments(chatId, messageId) { comments ->
-            _uiState.update { it.copy(comments = comments) }
+            _uiState.update { state ->
+                // Очищаем временные комментарии, которые уже появились в основном списке
+                val filteredTemp = state.tempComments.filter { temp ->
+                    comments.none { real ->
+                        val isSameUser = real.senderId == temp.senderId
+                        val isSameType = real.type == temp.type
+                        val timeDiff = Math.abs((real.createdAt?.seconds ?: 0) - (temp.createdAt?.seconds ?: 0))
+                        
+                        isSameUser && isSameType && timeDiff < 30 && (
+                            real.text == temp.text || 
+                            (real.duration != null && real.duration == temp.duration) ||
+                            (real.type == MessageType.IMAGE) // Для картинок просто по типу и времени
+                        )
+                    }
+                }
+                state.copy(comments = comments, tempComments = filteredTemp)
+            }
         }
     }
 
@@ -115,6 +133,21 @@ class CommentsViewModel(
     fun sendText(text: String) {
         val trimmed = text.trim().ifEmpty { return }
         val reply = _uiState.value.replyingTo?.toCommentReplyData()
+        val tempId = "temp_${System.currentTimeMillis()}"
+
+        val tempComment = Comment(
+            id = tempId,
+            senderId = currentUid,
+            senderUsername = currentUsername,
+            type = MessageType.TEXT,
+            text = trimmed,
+            replyTo = reply,
+            status = SendStatus.SENDING,
+            createdAt = Timestamp.now()
+        )
+
+        _uiState.update { it.copy(tempComments = it.tempComments + tempComment) }
+
         viewModelScope.launch {
             clearReply()
             try {
@@ -123,8 +156,14 @@ class CommentsViewModel(
                     type = MessageType.TEXT, text = trimmed,
                     replyTo = reply
                 )
+                _uiState.update { it.copy(tempComments = it.tempComments.filter { c -> c.id != tempId }) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { state ->
+                    val updated = state.tempComments.map {
+                        if (it.id == tempId) it.copy(status = SendStatus.ERROR) else it
+                    }
+                    state.copy(tempComments = updated, error = e.message)
+                }
             }
         }
     }
@@ -133,16 +172,37 @@ class CommentsViewModel(
 
     fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
         val reply = _uiState.value.replyingTo?.toCommentReplyData()
+        val tempId = "temp_img_${System.currentTimeMillis()}"
+
+        val tempComment = Comment(
+            id = tempId,
+            senderId = currentUid,
+            senderUsername = currentUsername,
+            type = MessageType.IMAGE,
+            url = uri.toString(),
+            spoiler = isSpoiler,
+            replyTo = reply,
+            status = SendStatus.SENDING,
+            createdAt = Timestamp.now()
+        )
+
+        _uiState.update { it.copy(tempComments = it.tempComments + tempComment, isUploading = true) }
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isUploading = true) }
             clearReply()
             try {
                 chatRepository.uploadAndCommentImage(
                     chatId = chatId, messageId = messageId,
                     file = uri, spoiler = isSpoiler, replyTo = reply
                 )
+                _uiState.update { it.copy(tempComments = it.tempComments.filter { c -> c.id != tempId }) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { state ->
+                    val updated = state.tempComments.map {
+                        if (it.id == tempId) it.copy(status = SendStatus.ERROR) else it
+                    }
+                    state.copy(tempComments = updated, error = e.message)
+                }
             } finally {
                 _uiState.update { it.copy(isUploading = false) }
             }
@@ -175,7 +235,20 @@ class CommentsViewModel(
         try { recorder?.apply { stop(); release() } } catch (_: Exception) {}
         recorder = null
         val reply = _uiState.value.replyingTo?.toCommentReplyData()
-        _uiState.update { it.copy(isRecording = false) }
+        val tempId = "temp_voice_${System.currentTimeMillis()}"
+
+        val tempComment = Comment(
+            id = tempId,
+            senderId = currentUid,
+            senderUsername = currentUsername,
+            type = MessageType.VOICE,
+            duration = duration,
+            replyTo = reply,
+            status = SendStatus.SENDING,
+            createdAt = Timestamp.now()
+        )
+
+        _uiState.update { it.copy(isRecording = false, tempComments = it.tempComments + tempComment) }
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
@@ -184,8 +257,14 @@ class CommentsViewModel(
                     chatId = chatId, messageId = messageId,
                     audioFile = file, durationSeconds = duration, replyTo = reply
                 )
+                _uiState.update { it.copy(tempComments = it.tempComments.filter { c -> c.id != tempId }) }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = e.message) }
+                _uiState.update { state ->
+                    val updated = state.tempComments.map {
+                        if (it.id == tempId) it.copy(status = SendStatus.ERROR) else it
+                    }
+                    state.copy(tempComments = updated, error = e.message)
+                }
             } finally {
                 _uiState.update { it.copy(isUploading = false) }
                 file.delete()

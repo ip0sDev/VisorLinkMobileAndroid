@@ -386,7 +386,8 @@ class ChatViewModel(
             createdAt = com.google.firebase.Timestamp.now(),
             readBy = listOf(currentUid),
             deleted = false,
-            replyTo = reply?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) }
+            replyTo = reply?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
+            status = SendStatus.SENDING
         )
 
         _uiState.update { state ->

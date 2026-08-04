@@ -348,12 +348,16 @@ internal fun TextBubble(
                             style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
                         )
                     }
-                    if (isMine && !message.deleted && chatType == ChatType.DIRECT) {
-                        AnimatedContent(
-                            targetState  = isReadByOther,
-                            transitionSpec = { scaleIn(initialScale = 0.5f, animationSpec = spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(targetScale = 0.5f) + fadeOut() },
-                            label = "read_receipt",
-                        ) { read -> ReadReceipt(isRead = read, isExthru = isExthru, isDark = isDark) }
+                    if (isMine && !message.deleted) {
+                        if (chatType == ChatType.DIRECT) {
+                            AnimatedContent(
+                                targetState = isReadByOther,
+                                transitionSpec = { scaleIn(initialScale = 0.5f, animationSpec = spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(targetScale = 0.5f) + fadeOut() },
+                                label = "read_receipt",
+                            ) { read -> ReadReceipt(isRead = read, isExthru = isExthru, isDark = isDark) }
+                        } else {
+                            MessageStatusIcon(status = message.status, isExthru = isExthru, isDark = isDark)
+                        }
                     }
                 }
             }
@@ -454,8 +458,18 @@ internal fun VideoBubble(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
-                    if (isMine && chatType == ChatType.DIRECT) {
-                        Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
+                    if (isMine) {
+                        if (chatType == ChatType.DIRECT) {
+                            Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
+                        } else {
+                            val icon = when (message.status) {
+                                SendStatus.SENDING -> Icons.Default.Schedule
+                                SendStatus.ERROR   -> Icons.Default.ErrorOutline
+                                else               -> Icons.Default.Done
+                            }
+                            val tint = if (message.status == SendStatus.ERROR) Color.Red else Color.White.copy(alpha = 0.8f)
+                            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(13.dp), tint = tint)
+                        }
                     }
                 }
             }
@@ -679,8 +693,18 @@ internal fun ImageBubble(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
-                    if (isMine && chatType == ChatType.DIRECT) {
-                        Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
+                    if (isMine) {
+                        if (chatType == ChatType.DIRECT) {
+                            Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
+                        } else {
+                            val icon = when (message.status) {
+                                SendStatus.SENDING -> Icons.Default.Schedule
+                                SendStatus.ERROR   -> Icons.Default.ErrorOutline
+                                else               -> Icons.Default.Done
+                            }
+                            val tint = if (message.status == SendStatus.ERROR) Color.Red else Color.White.copy(alpha = 0.8f)
+                            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(13.dp), tint = tint)
+                        }
                     }
                 }
             }
@@ -788,6 +812,9 @@ fun AlbumBubble(
                         message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
                         style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f), fontSize = 10.sp
                     )
+                    if (isMine) {
+                        MessageStatusIcon(status = message.status, isExthru = isExthru, isDark = isDark)
+                    }
                 }
             }
         }
@@ -1087,6 +1114,22 @@ internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Bo
             )
         }
     }
+}
+
+@Composable
+internal fun MessageStatusIcon(status: String, isExthru: Boolean = false, isDark: Boolean = false) {
+    val icon = when (status) {
+        SendStatus.SENDING -> Icons.Default.Schedule
+        SendStatus.ERROR   -> Icons.Default.ErrorOutline
+        else               -> Icons.Default.Done
+    }
+    val tint = when (status) {
+        SendStatus.SENDING -> if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        SendStatus.ERROR   -> MaterialTheme.colorScheme.error
+        else               -> if (isExthru) ExthruChat.Accent else MaterialTheme.colorScheme.primary
+    }
+
+    Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(13.dp), tint = tint)
 }
 
 @Composable

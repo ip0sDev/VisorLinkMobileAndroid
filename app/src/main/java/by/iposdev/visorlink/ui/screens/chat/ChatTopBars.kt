@@ -212,7 +212,7 @@ internal fun ExthruChatTopBar(
 }
 
 @Composable
-private fun InteractiveTopBarIcon(
+fun InteractiveTopBarIcon(
     icon: ImageVector,
     isDark: Boolean,
     isForge: Boolean,

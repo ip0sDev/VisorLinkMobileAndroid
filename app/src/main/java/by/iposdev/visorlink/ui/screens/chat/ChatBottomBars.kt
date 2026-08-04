@@ -25,6 +25,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -63,6 +64,7 @@ fun DynamicChatInputBar(
     appTheme: AppTheme,
     canSendMessage: Boolean,
     canSendMedia: Boolean,
+    canSendStickers: Boolean = true,
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
@@ -82,21 +84,32 @@ fun DynamicChatInputBar(
     val isForge = appTheme == AppTheme.FORGE
     val isOneUi = appTheme == AppTheme.ONE_UI
     val isExthru = appTheme.isExthruFamily
+    val isM3E = appTheme == AppTheme.MATERIAL3_EXPRESSIVE
 
     val style = rememberExthruStyle(if(isExthru) appTheme else AppTheme.BIOLUME)
 
-    val outerShape = if (isForge) RectangleShape else RoundedCornerShape(28.dp)
-    val innerShape = if (isForge) RectangleShape else RoundedCornerShape(20.dp)
+    val outerShape = when {
+        isForge -> RectangleShape
+        isM3E -> RoundedCornerShape(32.dp)
+        else -> RoundedCornerShape(28.dp)
+    }
+    val innerShape = when {
+        isForge -> RectangleShape
+        isM3E -> RoundedCornerShape(28.dp)
+        else -> RoundedCornerShape(20.dp)
+    }
 
     val outerBg = when {
         isExthru -> if (isForge) style.cardBg else cs.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.5f)
         isOneUi -> if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar
+        isM3E -> Color.Transparent
         else -> cs.surfaceContainerHighest.copy(alpha = 0.85f)
     }
 
     val innerBg = when {
         isExthru -> if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.35f else 0.6f)
         isOneUi -> if (isDark) OneUiChat.InputBgDark else OneUiChat.InputBg
+        isM3E -> cs.surfaceContainerHighest
         else -> cs.surface
     }
 
@@ -128,7 +141,12 @@ fun DynamicChatInputBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)
+                .padding(
+                    start = if (isM3E) 8.dp else 12.dp,
+                    end = if (isM3E) 8.dp else 12.dp,
+                    top = if (isM3E) 4.dp else 8.dp,
+                    bottom = if (isM3E) 8.dp else 12.dp
+                )
         ) {
             val bgMod = if (isExthru && !isForge) {
                 Modifier.hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, tint = HazeTint(outerBg), noiseFactor = 0.03f))
@@ -142,14 +160,14 @@ fun DynamicChatInputBar(
                     .clip(outerShape)
                     .then(bgMod)
                     .then(if (isExthru && !isForge) Modifier.border(1.dp, Color.White.copy(0.1f), outerShape) else Modifier)
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .padding(horizontal = if (isM3E) 4.dp else 8.dp, vertical = if (isM3E) 4.dp else 8.dp)
             ) {
                 AnimatedVisibility(visible = uiState.replyingTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     uiState.replyingTo?.let { msg ->
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(bottom = 8.dp)
+                                .padding(bottom = if (isM3E) 4.dp else 8.dp)
                                 .clip(innerShape)
                                 .background(innerBg)
                                 .then(if (isExthru && !isForge) Modifier.border(1.dp, cs.outlineVariant.copy(0.2f), innerShape) else Modifier)
@@ -171,7 +189,7 @@ fun DynamicChatInputBar(
                 }
 
                 AnimatedVisibility(visible = uiState.isUploading, enter = expandVertically(), exit = shrinkVertically()) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(4.dp)), color = accentColor, trackColor = Color.Transparent)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = if (isM3E) 4.dp else 8.dp).clip(RoundedCornerShape(4.dp)), color = accentColor, trackColor = Color.Transparent)
                 }
 
                 if (canSendMessage) {
@@ -184,14 +202,14 @@ fun DynamicChatInputBar(
                         LaunchedEffect(Unit) { while (true) { delay(1000); elapsed++; haptic.perform(HapticType.CLICK, hapticEnabled) } }
 
                         Row(
-                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            modifier = Modifier.fillMaxWidth().height(if (isM3E) 52.dp else 44.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { haptic.perform(HapticType.ERROR, hapticEnabled); onCancelRecord() }) {
-                                Icon(Icons.Default.Delete, "Cancel", tint = style.destructive)
+                                Icon(Icons.Default.Delete, "Cancel", tint = if (isM3E) cs.error else style.destructive)
                             }
                             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(8.dp).background(style.destructive.copy(alpha = dotAlpha), if(isForge) RectangleShape else CircleShape))
+                                Box(Modifier.size(8.dp).background((if (isM3E) cs.error else style.destructive).copy(alpha = dotAlpha), if(isForge) RectangleShape else CircleShape))
                                 Spacer(Modifier.width(8.dp))
                                 Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), fontFamily = if(isForge) FontFamily.Monospace else null)
                             }
@@ -201,32 +219,46 @@ fun DynamicChatInputBar(
 
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(if (isM3E) 44.dp else 40.dp)
                                     .scale(if(isForge) 1f else sendScale)
                                     .then(if (isExthru) sendShadow else Modifier)
-                                    .background(if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE) accentColor else style.cardBg, if(isForge) RectangleShape else CircleShape)
+                                    .background(if (isM3E) cs.primary else style.cardBg, if(isForge) RectangleShape else CircleShape)
                                     .clip(if(isForge) RectangleShape else CircleShape)
                                     .clickable(enabled = !uiState.isCooldown) { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSendRecord() },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE) Color.White else accentColor, modifier = Modifier.size(20.dp))
+                                Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = if (isM3E) cs.onPrimary else accentColor, modifier = Modifier.size(20.dp))
                             }
                         }
                     } else {
                         Row(verticalAlignment = Alignment.Bottom) {
-                            AnimatedVisibility(
-                                visible = inputText.isBlank(),
-                                enter = expandHorizontally(expandFrom = Alignment.End, clip = true) + fadeIn(tween(200)),
-                                exit = shrinkHorizontally(shrinkTowards = Alignment.End, clip = true) + fadeOut(tween(200))
-                            ) {
-                                Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(end = 6.dp, bottom = 2.dp)) {
-                                    if (canSendMedia) {
-                                        Box(modifier = Modifier.size(38.dp, 44.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) { haptic.perform(HapticType.CLICK, hapticEnabled); onAttach() }, contentAlignment = Alignment.Center) {
-                                            Icon(Icons.Default.AttachFile, null, tint = iconColor, modifier = Modifier.size(24.dp))
-                                        }
+                            if (isM3E) {
+                                if (canSendMedia) {
+                                    IconButton(
+                                        onClick = onAttach,
+                                        modifier = Modifier.padding(bottom = 4.dp),
+                                        enabled = !uiState.isCooldown
+                                    ) {
+                                        Icon(Icons.Default.Add, null, tint = cs.primary)
                                     }
-                                    Box(modifier = Modifier.size(38.dp, 44.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() }, contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.EmojiEmotions, null, tint = if (showStickerSheet) accentColor else iconColor, modifier = Modifier.size(24.dp))
+                                }
+                            } else {
+                                AnimatedVisibility(
+                                    visible = inputText.isBlank(),
+                                    enter = expandHorizontally(expandFrom = Alignment.End, clip = true) + fadeIn(tween(200)),
+                                    exit = shrinkHorizontally(shrinkTowards = Alignment.End, clip = true) + fadeOut(tween(200))
+                                ) {
+                                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(end = 6.dp, bottom = 2.dp)) {
+                                        if (canSendMedia) {
+                                            Box(modifier = Modifier.size(38.dp, 44.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) { haptic.perform(HapticType.CLICK, hapticEnabled); onAttach() }, contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Default.AttachFile, null, tint = iconColor, modifier = Modifier.size(24.dp))
+                                            }
+                                        }
+                                        if (canSendStickers) {
+                                            Box(modifier = Modifier.size(38.dp, 44.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() }, contentAlignment = Alignment.Center) {
+                                                Icon(Icons.Default.EmojiEmotions, null, tint = if (showStickerSheet) accentColor else iconColor, modifier = Modifier.size(24.dp))
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -247,12 +279,12 @@ fun DynamicChatInputBar(
                                         modifier = Modifier
                                             .weight(1f)
                                             .focusRequester(focusRequester)
-                                            .padding(top = 12.dp, bottom = 12.dp, end = 4.dp),
+                                            .padding(top = if (isM3E) 14.dp else 12.dp, bottom = if (isM3E) 14.dp else 12.dp, end = 4.dp),
                                         maxLines = 5,
                                         textStyle = TextStyle(color = if (isDark) Color.White else Color.Black, fontSize = 15.sp, fontFamily = if(isForge) FontFamily.Monospace else null),
                                         decorationBox = { inner ->
                                             if (inputText.isEmpty()) {
-                                                Text(stringResource(R.string.chat_input_placeholder), fontSize = 15.sp, color = iconColor, fontFamily = if(isForge) FontFamily.Monospace else null)
+                                                Text(stringResource(R.string.chat_input_placeholder), fontSize = 15.sp, color = if (isM3E) cs.onSurfaceVariant.copy(alpha = 0.7f) else iconColor, fontFamily = if(isForge) FontFamily.Monospace else null)
                                             }
                                             inner()
                                         }
@@ -261,35 +293,95 @@ fun DynamicChatInputBar(
                                     if (inputText.isNotEmpty()) {
                                         Text(
                                             "${inputText.length}/2000", fontSize = 11.sp,
-                                            color = if (inputText.length >= 2000) style.destructive else iconColor,
-                                            modifier = Modifier.padding(bottom = 14.dp, end = 6.dp),
+                                            color = if (inputText.length >= 2000) (if (isM3E) cs.error else style.destructive) else iconColor,
+                                            modifier = Modifier.padding(bottom = if (isM3E) 16.dp else 14.dp, end = 6.dp),
                                         )
                                     }
 
-                                    Box(modifier = Modifier.padding(bottom = 2.dp)) {
-                                        AnimatedContent(
-                                            targetState = inputText.isNotBlank(),
-                                            transitionSpec = {
-                                                scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(spring(stiffness = Spring.StiffnessHigh)) + fadeOut()
-                                            },
-                                            label = "send_mic",
-                                        ) { hasText ->
-                                            if (hasText) {
-                                                Box(modifier = Modifier.size(40.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) { haptic.perform(HapticType.CLICK, hapticEnabled); onSend() }, contentAlignment = Alignment.Center) {
-                                                    Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = accentColor, modifier = Modifier.size(24.dp))
-                                                }
-                                            } else {
-                                                if (canSendMedia) {
-                                                    Box(modifier = Modifier.size(40.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) {
-                                                        if (audioPermission.status.isGranted) { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onStartRecord() }
-                                                        else onRequestAudioPerm()
-                                                    }, contentAlignment = Alignment.Center) {
-                                                        Icon(Icons.Default.Mic, "Record", tint = iconColor, modifier = Modifier.size(24.dp))
+                                    if (isM3E && canSendStickers) {
+                                        IconButton(onClick = onStickerClick, modifier = Modifier.padding(bottom = 2.dp)) {
+                                            Icon(Icons.Default.EmojiEmotions, null, tint = if (showStickerSheet) cs.primary else cs.onSurfaceVariant)
+                                        }
+                                    }
+
+                                    if (!isM3E) {
+                                        Box(modifier = Modifier.padding(bottom = 2.dp)) {
+                                            AnimatedContent(
+                                                targetState = inputText.isNotBlank(),
+                                                transitionSpec = {
+                                                    scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(spring(stiffness = Spring.StiffnessHigh)) + fadeOut()
+                                                },
+                                                label = "send_mic",
+                                            ) { hasText ->
+                                                if (hasText) {
+                                                    val sendScale by animateFloatAsState(if (uiState.isCooldown) 0.85f else 1f, label = "")
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .scale(sendScale)
+                                                            .clip(CircleShape)
+                                                            .clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) { haptic.perform(HapticType.CLICK, hapticEnabled); onSend() },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = accentColor, modifier = Modifier.size(24.dp))
                                                     }
                                                 } else {
-                                                    Spacer(Modifier.size(40.dp))
+                                                    if (canSendMedia) {
+                                                        Box(modifier = Modifier.size(40.dp).clickable(enabled = !uiState.isCooldown, indication = null, interactionSource = remember { MutableInteractionSource() }) {
+                                                            if (audioPermission.status.isGranted) { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onStartRecord() }
+                                                            else onRequestAudioPerm()
+                                                        }, contentAlignment = Alignment.Center) {
+                                                            Icon(Icons.Default.Mic, "Record", tint = iconColor, modifier = Modifier.size(24.dp))
+                                                        }
+                                                    } else {
+                                                        Spacer(Modifier.size(40.dp))
+                                                    }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (isM3E) {
+                                Spacer(Modifier.width(8.dp))
+                                AnimatedContent(
+                                    targetState = inputText.isNotBlank(),
+                                    transitionSpec = {
+                                        scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(spring(stiffness = Spring.StiffnessHigh)) + fadeOut()
+                                    },
+                                    label = "m3e_send_mic",
+                                    modifier = Modifier.padding(bottom = 2.dp)
+                                ) { hasText ->
+                                    if (hasText) {
+                                        val sendScale by animateFloatAsState(if (uiState.isCooldown) 0.85f else 1f, label = "")
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .scale(sendScale)
+                                                .background(cs.primary, CircleShape)
+                                                .clip(CircleShape)
+                                                .clickable(enabled = !uiState.isCooldown) { 
+                                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                                    onSend() 
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = cs.onPrimary, modifier = Modifier.size(22.dp))
+                                        }
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .background(cs.primaryContainer, CircleShape)
+                                                .clip(CircleShape)
+                                                .clickable(enabled = !uiState.isCooldown) {
+                                                    if (audioPermission.status.isGranted) { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onStartRecord() }
+                                                    else onRequestAudioPerm()
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(Icons.Default.Mic, "Record", tint = cs.onPrimaryContainer, modifier = Modifier.size(22.dp))
                                         }
                                     }
                                 }
@@ -320,6 +412,7 @@ internal fun ExthruChatBottomBar(
     isForge: Boolean = false,
     canSendMessage: Boolean,
     canSendMedia: Boolean,
+    canSendStickers: Boolean = true,
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
@@ -543,7 +636,7 @@ internal fun ExthruChatBottomBar(
 
 @Composable
 private fun InteractiveExthruButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     isDark: Boolean,
     isForge: Boolean,
     enabled: Boolean,
@@ -693,6 +786,7 @@ internal fun OneUiChatBottomBar(
     isDark: Boolean,
     canSendMessage: Boolean,
     canSendMedia: Boolean,
+    canSendStickers: Boolean = true,
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
@@ -800,16 +894,18 @@ internal fun OneUiChatBottomBar(
                                     modifier = Modifier.padding(end = 6.dp),
                                 )
                             }
-                            IconButton(
-                                onClick  = { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() },
-                                modifier = Modifier.size(32.dp),
-                                enabled  = !uiState.isCooldown,
-                            ) {
-                                Icon(
-                                    Icons.Default.EmojiEmotions, null,
-                                    tint     = if (showStickerSheet) accentColor else iconTint,
-                                    modifier = Modifier.size(20.dp),
-                                )
+                            if (canSendStickers) {
+                                IconButton(
+                                    onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() },
+                                    modifier = Modifier.size(32.dp),
+                                    enabled = !uiState.isCooldown,
+                                ) {
+                                    Icon(
+                                        Icons.Default.EmojiEmotions, null,
+                                        tint = if (showStickerSheet) accentColor else iconTint,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
                             }
                         }
                     }
@@ -880,6 +976,7 @@ internal fun DefaultChatBottomBar(
     inputText: String,
     canSendMessage: Boolean,
     canSendMedia: Boolean,
+    canSendStickers: Boolean = true,
     hapticEnabled: Boolean,
     showStickerSheet: Boolean,
     audioPermission: PermissionState,
@@ -941,18 +1038,20 @@ internal fun DefaultChatBottomBar(
                     }
                     val emojiScale = remember { Animatable(0f) }
                     LaunchedEffect(Unit) {
-                        kotlinx.coroutines.delay(40)
+                        delay(40)
                         emojiScale.animateTo(1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMediumLow))
                     }
-                    IconButton(
-                        onClick  = { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() },
-                        modifier = Modifier.scale(emojiScale.value),
-                        enabled  = !uiState.isCooldown,
-                    ) {
-                        Icon(
-                            Icons.Default.EmojiEmotions, null,
-                            tint = if (showStickerSheet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    if (canSendStickers) {
+                        IconButton(
+                            onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onStickerClick() },
+                            modifier = Modifier.scale(emojiScale.value),
+                            enabled = !uiState.isCooldown,
+                        ) {
+                            Icon(
+                                Icons.Default.EmojiEmotions, null,
+                                tint = if (showStickerSheet) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                     OutlinedTextField(
                         value         = inputText,
