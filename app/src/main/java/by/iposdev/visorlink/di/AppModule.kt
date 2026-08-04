@@ -12,7 +12,9 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
+import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
+import by.iposdev.visorlink.ui.screens.main.MainViewModel
 import by.iposdev.visorlink.ui.screens.feed.FeedViewModel
 import by.iposdev.visorlink.ui.screens.comments.CommentsViewModel
 import by.iposdev.visorlink.ui.screens.group.ChatSettingsViewModel
@@ -27,6 +29,7 @@ import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.CacheManager
+import by.iposdev.visorlink.utils.DiaryReminderManager
 import by.iposdev.visorlink.utils.DraftManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import com.google.firebase.Firebase
@@ -62,11 +65,13 @@ val appModule = module {
     single { CacheManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
     single { DraftManager(androidContext()) }
+    single { DiaryReminderManager(androidContext()) }
 
     viewModel { AppCheckViewModel() }
 
     viewModel { AuthViewModel(get()) }
     viewModel { ThemeViewModel(androidContext()) }
+    viewModel { MainViewModel(get()) }
     viewModel { ChatListViewModel(get(), get(), get(), get()) }
 
     viewModel { parameters ->
@@ -119,6 +124,7 @@ val appModule = module {
     single { ForwardRepository(get()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), androidContext(), get()) }
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }

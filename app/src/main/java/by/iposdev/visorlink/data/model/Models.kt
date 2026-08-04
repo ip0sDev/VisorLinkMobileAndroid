@@ -34,7 +34,20 @@ data class UserProfile(
     val ignoreCustomizations: Boolean = false,
     val interestWeights: Map<String, Double> = emptyMap(),
     val tg_username: String? = null,
-    val tg_uid: Long? = null
+    val tg_uid: Long? = null,
+
+    val diaryEnabled: Boolean = false,
+    val diaryRemindersEnabled: Boolean = false,
+    val diaryReminderTime: String = "21:00", // HH:mm
+
+    // Fields from Firestore warnings
+    val stickerPackIds: List<String> = emptyList(),
+    val customization: Map<String, Any?> = emptyMap(),
+    val lastStreakUpdate: Timestamp? = null,
+    val ntfyTopics: List<String> = emptyList(),
+    val settings: Map<String, Any?> = emptyMap(),
+    val mutedChatIds: List<String> = emptyList(),
+    val lastBitsClaim: Timestamp? = null
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false

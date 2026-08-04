@@ -34,6 +34,7 @@ data class SavedMessage(
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
     val createdAt: Timestamp? = null,
+    val isDiary: Boolean = false,
     // Временные/Локальные данные для расшифровки на лету в UI
     val localBytes: ByteArray? = null
 ) {

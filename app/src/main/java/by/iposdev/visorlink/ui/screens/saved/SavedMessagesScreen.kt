@@ -32,12 +32,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
+import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
@@ -249,7 +251,7 @@ fun SavedMessagesScreen(
                                 modifier      = Modifier.fillMaxSize().padding(padding),
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
-                                items(items = uiState.messages.asReversed(), key = { it.id }) { saved ->
+                                items(items = uiState.messages, key = { it.id }) { saved ->
                                     var decryptedFile by remember(saved.id) { mutableStateOf<File?>(null) }
 
                                     LaunchedEffect(saved) {
@@ -372,7 +374,7 @@ private fun SavedTopBar(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             },
             title = {
@@ -380,8 +382,8 @@ private fun SavedTopBar(
                     Text("⭐", fontSize = 20.sp)
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text("Избранное", fontWeight = FontWeight.Bold, fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
-                        if (isEncrypted) Text("🔐 Зашифровано", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(stringResource(R.string.saved_messages_title), fontWeight = FontWeight.Bold, fontSize = 22.sp, color = MaterialTheme.colorScheme.primary)
+                        if (isEncrypted) Text(stringResource(R.string.saved_enc_active_short), fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             },
@@ -411,7 +413,7 @@ private fun SavedTopBar(
                             },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Default.Lock, "Lock", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        Icon(Icons.Default.Lock, stringResource(R.string.saved_pin_disable), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                     }
                     Spacer(Modifier.width(10.dp))
                 }
@@ -431,7 +433,7 @@ private fun SavedTopBar(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Settings, "Settings", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.Settings, stringResource(R.string.chat_action_settings), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
@@ -444,7 +446,7 @@ private fun SavedTopBar(
         TopAppBar(
             navigationIcon = {
                 IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = titleColor)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back), tint = titleColor)
                 }
             },
             title = {
@@ -452,14 +454,14 @@ private fun SavedTopBar(
                     Text("⭐", fontSize = 20.sp)
                     Spacer(Modifier.width(8.dp))
                     Column {
-                        Text("Избранное", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = titleColor)
-                        if (isEncrypted) Text("🔐 Зашифровано", fontSize = 10.sp, color = accentColor)
+                        Text(stringResource(R.string.saved_messages_title), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = titleColor)
+                        if (isEncrypted) Text(stringResource(R.string.saved_enc_active_short), fontSize = 10.sp, color = accentColor)
                     }
                 }
             },
             actions = {
-                if (isPinEnabled) IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLock() }) { Icon(Icons.Default.Lock, "Lock", tint = accentColor) }
-                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) { Icon(Icons.Default.Settings, "Settings", tint = titleColor) }
+                if (isPinEnabled) IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLock() }) { Icon(Icons.Default.Lock, stringResource(R.string.saved_pin_disable), tint = accentColor) }
+                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) { Icon(Icons.Default.Settings, stringResource(R.string.chat_action_settings), tint = titleColor) }
             },
             colors = TopAppBarDefaults.topAppBarColors(containerColor = containerColor, scrolledContainerColor = containerColor)
         )
@@ -519,7 +521,7 @@ private fun SavedMessageActionSheet(onDismiss: () -> Unit, onDelete: () -> Unit)
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp) {
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
             ListItem(
-                headlineContent = { Text("Удалить из Избранного", color = MaterialTheme.colorScheme.error) },
+                headlineContent = { Text(stringResource(R.string.saved_action_delete), color = MaterialTheme.colorScheme.error) },
                 leadingContent = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
                 modifier = Modifier.clickable(onClick = onDelete)
             )
@@ -560,13 +562,13 @@ private fun SavedEmptyPlaceholder(modifier: Modifier, isEncrypted: Boolean, isEx
                 }
                 Text("⭐", fontSize = 48.sp)
             }
-            Text("Здесь будут ваши сохранённые сообщения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textColor)
+            Text(stringResource(R.string.saved_empty_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textColor)
             if (isEncrypted) {
                 Surface(shape = RoundedCornerShape(16.dp), color = accentColor.copy(alpha = 0.1f), modifier = Modifier.padding(top = 8.dp, start = 32.dp, end = 32.dp)) {
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lock, null, modifier = Modifier.size(16.dp), tint = accentColor)
                         Spacer(Modifier.width(8.dp))
-                        Text("Тексты зашифрованы на устройстве", fontSize = 13.sp, color = accentColor, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.saved_empty_footer), fontSize = 13.sp, color = accentColor, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -592,7 +594,7 @@ private fun PinInputDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Введите PIN-код") },
+        title = { Text(stringResource(R.string.saved_pin_prompt)) },
         text = {
             Column {
                 OutlinedTextField(
@@ -603,14 +605,14 @@ private fun PinInputDialog(
                             clearError()
                         }
                     },
-                    label = { Text("PIN (от 4 до 8 цифр)") },
+                    label = { Text(stringResource(R.string.saved_pin_hint)) },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     isError = pinError,
                     singleLine = true
                 )
                 if (pinError) {
-                    Text("Неверный PIN-код", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                    Text(stringResource(R.string.saved_pin_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
                 }
 
                 if (!hasBiometric) {
@@ -624,7 +626,7 @@ private fun PinInputDialog(
                             .padding(vertical = 4.dp)
                     ) {
                         Checkbox(checked = useBiometrics, onCheckedChange = { useBiometrics = it })
-                        Text("Разрешить вход по биометрии", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.saved_biometric_enable), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
@@ -633,16 +635,16 @@ private fun PinInputDialog(
             TextButton(
                 onClick = { onPinEntered(pin, useBiometrics) },
                 enabled = pin.length in 4..8
-            ) { Text("Разблокировать") }
+            ) { Text(stringResource(R.string.saved_action_unlock)) }
         },
         dismissButton = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (hasBiometric) {
                     IconButton(onClick = onBiometric) {
-                        Icon(Icons.Default.Fingerprint, tint = MaterialTheme.colorScheme.primary, contentDescription = "Биометрия")
+                        Icon(Icons.Default.Fingerprint, tint = MaterialTheme.colorScheme.primary, contentDescription = stringResource(R.string.saved_biometric_subtitle))
                     }
                 }
-                TextButton(onClick = onDismiss) { Text("Отмена") }
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             }
         }
     )

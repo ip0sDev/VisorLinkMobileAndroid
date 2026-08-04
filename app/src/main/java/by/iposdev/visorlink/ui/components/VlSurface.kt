@@ -126,7 +126,7 @@ fun VlSurface(
             // Фон делаем немного прозрачным, чтобы Haze и Glow красиво просвечивали
             val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f)
 
-            val shadowModifier = if (!showInset) {
+            val shadowModifier = if (overrideColor == Color.Transparent) Modifier else if (!showInset) {
                 Modifier.nmRaisedShadow(
                     isDark = isDark,
                     shadowRadius = if (isButton) 8.dp else 16.dp, // Увеличил размытие тени для глубины
@@ -141,28 +141,27 @@ fun VlSurface(
                 )
             }
 
-            val glowModifier = if (onClick != null && !isInput) {
+            val glowModifier = if (overrideColor == Color.Transparent) Modifier else if (onClick != null && !isInput) {
                 Modifier.accentGlowShadow(accent = style.accent, isPressed = isPressed, cornerRadius = baseRadius)
             } else Modifier
 
             Box(
                 modifier = modifier
-                    .scale(scale) // Масштаб применяется ко всему: и тени, и фону
+                    .scale(scale)
                     .then(shadowModifier)
                     .then(glowModifier)
                     .background(bg, shape)
                     .clip(shape)
-                    .border(
+                    .then(if (overrideColor == Color.Transparent) Modifier else Modifier.border(
                         width = 1.dp,
                         color = Color.White.copy(alpha = if (isDark) 0.05f else 0.4f),
                         shape = shape
-                    )
-                    .then(clickModifier)
-                    .padding(contentPadding),
+                    ))
+                    .then(clickModifier),
                 contentAlignment = Alignment.Center,
             ) {
                 // Внутренний блик
-                if (!showInset) {
+                if (!showInset && overrideColor != Color.Transparent) {
                     Box(
                         Modifier
                             .matchParentSize()
@@ -176,7 +175,10 @@ fun VlSurface(
                             )
                     )
                 }
-                content()
+                
+                Box(Modifier.padding(contentPadding), contentAlignment = Alignment.Center) {
+                    content()
+                }
             }
         }
     }

@@ -49,4 +49,8 @@ sealed class Screen(val route: String) {
     object SavedMessagesSettings : Screen("saved_messages_settings")
     object Feed : Screen("feed")
     object StorageManager : Screen("storage_manager")
+    object Diary : Screen("diary")
+    object DiaryEntry : Screen("diary_entry?id={id}") {
+        fun createRoute(id: String? = null) = if (id != null) "diary_entry?id=$id" else "diary_entry"
+    }
 }

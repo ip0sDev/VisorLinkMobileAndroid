@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.Message
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -86,15 +88,15 @@ fun GiftMessage(
                 )
                 Text("💎", fontSize = 56.sp, modifier = Modifier.offset(y = bounce.value.dp))
                 Spacer(Modifier.height(16.dp))
-                Text("VisorLink PRO", color = Color(0xFF3DBFB0), fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text(stringResource(R.string.gift_pro_title), color = Color(0xFF3DBFB0), fontWeight = FontWeight.Black, fontSize = 18.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("Открыто @${message.redeemedByUsername}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.gift_redeemed_by, message.redeemedByUsername ?: ""), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
             } else {
                 Text("🎁", fontSize = 56.sp)
                 Spacer(Modifier.height(16.dp))
-                Text("VisorLink PRO", color = Color(0xFFFFD700), fontWeight = FontWeight.Black, fontSize = 18.sp)
+                Text(stringResource(R.string.gift_pro_title), color = Color(0xFFFFD700), fontWeight = FontWeight.Black, fontSize = 18.sp)
                 Spacer(Modifier.height(8.dp))
-                Text("Подарок для самого быстрого!", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.gift_hint), color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(20.dp))
 
                 Box(
@@ -109,7 +111,7 @@ fun GiftMessage(
                         .padding(horizontal = 24.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(if (isOpening) "ОТКРЫВАЕМ..." else "ОТКРЫТЬ", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 14.sp)
+                    Text(if (isOpening) stringResource(R.string.gift_action_opening) else stringResource(R.string.gift_action_open), color = Color.Black, fontWeight = FontWeight.Black, fontSize = 14.sp)
                 }
             }
         }
@@ -199,7 +201,7 @@ fun FullscreenGiftOverlay(chatId: String, messageId: String, onDismiss: () -> Un
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("💎", fontSize = 180.sp)
                             Spacer(Modifier.height(32.dp))
-                            Text("ВЫ ПОЛУЧИЛИ PRO!", color = Color(0xFFFFD700), fontSize = 28.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
+                            Text(stringResource(R.string.gift_success_title), color = Color(0xFFFFD700), fontSize = 28.sp, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
                         }
                     }
                 }
@@ -208,7 +210,7 @@ fun FullscreenGiftOverlay(chatId: String, messageId: String, onDismiss: () -> Un
                         Text("📦", fontSize = 140.sp)
                         Spacer(Modifier.height(32.dp))
                         Box(modifier = Modifier.background(Color.Red.copy(alpha = 0.2f), RoundedCornerShape(20.dp)).padding(horizontal = 24.dp, vertical = 12.dp)) {
-                            Text(errorMsg, color = Color.Red, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                            Text(stringResource(R.string.gift_error_taken), color = Color.Red, fontSize = 24.sp, fontWeight = FontWeight.Black)
                         }
                     }
                 }

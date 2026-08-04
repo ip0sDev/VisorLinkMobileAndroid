@@ -56,9 +56,39 @@ class SavedMessagesRepository(
         db.collection("savedMessagesSettings").document(uid).set(mapOf("lockTimeout" to minutes, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
     }
 
-    fun messagesFlow(uid: String, key: SecretKey?): Flow<List<SavedMessage>> = callbackFlow {
-        val reg = db.collection("savedMessages").document(uid).collection("messages").orderBy("createdAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snap, _ ->
+    fun messagesFlow(uid: String, key: SecretKey?, includeDiary: Boolean = false): Flow<List<SavedMessage>> = callbackFlow {
+        val query = db.collection("savedMessages").document(uid).collection("messages")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+
+        val reg = query.addSnapshotListener { snap, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val messages = snap?.documents?.mapNotNull { doc ->
+                    try {
+                        val isDiary = doc.getBoolean("isDiary") ?: false
+                        if (!includeDiary && isDiary) return@mapNotNull null
+
+                        doc.toObject(SavedMessage::class.java)?.copy(id = doc.id)?.let { msg -> decryptIfNeeded(msg, key) }
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: emptyList()
+                trySend(messages)
+            }
+        awaitClose { reg.remove() }
+    }
+
+    fun diaryFlow(uid: String, key: SecretKey?): Flow<List<SavedMessage>> = callbackFlow {
+        val reg = db.collection("savedMessages").document(uid).collection("messages")
+            .whereEqualTo("isDiary", true)
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
                 val messages = snap?.documents?.mapNotNull { doc ->
                     try { doc.toObject(SavedMessage::class.java)?.copy(id = doc.id)?.let { msg -> decryptIfNeeded(msg, key) } } catch (e: Exception) { null }
                 } ?: emptyList()
@@ -67,12 +97,13 @@ class SavedMessagesRepository(
         awaitClose { reg.remove() }
     }
 
-    suspend fun saveText(uid: String, text: String, key: SecretKey?, forwardFrom: ForwardFrom? = null) {
+    suspend fun saveText(uid: String, text: String, key: SecretKey?, forwardFrom: ForwardFrom? = null, isDiary: Boolean = false) {
         val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
         val userRef = db.collection("users").document(uid) // Ссылка на кулдаун пользователя
 
         val data = buildMap<String, Any?> {
             put("senderId",  uid); put("type", MessageType.TEXT); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
+            put("isDiary", isDiary)
             forwardFrom?.let { put("forwardFrom", it.toMap()) }
             if (key != null) {
                 val (ct, iv) = encryptText(text, key)
@@ -89,7 +120,7 @@ class SavedMessagesRepository(
         batch.commit().await()
     }
 
-    suspend fun saveImage(uid: String, uri: Uri, caption: String? = null, key: SecretKey? = null, isSpoiler: Boolean = false, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
+    suspend fun saveImage(uid: String, uri: Uri, caption: String? = null, key: SecretKey? = null, isSpoiler: Boolean = false, forwardFrom: ForwardFrom? = null, isDiary: Boolean = false): String = withContext(Dispatchers.IO) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "image.jpg"}"
         val tempOriginalFile = File(context.cacheDir, "orig_$fileName")
         val tempUploadFile = File(context.cacheDir, "upload_$fileName")
@@ -114,7 +145,8 @@ class SavedMessagesRepository(
         tempOriginalFile.delete()
         tempUploadFile.delete()
 
-        saveMediaMeta(uid, MessageType.IMAGE, mediaId, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, fileIv)
+        saveMediaMeta(uid, MessageType.IMAGE, mediaId, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, fileIv, isDiary)
+        return@withContext mediaId
     }
 
     suspend fun saveVoice(uid: String, uri: Uri, durationSec: Int, key: SecretKey? = null, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
@@ -146,7 +178,7 @@ class SavedMessagesRepository(
     }
 
     private suspend fun saveMediaMeta(
-        uid: String, type: String, cdnMediaId: String, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?
+        uid: String, type: String, cdnMediaId: String, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?, isDiary: Boolean = false
     ) {
         val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
         val userRef = db.collection("users").document(uid) // Ссылка на кулдаун пользователя
@@ -154,6 +186,7 @@ class SavedMessagesRepository(
         val data = buildMap<String, Any?> {
             put("senderId", uid); put("type", type); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
             put("cdnMediaId", cdnMediaId)
+            put("isDiary", isDiary)
             if (fileName != null) put("fileName", fileName)
             if (duration != null) put("duration", duration)
             if (spoiler) put("spoiler", true)

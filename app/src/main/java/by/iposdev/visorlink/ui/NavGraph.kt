@@ -8,6 +8,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.*
 import androidx.navigation.compose.*
 import by.iposdev.visorlink.data.repository.AuthState
+import by.iposdev.visorlink.ui.screens.diary.DiaryScreen
+import by.iposdev.visorlink.ui.screens.diary.DiaryEntryScreen
+import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
@@ -157,6 +160,12 @@ fun VisorLinkNavGraph(
                 },
                 onOpenComments      = { chatId, messageId ->
                     navController.navigate(Screen.Comments.createRoute(chatId, messageId))
+                },
+                onAddDiaryEntry = {
+                    navController.navigate(Screen.DiaryEntry.createRoute(null))
+                },
+                onEditDiaryEntry = { id ->
+                    navController.navigate(Screen.DiaryEntry.createRoute(id))
                 }
             )
         }
@@ -288,6 +297,29 @@ fun VisorLinkNavGraph(
                 onViewMedia = { url, type ->
                     navController.navigate(Screen.ImageViewer.createRoute(url, type))
                 }
+            )
+        }
+
+        // Diary route removed to prevent duplicate PIN entry since it's displayed in MainScreen
+
+        composable(
+            route = Screen.DiaryEntry.route,
+            arguments = listOf(navArgument("id") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("id")
+            val chatListEntry = remember(navController) {
+                try { navController.getBackStackEntry(Screen.ChatList.route) } catch (_: Exception) { null }
+            }
+            val diaryVm: DiaryViewModel = if (chatListEntry != null) {
+                koinViewModel(viewModelStoreOwner = chatListEntry)
+            } else {
+                koinViewModel()
+            }
+            
+            DiaryEntryScreen(
+                entryId = id,
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = diaryVm
             )
         }
 

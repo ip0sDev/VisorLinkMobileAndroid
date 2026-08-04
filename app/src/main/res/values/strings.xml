@@ -417,6 +417,164 @@
     <string name="forward_from_saved">Переслано из Избранного</string>
     <string name="forward_not_allowed">Пересылка запрещена</string>
     <string name="forward_picker_title">Переслать в…</string>
-    <string name="settings_no_forwards">Запретить пересылку</string>
-    <string name="saved_messages_title">Избранное</string>
+    <string name="settings_no_forwards">No forwards allowed</string>
+    <string name="saved_messages_title">Saved Messages</string>
+
+    <!-- Discover Feed -->
+    <string name="feed_title">Discover</string>
+    <string name="feed_empty">No posts found</string>
+    <string name="feed_view_channel">view channel</string>
+    <string name="feed_unknown_channel">Unknown Channel</string>
+    <string name="feed_just_now">Just now</string>
+    <string name="feed_scroll_to_top">Scroll to top</string>
+
+    <!-- Storage Manager -->
+    <string name="storage_title">Cloud Storage</string>
+    <string name="storage_section_files">Your Files</string>
+    <string name="storage_usage_title">Storage Usage</string>
+    <string name="storage_usage_of">%1$s of %2$s used</string>
+    <string name="storage_usage_files_count">%1$d total files in cloud</string>
+    <string name="storage_subtitle">Manage files in cloud</string>
+    <string name="storage_empty">No files found in cloud</string>
+    <string name="storage_zone_vault">🔒 Vault</string>
+    <string name="storage_zone_public">🌐 Public</string>
+    <string name="storage_delete_title">Delete File?</string>
+    <string name="storage_delete_confirm">Are you sure you want to delete \"%1$s\" permanently?</string>
+
+    <!-- Gift Messages -->
+    <string name="gift_pro_title">VisorLink PRO</string>
+    <string name="gift_redeemed_by">Opened by @%1$s</string>
+    <string name="gift_hint">Gift for the fastest!</string>
+    <string name="gift_action_open">OPEN</string>
+    <string name="gift_action_opening">OPENING…</string>
+    <string name="gift_success_title">YOU GOT PRO!</string>
+    <string name="gift_error_taken">Someone was faster!</string>
+
+    <!-- Settings — Bots & Admin -->
+    <string name="settings_bots_title">My Bots</string>
+    <string name="settings_bots_subtitle">Manage API bots</string>
+    <string name="settings_bots_manager_title">Bot Management</string>
+    <string name="settings_bots_create_title">Create new Webhook bot</string>
+    <string name="settings_bots_field_name">Bot Name</string>
+    <string name="settings_bots_field_username">Username (without @)</string>
+    <string name="settings_bots_empty">You don\'t have any bots yet</string>
+    <string name="settings_bots_token_regenerate">Regenerate token</string>
+    <string name="settings_bots_token_copied">New token copied</string>
+    <string name="settings_admin_panel">Admin Panel</string>
+    <string name="settings_tg_binding_title">Telegram Binding</string>
+    <string name="settings_tg_binding_subtitle">Receive forwarded messages from bot</string>
+    <string name="settings_tg_linked">Telegram: @%1$s</string>
+    <string name="settings_tg_linked_sub">Linked. Tap to unlink.</string>
+    <string name="settings_tg_code_instruction">Send this command to our Telegram bot:</string>
+    <string name="settings_tg_code_expire">Code expires in 5 minutes.</string>
+    <string name="settings_tg_unlinked_toast">Telegram unlinked</string>
+
+    <!-- Saved Messages (more) -->
+    <string name="saved_empty_title">Your saved messages will be here</string>
+    <string name="saved_empty_footer">Texts are encrypted on device</string>
+    <string name="saved_action_delete">Remove from Saved</string>
+    <string name="saved_pin_hint">PIN (4-8 digits)</string>
+    <string name="saved_pin_error">Invalid PIN</string>
+    <string name="saved_biometric_enable">Allow biometric entry</string>
+    <string name="saved_biometric_title">Saved Messages</string>
+    <string name="saved_biometric_subtitle">Login with biometrics</string>
+    <string name="saved_action_unlock">Unlock</string>
+
+    <!-- Diary -->
+    <string name="diary_title">Diary</string>
+    <string name="diary_empty_date">No entries for this date</string>
+    <string name="diary_stats_total">Total</string>
+    <string name="diary_stats_month">This Month</string>
+    <string name="diary_stats_streak">Streak</string>
+    <string name="diary_action_add">Add Entry</string>
+    <string name="diary_action_export">Export</string>
+    <string name="diary_action_export_title">Export Diary XML</string>
+    <string name="diary_locked">Diary Locked</string>
+    <string name="diary_pin_prompt">Enter PIN</string>
+    <string name="diary_bio_unlock">Unlock with biometrics</string>
+    <string name="diary_new_entry">New Entry</string>
+    <string name="diary_edit_entry">Edit Entry</string>
+    <string name="diary_placeholder">Write your thoughts here…</string>
+    <string name="diary_toggle_preview">Toggle Preview</string>
+    <string name="diary_reminder_title">Diary Time</string>
+    <string name="diary_reminder_text">Don\'t forget to write down your thoughts for today!</string>
+    <string name="diary_enable_title">Enable Diary</string>
+    <string name="diary_enable_sub">Separate interface for daily notes</string>
+    <string name="diary_reminders_title">Reminders</string>
+    <string name="diary_reminders_sub">Remind about entry at %1$s</string>
+    <string name="diary_format_bold">Bold</string>
+    <string name="diary_format_italic">Italic</string>
+    <string name="diary_format_list">List</string>
+    <string name="diary_format_link">Link</string>
+    <string name="diary_format_check">Checkbox</string>
+    <string name="diary_format_image">Image</string>
+    <string name="diary_format_draw">Draw</string>
+    <string name="diary_format_color">Color</string>
+    <string name="diary_stats_total_entries">Total entries</string>
+    <string name="diary_stats_monthly">This month</string>
+    <string name="diary_stats_streak_days">Streak: %1$d days</string>
+    <string name="diary_export_chooser">Share Diary XML</string>
+    <string name="diary_delete_confirm">Delete entry?</string>
+
+    <!-- Settings — Customization -->
+    <string name="settings_custom_title">My Customization</string>
+    <string name="settings_custom_design_title">Profile &amp; Chat Design</string>
+    <string name="settings_custom_design_sub">Background, fonts, banner, style</string>
+    <string name="settings_custom_hide_title">Hide others\' design</string>
+    <string name="settings_custom_hide_sub">Display profiles in system style</string>
+    <string name="settings_custom_pro_only">Available only with PRO subscription!</string>
+    <string name="settings_custom_in_development">In development</string>
+    <string name="settings_section_accent">Color Accent</string>
+
+    <!-- Settings — Common -->
+    <string name="settings_section_management">Management</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_section_updates">Updates</string>
+    <string name="settings_section_account">Account</string>
+
+    <!-- Settings — Stealth Mode -->
+    <string name="settings_stealth_title">Stealth Mode</string>
+    <string name="settings_stealth_sub_off">Masks the messenger as another app</string>
+    <string name="settings_stealth_sub_on">Enabled — mask screen will open on launch</string>
+    <string name="settings_stealth_change_pin">Change Stealth PIN</string>
+    <string name="settings_stealth_change_pin_sub">Update access code for unlocking</string>
+
+    <!-- Settings — Updates -->
+    <string name="settings_update_channel">Update Channel</string>
+    <string name="settings_update_channel_current">Current: %1$s</string>
+
+    <!-- Settings — Account -->
+    <string name="settings_tg_link">Bind Telegram</string>
+    <string name="settings_password_change">Change Password</string>
+    <string name="settings_logout">Sign Out</string>
+
+    <!-- PRO Banner -->
+    <string name="pro_title">VisorLink PRO</string>
+    <string name="pro_status_active">Status: Active</string>
+    <string name="pro_status_inactive">Status: Inactive</string>
+    <string name="pro_eternal">♾️ Eternal PRO</string>
+    <string name="pro_until">Until %1$s</string>
+    <string name="pro_unlock_hint">Unlock the gold badge</string>
+    <string name="pro_bits">Your Bits</string>
+    <string name="pro_streak">Streak: %1$d days</string>
+    <string name="pro_streak_sub">Show badge in chats</string>
+    <string name="pro_description">Gold PRO badge, 10 GB in cloud and full profile customization: set your backgrounds, GIFs, change fonts, themes and emoji statuses!</string>
+    <string name="pro_action_buy">Buy PRO (%1$d Bits)</string>
+    <string name="pro_action_trial">Activate Trial (1 day)</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_stealth_setup_title">Stealth Mode Setup</string>
+    <string name="dialog_stealth_setup_text">Create a PIN (4+ digits). It will be required to open the real messenger from stealth mode.</string>
+    <string name="dialog_stealth_setup_pin">PIN Code</string>
+    <string name="dialog_stealth_setup_confirm">Repeat PIN Code</string>
+    <string name="dialog_stealth_error_short">Min 4 digits</string>
+    <string name="dialog_stealth_error_mismatch">PINs don\'t match</string>
+
+    <string name="dialog_tg_binding_title">Telegram Binding</string>
+    <string name="dialog_password_change_title">Change Password</string>
+    <string name="dialog_password_current">Current Password</string>
+    <string name="dialog_password_new">New Password</string>
+    <string name="dialog_password_confirm">Confirm Password</string>
+    <string name="dialog_password_error_short">Min 6 characters</string>
+    <string name="dialog_password_success">Password changed</string>
 </resources>

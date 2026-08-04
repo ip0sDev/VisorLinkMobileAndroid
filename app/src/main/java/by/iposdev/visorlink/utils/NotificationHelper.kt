@@ -21,6 +21,8 @@ object NotificationHelper {
 
     private const val CHANNEL_MESSAGES    = "messages"
     private const val CHANNEL_MESSAGES_NAME = "Messages"
+    private const val CHANNEL_DIARY       = "diary_reminders"
+    private const val CHANNEL_DIARY_NAME  = "Diary Reminders"
     private const val TAG = "NotificationHelper"
     private const val GROUP_KEY = "by.iposdev.visorlink.MESSAGES"
     private const val SUMMARY_ID = 9999
@@ -33,7 +35,10 @@ object NotificationHelper {
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
 
-        val channel = NotificationChannel(
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // 1. Messages Channel
+        val msgChannel = NotificationChannel(
             CHANNEL_MESSAGES,
             CHANNEL_MESSAGES_NAME,
             NotificationManager.IMPORTANCE_HIGH
@@ -47,7 +52,14 @@ object NotificationHelper {
             lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
         }
 
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 2. Diary Reminders Channel
+        val diaryChannel = NotificationChannel(
+            CHANNEL_DIARY,
+            CHANNEL_DIARY_NAME,
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Daily diary entry reminders"
+        }
 
         val existing = manager.getNotificationChannel(CHANNEL_MESSAGES)
         if (existing != null && existing.importance < NotificationManager.IMPORTANCE_HIGH) {
@@ -55,7 +67,8 @@ object NotificationHelper {
             Log.d(TAG, "Old low-priority channel removed")
         }
 
-        manager.createNotificationChannel(channel)
+        manager.createNotificationChannel(msgChannel)
+        manager.createNotificationChannel(diaryChannel)
     }
 
     fun showMessageNotification(

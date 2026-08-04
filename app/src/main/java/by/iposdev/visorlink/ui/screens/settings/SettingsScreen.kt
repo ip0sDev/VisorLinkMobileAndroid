@@ -1,6 +1,7 @@
 // ui/screens/settings/SettingsScreen.kt
 package by.iposdev.visorlink.ui.screens.settings
 
+import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -75,6 +76,7 @@ import by.iposdev.visorlink.utils.rememberHaptic
 import com.google.firebase.Firebase
 import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -325,28 +327,28 @@ fun SettingsScreen(
                     }
 
                     // ── Кастомизация ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Моя Кастомизация", isPremium = true) {
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_custom_title), isPremium = true) {
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = Color(0xFFC5A059),
                             icon = Icons.Default.Brush,
-                            title = "Дизайн профиля и чатов",
-                            subtitle = "Фон, шрифты, баннер, стиль",
+                            title = stringResource(R.string.settings_custom_design_title),
+                            subtitle = stringResource(R.string.settings_custom_design_sub),
                             index = 0, total = 2,
                             onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 if (profile?.isProActive() == true) {
-                                    Toast.makeText(context, "В разработке", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.settings_custom_in_development), Toast.LENGTH_SHORT).show()
                                 } else {
-                                    Toast.makeText(context, "Доступно только с подпиской PRO!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show()
                                 }
                             }
                         )
                         VlSettingsItem(
                             appTheme = currentTheme,
                             icon = Icons.Default.HideImage,
-                            title = "Скрывать чужой дизайн",
-                            subtitle = "Отображать профили в системном стиле",
+                            title = stringResource(R.string.settings_custom_hide_title),
+                            subtitle = stringResource(R.string.settings_custom_hide_sub),
                             index = 1, total = 2,
                             trailing = {
                                 VlSwitch(
@@ -362,7 +364,7 @@ fun SettingsScreen(
                     }
 
                     // ── Акцент ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Цветовой акцент") {
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_accent)) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween
@@ -404,21 +406,89 @@ fun SettingsScreen(
                     }
 
                     // ── Управление ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Управление") {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = "Push-уведомления", trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 4)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = "Вибрация", trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 4)
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_management)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 4)
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = 4)
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = 4)
                     }
 
+                    // ── Дневник ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.diary_title)) {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            icon = Icons.Default.Book,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            title = stringResource(R.string.diary_enable_title),
+                            subtitle = stringResource(R.string.diary_enable_sub),
+                            index = 0, total = 2,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = profile?.diaryEnabled ?: false,
+                                    onCheckedChange = { v ->
+                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                        scope.launch {
+                                            val uid = profile?.uid ?: return@launch
+                                            Firebase.firestore.collection("users").document(uid)
+                                                .update("diaryEnabled", v)
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                        if (profile?.diaryEnabled == true) {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.Notifications,
+                                iconColor = Color(0xFFF59E0B),
+                                title = stringResource(R.string.diary_reminders_title),
+                                subtitle = stringResource(R.string.diary_reminders_sub, profile?.diaryReminderTime ?: "21:00"),
+                                index = 1, total = 2,
+                                onClick = {
+                                    val parts = (profile?.diaryReminderTime ?: "21:00").split(":")
+                                    val picker = TimePickerDialog(
+                                        context,
+                                        { _, h, m ->
+                                            val time = String.format(Locale.US, "%02d:%02d", h, m)
+                                            scope.launch {
+                                                val uid = profile?.uid ?: return@launch
+                                                Firebase.firestore.collection("users").document(uid)
+                                                    .update("diaryReminderTime", time)
+                                            }
+                                        },
+                                        parts[0].toInt(),
+                                        parts[1].toInt(),
+                                        true
+                                    )
+                                    picker.show()
+                                },
+                                trailing = {
+                                    VlSwitch(
+                                        appTheme = currentTheme,
+                                        checked = profile?.diaryRemindersEnabled ?: false,
+                                        onCheckedChange = { v ->
+                                            haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                            scope.launch {
+                                                val uid = profile?.uid ?: return@launch
+                                                Firebase.firestore.collection("users").document(uid)
+                                                    .update("diaryRemindersEnabled", v)
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    }
+
                     // ── Приватность ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Приватность") {
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_privacy)) {
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = colorStealth,
                             icon = Icons.Default.VisibilityOff,
-                            title = "Режим скрытия",
-                            subtitle = if (isStealthEnabled) "Включён — при запуске откроется маскировочный экран" else "Маскирует мессенджер под другое приложение",
+                            title = stringResource(R.string.settings_stealth_title),
+                            subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off),
                             index = 0, total = if (hasStealthPin) 2 else 1,
                             trailing = {
                                 VlSwitch(
@@ -430,7 +500,7 @@ fun SettingsScreen(
                                             if (hasStealthPin) {
                                                 stealthManager.setEnabled(true)
                                                 isStealthEnabled = true
-                                                Toast.makeText(context, "Режим скрытия включён", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, context.getString(R.string.settings_stealth_sub_on), Toast.LENGTH_SHORT).show()
                                             } else {
                                                 showStealthSetup = true
                                             }
@@ -447,8 +517,8 @@ fun SettingsScreen(
                                 appTheme = currentTheme,
                                 iconColor = colorStealthPin,
                                 icon = Icons.Default.Password,
-                                title = "Сменить PIN-код скрытия",
-                                subtitle = "Обновить код доступа для разблокировки",
+                                title = stringResource(R.string.settings_stealth_change_pin),
+                                subtitle = stringResource(R.string.settings_stealth_change_pin_sub),
                                 index = 1, total = 2,
                                 onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
@@ -461,24 +531,24 @@ fun SettingsScreen(
                     // ── Память ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_storage)) {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.Storage, title = stringResource(R.string.settings_cache_title), subtitle = stringResource(R.string.settings_cache_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }, index = 0, total = 2)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.CloudQueue, title = "Cloud Storage", subtitle = "Manage files in cloud", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenStorageManager() }, index = 1, total = 2)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.CloudQueue, title = stringResource(R.string.storage_title), subtitle = stringResource(R.string.storage_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenStorageManager() }, index = 1, total = 2)
                     }
 
                     // ── Боты ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Боты") {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorBots, icon = Icons.Default.SmartToy, title = "Мои боты", subtitle = "Управление API-ботами", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showBotsManager = true }, index = 0, total = 1)
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.stickers_title)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorBots, icon = Icons.Default.SmartToy, title = stringResource(R.string.settings_bots_title), subtitle = stringResource(R.string.settings_bots_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showBotsManager = true }, index = 0, total = 1)
                     }
 
                     // ── Администрирование ──
                     if (profile?.isAdmin == true) {
-                        VlSettingsSection(appTheme = currentTheme, title = "Администрирование") {
+                        VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_admin_panel)) {
                             VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.AdminPanelSettings, iconColor = MaterialTheme.colorScheme.error, title = "Admin Panel", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showAdminPanel = true }, index = 0, total = 1)
                         }
                     }
 
                     // ── Обновления ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Обновления") {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorUpdateChan, icon = Icons.Default.Science, title = "Канал обновлений", subtitle = "Текущий: ${currentChannel.title}", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showChannelDialog = true }, index = 0, total = 2)
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_updates)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorUpdateChan, icon = Icons.Default.Science, title = stringResource(R.string.settings_update_channel), subtitle = stringResource(R.string.settings_update_channel_current, currentChannel.title), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showChannelDialog = true }, index = 0, total = 2)
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = colorUpdateCheck,
@@ -487,10 +557,10 @@ fun SettingsScreen(
                             subtitle = stringResource(R.string.settings_check_updates_sub),
                             onClick = {
                                 haptic.perform(HapticType.SUCCESS, hapticEnabled)
-                                Toast.makeText(context, "Проверка обновлений...", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
                                 appUpdateViewModel.checkForUpdates(isManual = true) { hasUpdate ->
                                     if (!hasUpdate) {
-                                        Toast.makeText(context, "У вас установлена последняя версия", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -500,14 +570,14 @@ fun SettingsScreen(
                     }
 
                     // ── Аккаунт ──
-                    VlSettingsSection(appTheme = currentTheme, title = "Аккаунт") {
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_account)) {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorEmail, icon = Icons.Default.Email, title = "Email", subtitle = profile?.email ?: "", index = 0, total = 4)
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = Color(0xFF2AABEE),
                             icon = Icons.Default.Send,
-                            title = if (profile?.tg_username != null) "Telegram: @${profile?.tg_username}" else "Привязать Telegram",
-                            subtitle = if (profile?.tg_username != null) "Аккаунт привязан. Нажмите, чтобы отвязать." else "Получать пересланные сообщения из бота",
+                            title = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked, profile?.tg_username ?: "") else stringResource(R.string.settings_tg_link),
+                            subtitle = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
                             index = 1, total = 4,
                             onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
@@ -515,9 +585,9 @@ fun SettingsScreen(
                                     scope.launch {
                                         try {
                                             Firebase.functions("europe-west1").getHttpsCallable("unlinkTelegram").call().await()
-                                            Toast.makeText(context, "Telegram отвязан", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.settings_tg_unlinked_toast), Toast.LENGTH_SHORT).show()
                                         } catch (e: Exception) {
-                                            Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
                                         }
                                     }
                                 } else {
@@ -543,8 +613,8 @@ fun SettingsScreen(
                                 }
                             }
                         )
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorPassword, icon = Icons.Default.Password, title = "Изменить пароль", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showPasswordDialog = true }, index = 2, total = 4)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = MaterialTheme.colorScheme.error, icon = Icons.AutoMirrored.Filled.Logout, title = "Выйти из аккаунта", isDestructive = true, onClick = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); showLogoutDialog = true }, index = 3, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorPassword, icon = Icons.Default.Password, title = stringResource(R.string.settings_password_change), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showPasswordDialog = true }, index = 2, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = MaterialTheme.colorScheme.error, icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); showLogoutDialog = true }, index = 3, total = 4)
                     }
 
                     // ── About ──
@@ -753,13 +823,13 @@ private fun ProStatusBanner(
         return java.text.SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(date)
     }
 
-    VlSettingsSection(appTheme = appTheme, title = "VisorLink PRO", isPremium = true) {
+    VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.pro_title), isPremium = true) {
         VlSettingsItem(
             appTheme = appTheme,
             icon = if (isActive) Icons.Default.WorkspacePremium else Icons.Default.Stars,
             iconColor = if (isActive) goldColor else cs.onSurfaceVariant,
-            title = if (isActive) "Статус: Активен" else "Статус: Неактивен",
-            subtitle = if (isEternalPro) "♾️ Бесконечный PRO" else (if (isActive) "До ${formatDate(profile.proUntil?.toDate())}" else "Разблокируйте золотой бейдж"),
+            title = if (isActive) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive),
+            subtitle = if (isEternalPro) stringResource(R.string.pro_eternal) else (if (isActive) stringResource(R.string.pro_until, formatDate(profile.proUntil?.toDate())) else stringResource(R.string.pro_unlock_hint)),
             index = 0, total = if (isActive) 3 else 4
         )
 
@@ -767,7 +837,7 @@ private fun ProStatusBanner(
             appTheme = appTheme,
             icon = Icons.Default.Toll,
             iconColor = goldColor,
-            title = "Ваши Биты",
+            title = stringResource(R.string.pro_bits),
             trailing = {
                 Text(
                     profile.bits.toString(),
@@ -781,8 +851,8 @@ private fun ProStatusBanner(
             appTheme = appTheme,
             icon = Icons.Default.LocalFireDepartment,
             iconColor = Color(0xFFE11D48),
-            title = "Стрик: ${profile.streak} дней",
-            subtitle = "Показывать бейдж в чатах",
+            title = stringResource(R.string.pro_streak, profile.streak),
+            subtitle = stringResource(R.string.pro_streak_sub),
             trailing = {
                 VlSwitch(
                     appTheme = appTheme,
@@ -799,7 +869,7 @@ private fun ProStatusBanner(
         if (!isActive && !isEternalPro) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    "Золотой бейдж PRO, 10 ГБ в облаке и полная кастомизация профиля: ставьте свои фоны, GIF, меняйте шрифты, темы и эмодзи-статусы!",
+                    stringResource(R.string.pro_description),
                     style = MaterialTheme.typography.bodySmall.copy(color = cs.onSurfaceVariant, fontSize = 13.sp, lineHeight = 18.sp),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -819,7 +889,7 @@ private fun ProStatusBanner(
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         if (proState.isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                        else Text("Купить PRO (1000 Бит)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        else Text(stringResource(R.string.pro_action_buy, 1000), fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 } else {
                     VlSurface(
@@ -839,7 +909,7 @@ private fun ProStatusBanner(
                             CircularProgressIndicator(color = goldColor, modifier = Modifier.size(24.dp))
                         } else {
                             Text(
-                                "Купить PRO (1000 Бит)",
+                                stringResource(R.string.pro_action_buy, 1000),
                                 color = if (canAfford) goldColor else cs.onSurfaceVariant.copy(alpha = 0.5f),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
@@ -865,7 +935,7 @@ private fun ProStatusBanner(
                             modifier = Modifier.fillMaxWidth().height(56.dp),
                             shape = RoundedCornerShape(16.dp)
                         ) {
-                            Text("Активировать Триал (1 день)", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.pro_action_trial), fontWeight = FontWeight.Bold)
                         }
                     } else {
                         VlSurface(
@@ -882,7 +952,7 @@ private fun ProStatusBanner(
                             modifier = Modifier.fillMaxWidth().height(56.dp)
                         ) {
                             Text(
-                                "Активировать Триал (1 день)",
+                                stringResource(R.string.pro_action_trial),
                                 color = cs.onSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
@@ -907,20 +977,20 @@ private fun StealthSetupDialog(appTheme: AppTheme, onDismiss: () -> Unit, onConf
     VlAlertDialog(
         appTheme = appTheme,
         onDismissRequest = onDismiss,
-        title = { Text("Настройка режима скрытия") },
+        title = { Text(stringResource(R.string.dialog_stealth_setup_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Придумайте PIN-код (от 4 цифр). Он потребуется, чтобы открыть настоящий мессенджер из режима скрытия.", fontSize = 13.sp)
+                Text(stringResource(R.string.dialog_stealth_setup_text), fontSize = 13.sp)
                 OutlinedTextField(
                     value = pin, onValueChange = { pin = it; error = null },
-                    label = { Text("PIN-код") },
+                    label = { Text(stringResource(R.string.dialog_stealth_setup_pin)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = confirm, onValueChange = { confirm = it; error = null },
-                    label = { Text("Повторите PIN-код") },
+                    label = { Text(stringResource(R.string.dialog_stealth_setup_confirm)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true, modifier = Modifier.fillMaxWidth()
@@ -929,12 +999,12 @@ private fun StealthSetupDialog(appTheme: AppTheme, onDismiss: () -> Unit, onConf
             }
         },
         actions = {
-            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             VlDialogButton(appTheme = appTheme, isPrimary = true, onClick = {
                 if (pin.length < 4) error = "Минимум 4 цифры"
                 else if (pin != confirm) error = "PIN-коды не совпадают"
                 else onConfirm(pin)
-            }) { Text("Включить") }
+            }) { Text(stringResource(R.string.action_accept)) }
         }
     )
 }
@@ -1021,7 +1091,7 @@ private fun StealthChangePinDialog(appTheme: AppTheme, stealthManager: StealthMa
 }
 
 @Composable
-private fun ChangePasswordDialog(appTheme: AppTheme, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+fun ChangePasswordDialog(appTheme: AppTheme, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
     var current by remember { mutableStateOf("") }
     var newPass by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
@@ -1030,24 +1100,24 @@ private fun ChangePasswordDialog(appTheme: AppTheme, onDismiss: () -> Unit, onCo
     VlAlertDialog(
         appTheme = appTheme,
         onDismissRequest = onDismiss,
-        title = { Text("Смена пароля") },
+        title = { Text(stringResource(R.string.dialog_password_change_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = current, onValueChange = { current = it; error = null },
-                    label = { Text("Текущий пароль") },
+                    label = { Text(stringResource(R.string.dialog_password_current)) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = newPass, onValueChange = { newPass = it; error = null },
-                    label = { Text("Новый пароль") },
+                    label = { Text(stringResource(R.string.dialog_password_new)) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = confirm, onValueChange = { confirm = it; error = null },
-                    label = { Text("Подтвердите пароль") },
+                    label = { Text(stringResource(R.string.dialog_password_confirm)) },
                     visualTransformation = PasswordVisualTransformation(),
                     singleLine = true, modifier = Modifier.fillMaxWidth()
                 )
@@ -1055,12 +1125,12 @@ private fun ChangePasswordDialog(appTheme: AppTheme, onDismiss: () -> Unit, onCo
             }
         },
         actions = {
-            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             VlDialogButton(appTheme = appTheme, isPrimary = true, onClick = {
-                if (newPass.length < 6) error = "Минимум 6 символов"
-                else if (newPass != confirm) error = "Пароли не совпадают"
+                if (newPass.length < 6) error = "Min 6 characters"
+                else if (newPass != confirm) error = "Passwords don't match"
                 else onConfirm(current, newPass)
-            }) { Text("Сохранить") }
+            }) { Text(stringResource(R.string.action_save)) }
         }
     )
 }
@@ -1144,7 +1214,7 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Управление ботами", style = MaterialTheme.typography.titleLarge)
+                Text(stringResource(R.string.settings_bots_manager_title), style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
@@ -1152,9 +1222,9 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
             if (isLoading) {
                 CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
             } else {
-                Text("Мои боты", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                Text(stringResource(R.string.settings_bots_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 if (bots.isEmpty()) {
-                    Text("У вас пока нет ботов", modifier = Modifier.padding(vertical = 16.dp))
+                    Text(stringResource(R.string.settings_bots_empty), modifier = Modifier.padding(vertical = 16.dp))
                 } else {
                     bots.forEach { bot ->
                         BotItem(
@@ -1166,10 +1236,10 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
                                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                         val clip = ClipData.newPlainText("bot token", newToken)
                                         clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(context, "Новый токен скопирован", Toast.LENGTH_LONG).show()
+                                        Toast.makeText(context, context.getString(R.string.settings_bots_token_copied), Toast.LENGTH_LONG).show()
                                         refresh()
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             },
@@ -1179,7 +1249,7 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
                                         botRepository.deleteBot(bot.uid)
                                         refresh()
                                     } catch (e: Exception) {
-                                        Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "${context.getString(R.string.action_delete)} ${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
                                     }
                                 }
                             }
@@ -1189,11 +1259,11 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
-                Text("Создать нового Webhook бота", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_bots_create_title), fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
-                OutlinedTextField(value = botName, onValueChange = { botName = it }, label = { Text("Имя бота") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = botName, onValueChange = { botName = it }, label = { Text(stringResource(R.string.settings_bots_field_name)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(value = botUsername, onValueChange = { botUsername = it }, label = { Text("Username (без @)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = botUsername, onValueChange = { botUsername = it }, label = { Text(stringResource(R.string.settings_bots_field_username)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(16.dp))
 
                 Button(
@@ -1203,11 +1273,11 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
                             isSaving = true
                             try {
                                 val token = botRepository.createBot(botName, botUsername)
-                                Toast.makeText(context, "Создан! Токен: $token", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "${context.getString(R.string.settings_info_saved)} Token: $token", Toast.LENGTH_LONG).show()
                                 botName = ""; botUsername = ""
                                 refresh()
                             } catch(e: Exception) {
-                                Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
                             } finally {
                                 isSaving = false
                             }
@@ -1217,7 +1287,7 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     if (isSaving) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                    else Text("Создать")
+                    else Text(stringResource(R.string.action_accept))
                 }
             }
             Spacer(Modifier.height(32.dp))
@@ -1248,7 +1318,7 @@ fun BotItem(bot: DmBot, onRegenerate: () -> Unit, onDelete: () -> Unit) {
                 Text("Token: ${bot.token}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
             }
             TextButton(onClick = onRegenerate) {
-                Text("Перевыпустить токен")
+                Text(stringResource(R.string.settings_bots_token_regenerate))
             }
         }
     }

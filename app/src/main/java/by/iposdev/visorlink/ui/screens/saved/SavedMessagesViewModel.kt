@@ -98,7 +98,7 @@ class SavedMessagesViewModel(
 
     private fun startMessagesFlow() {
         viewModelScope.launch {
-            repository.messagesFlow(currentUid, encryptionKey).collect { messages ->
+            repository.messagesFlow(currentUid, encryptionKey, includeDiary = false).collect { messages ->
                 _uiState.update { it.copy(messages = messages, isLoading = false) }
             }
         }

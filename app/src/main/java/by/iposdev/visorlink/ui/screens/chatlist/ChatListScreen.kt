@@ -321,18 +321,20 @@ fun ChatListScreen(
                 }
             },
             floatingActionButton = {
-                M3eFab(
-                    showMenu = showFabMenu,
-                    isOneUi = isOneUi,
-                    isExthru = isExthru,
-                    isForge = isForge,
-                    isDark = isDark,
-                    hapticEnabled = hapticEnabled,
-                    onToggle = { showFabMenu = !showFabMenu },
-                    onNewChat = { showFabMenu = false; onOpenSearch() },
-                    onNewGroup = { showFabMenu = false; onCreateChat() },
-                    onFindChannel = { showFabMenu = false; onFindChannel() }
-                )
+                Box(modifier = Modifier.padding(bottom = if (isForge) 64.dp else 80.dp)) {
+                    M3eFab(
+                        showMenu = showFabMenu,
+                        isOneUi = isOneUi,
+                        isExthru = isExthru,
+                        isForge = isForge,
+                        isDark = isDark,
+                        hapticEnabled = hapticEnabled,
+                        onToggle = { showFabMenu = !showFabMenu },
+                        onNewChat = { showFabMenu = false; onOpenSearch() },
+                        onNewGroup = { showFabMenu = false; onCreateChat() },
+                        onFindChannel = { showFabMenu = false; onFindChannel() }
+                    )
+                }
             }
         ) { padding ->
             Box(
