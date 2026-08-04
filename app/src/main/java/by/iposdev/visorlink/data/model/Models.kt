@@ -1,6 +1,8 @@
 package by.iposdev.visorlink.data.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.PropertyName
+import com.google.firebase.firestore.IgnoreExtraProperties
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
@@ -29,7 +31,10 @@ data class UserProfile(
     val registeredViaOfficialClient: Boolean = true,
 
     // ДОБАВЛЕНО:
-    val ignoreCustomizations: Boolean = false
+    val ignoreCustomizations: Boolean = false,
+    val interestWeights: Map<String, Double> = emptyMap(),
+    val tg_username: String? = null,
+    val tg_uid: Long? = null
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false
@@ -416,6 +421,75 @@ fun Comment.toCommentReplyData() = CommentReplyData(
     url            = url,
     senderUsername = senderUsername
 )
+
+// ─── Feed ──────────────────────────────────────────────────────────────────────
+
+@IgnoreExtraProperties
+data class FeedChannelData(
+    var name: String? = null,
+    var avatarUrl: String? = null,
+    var avatar_url: String? = null,
+    var tag: String? = null
+)
+
+@IgnoreExtraProperties
+data class FeedItem(
+    var id: String = "",
+    var chatId: String? = null,
+    var messageId: String? = null,
+    var channelData: FeedChannelData? = null,
+    var channel_data: FeedChannelData? = null,
+    var authorData: FeedChannelData? = null,
+
+    // Web version might put author name at root too
+    var author_name: String? = null,
+    var authorName: String? = null,
+    var author_avatar_url: String? = null,
+    var authorAvatarUrl: String? = null,
+
+    var type: String = "post",
+    var title: String? = null,
+    var text: String? = null,
+    var caption: String? = null,
+    var url: String? = null,
+    var cdnMediaId: String? = null,
+    var images: List<AlbumImage>? = null,
+    var duration: Int? = null,
+    var tags: List<String> = emptyList(),
+
+    // Field names from web
+    var likeCount: Int = 0,
+    var likers: List<String> = emptyList(),
+
+    // Field names from previous turn (fallback)
+    var likes_count: Int = 0,
+    var liked_uids: List<String> = emptyList(),
+    var views_count: Int = 0,
+    var comments_count: Int = 0,
+
+    var createdAt: Timestamp? = null
+) {
+    val displayAuthorName: String
+        get() = (channelData?.name ?: channel_data?.name ?: authorData?.name ?: author_name ?: authorName ?: "Unknown Channel").ifEmpty { "Unknown Channel" }
+
+    val displayAuthorAvatarUrl: String?
+        get() = channelData?.avatarUrl ?: channelData?.avatar_url ?: channel_data?.avatarUrl ?: channel_data?.avatar_url ?: authorData?.avatarUrl ?: author_avatar_url ?: authorAvatarUrl
+
+    val displayChatId: String?
+        get() = chatId
+
+    val displayLikesCount: Int
+        get() = if (likeCount != 0) likeCount else likes_count
+
+    val displayViewsCount: Int
+        get() = views_count
+
+    val displayCommentsCount: Int
+        get() = comments_count
+
+    val displayLikedUids: List<String>
+        get() = if (likers.isNotEmpty()) likers else liked_uids
+}
 
 data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null)
 

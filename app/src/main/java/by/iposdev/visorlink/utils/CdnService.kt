@@ -5,6 +5,7 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.DataOutputStream
 import java.io.File
@@ -35,6 +36,42 @@ object CdnService {
         } catch (e: Exception) {
             mapOf("status" to "offline", "used_bytes" to 0L, "quota_bytes" to 2147483648L, "files_count" to 0)
         }
+    }
+
+    suspend fun listFiles(): List<Map<String, Any>> = withContext(Dispatchers.IO) {
+        try {
+            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: return@withContext emptyList()
+            val connection = URL("$BASE_URL/user_media").openConnection() as HttpURLConnection
+            connection.setRequestProperty("Authorization", "Bearer $token")
+
+            if (connection.responseCode == 200) {
+                val text = connection.inputStream.bufferedReader().readText()
+                val json = JSONObject(text)
+                val array = json.getJSONArray("media")
+                List(array.length()) { i ->
+                    val obj = array.getJSONObject(i)
+                    mapOf(
+                        "media_id" to obj.getString("id"),
+                        "original_name" to obj.optString("original_name", "unknown"),
+                        "mime_type" to obj.optString("mime_type", "application/octet-stream"),
+                        "size" to obj.optLong("size", 0L),
+                        "zone" to obj.optString("zone", "public"),
+                        "is_read" to obj.optBoolean("is_read", false),
+                        "created_at" to obj.optLong("uploaded_at", 0L)
+                    )
+                }
+            } else emptyList()
+        } catch (e: Exception) { emptyList() }
+    }
+
+    suspend fun deleteFile(mediaId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: return@withContext false
+            val connection = URL("$BASE_URL/f/$mediaId").openConnection() as HttpURLConnection
+            connection.requestMethod = "DELETE"
+            connection.setRequestProperty("Authorization", "Bearer $token")
+            connection.responseCode == 200
+        } catch (e: Exception) { false }
     }
 
     suspend fun getFileUrl(cdnMediaId: String): String {

@@ -10,14 +10,16 @@ import androidx.navigation.compose.*
 import by.iposdev.visorlink.data.repository.AuthState
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
+import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
 import by.iposdev.visorlink.ui.screens.auth.VerifyEmailScreen
 import by.iposdev.visorlink.ui.screens.chat.ChatScreen
 import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
-import by.iposdev.visorlink.ui.screens.chatlist.ChatListScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
+import by.iposdev.visorlink.ui.screens.main.MainScreen
+import by.iposdev.visorlink.ui.screens.feed.FeedScreen
 import by.iposdev.visorlink.ui.screens.comments.CommentsScreen
 import by.iposdev.visorlink.ui.screens.decoy.DecoyHomeScreen
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
@@ -136,13 +138,11 @@ fun VisorLinkNavGraph(
 
         // ── Main app ──────────────────────────────────────────────────────────
         composable(Screen.ChatList.route) {
-            ChatListScreen(
+            MainScreen(
                 onOpenChat = { chatId, otherUid ->
-                    // Если это наше Избранное — идем на отдельный экран
                     if (chatId.startsWith("saved_")) {
                         navController.navigate(Screen.SavedMessages.route)
                     } else {
-                        // Обычный чат
                         navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
                     }
                 },
@@ -151,7 +151,13 @@ fun VisorLinkNavGraph(
                 onOpenSettings      = { navController.navigate(Screen.Settings.route) },
                 onCreateChat        = { navController.navigate(Screen.CreateChat.route) },
                 onFindChannel       = { navController.navigate(Screen.Search.createRoute(null)) },
-                onOpenNotifications = { navController.navigate(Screen.Notifications.route) }
+                onOpenNotifications = { navController.navigate(Screen.Notifications.route) },
+                onOpenChannel       = { chatId ->
+                    navController.navigate(Screen.Chat.createRoute(chatId, chatId))
+                },
+                onOpenComments      = { chatId, messageId ->
+                    navController.navigate(Screen.Comments.createRoute(chatId, messageId))
+                }
             )
         }
 
@@ -266,6 +272,7 @@ fun VisorLinkNavGraph(
             SettingsScreen(
                 onNavigateBack      = { navController.popBackStack() },
                 onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
+                onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
                 themeViewModel      = themeViewModel,
                 appUpdateViewModel  = appUpdateViewModel
             )
@@ -273,6 +280,15 @@ fun VisorLinkNavGraph(
 
         composable(Screen.CacheSettings.route) {
             CacheSettingsScreen(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.StorageManager.route) {
+            StorageManagerScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onViewMedia = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
+                }
+            )
         }
 
         composable(Screen.CreateChat.route) {

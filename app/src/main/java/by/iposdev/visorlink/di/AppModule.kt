@@ -2,7 +2,9 @@
 package by.iposdev.visorlink.di
 
 import by.iposdev.visorlink.data.repository.AuthRepository
+import by.iposdev.visorlink.data.repository.BotRepository
 import by.iposdev.visorlink.data.repository.ChatRepository
+import by.iposdev.visorlink.data.repository.FeedRepository
 import by.iposdev.visorlink.data.repository.ForwardRepository
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.data.repository.StickerPackRepository
@@ -11,6 +13,7 @@ import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
+import by.iposdev.visorlink.ui.screens.feed.FeedViewModel
 import by.iposdev.visorlink.ui.screens.comments.CommentsViewModel
 import by.iposdev.visorlink.ui.screens.group.ChatSettingsViewModel
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileViewModel
@@ -18,6 +21,7 @@ import by.iposdev.visorlink.ui.screens.profile.ProfileViewModel
 import by.iposdev.visorlink.ui.screens.saved.SavedMessagesViewModel
 import by.iposdev.visorlink.ui.screens.search.SearchViewModel
 import by.iposdev.visorlink.ui.screens.settings.CacheViewModel
+import by.iposdev.visorlink.ui.screens.settings.StorageViewModel
 import by.iposdev.visorlink.ui.screens.settings.ProViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
@@ -53,6 +57,7 @@ val appModule = module {
     single { ChatRepository(get(), get(), get(), androidContext()) }
     single { UserRepository(get(), get(), get(), androidContext()) }
     single { StickerPackRepository(get(), androidContext()) }
+    single { BotRepository(get()) }
 
     single { CacheManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
@@ -106,12 +111,15 @@ val appModule = module {
 
     viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
+    viewModel { StorageViewModel() }
 
     // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }
+    single { FeedRepository(get(), get()) }
     single { ForwardRepository(get()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }
+    viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }
 }

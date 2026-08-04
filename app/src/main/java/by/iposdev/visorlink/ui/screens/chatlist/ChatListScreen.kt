@@ -90,6 +90,7 @@ fun ChatListScreen(
     onCreateChat: () -> Unit,
     onFindChannel: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenFeed: () -> Unit,
     viewModel: ChatListViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {

@@ -47,4 +47,6 @@ sealed class Screen(val route: String) {
 
     object SavedMessages : Screen("saved_messages")
     object SavedMessagesSettings : Screen("saved_messages_settings")
+    object Feed : Screen("feed")
+    object StorageManager : Screen("storage_manager")
 }

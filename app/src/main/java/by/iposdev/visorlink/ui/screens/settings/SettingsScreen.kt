@@ -1,6 +1,9 @@
 // ui/screens/settings/SettingsScreen.kt
 package by.iposdev.visorlink.ui.screens.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -54,6 +57,8 @@ import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.data.repository.AuthRepository
+import by.iposdev.visorlink.data.repository.BotRepository
+import by.iposdev.visorlink.data.repository.DmBot
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
@@ -87,6 +92,7 @@ import java.util.*
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
+    onOpenStorageManager: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
@@ -454,7 +460,8 @@ fun SettingsScreen(
 
                     // ── Память ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_storage)) {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.Storage, title = stringResource(R.string.settings_cache_title), subtitle = stringResource(R.string.settings_cache_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }, index = 0, total = 1)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.Storage, title = stringResource(R.string.settings_cache_title), subtitle = stringResource(R.string.settings_cache_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }, index = 0, total = 2)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.CloudQueue, title = "Cloud Storage", subtitle = "Manage files in cloud", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenStorageManager() }, index = 1, total = 2)
                     }
 
                     // ── Боты ──
@@ -499,28 +506,39 @@ fun SettingsScreen(
                             appTheme = currentTheme,
                             iconColor = Color(0xFF2AABEE),
                             icon = Icons.Default.Send,
-                            title = "Привязать Telegram",
-                            subtitle = "Получать пересланные сообщения из бота",
+                            title = if (profile?.tg_username != null) "Telegram: @${profile?.tg_username}" else "Привязать Telegram",
+                            subtitle = if (profile?.tg_username != null) "Аккаунт привязан. Нажмите, чтобы отвязать." else "Получать пересланные сообщения из бота",
                             index = 1, total = 4,
                             onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
-                                showTgBindingDialog = true
-                                isGeneratingTgCode = true
-                                tgCode = null
-                                tgError = null
-                                scope.launch {
-                                    try {
-                                        val result = Firebase.functions("europe-west1").getHttpsCallable("generateTgCode").call().await()
-                                        val data = result.data as Map<*, *>
-                                        if (data["success"] == true) {
-                                            tgCode = data["code"] as String
-                                        } else {
-                                            tgError = "Ошибка: ${data["error"]}"
+                                if (profile?.tg_username != null) {
+                                    scope.launch {
+                                        try {
+                                            Firebase.functions("europe-west1").getHttpsCallable("unlinkTelegram").call().await()
+                                            Toast.makeText(context, "Telegram отвязан", Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
                                         }
-                                    } catch (e: Exception) {
-                                        tgError = e.message ?: "Неизвестная ошибка сети"
-                                    } finally {
-                                        isGeneratingTgCode = false
+                                    }
+                                } else {
+                                    showTgBindingDialog = true
+                                    isGeneratingTgCode = true
+                                    tgCode = null
+                                    tgError = null
+                                    scope.launch {
+                                        try {
+                                            val result = Firebase.functions("europe-west1").getHttpsCallable("generateTgCode").call().await()
+                                            val data = result.data as Map<*, *>
+                                            if (data["success"] == true) {
+                                                tgCode = data["code"] as String
+                                            } else {
+                                                tgError = "Ошибка: ${data["error"]}"
+                                            }
+                                        } catch (e: Exception) {
+                                            tgError = e.message ?: "Неизвестная ошибка сети"
+                                        } finally {
+                                            isGeneratingTgCode = false
+                                        }
                                     }
                                 }
                             }
@@ -1102,49 +1120,136 @@ fun AdminPanelSheet(onDismiss: () -> Unit) {
 fun BotsManagerSheet(onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val botRepository: BotRepository = koinInject()
+
+    var bots by remember { mutableStateOf<List<DmBot>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
+
     var botName by remember { mutableStateOf("") }
     var botUsername by remember { mutableStateOf("") }
 
+    fun refresh() {
+        scope.launch {
+            isLoading = true
+            try {
+                bots = botRepository.listBots()
+            } catch (_: Exception) {}
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) { refresh() }
+
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).navigationBarsPadding()) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Text("Управление ботами", style = MaterialTheme.typography.titleLarge)
                 IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
 
-            Text("Создать нового Webhook бота", fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
-            OutlinedTextField(value = botName, onValueChange = { botName = it }, label = { Text("Имя бота") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(12.dp))
-            OutlinedTextField(value = botUsername, onValueChange = { botUsername = it }, label = { Text("Username (без @)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-            Spacer(Modifier.height(16.dp))
-
-            Button(
-                onClick = {
-                    if (botName.isBlank() || botUsername.isBlank()) return@Button
-                    scope.launch {
-                        isSaving = true
-                        try {
-                            val res = Firebase.functions("europe-west1").getHttpsCallable("createDmBot").call(mapOf("name" to botName, "username" to botUsername)).await()
-                            val data = res.data as Map<*, *>
-                            Toast.makeText(context, "Создан! Токен: ${data["botToken"]}", Toast.LENGTH_LONG).show()
-                            onDismiss()
-                        } catch(e: Exception) {
-                            Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
-                        } finally {
-                            isSaving = false
-                        }
+            if (isLoading) {
+                CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                Text("Мои боты", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                if (bots.isEmpty()) {
+                    Text("У вас пока нет ботов", modifier = Modifier.padding(vertical = 16.dp))
+                } else {
+                    bots.forEach { bot ->
+                        BotItem(
+                            bot = bot,
+                            onRegenerate = {
+                                scope.launch {
+                                    try {
+                                        val newToken = botRepository.regenerateToken(bot.uid)
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("bot token", newToken)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Новый токен скопирован", Toast.LENGTH_LONG).show()
+                                        refresh()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            onDelete = {
+                                scope.launch {
+                                    try {
+                                        botRepository.deleteBot(bot.uid)
+                                        refresh()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        )
                     }
-                },
-                enabled = !isSaving,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                if (isSaving) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                else Text("Создать")
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+                Text("Создать нового Webhook бота", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(value = botName, onValueChange = { botName = it }, label = { Text("Имя бота") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(value = botUsername, onValueChange = { botUsername = it }, label = { Text("Username (без @)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        if (botName.isBlank() || botUsername.isBlank()) return@Button
+                        scope.launch {
+                            isSaving = true
+                            try {
+                                val token = botRepository.createBot(botName, botUsername)
+                                Toast.makeText(context, "Создан! Токен: $token", Toast.LENGTH_LONG).show()
+                                botName = ""; botUsername = ""
+                                refresh()
+                            } catch(e: Exception) {
+                                Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                            } finally {
+                                isSaving = false
+                            }
+                        }
+                    },
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isSaving) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    else Text("Создать")
+                }
             }
             Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun BotItem(bot: DmBot, onRegenerate: () -> Unit, onDelete: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.SmartToy, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(bot.name, fontWeight = FontWeight.Bold)
+                    Text("@${bot.username}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                }
+            }
+            if (bot.token != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("Token: ${bot.token}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+            TextButton(onClick = onRegenerate) {
+                Text("Перевыпустить токен")
+            }
         }
     }
 }
