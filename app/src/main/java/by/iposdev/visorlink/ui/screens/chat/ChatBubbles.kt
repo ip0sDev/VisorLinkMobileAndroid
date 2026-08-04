@@ -35,6 +35,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -58,6 +59,7 @@ import by.iposdev.visorlink.ui.theme.ExthruSenderNameStyle
 import by.iposdev.visorlink.ui.theme.bubbleInnerHighlight
 import by.iposdev.visorlink.ui.theme.exthruRaisedShadow
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.VoicePlaybackState
@@ -107,6 +109,12 @@ fun Modifier.messageGestures(
         }
 }
 
+internal fun resolveBubbleShape(isMine: Boolean, isOneUi: Boolean, isForge: Boolean = false): androidx.compose.ui.graphics.Shape {
+    if (isForge) return RectangleShape
+    return if (isMine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)
+    else        RoundedCornerShape(6.dp, 20.dp, 20.dp, 20.dp)
+}
+
 @Composable
 internal fun MessageBubble(
     message: Message,
@@ -119,6 +127,7 @@ internal fun MessageBubble(
     voicePlayback: VoicePlaybackState,
     isOneUi: Boolean = false,
     isExthru: Boolean = false,
+    isForge: Boolean = false,
     isDark: Boolean = false,
     hasWallpaper: Boolean = false,
     onPlayVoice: (url: String, durationSec: Int) -> Unit,
@@ -156,7 +165,7 @@ internal fun MessageBubble(
                     VideoBubble(
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
-                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
+                        isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hasWallpaper = hasWallpaper,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onMediaTap = onMediaTap,
@@ -167,7 +176,7 @@ internal fun MessageBubble(
                 message.type == MessageType.ALBUM && !message.deleted -> {
                     AlbumBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
-                        chatType = chatType, isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                        chatType = chatType, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
                         onAlbumTap = onAlbumTap,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
@@ -179,7 +188,7 @@ internal fun MessageBubble(
                     ImageBubble(
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
-                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hasWallpaper = hasWallpaper,
+                        isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hasWallpaper = hasWallpaper,
                         onTap = { url -> onMediaTap(url, MessageType.IMAGE) },
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
@@ -190,7 +199,7 @@ internal fun MessageBubble(
                 message.type == MessageType.STICKER && !message.deleted -> {
                     StickerBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
-                        isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                        isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
                         hapticEnabled = hapticEnabled, showPackBanner = showPackBanner,
                         onTogglePackBanner = { showPackBanner = !showPackBanner },
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
@@ -202,7 +211,7 @@ internal fun MessageBubble(
                     TextBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled, showSenderName = showSenderName,
-                        voicePlayback = voicePlayback, isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                        voicePlayback = voicePlayback, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
                         isReadByOther = isReadByOther, hasWallpaper = hasWallpaper,
                         onPlayVoice = onPlayVoice, onSeekVoice = onSeekVoice,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
@@ -218,7 +227,7 @@ internal fun MessageBubble(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.3f), resolveBubbleShape(isMine, isOneUi)),
+                    .background(Color.Black.copy(alpha = 0.3f), resolveBubbleShape(isMine, isOneUi, isForge)),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
@@ -236,7 +245,7 @@ internal fun MessageBubble(
 internal fun TextBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
     showSenderName: Boolean, voicePlayback: VoicePlaybackState, isOneUi: Boolean = false,
-    isExthru: Boolean = false, isDark: Boolean = false, isReadByOther: Boolean = false,
+    isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, isReadByOther: Boolean = false,
     hasWallpaper: Boolean = false, onPlayVoice: (String, Int) -> Unit, onSeekVoice: (Float) -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit,
@@ -245,7 +254,7 @@ internal fun TextBubble(
     val bubbleColor = resolveBubbleColor(isMine, isOneUi, isExthru, isDark)
     val textColor   = resolveBubbleTextColor(isMine, isOneUi, isExthru, isDark)
     val linkColor   = resolveLinkColor(isMine, isOneUi, isExthru, isDark)
-    val bubbleShape = resolveBubbleShape(isMine, isOneUi)
+    val bubbleShape = resolveBubbleShape(isMine, isOneUi, isForge)
 
     val borderColor = by.iposdev.visorlink.ui.screens.chat.ExthruChat.shadowLight(isDark).copy(
         alpha = when {
@@ -268,16 +277,18 @@ internal fun TextBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        val shadowMod = if (isExthru && !hasWallpaper) {
+        val shadowMod = if (isForge) {
+            Modifier.forgeNeuBrutalism(isPressed = isPressed, isDark = isDark, offsetDp = 3.dp)
+        } else if (isExthru && !hasWallpaper) {
             if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
         } else Modifier
 
         val bubbleModifier = Modifier
             .widthIn(max = 270.dp)
-            .scale(scale)
+            .scale(if (isForge) 1f else scale)
             .then(shadowMod)
-            .then(if (isExthru) Modifier.bubbleInnerHighlight(shape = bubbleShape, isDark = isDark) else Modifier)
-            .then(if (isExthru) Modifier.border(0.5.dp, if (isPressed) Color.Transparent else borderColor, bubbleShape) else Modifier)
+            .then(if (isExthru && !isForge) Modifier.bubbleInnerHighlight(shape = bubbleShape, isDark = isDark) else Modifier)
+            .then(if (isExthru && !isForge) Modifier.border(0.5.dp, if (isPressed) Color.Transparent else borderColor, bubbleShape) else Modifier)
             .clip(bubbleShape)
             .messageGestures(
                 messageId = message.id,
@@ -304,7 +315,7 @@ internal fun TextBubble(
                 }
 
                 message.replyData?.let { reply ->
-                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onClick = { reply.id?.let { id -> onReplyClick(id) } })
+                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isForge = isForge, isDark = isDark, onClick = { reply.id?.let { id -> onReplyClick(id) } })
                     Spacer(Modifier.height(4.dp))
                 }
 
@@ -355,7 +366,7 @@ internal fun TextBubble(
         ) {
             InlinedReactionRow(
                 reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
+                isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
                 onReact = onReact, onShowPicker = { /* no-op for now */ },
             )
         }
@@ -368,12 +379,12 @@ internal fun TextBubble(
 
 @Composable
 internal fun VideoBubble(
-    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onMediaTap: (String, String) -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
-    val imageShape = if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+    val imageShape = if (isForge) RectangleShape else if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
     else RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -386,7 +397,9 @@ internal fun VideoBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        val containerModifier = if (isExthru) {
+        val containerModifier = if (isForge) {
+            Modifier.widthIn(max = 280.dp).then(if (!hasWallpaper) Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp) else Modifier).clip(imageShape)
+        } else if (isExthru) {
             val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
             Modifier.widthIn(max = 280.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
         } else {
@@ -455,7 +468,7 @@ internal fun VideoBubble(
         ) {
             InlinedReactionRow(
                 reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
+                isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
                 onReact = onReact, onShowPicker = { },
             )
         }
@@ -468,7 +481,7 @@ internal fun VideoBubble(
 
 @Composable
 internal fun StickerBubble(
-    message: Message, isMine: Boolean, currentUid: String, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hapticEnabled: Boolean, showPackBanner: Boolean, onTogglePackBanner: () -> Unit,
+    message: Message, isMine: Boolean, currentUid: String, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hapticEnabled: Boolean, showPackBanner: Boolean, onTogglePackBanner: () -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit, onReact: (String) -> Unit,
 ) {
     val timeColor = if (isExthru) by.iposdev.visorlink.ui.screens.chat.ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
@@ -486,7 +499,7 @@ internal fun StickerBubble(
         Box(
             modifier = Modifier
                 .widthIn(max = 260.dp)
-                .scale(scale)
+                .scale(if (isForge) 1f else scale)
                 .messageGestures(
                     messageId = message.id,
                     interactionSource = interactionSource,
@@ -498,7 +511,7 @@ internal fun StickerBubble(
         ) {
             Column(horizontalAlignment = if (isMine) Alignment.End else Alignment.Start) {
                 message.replyData?.let { reply ->
-                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onClick = { })
+                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isForge = isForge, isDark = isDark, onClick = { })
                     Spacer(Modifier.height(4.dp))
                 }
 
@@ -553,7 +566,7 @@ internal fun StickerBubble(
         ) {
             InlinedReactionRow(
                 reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
+                isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
                 onReact = onReact, onShowPicker = { },
             )
         }
@@ -562,11 +575,11 @@ internal fun StickerBubble(
 
 @Composable
 internal fun ImageBubble(
-    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false, onTap: (String) -> Unit,
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false, onTap: (String) -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
-    val imageShape = if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
+    val imageShape = if (isForge) RectangleShape else if (isMine) RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 4.dp)
     else RoundedCornerShape(topStart = 4.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 18.dp)
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -582,7 +595,9 @@ internal fun ImageBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        val containerModifier = if (isExthru) {
+        val containerModifier = if (isForge) {
+            Modifier.widthIn(max = 280.dp).then(if (!hasWallpaper) Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp) else Modifier).clip(imageShape)
+        } else if (isExthru) {
             val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
             Modifier.widthIn(max = 280.dp).scale(scale).then(if (!hasWallpaper) shadow else Modifier).clip(imageShape)
         } else {
@@ -678,7 +693,7 @@ internal fun ImageBubble(
         ) {
             InlinedReactionRow(
                 reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark, hapticEnabled = hapticEnabled,
+                isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
                 onReact = onReact, onShowPicker = { },
             )
         }
@@ -691,7 +706,7 @@ internal fun ImageBubble(
 
 @Composable
 fun AlbumBubble(
-    message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, isOneUi: Boolean = false, isDark: Boolean = false, isExthru: Boolean = false, onAlbumTap: (List<AlbumImage>, Int) -> Unit,
+    message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, isOneUi: Boolean = false, isDark: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, onAlbumTap: (List<AlbumImage>, Int) -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null
 ) {
@@ -702,7 +717,7 @@ fun AlbumBubble(
 
     val bubbleColor = resolveBubbleColor(isMine, isOneUi, isExthru, isDark)
     val textColor   = resolveBubbleTextColor(isMine, isOneUi, isExthru, isDark)
-    val bubbleShape = resolveBubbleShape(isMine, isOneUi)
+    val bubbleShape = resolveBubbleShape(isMine, isOneUi, isForge)
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -712,15 +727,18 @@ fun AlbumBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start
     ) {
-        val shadowMod = if (isExthru) {
+        val shadowMod = if (isForge) {
+            Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+        } else if (isExthru) {
             if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier.exthruRaisedShadow(isDark)
         } else Modifier
 
         val bubbleModifier = Modifier
             .widthIn(max = 280.dp)
-            .scale(scale)
+            .scale(if (isForge) 1f else scale)
             .then(shadowMod)
-            .then(if (isExthru) Modifier.bubbleInnerHighlight(shape = bubbleShape, isDark = isDark) else Modifier)
+            .then(if (isExthru && !isForge) Modifier.bubbleInnerHighlight(shape = bubbleShape, isDark = isDark) else Modifier)
+            .then(if (isExthru && !isForge) Modifier.border(0.5.dp, if (isPressed) Color.Transparent else ExthruChat.shadowLight(isDark).copy(alpha=0.45f), bubbleShape) else Modifier)
             .clip(bubbleShape)
             .messageGestures(
                 messageId = message.id,
@@ -735,7 +753,7 @@ fun AlbumBubble(
             Column(modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)) {
                 message.replyData?.let { reply ->
                     Box(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 4.dp)) {
-                        ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onClick = { reply.id?.let { id -> onReplyClick(id) } })
+                        ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isForge = isForge, isDark = isDark, onClick = { reply.id?.let { id -> onReplyClick(id) } })
                     }
                     Spacer(Modifier.height(4.dp))
                 }
@@ -781,7 +799,7 @@ fun AlbumBubble(
         ) {
             InlinedReactionRow(
                 reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                isOneUi = isOneUi, isDark = isDark, hapticEnabled = true, onReact = onReact, onShowPicker = { }, isExthru = isExthru
+                isOneUi = isOneUi, isDark = isDark, hapticEnabled = true, onReact = onReact, onShowPicker = { }, isExthru = isExthru, isForge = isForge
             )
         }
 
@@ -913,31 +931,31 @@ internal fun resolveLinkColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boole
     }
 }
 
-internal fun resolveBubbleShape(isMine: Boolean, isOneUi: Boolean) =
-    if (isMine) RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp)
-    else        RoundedCornerShape(6.dp, 20.dp, 20.dp, 20.dp)
-
 @Composable
 internal fun ReplyPreview(
-    reply: ReplyData, isMine: Boolean, isExthru: Boolean = false, isDark: Boolean = false, onClick: () -> Unit,
+    reply: ReplyData, isMine: Boolean, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.95f else 1f, spring(dampingRatio = 0.5f), label = "reply_scale")
 
-    val bgModifier = if (isExthru) {
+    val bgModifier = if (isForge) {
+        Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape).background(Color.Black.copy(alpha = if (isDark) 0.3f else 0.1f))
+    } else if (isExthru) {
         Modifier.nmInsetShadow(isDark, cornerRadius = 10.dp, darkAlpha = if(isDark) 0.5f else 0.2f)
             .background(Color.Black.copy(alpha = if (isDark) 0.15f else 0.04f), RoundedCornerShape(10.dp))
     } else {
         Modifier.background(if (isMine) Color.White.copy(0.25f) else MaterialTheme.colorScheme.primary.copy(0.12f), RoundedCornerShape(6.dp))
     }
 
+    val shape = if (isForge) RectangleShape else RoundedCornerShape(10.dp)
+
     Row(
         modifier = Modifier
             .widthIn(min = 60.dp, max = 260.dp)
-            .scale(scale)
+            .scale(if(isForge) 1f else scale)
             .then(bgModifier)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
             .padding(8.dp),
     ) {
@@ -961,7 +979,7 @@ internal fun ReplyPreview(
 
 @Composable
 internal fun InlinedReactionRow(
-    reactions: List<Reaction>, currentUid: String, isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean, hapticEnabled: Boolean, onReact: (String) -> Unit, onShowPicker: () -> Unit,
+    reactions: List<Reaction>, currentUid: String, isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isForge: Boolean = false, isDark: Boolean, hapticEnabled: Boolean, onReact: (String) -> Unit, onShowPicker: () -> Unit,
 ) {
     val haptic = rememberHaptic()
 
@@ -978,7 +996,11 @@ internal fun InlinedReactionRow(
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(if (isPressed) 0.85f else 1f, spring(dampingRatio = 0.5f), label = "react_scale")
 
-                val shadowMod = if (isExthru) {
+                val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
+
+                val shadowMod = if (isForge) {
+                    Modifier.forgeNeuBrutalism(isPressed || iReacted, isDark, offsetDp = 2.dp)
+                } else if (isExthru) {
                     if (isPressed || iReacted) Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
                     else Modifier.exthruSmallRaisedShadow(isDark)
                 } else Modifier
@@ -991,11 +1013,11 @@ internal fun InlinedReactionRow(
 
                 Box(
                     modifier = Modifier
-                        .scale(scale)
+                        .scale(if(isForge) 1f else scale)
                         .then(shadowMod)
-                        .background(bgColor, RoundedCornerShape(16.dp))
-                        .border(1.dp, if(isExthru && !isPressed && !iReacted) Color.White.copy(if(isDark)0.05f else 0.3f) else Color.Transparent, RoundedCornerShape(16.dp))
-                        .clip(RoundedCornerShape(16.dp))
+                        .background(bgColor, shape)
+                        .border(1.dp, if(isExthru && !isForge && !isPressed && !iReacted) Color.White.copy(if(isDark)0.05f else 0.3f) else Color.Transparent, shape)
+                        .clip(shape)
                         .clickable(interactionSource = interactionSource, indication = null) {
                             haptic.perform(HapticType.REACTION, hapticEnabled)
                             onReact(reaction.emoji)
@@ -1018,18 +1040,21 @@ internal fun InlinedReactionRow(
             val interactionSource = remember { MutableInteractionSource() }
             val isPressed by interactionSource.collectIsPressedAsState()
             val scale by animateFloatAsState(if (isPressed) 0.85f else 1f, spring(dampingRatio = 0.5f), label = "add_scale")
+            val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
 
-            val shadowMod = if (isExthru) {
+            val shadowMod = if (isForge) {
+                Modifier.forgeNeuBrutalism(isPressed, isDark, offsetDp = 2.dp)
+            } else if (isExthru) {
                 if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp) else Modifier.exthruSmallRaisedShadow(isDark)
             } else Modifier
 
             Box(
                 modifier = Modifier
-                    .scale(scale)
+                    .scale(if(isForge) 1f else scale)
                     .then(shadowMod)
-                    .background(if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.3f else 0.6f) else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-                    .border(1.dp, if(isExthru && !isPressed) Color.White.copy(if(isDark)0.05f else 0.3f) else Color.Transparent, RoundedCornerShape(16.dp))
-                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.3f else 0.6f) else MaterialTheme.colorScheme.surfaceVariant, shape)
+                    .border(1.dp, if(isExthru && !isForge && !isPressed) Color.White.copy(if(isDark)0.05f else 0.3f) else Color.Transparent, shape)
+                    .clip(shape)
                     .clickable(interactionSource = interactionSource, indication = null, onClick = onShowPicker)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 contentAlignment = Alignment.Center,
@@ -1041,13 +1066,16 @@ internal fun InlinedReactionRow(
 }
 
 @Composable
-internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false) {
+internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false) {
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        val bgMod = if (isExthru) {
+        val shape = if (isForge) RectangleShape else RoundedCornerShape(14.dp)
+        val bgMod = if (isForge) {
+            Modifier.forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 2.dp).background(Color.Black.copy(alpha = if(isDark) 0.3f else 0.1f), shape)
+        } else if (isExthru) {
             Modifier.nmInsetShadow(isDark, cornerRadius = 14.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-                .background(Color.Black.copy(alpha = if(isDark) 0.3f else 0.1f), RoundedCornerShape(14.dp))
+                .background(Color.Black.copy(alpha = if(isDark) 0.3f else 0.1f), shape)
         } else {
-            Modifier.background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))
+            Modifier.background(MaterialTheme.colorScheme.surfaceVariant, shape)
         }
 
         Box(modifier = bgMod.padding(horizontal = 14.dp, vertical = 6.dp)) {

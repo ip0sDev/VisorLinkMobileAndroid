@@ -23,11 +23,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -38,6 +40,7 @@ import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
@@ -101,7 +104,9 @@ fun ChatListScreen(
     val compactList by themeViewModel.compactChatList.collectAsState()
 
     val isOneUi = currentTheme == AppTheme.ONE_UI
-    val isExthru = currentTheme == AppTheme.EXTHRU || currentTheme == AppTheme.BIOLUME
+    val isExthru = currentTheme.isExthruFamily
+    val style = rememberExthruStyle(currentTheme)
+    val isForge = style.isForge
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     val haptic = rememberHaptic()
@@ -109,14 +114,13 @@ fun ChatListScreen(
     var showFabMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
-    // TopBar collapse — скрываем subtitle при прокрутке
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     val hazeState = remember { HazeState() }
 
     val scaffoldBg = when {
         isOneUi -> if (isDark) OneUi.PageBgDark else OneUi.PageBg
-        isExthru -> MaterialTheme.colorScheme.background // MidWater / DarkMidWater
+        isExthru -> MaterialTheme.colorScheme.background
         else -> MaterialTheme.colorScheme.surface
     }
 
@@ -126,21 +130,29 @@ fun ChatListScreen(
             containerColor = Color.Transparent,
             topBar = {
                 if (isExthru) {
-                    TopAppBar(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .hazeChild(
+                    val topBarBg = if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+
+                    val topBarMod = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isForge) Modifier.background(topBarBg)
+                            else Modifier.hazeChild(
                                 state = hazeState,
                                 style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
-                            )
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)),
+                            ).background(topBarBg)
+                        )
+
+                    TopAppBar(
+                        modifier = topBarMod,
                         title = {
                             Text(
-                                text = stringResource(R.string.chatlist_title),
+                                text = if (isForge) "> CHATS_" else stringResource(R.string.chatlist_title),
                                 style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    fontSize = if (isForge) 28.sp else 34.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isForge) FontFamily.Monospace else null
+                                ),
+                                color = if (isForge) style.accent else Color.Unspecified
                             )
                         },
                         actions = {
@@ -169,6 +181,7 @@ fun ChatListScreen(
                                 ExthruTopBarButton(
                                     icon = if (unreadNotifications > 0) Icons.Default.Notifications else Icons.Outlined.Notifications,
                                     isDark = isDark,
+                                    isForge = isForge,
                                     hapticEnabled = hapticEnabled
                                 ) { onOpenNotifications() }
                             }
@@ -178,6 +191,7 @@ fun ChatListScreen(
                             ExthruTopBarButton(
                                 icon = Icons.Default.Search,
                                 isDark = isDark,
+                                isForge = isForge,
                                 hapticEnabled = hapticEnabled
                             ) { onOpenSearch() }
 
@@ -186,6 +200,7 @@ fun ChatListScreen(
                             ExthruTopBarButton(
                                 icon = Icons.Outlined.Settings,
                                 isDark = isDark,
+                                isForge = isForge,
                                 hapticEnabled = hapticEnabled
                             ) { onOpenSettings() }
 
@@ -196,6 +211,7 @@ fun ChatListScreen(
                                 displayName = currentUser?.displayName ?: "",
                                 isOneUi = false,
                                 isExthru = true,
+                                isForge = isForge,
                                 isDark = isDark,
                                 hapticEnabled = hapticEnabled,
                                 onClick = { onOpenProfile() }
@@ -288,6 +304,7 @@ fun ChatListScreen(
                                         displayName = currentUser?.displayName ?: "",
                                         isOneUi = isOneUi,
                                         isExthru = false,
+                                        isForge = false,
                                         isDark = isDark,
                                         hapticEnabled = hapticEnabled,
                                         onClick = { onOpenProfile() }
@@ -307,6 +324,7 @@ fun ChatListScreen(
                     showMenu = showFabMenu,
                     isOneUi = isOneUi,
                     isExthru = isExthru,
+                    isForge = isForge,
                     isDark = isDark,
                     hapticEnabled = hapticEnabled,
                     onToggle = { showFabMenu = !showFabMenu },
@@ -319,7 +337,7 @@ fun ChatListScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .let { if (isExthru) it.haze(state = hazeState) else it }
+                    .let { if (isExthru && !isForge) it.haze(state = hazeState) else it }
                     .background(scaffoldBg)
             ) {
                 VlAmbientGlow(appTheme = currentTheme)
@@ -336,6 +354,7 @@ fun ChatListScreen(
                                 .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding()),
                             isOneUi = isOneUi,
                             isExthru = isExthru,
+                            isForge = isForge,
                             isDark = isDark
                         )
                     } else {
@@ -347,7 +366,7 @@ fun ChatListScreen(
                                 bottom = padding.calculateBottomPadding() + 88.dp
                             )
                         ) {
-                            // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ (Всегда отдельной карточкой)
+                            // 📌 ЗАКРЕПЛЕННОЕ: ИЗБРАННОЕ
                             item(key = "saved_messages") {
                                 val savedChat = viewModel.savedMessagesEntry
                                 ChatListItem(
@@ -360,6 +379,7 @@ fun ChatListScreen(
                                     total = chats.size,
                                     isOneUi = isOneUi,
                                     isExthru = isExthru,
+                                    isForge = isForge,
                                     isDark = isDark,
                                     isSavedMessages = true,
                                     isCompactList = compactList,
@@ -371,19 +391,21 @@ fun ChatListScreen(
                                         thickness = 0.5.dp,
                                         color = if (isDark) OneUi.DividerDark else OneUi.Divider
                                     )
-                                } else if (chats.isNotEmpty()) {
+                                } else if (chats.isNotEmpty() && !isForge) {
+                                    Spacer(Modifier.height(16.dp))
+                                } else if (isForge && chats.isNotEmpty() && !compactList) {
                                     Spacer(Modifier.height(16.dp))
                                 }
                             }
 
                             // 📌 СПИСОК ЧАТОВ
                             if (compactList && chats.isNotEmpty()) {
-                                // ── ЕДИНАЯ КАРТОЧКА ДЛЯ ВСЕХ ЧАТОВ ──
                                 item(key = "compact_chats_card") {
-                                    val shape = RoundedCornerShape(24.dp)
-                                    val shadowMod = if (isExthru) Modifier.exthruRaisedShadow(isDark) else Modifier.shadow(4.dp, shape)
+                                    val shape = if (isForge) RectangleShape else RoundedCornerShape(24.dp)
+                                    val shadowMod = if (isForge) Modifier.forgeNeuBrutalism(false, isDark, 4.dp) else if (isExthru) Modifier.exthruRaisedShadow(isDark) else Modifier.shadow(4.dp, shape)
                                     val bgAlpha = if (isDark) 0.4f else 0.55f
-                                    val borderColor = if (isExthru) Color.White.copy(alpha = if (isDark) 0.05f else 0.2f) else Color.Transparent
+                                    val bgColor = if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha)
+                                    val borderColor = if (isForge) Color.Transparent else if (isExthru) Color.White.copy(alpha = if (isDark) 0.05f else 0.2f) else Color.Transparent
 
                                     Column(
                                         modifier = Modifier
@@ -391,8 +413,8 @@ fun ChatListScreen(
                                             .padding(horizontal = if (isOneUi) 0.dp else 14.dp)
                                             .padding(bottom = 12.dp)
                                             .then(shadowMod)
-                                            .background(if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha) else MaterialTheme.colorScheme.surfaceContainerLow, shape)
-                                            .border(1.dp, borderColor, shape)
+                                            .background(if (isExthru && !isForge) bgColor else MaterialTheme.colorScheme.surfaceContainerLow, shape)
+                                            .then(if(isForge) Modifier else Modifier.border(1.dp, borderColor, shape))
                                             .clip(shape)
                                     ) {
                                         chats.forEachIndexed { index, chat ->
@@ -410,6 +432,7 @@ fun ChatListScreen(
                                                 draftText = drafts[chat.id],
                                                 isOneUi = isOneUi,
                                                 isExthru = isExthru,
+                                                isForge = isForge,
                                                 isDark = isDark,
                                                 onClick = { onOpenChat(chat.id, otherUid) }
                                             )
@@ -418,8 +441,8 @@ fun ChatListScreen(
                                             if (index < chats.size - 1) {
                                                 HorizontalDivider(
                                                     modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                                    thickness = 0.5.dp,
-                                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.2f else 0.4f)
+                                                    thickness = if (isForge) 2.dp else 0.5.dp,
+                                                    color = if (isForge) (if (isDark) Color(0xFF333333) else Color.Black) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (isDark) 0.2f else 0.4f)
                                                 )
                                             }
                                         }
@@ -444,6 +467,7 @@ fun ChatListScreen(
                                         total = chats.size,
                                         isOneUi = isOneUi,
                                         isExthru = isExthru,
+                                        isForge = isForge,
                                         isDark = isDark,
                                         isCompactList = compactList,
                                         onClick = { onOpenChat(chat.id, otherUid) }
@@ -462,7 +486,7 @@ fun ChatListScreen(
                     }
                 }
 
-                // Оверлей для меню FAB, если оно открыто
+                // Оверлей для меню FAB
                 if (showFabMenu) {
                     Box(
                         modifier = Modifier
@@ -488,6 +512,7 @@ fun ChatListScreen(
 private fun ExthruTopBarButton(
     icon: ImageVector,
     isDark: Boolean,
+    isForge: Boolean,
     hapticEnabled: Boolean,
     onClick: () -> Unit
 ) {
@@ -496,7 +521,10 @@ private fun ExthruTopBarButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "btn_scale")
 
-    val shadowMod = if (isPressed) {
+    val shape = if (isForge) RectangleShape else CircleShape
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+    } else if (isPressed) {
         Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
     } else {
         Modifier.exthruSmallRaisedShadow(isDark)
@@ -505,11 +533,11 @@ private fun ExthruTopBarButton(
     Box(
         modifier = Modifier
             .size(42.dp)
-            .scale(scale)
+            .scale(if(isForge) 1f else scale)
             .then(shadowMod)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+            .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null) {
                 haptic.perform(HapticType.CLICK, hapticEnabled)
                 onClick()
@@ -527,6 +555,7 @@ private fun EmptyState(
     modifier: Modifier = Modifier,
     isOneUi: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "empty_breath")
@@ -557,7 +586,15 @@ private fun EmptyState(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                if (isExthru) {
+                if (isForge) {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .scale(breathScale)
+                            .forgeNeuBrutalism(false, isDark, 4.dp)
+                            .background(MaterialTheme.colorScheme.surface)
+                    )
+                } else if (isExthru) {
                     Box(
                         modifier = Modifier
                             .size(100.dp)
@@ -586,12 +623,14 @@ private fun EmptyState(
                     stringResource(R.string.chatlist_empty_title),
                     style = if (isExthru) MaterialTheme.typography.titleLarge else MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
                     color = titleColor
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     stringResource(R.string.chatlist_empty_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
                     color = subColor
                 )
             }
@@ -612,6 +651,7 @@ private fun ChatListItem(
     total: Int,
     isOneUi: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     isSavedMessages: Boolean = false,
     isCompactList: Boolean = false,
@@ -621,8 +661,8 @@ private fun ChatListItem(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val targetScale = when {
-        isPressed && isExthru -> 0.96f
-        isPressed && !isOneUi -> 0.97f
+        isPressed && isExthru && !isForge -> 0.96f
+        isPressed && !isOneUi && !isForge -> 0.97f
         else -> 1f
     }
 
@@ -633,6 +673,7 @@ private fun ChatListItem(
     )
 
     val shape = when {
+        isForge -> RectangleShape
         isOneUi -> RoundedCornerShape(0.dp)
         isSavedMessages -> RoundedCornerShape(24.dp)
         else -> RoundedCornerShape(24.dp)
@@ -657,20 +698,22 @@ private fun ChatListItem(
         ) {
             Box(modifier = Modifier.size(if (isOneUi) 50.dp else 54.dp)) {
                 if (isSavedMessages) {
-                    SavedMessagesIcon(isOneUi, isExthru, isDark, size = if (isOneUi) 50.dp else 54.dp)
+                    SavedMessagesIcon(isOneUi, isExthru, isForge, isDark, size = if (isOneUi) 50.dp else 54.dp)
                 } else {
                     when (chatType) {
                         ChatType.DIRECT -> AvatarWithPresence(
                             avatarUrl = otherProfile?.avatarUrl,
                             displayName = chat.otherDisplayName(currentUid),
                             isOnline = otherProfile?.online ?: false,
-                            size = if (isOneUi) 50.dp else 54.dp
+                            size = if (isOneUi) 50.dp else 54.dp,
+                            isForge = isForge
                         )
                         ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                             avatarUrl = chat.avatarUrl,
                             name = chat.name,
                             isChannel = chatType == ChatType.CHANNEL,
                             isExthru = isExthru,
+                            isForge = isForge,
                             size = if (isOneUi) 50.dp else 54.dp
                         )
                     }
@@ -695,7 +738,8 @@ private fun ChatListItem(
                         },
                         fontSize = if (isOneUi) 16.sp else 16.sp,
                         fontWeight = if (isOneUi) FontWeight.Medium else FontWeight.SemiBold,
-                        color = titleColor,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
+                        color = if (isForge) MaterialTheme.colorScheme.primary else titleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -704,6 +748,7 @@ private fun ChatListItem(
                         Text(
                             formatTime(it.toDate()),
                             style = MaterialTheme.typography.labelSmall,
+                            fontFamily = if (isForge) FontFamily.Monospace else null,
                             color = subColor,
                             fontSize = 11.sp
                         )
@@ -715,12 +760,14 @@ private fun ChatListItem(
                         Text(
                             "Черновик: ",
                             style = MaterialTheme.typography.bodySmall,
+                            fontFamily = if (isForge) FontFamily.Monospace else null,
                             color = MaterialTheme.colorScheme.error,
                             fontWeight = FontWeight.Medium
                         )
                         Text(
                             text = draftText,
                             style = MaterialTheme.typography.bodySmall,
+                            fontFamily = if (isForge) FontFamily.Monospace else null,
                             color = subColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -731,6 +778,7 @@ private fun ChatListItem(
                     Text(
                         text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                         style = MaterialTheme.typography.bodySmall,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
                         color = subColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -741,7 +789,9 @@ private fun ChatListItem(
     }
 
     if (isExthru) {
-        val shadowMod = if (isPressed) {
+        val shadowMod = if (isForge) {
+            Modifier.forgeNeuBrutalism(isPressed, isDark, 4.dp)
+        } else if (isPressed) {
             Modifier.nmInsetShadow(isDark, cornerRadius = 24.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
         } else if (!isCompactList || isSavedMessages) {
             Modifier.exthruRaisedShadow(isDark)
@@ -753,10 +803,10 @@ private fun ChatListItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = verticalPadding)
-                .scale(itemScale)
+                .scale(if (isForge) 1f else itemScale)
                 .then(shadowMod)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f), shape)
-                .border(1.dp, if (isPressed || (isCompactList && !isSavedMessages)) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.2f), shape)
+                .background(if (isForge) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f), shape)
+                .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed || (isCompactList && !isSavedMessages)) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.2f), shape))
                 .clip(shape)
                 .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
         ) {
@@ -799,6 +849,7 @@ private fun ChatListItemCompact(
     draftText: String?,
     isOneUi: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     onClick: () -> Unit
 ) {
@@ -806,7 +857,8 @@ private fun ChatListItemCompact(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val bgHighlight = if (isPressed) {
-        if (isDark) Color.White.copy(0.05f) else Color.Black.copy(0.05f)
+        if (isForge) MaterialTheme.colorScheme.primary.copy(0.15f)
+        else if (isDark) Color.White.copy(0.05f) else Color.Black.copy(0.05f)
     } else Color.Transparent
 
     val titleColor = if (isOneUi) (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary) else MaterialTheme.colorScheme.onSurface
@@ -826,13 +878,15 @@ private fun ChatListItemCompact(
                     avatarUrl = otherProfile?.avatarUrl,
                     displayName = chat.otherDisplayName(currentUid),
                     isOnline = otherProfile?.online ?: false,
-                    size = if (isOneUi) 50.dp else 54.dp
+                    size = if (isOneUi) 50.dp else 54.dp,
+                    isForge = isForge
                 )
                 ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                     avatarUrl = chat.avatarUrl,
                     name = chat.name,
                     isChannel = chatType == ChatType.CHANNEL,
                     isExthru = isExthru,
+                    isForge = isForge,
                     size = if (isOneUi) 50.dp else 54.dp
                 )
             }
@@ -852,7 +906,8 @@ private fun ChatListItemCompact(
                     text = if (chatType == ChatType.DIRECT) chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" } else chat.name,
                     fontSize = if (isOneUi) 16.sp else 16.sp,
                     fontWeight = if (isOneUi) FontWeight.Medium else FontWeight.SemiBold,
-                    color = titleColor,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
+                    color = if (isForge) MaterialTheme.colorScheme.primary else titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
@@ -861,6 +916,7 @@ private fun ChatListItemCompact(
                     Text(
                         formatTime(it.toDate()),
                         style = MaterialTheme.typography.labelSmall,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
                         color = subColor,
                         fontSize = 11.sp
                     )
@@ -872,12 +928,14 @@ private fun ChatListItemCompact(
                     Text(
                         "Черновик: ",
                         style = MaterialTheme.typography.bodySmall,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
                         color = MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         text = draftText,
                         style = MaterialTheme.typography.bodySmall,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
                         color = subColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -888,6 +946,7 @@ private fun ChatListItemCompact(
                 Text(
                     text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                     style = MaterialTheme.typography.bodySmall,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
                     color = subColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -905,6 +964,7 @@ private fun AvatarChip(
     displayName: String,
     isOneUi: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     hapticEnabled: Boolean,
     onClick: () -> Unit
@@ -931,7 +991,10 @@ private fun AvatarChip(
         else -> MaterialTheme.colorScheme.onPrimaryContainer
     }
 
-    val shadowMod = if (isExthru) {
+    val shape = if (isForge) RectangleShape else CircleShape
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, 2.dp)
+    } else if (isExthru) {
         if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
         else Modifier.exthruSmallRaisedShadow(isDark)
     } else Modifier
@@ -939,11 +1002,11 @@ private fun AvatarChip(
     Box(
         modifier = Modifier
             .size(42.dp)
-            .scale(scale)
+            .scale(if(isForge) 1f else scale)
             .then(shadowMod)
-            .background(if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f) else Color.Transparent, CircleShape)
-            .border(1.dp, if (isPressed || !isExthru) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-            .clip(CircleShape)
+            .background(if (isForge) MaterialTheme.colorScheme.surface else if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f) else Color.Transparent, shape)
+            .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed || !isExthru) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null) {
                 haptic.perform(HapticType.CLICK, hapticEnabled)
                 onClick()
@@ -958,12 +1021,13 @@ private fun AvatarChip(
                 contentScale = ContentScale.Crop
             )
         } else {
-            Surface(color = placeholderBg, shape = CircleShape, modifier = Modifier.fillMaxSize()) {
+            Surface(color = placeholderBg, shape = shape, modifier = Modifier.fillMaxSize()) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
                         displayName.firstOrNull()?.uppercase() ?: "?",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
                         color = placeholderColor
                     )
                 }
@@ -980,6 +1044,7 @@ fun GroupChannelAvatar(
     name: String,
     isChannel: Boolean,
     isExthru: Boolean = false,
+    isForge: Boolean = false,
     size: Dp = 48.dp
 ) {
     val bgBrush = when {
@@ -996,11 +1061,14 @@ fun GroupChannelAvatar(
         else -> MaterialTheme.colorScheme.onSecondaryContainer
     }
 
+    val shape = if (isForge) RectangleShape else CircleShape
+
     Box(
         modifier = Modifier
             .size(size)
-            .clip(CircleShape)
-            .background(bgBrush),
+            .clip(shape)
+            .background(bgBrush)
+            .then(if(isForge) Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         if (!avatarUrl.isNullOrEmpty()) {
@@ -1015,6 +1083,7 @@ fun GroupChannelAvatar(
                 text = if (isChannel) "📢" else (name.firstOrNull()?.uppercase() ?: "G"),
                 fontSize = (size.value * 0.38f).sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = if (isForge) FontFamily.Monospace else null,
                 color = textColor
             )
         }
@@ -1028,6 +1097,7 @@ private fun M3eFab(
     showMenu: Boolean,
     isOneUi: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     hapticEnabled: Boolean,
     onToggle: () -> Unit,
@@ -1081,7 +1151,7 @@ private fun M3eFab(
                     icon = icon, label = label, onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); action() },
                     chipBg = menuChipBg, chipText = menuChipText,
                     iconBg = menuIconBg, iconTint = menuIconTint,
-                    isExthru = isExthru, isDark = isDark
+                    isExthru = isExthru, isForge = isForge, isDark = isDark
                 )
             }
         }
@@ -1110,16 +1180,17 @@ private fun M3eFab(
         val fabContentClosed = if (isOneUi || isExthru) Color.White else MaterialTheme.colorScheme.onPrimary
 
         if (isExthru) {
-            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = if (showMenu) 16.dp else 28.dp) else Modifier.exthruSmallRaisedShadow(isDark)
+            val fabShape = if (isForge) RectangleShape else if (showMenu) RoundedCornerShape(16.dp) else CircleShape
+            val shadowMod = if (isForge) Modifier.forgeNeuBrutalism(isPressed, isDark, 4.dp) else if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = if (showMenu) 16.dp else 28.dp) else Modifier.exthruSmallRaisedShadow(isDark)
 
             Box(
                 modifier = Modifier
                     .size(56.dp)
-                    .scale(fabScale)
+                    .scale(if(isForge) 1f else fabScale)
                     .then(shadowMod)
-                    .background(if (showMenu) fabBgOpen else fabBgClosed, if (showMenu) RoundedCornerShape(16.dp) else CircleShape)
-                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), if (showMenu) RoundedCornerShape(16.dp) else CircleShape)
-                    .clip(if (showMenu) RoundedCornerShape(16.dp) else CircleShape)
+                    .background(if (showMenu) fabBgOpen else fabBgClosed, fabShape)
+                    .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), fabShape))
+                    .clip(fabShape)
                     .clickable(interactionSource = interactionSource, indication = null) {
                         haptic.perform(HapticType.SELECTION, hapticEnabled)
                         onToggle()
@@ -1183,6 +1254,7 @@ private fun FabMenuItem(
     iconBg: Color,
     iconTint: Color,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1194,28 +1266,30 @@ private fun FabMenuItem(
     )
 
     Row(
-        modifier = Modifier.scale(scale).clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        modifier = Modifier.scale(if(isForge) 1f else scale).clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (isExthru) {
-            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 12.dp) else Modifier.exthruSmallRaisedShadow(isDark)
+            val shape = if (isForge) RectangleShape else RoundedCornerShape(12.dp)
+            val shadowMod = if (isForge) Modifier.forgeNeuBrutalism(isPressed, isDark, 2.dp) else if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 12.dp) else Modifier.exthruSmallRaisedShadow(isDark)
+
             Box(
                 modifier = Modifier
                     .then(shadowMod)
-                    .background(chipBg, RoundedCornerShape(12.dp))
-                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), RoundedCornerShape(12.dp))
+                    .background(chipBg, shape)
+                    .then(if(isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
                     .padding(horizontal = 14.dp, vertical = 8.dp)
             ) {
-                Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = chipText)
+                Text(label, style = MaterialTheme.typography.labelLarge, fontFamily = if(isForge) FontFamily.Monospace else null, fontWeight = FontWeight.Medium, color = chipText)
             }
 
             Box(
                 modifier = Modifier
                     .size(40.dp)
                     .then(shadowMod)
-                    .background(iconBg, RoundedCornerShape(14.dp))
-                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), RoundedCornerShape(14.dp)),
+                    .background(iconBg, shape)
+                    .then(if(isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, null, modifier = Modifier.size(22.dp), tint = iconTint)
@@ -1260,6 +1334,7 @@ private fun formatTime(date: Date): String {
 fun SavedMessagesIcon(
     isOneUi: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     size: Dp
 ) {
@@ -1278,12 +1353,15 @@ fun SavedMessagesIcon(
         )
     )
 
+    val shape = if (isForge) RectangleShape else CircleShape
+    val shadowMod = if (isForge) Modifier.forgeNeuBrutalism(false, isDark, 2.dp) else if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier.shadow(8.dp, shape)
+
     Box(
         modifier = Modifier
             .size(size)
-            .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier.shadow(8.dp, CircleShape))
-            .background(bgGradient, CircleShape)
-            .border(1.5.dp, borderBrush, CircleShape),
+            .then(shadowMod)
+            .background(bgGradient, shape)
+            .then(if (isForge) Modifier else Modifier.border(1.5.dp, borderBrush, shape)),
         contentAlignment = Alignment.Center
     ) {
         Icon(

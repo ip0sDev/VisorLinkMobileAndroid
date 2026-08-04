@@ -1,27 +1,70 @@
+// ui/theme/ExthruModifiers.kt
 package by.iposdev.visorlink.ui.theme
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.border
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.graphicsLayer
 
-// ── Raised shadow — угло-осознанный вариант (Улучшено для чистоты) ────────────
+// ── Forge Neo-Brutalism Shadow (Терминальный стиль) ──────────────────────────
+
+fun Modifier.forgeNeuBrutalism(
+    isPressed: Boolean,
+    isDark: Boolean,
+    offsetDp: Dp = 4.dp,
+    borderWidth: Dp = 2.dp,
+    borderColor: Color = if (isDark) Color(0xFF333333) else Color.Black,
+    shadowColor: Color = Color.Black
+): Modifier = composed {
+    val trans by animateFloatAsState(
+        targetValue = if (isPressed) offsetDp.value else 0f,
+        animationSpec = spring(stiffness = 600f),
+        label = "forge_push"
+    )
+    this
+        .drawBehind {
+            val offPx = offsetDp.toPx()
+            val shift = trans.dp.toPx()
+            // Рисуем сплошную тень на фиксированном оффсете минус смещение самого блока
+            drawRect(
+                color = shadowColor,
+                topLeft = Offset(offPx - shift, offPx - shift),
+                size = size
+            )
+        }
+        .graphicsLayer {
+            translationX = trans.dp.toPx()
+            translationY = trans.dp.toPx()
+        }
+        .border(borderWidth, borderColor, RectangleShape)
+}
+
+// ── Raised shadow — угло-осознанный вариант ──────────────────────────────────
 
 fun Modifier.nmRaisedShadow(
     isDark: Boolean = false,
     shadowRadius: Dp = 10.dp,
     offsetDp: Dp = 5.dp,
     cornerRadius: Dp = 0.dp,
-    darkAlpha: Float = if (isDark) 0.45f else 0.22f, // Тени стали намного мягче
+    darkAlpha: Float = if (isDark) 0.45f else 0.22f,
     lightAlpha: Float = if (isDark) 0.05f else 0.65f,
 ): Modifier = this.drawBehind {
     val radiusPx  = shadowRadius.toPx()
@@ -73,7 +116,7 @@ fun Modifier.nmRaisedShadow(
 fun Modifier.nmInsetShadow(
     isDark: Boolean = false,
     cornerRadius: Dp = 22.dp,
-    darkAlpha: Float = if (isDark) 0.45f else 0.25f, // Более мягкое углубление
+    darkAlpha: Float = if (isDark) 0.45f else 0.25f,
     lightAlpha: Float = if (isDark) 0.05f else 0.60f,
     lineWidthDp: Dp = 1.5.dp,
 ): Modifier = this.drawBehind {
@@ -155,13 +198,13 @@ fun Modifier.nmDividerBottom(isDark: Boolean = false): Modifier = this.drawBehin
 
     drawRect(
         color = darkColor,
-        topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - darkPx),
-        size = androidx.compose.ui.geometry.Size(size.width, darkPx)
+        topLeft = Offset(0f, size.height - darkPx),
+        size = Size(size.width, darkPx)
     )
     drawRect(
         color = lightColor,
-        topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - darkPx - lightPx - 0.5.dp.toPx()),
-        size = androidx.compose.ui.geometry.Size(size.width, lightPx)
+        topLeft = Offset(0f, size.height - darkPx - lightPx - 0.5.dp.toPx()),
+        size = Size(size.width, lightPx)
     )
 }
 
@@ -177,13 +220,13 @@ fun Modifier.nmDividerTop(isDark: Boolean = false): Modifier = this.drawBehind {
 
     drawRect(
         color = lightColor,
-        topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
-        size = androidx.compose.ui.geometry.Size(size.width, lightPx)
+        topLeft = Offset(0f, 0f),
+        size = Size(size.width, lightPx)
     )
     drawRect(
         color = darkColor,
-        topLeft = androidx.compose.ui.geometry.Offset(0f, lightPx + 0.5.dp.toPx()),
-        size = androidx.compose.ui.geometry.Size(size.width, darkPx)
+        topLeft = Offset(0f, lightPx + 0.5.dp.toPx()),
+        size = Size(size.width, darkPx)
     )
 }
 
@@ -205,14 +248,14 @@ fun Modifier.bubbleInnerHighlight(
         clipPath(path) {
             drawRect(
                 color = lColor.copy(alpha = highlightAlpha),
-                topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
-                size = androidx.compose.ui.geometry.Size(size.width, lineHeight)
+                topLeft = Offset(0f, 0f),
+                size = Size(size.width, lineHeight)
             )
         }
     }
 }
 
-// ── Forge hard shadow ─────────────────────────────────────────────────────────
+// ── Старая реализация Forge оставлена для обратной совместимости ──────────────
 
 fun Modifier.forgeHardShadow(
     color: Color,
@@ -221,11 +264,10 @@ fun Modifier.forgeHardShadow(
     val offPx = offset.toPx()
     drawRect(
         color = color,
-        topLeft = androidx.compose.ui.geometry.Offset(offPx, offPx),
-        size = androidx.compose.ui.geometry.Size(size.width, size.height)
+        topLeft = Offset(offPx, offPx),
+        size = Size(size.width, size.height)
     )
 }
-
 // ── Accent glow ───────────────────────────────────────────────────────────────
 
 fun Modifier.accentGlowShadow(

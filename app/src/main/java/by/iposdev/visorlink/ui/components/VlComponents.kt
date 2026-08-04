@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
@@ -108,10 +110,10 @@ fun VlGlassPanel(
         val style = rememberExthruStyle(appTheme)
         Box(
             modifier
-                .clip(RoundedCornerShape(if (appTheme == AppTheme.FORGE) 0.dp else radius))
+                .clip(if (appTheme == AppTheme.FORGE) RectangleShape else RoundedCornerShape(radius))
                 .background(
                     if (appTheme == AppTheme.FORGE) style.cardBg else cs.surface,
-                    RoundedCornerShape(if (appTheme == AppTheme.FORGE) 0.dp else radius)
+                    if (appTheme == AppTheme.FORGE) RectangleShape else RoundedCornerShape(radius)
                 )
         ) { content() }
         return
@@ -184,11 +186,13 @@ fun VlButton(
     }
 
     val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val bgColor = if (isDestructive) style.destructive.copy(alpha = 0.8f) else style.cardBg.copy(alpha = if(isDark) 0.4f else 0.6f)
+    val bgColor = if (isDestructive) style.destructive.copy(alpha = 0.8f) else if (isForge) style.cardBg else style.cardBg.copy(alpha = if(isDark) 0.4f else 0.6f)
     val textColor = if (isDestructive) Color.White else style.accent
+    val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.95f else 1f,
@@ -196,8 +200,9 @@ fun VlButton(
         label = "vl_btn_scale"
     )
 
-    // Динамический переход: выпуклая тень -> вдавленная тень
-    val shadowMod = if (isPressed) {
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, offsetDp = 4.dp)
+    } else if (isPressed) {
         Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
     } else {
         Modifier.exthruSmallRaisedShadow(isDark)
@@ -207,15 +212,11 @@ fun VlButton(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            .scale(scale)
+            .scale(if (isForge) 1f else scale)
             .then(shadowMod)
-            .background(bgColor, RoundedCornerShape(16.dp))
-            .border(
-                width = 1.dp,
-                color = if (isPressed) Color.Transparent else Color.White.copy(alpha = if(isDark) 0.05f else 0.3f),
-                shape = RoundedCornerShape(16.dp)
-            )
-            .clip(RoundedCornerShape(16.dp))
+            .background(bgColor, shape)
+            .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(
                 interactionSource = interactionSource, indication = null,
                 onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() }
@@ -252,10 +253,32 @@ fun VlSwitch(
     }
 
     val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
     val thumbOffset by animateDpAsState(if (checked) 24.dp else 4.dp, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "vlswitch_thumb")
     val dotColor by animateColorAsState(if (checked) style.accent else cs.onSurfaceVariant.copy(alpha = 0.5f), tween(200), label = "vlswitch_dot")
 
-    // Трек свитча - вдавленный
+    if (isForge) {
+        val trackBorder = if (isDark) Color(0xFF333333) else Color.Black
+        Box(
+            modifier = modifier
+                .width(52.dp)
+                .height(28.dp)
+                .forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 2.dp)
+                .background(if (checked) style.accent.copy(alpha = 0.2f) else cs.surfaceVariant, RectangleShape)
+                .clickable { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) }
+        ) {
+            Box(
+                Modifier
+                    .offset(x = thumbOffset, y = 2.dp)
+                    .size(24.dp)
+                    .background(style.cardBg)
+                    .border(2.dp, trackBorder)
+            )
+        }
+        return
+    }
+
+    // Трек свитча - вдавленный (Biolume)
     Box(
         modifier = modifier
             .width(52.dp)
@@ -265,7 +288,6 @@ fun VlSwitch(
             .clip(RoundedCornerShape(14.dp))
             .clickable { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) }
     ) {
-        // Ползунок - выпуклый
         Box(
             Modifier
                 .offset(x = thumbOffset, y = 2.dp)
@@ -294,27 +316,44 @@ fun VlSegmentedControl(
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
 
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
+    val itemShape = if (isForge) RectangleShape else RoundedCornerShape(12.dp)
+
+    val shadowMod = if (isForge) {
+        Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, shape)
+    } else {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp)
+    }
+
     // Основной трек
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .nmInsetShadow(isDark, cornerRadius = 16.dp)
-            .background(cs.surface.copy(alpha = if(isDark) 0.2f else 0.4f), RoundedCornerShape(16.dp))
-            .padding(4.dp)
+            .then(shadowMod)
+            .background(if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.2f else 0.4f), shape)
+            .padding(if (isForge) 2.dp else 4.dp)
     ) {
         Row(Modifier.fillMaxWidth()) {
             labels.forEachIndexed { i, label ->
                 val isSelected = selectedIndex == i
-                val bgColor by animateColorAsState(if (isSelected) cs.surface else Color.Transparent, tween(250), label = "seg_bg")
-                val textColor by animateColorAsState(if (isSelected) cs.primary else cs.onSurfaceVariant, tween(250), label = "seg_txt")
+                val bgColor by animateColorAsState(if (isSelected) style.cardBg else Color.Transparent, tween(250), label = "seg_bg")
+                val textColor by animateColorAsState(if (isSelected) style.accent else cs.onSurfaceVariant, tween(250), label = "seg_txt")
+
+                val itemShadow = if (isForge && isSelected) {
+                    Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape)
+                } else if (appTheme.isExthruFamily && isSelected && !isForge) {
+                    Modifier.exthruSmallRaisedShadow(isDark)
+                } else Modifier
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .then(if (isSelected && appTheme.isExthruFamily) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
-                        .background(bgColor, RoundedCornerShape(12.dp))
-                        .clip(RoundedCornerShape(12.dp))
+                        .then(itemShadow)
+                        .background(bgColor, itemShape)
+                        .clip(itemShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() }, indication = null
                         ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onSelected(i) }
@@ -326,6 +365,7 @@ fun VlSegmentedControl(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = textColor,
                         fontSize = 14.sp,
+                        fontFamily = monoFamily(style)
                     )
                 }
             }
@@ -345,22 +385,30 @@ fun ExthruIconTray(
     iconColor: Color? = null,
 ) {
     val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
     val color = iconColor ?: if (isError) style.destructive else if (selected) style.accent else cs.onSurfaceVariant
-    val size = if (style.isForge) 36.dp else 38.dp
+    val size = if (isForge) 36.dp else 38.dp
 
-    val bgColor = cs.surface.copy(alpha = if (isDark) 0.5f else 0.7f)
+    val bgColor = if (isForge) style.cardBg else cs.surface.copy(alpha = if (isDark) 0.5f else 0.7f)
+    val shape = if (isForge) RectangleShape else CircleShape
+
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 2.dp)
+    } else {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    }
 
     Box(
         modifier = modifier
             .size(size)
-            .exthruSmallRaisedShadow(isDark)
-            .background(bgColor, CircleShape)
-            .border(1.dp, Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), CircleShape),
+            .then(shadowMod)
+            .background(bgColor, shape)
+            .then(if (isForge) Modifier else Modifier.border(1.dp, Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), shape)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(if (style.isForge) 18.dp else 20.dp))
+        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(if (isForge) 18.dp else 20.dp))
     }
 }
 
@@ -443,8 +491,17 @@ fun VlSettingsSection(
 
         if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
             Column(Modifier.padding(horizontal = 16.dp)) { content() }
+        } else if (isForge) {
+            // Терминальный квадратный контейнер
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 4.dp)
+                    .background(style.cardBg)
+            ) { content() }
         } else {
-            // Glassmorphism Container
+            // Glassmorphism Container (Biolume)
             val hazeState = LocalHazeState.current
             Column(
                 modifier = Modifier
@@ -534,7 +591,7 @@ fun VlSettingsItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
+            .scale(if (style.isForge) 1f else scale)
             .clickable(
                 interactionSource = interactionSource, indication = null,
                 enabled = onClick != null,
@@ -603,6 +660,7 @@ fun VlOptionRow(
     }
 
     val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
     val dotScale by animateFloatAsState(if (selected) 1f else 0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "dot_scale")
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -611,7 +669,7 @@ fun VlOptionRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .scale(scale)
+            .scale(if (isForge) 1f else scale)
             .clickable(
                 interactionSource = interactionSource, indication = null,
                 onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() }
@@ -627,20 +685,38 @@ fun VlOptionRow(
         }
 
         // NmRadio (Чекбокс)
-        Box(
-            modifier = Modifier
-                .size(24.dp)
-                .nmInsetShadow(isDark, cornerRadius = 12.dp)
-                .background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            if (selected || dotScale > 0f) {
-                Box(
-                    modifier = Modifier
-                        .size((12 * dotScale).dp)
-                        .exthruSmallRaisedShadow(isDark)
-                        .background(style.accent, CircleShape)
-                )
+        if (isForge) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape)
+                    .background(style.inputBg),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selected || dotScale > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .size((12 * dotScale).dp)
+                            .background(style.accent)
+                    )
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .nmInsetShadow(isDark, cornerRadius = 12.dp)
+                    .background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (selected || dotScale > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .size((12 * dotScale).dp)
+                            .exthruSmallRaisedShadow(isDark)
+                            .background(style.accent, CircleShape)
+                    )
+                }
             }
         }
     }

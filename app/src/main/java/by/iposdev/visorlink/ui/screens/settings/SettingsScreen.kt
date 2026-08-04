@@ -1,3 +1,4 @@
+// ui/screens/settings/SettingsScreen.kt
 package by.iposdev.visorlink.ui.screens.settings
 
 import android.widget.Toast
@@ -32,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -56,6 +58,7 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
@@ -108,6 +111,8 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
 
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
+    val style = rememberExthruStyle(currentTheme)
+    val isForge = style.isForge
 
     // ── Стелс-режим ──
     val stealthManager = remember { StealthManager(context) }
@@ -176,36 +181,53 @@ fun SettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 if (currentTheme.isExthruFamily) {
-                    val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
-                    TopAppBar(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .hazeChild(
+                    val topBarBg = if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+
+                    val topBarMod = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isForge) Modifier.background(topBarBg)
+                            else Modifier.hazeChild(
                                 state = hazeState,
                                 style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
-                            )
-                            .background(topBarBg),
+                            ).background(topBarBg)
+                        )
+
+                    TopAppBar(
+                        modifier = topBarMod,
                         title = {
                             Text(
                                 text = stringResource(R.string.settings_title),
-                                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontSize = 34.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isForge) FontFamily.Monospace else null
+                                )
                             )
                         },
                         navigationIcon = {
                             val interactionSource = remember { MutableInteractionSource() }
                             val isPressed by interactionSource.collectIsPressedAsState()
                             val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_btn_scale")
-                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                            val shape = if (isForge) RectangleShape else CircleShape
+                            val shadowMod = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+                            } else if (isPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
 
                             Box(
                                 modifier = Modifier
                                     .padding(start = 12.dp, end = 4.dp)
                                     .size(42.dp)
-                                    .scale(scale)
+                                    .scale(if(isForge) 1f else scale)
                                     .then(shadowMod)
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                    .clip(CircleShape)
+                                    .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+                                    .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                    .clip(shape)
                                     .clickable(interactionSource = interactionSource, indication = null) {
                                         haptic.perform(HapticType.CLICK, hapticEnabled)
                                         onNavigateBack()
@@ -236,7 +258,7 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .let { if (currentTheme.isExthruFamily) it.haze(state = hazeState) else it }
+                    .let { if (currentTheme.isExthruFamily && !isForge) it.haze(state = hazeState) else it }
                     .background(scaffoldBg)
             ) {
                 VlAmbientGlow(appTheme = currentTheme)
@@ -270,12 +292,14 @@ fun SettingsScreen(
                                     Text(
                                         text = p.displayName.ifEmpty { p.username },
                                         style = MaterialTheme.typography.titleLarge,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = if (isForge) FontFamily.Monospace else null
                                     )
                                     Text(
                                         text = "@${p.username}",
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.primary
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontFamily = if (isForge) FontFamily.Monospace else null
                                     )
                                 }
                             }
@@ -341,7 +365,7 @@ fun SettingsScreen(
                                 ColorPresetCircle(
                                     preset = preset,
                                     isSelected = currentPreset == preset,
-                                    isExthru = currentTheme.isExthruFamily,
+                                    appTheme = currentTheme,
                                     isDark = isDark,
                                     onClick = {
                                         haptic.perform(HapticType.CLICK, hapticEnabled)
@@ -506,13 +530,16 @@ fun SettingsScreen(
                     }
 
                     // ── About ──
-                    Spacer(Modifier.height(16.dp))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Info, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.width(8.dp))
-                            Text("VisorLink $versionString", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                        }
+                    VlSettingsSection(appTheme = currentTheme, title = "О приложении") {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            icon = Icons.Default.Info,
+                            title = "VisorLink",
+                            subtitle = "Версия $versionString",
+                            index = 0, total = 1,
+                            onClick = null // Отключаем клик, шеврона не будет
+                        )
                     }
 
                     Spacer(Modifier.height(padding.calculateBottomPadding() + 32.dp))
@@ -701,6 +728,7 @@ private fun ProStatusBanner(
     val goldColor = Color(0xFFC5A059)
     val cs = MaterialTheme.colorScheme
     val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
 
     fun formatDate(date: java.util.Date?): String {
         if (date == null) return ""
@@ -779,7 +807,7 @@ private fun ProStatusBanner(
                     VlSurface(
                         appTheme = appTheme,
                         isButton = true,
-                        customRadius = if (style.isForge) 0.dp else 16.dp,
+                        customRadius = if (isForge) 0.dp else 16.dp,
                         overrideColor = style.cardBg,
                         onClick = if (canAfford && !proState.isLoading) {
                             {
@@ -797,7 +825,7 @@ private fun ProStatusBanner(
                                 color = if (canAfford) goldColor else cs.onSurfaceVariant.copy(alpha = 0.5f),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
-                                fontFamily = if (style.isForge) FontFamily.Monospace else null
+                                fontFamily = if (isForge) FontFamily.Monospace else null
                             )
                         }
                     }
@@ -825,7 +853,7 @@ private fun ProStatusBanner(
                         VlSurface(
                             appTheme = appTheme,
                             isButton = true,
-                            customRadius = if (style.isForge) 0.dp else 16.dp,
+                            customRadius = if (isForge) 0.dp else 16.dp,
                             overrideColor = style.cardBg,
                             onClick = if (!proState.isLoading) {
                                 {
@@ -840,7 +868,7 @@ private fun ProStatusBanner(
                                 color = cs.onSurface,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp,
-                                fontFamily = if (style.isForge) FontFamily.Monospace else null
+                                fontFamily = if (isForge) FontFamily.Monospace else null
                             )
                         }
                     }
@@ -1124,10 +1152,19 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
 // ── Utils ─────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun ColorPresetCircle(preset: ColorPreset, isSelected: Boolean, isExthru: Boolean, isDark: Boolean = false, onClick: () -> Unit) {
+private fun ColorPresetCircle(
+    preset: ColorPreset,
+    isSelected: Boolean,
+    appTheme: AppTheme,
+    isDark: Boolean = false,
+    onClick: () -> Unit
+) {
     val isDefault = preset == ColorPreset.DEFAULT
     val color = preset.seedColor ?: Color.Transparent
     val cs = MaterialTheme.colorScheme
+
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1138,13 +1175,17 @@ private fun ColorPresetCircle(preset: ColorPreset, isSelected: Boolean, isExthru
         label = "scale"
     )
 
+    val shape = if (isForge) RectangleShape else CircleShape
+
     val bgModifier = if (isDefault) {
-        Modifier.background(Brush.sweepGradient(listOf(Color.Blue, Color.Magenta, Color.Red, Color(0xFFFFA500), Color.Blue)), CircleShape)
+        Modifier.background(Brush.sweepGradient(listOf(Color.Blue, Color.Magenta, Color.Red, Color(0xFFFFA500), Color.Blue)), shape)
     } else {
-        Modifier.background(color, CircleShape)
+        Modifier.background(color, shape)
     }
 
-    val exthruMod = if (isExthru) {
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+    } else if (appTheme.isExthruFamily) {
         if (isSelected || isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
         else Modifier.exthruSmallRaisedShadow(isDark)
     } else Modifier
@@ -1152,15 +1193,15 @@ private fun ColorPresetCircle(preset: ColorPreset, isSelected: Boolean, isExthru
     Box(
         modifier = Modifier
             .size(44.dp)
-            .scale(scale)
-            .then(exthruMod)
+            .scale(if(isForge) 1f else scale)
+            .then(shadowMod)
             .then(bgModifier)
             .border(
-                width = if (isSelected && !isExthru) 3.dp else 1.dp,
-                color = if (isSelected && !isExthru) cs.onSurface else if (isExthru) Color.White.copy(alpha = if (isDark) 0.05f else 0.3f) else cs.outlineVariant.copy(alpha = 0.3f),
-                shape = CircleShape
+                width = if (isSelected && !appTheme.isExthruFamily) 3.dp else 1.dp,
+                color = if (isSelected && !appTheme.isExthruFamily) cs.onSurface else if (appTheme.isExthruFamily) Color.White.copy(alpha = if (isDark) 0.05f else 0.3f) else cs.outlineVariant.copy(alpha = 0.3f),
+                shape = shape
             )
-            .clip(CircleShape)
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {

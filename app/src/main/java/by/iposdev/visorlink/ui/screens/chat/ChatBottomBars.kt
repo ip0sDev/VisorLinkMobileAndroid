@@ -24,6 +24,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -37,6 +38,7 @@ import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.theme.Biolume
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmDividerTop
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
@@ -83,17 +85,17 @@ fun DynamicChatInputBar(
 
     val style = rememberExthruStyle(if(isExthru) appTheme else AppTheme.BIOLUME)
 
-    val outerShape = RoundedCornerShape(if (isForge) 0.dp else 28.dp)
-    val innerShape = RoundedCornerShape(if (isForge) 0.dp else 20.dp)
+    val outerShape = if (isForge) RectangleShape else RoundedCornerShape(28.dp)
+    val innerShape = if (isForge) RectangleShape else RoundedCornerShape(20.dp)
 
     val outerBg = when {
-        isExthru -> if (isForge) style.inputBg else cs.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.5f)
+        isExthru -> if (isForge) style.cardBg else cs.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.5f)
         isOneUi -> if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar
         else -> cs.surfaceContainerHighest.copy(alpha = 0.85f)
     }
 
     val innerBg = when {
-        isExthru -> if (isForge) cs.surfaceVariant else cs.surface.copy(alpha = if(isDark) 0.35f else 0.6f)
+        isExthru -> if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.35f else 0.6f)
         isOneUi -> if (isDark) OneUiChat.InputBgDark else OneUiChat.InputBg
         else -> cs.surface
     }
@@ -136,6 +138,7 @@ fun DynamicChatInputBar(
 
             Column(
                 modifier = Modifier
+                    .then(if (isForge) Modifier.forgeNeuBrutalism(false, isDark, 3.dp) else Modifier)
                     .clip(outerShape)
                     .then(bgMod)
                     .then(if (isExthru && !isForge) Modifier.border(1.dp, Color.White.copy(0.1f), outerShape) else Modifier)
@@ -153,7 +156,7 @@ fun DynamicChatInputBar(
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.width(3.dp).height(32.dp).background(accentColor, RoundedCornerShape(2.dp)))
+                                Box(Modifier.width(3.dp).height(32.dp).background(accentColor, if(isForge) RectangleShape else RoundedCornerShape(2.dp)))
                                 Spacer(Modifier.width(8.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("@${msg.senderUsername}", style = MaterialTheme.typography.labelSmall, color = accentColor, fontWeight = FontWeight.SemiBold)
@@ -188,19 +191,21 @@ fun DynamicChatInputBar(
                                 Icon(Icons.Default.Delete, "Cancel", tint = style.destructive)
                             }
                             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(8.dp).background(style.destructive.copy(alpha = dotAlpha), CircleShape))
+                                Box(Modifier.size(8.dp).background(style.destructive.copy(alpha = dotAlpha), if(isForge) RectangleShape else CircleShape))
                                 Spacer(Modifier.width(8.dp))
                                 Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold), fontFamily = if(isForge) FontFamily.Monospace else null)
                             }
 
                             val sendScale by animateFloatAsState(if (uiState.isCooldown) 0.9f else 1f, label = "")
+                            val sendShadow = if (isForge) Modifier.forgeNeuBrutalism(uiState.isCooldown, isDark, 3.dp) else Modifier.exthruSmallRaisedShadow(isDark)
+
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .scale(sendScale)
-                                    .then(if (isExthru && !isForge) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
-                                    .background(if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE) accentColor else style.cardBg, CircleShape)
-                                    .clip(CircleShape)
+                                    .scale(if(isForge) 1f else sendScale)
+                                    .then(if (isExthru) sendShadow else Modifier)
+                                    .background(if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE) accentColor else style.cardBg, if(isForge) RectangleShape else CircleShape)
+                                    .clip(if(isForge) RectangleShape else CircleShape)
                                     .clickable(enabled = !uiState.isCooldown) { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSendRecord() },
                                 contentAlignment = Alignment.Center
                             ) {
@@ -232,6 +237,7 @@ fun DynamicChatInputBar(
                                     .clip(innerShape)
                                     .background(innerBg)
                                     .then(if (isExthru && !isForge) Modifier.nmInsetShadow(isDark, cornerRadius = 20.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier)
+                                    .then(if (isForge) Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, innerShape) else Modifier)
                                     .padding(start = 16.dp, end = 4.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.Bottom) {
@@ -293,6 +299,7 @@ fun DynamicChatInputBar(
                 } else {
                     RecordingBar(
                         isExthru      = true,
+                        isForge       = isForge,
                         isDark        = isDark,
                         hapticEnabled = hapticEnabled,
                         onCancel      = onCancelRecord,
@@ -310,6 +317,7 @@ internal fun ExthruChatBottomBar(
     uiState: ChatUiState,
     inputText: String,
     isDark: Boolean = false,
+    isForge: Boolean = false,
     canSendMessage: Boolean,
     canSendMedia: Boolean,
     hapticEnabled: Boolean,
@@ -327,11 +335,11 @@ internal fun ExthruChatBottomBar(
     onClearReply: () -> Unit,
     haptic: HapticHelper,
 ) {
-    val inputShape = RoundedCornerShape(24.dp)
+    val inputShape = if (isForge) RectangleShape else RoundedCornerShape(24.dp)
 
     val barBgBase     = ExthruChat.barBg(isDark)
-    val barBg         = barBgBase.copy(alpha = if (isDark) 0.4f else 0.55f)
-    val inputBg       = ExthruChat.inputBg(isDark).copy(alpha = if (isDark) 0.6f else 0.3f)
+    val barBg         = if (isForge) barBgBase else barBgBase.copy(alpha = if (isDark) 0.4f else 0.55f)
+    val inputBg       = if (isForge) ExthruChat.inputBg(isDark) else ExthruChat.inputBg(isDark).copy(alpha = if (isDark) 0.6f else 0.3f)
     val textPrimary   = ExthruChat.textPrimary(isDark)
     val textHint      = ExthruChat.textHint(isDark)
 
@@ -339,8 +347,8 @@ internal fun ExthruChatBottomBar(
 
     Column(
         modifier = Modifier
-            .nmDividerTop(isDark = isDark)
-            .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = HazeTint(barBg)))
+            .then(if (isForge) Modifier else Modifier.nmDividerTop(isDark = isDark))
+            .then(if (isForge) Modifier.background(barBg) else Modifier.hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = HazeTint(barBg))))
             .navigationBarsPadding()
             .imePadding(),
     ) {
@@ -371,13 +379,15 @@ internal fun ExthruChatBottomBar(
             exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150)),
         ) {
             uiState.replyingTo?.let { msg ->
+                val replyShape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
+                val replyShadow = if (isForge) Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, replyShape) else Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.6f else 0.2f)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 10.dp, vertical = 6.dp)
-                        .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.6f else 0.2f)
-                        .background(ExthruChat.cardBg(isDark).copy(alpha = if (isDark) 0.7f else 0.8f), RoundedCornerShape(16.dp))
-                        .clip(RoundedCornerShape(16.dp))
+                        .then(replyShadow)
+                        .background(if(isForge) ExthruChat.cardBg(isDark) else ExthruChat.cardBg(isDark).copy(alpha = if (isDark) 0.7f else 0.8f), replyShape)
+                        .clip(replyShape)
                 ) {
                     ReplyBanner(message = msg, onDismiss = onClearReply)
                 }
@@ -402,6 +412,7 @@ internal fun ExthruChatBottomBar(
                         InteractiveExthruButton(
                             icon = Icons.Default.AttachFile,
                             isDark = isDark,
+                            isForge = isForge,
                             hapticEnabled = hapticEnabled,
                             enabled = !uiState.isCooldown,
                             onClick = onAttach
@@ -409,12 +420,18 @@ internal fun ExthruChatBottomBar(
                         Spacer(Modifier.width(6.dp))
                     }
 
+                    val inputShadow = if (isForge) {
+                        Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, inputShape)
+                    } else {
+                        Modifier.nmInsetShadow(isDark = isDark, cornerRadius = 24.dp, darkAlpha = if(isDark) 0.7f else 0.35f)
+                    }
+
                     Box(
                         modifier = Modifier
                             .weight(1f)
                             .clip(inputShape)
                             .background(inputBg, inputShape)
-                            .nmInsetShadow(isDark = isDark, cornerRadius = 24.dp, darkAlpha = if(isDark) 0.7f else 0.35f)
+                            .then(inputShadow)
                             .padding(end = 4.dp),
                         contentAlignment = Alignment.CenterStart,
                     ) {
@@ -427,10 +444,10 @@ internal fun ExthruChatBottomBar(
                                     .focusRequester(focusRequester)
                                     .padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
                                 maxLines  = 5,
-                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp),
+                                textStyle = TextStyle(color = textPrimary, fontSize = 15.sp, fontFamily = if(isForge) FontFamily.Monospace else null),
                                 decorationBox = { inner ->
                                     if (inputText.isEmpty()) {
-                                        Text(stringResource(R.string.chat_input_placeholder), fontSize = 15.sp, color = textHint)
+                                        Text(stringResource(R.string.chat_input_placeholder), fontSize = 15.sp, color = textHint, fontFamily = if(isForge) FontFamily.Monospace else null)
                                     }
                                     inner()
                                 },
@@ -446,14 +463,22 @@ internal fun ExthruChatBottomBar(
                             val intEmoji = remember { MutableInteractionSource() }
                             val isEmojiPressed by intEmoji.collectIsPressedAsState()
                             val emojiScale by animateFloatAsState(if (isEmojiPressed) 0.85f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "")
-                            val emojiShadow = if (isEmojiPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp) else Modifier
+
+                            val emojiShadow = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isEmojiPressed, isDark, offsetDp = 2.dp)
+                            } else if (isEmojiPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 18.dp)
+                            } else Modifier
+
+                            val emojiShape = if (isForge) RectangleShape else CircleShape
 
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .scale(emojiScale)
+                                    .scale(if(isForge) 1f else emojiScale)
                                     .then(emojiShadow)
-                                    .clip(CircleShape)
+                                    .background(if(isForge) ExthruChat.cardBg(isDark) else Color.Transparent, emojiShape)
+                                    .clip(emojiShape)
                                     .clickable(interactionSource = intEmoji, indication = null, enabled = !uiState.isCooldown) {
                                         haptic.perform(HapticType.CLICK, hapticEnabled)
                                         onStickerClick()
@@ -483,6 +508,7 @@ internal fun ExthruChatBottomBar(
                             InteractiveExthruSendButton(
                                 enabled = !uiState.isCooldown,
                                 isDark = isDark,
+                                isForge = isForge,
                                 hapticEnabled = hapticEnabled,
                                 onClick = onSend
                             )
@@ -490,6 +516,7 @@ internal fun ExthruChatBottomBar(
                             if (canSendMedia) {
                                 InteractiveExthruMicButton(
                                     isDark = isDark,
+                                    isForge = isForge,
                                     enabled = !uiState.isCooldown,
                                     hapticEnabled = hapticEnabled,
                                     onRequestAudioPerm = onRequestAudioPerm,
@@ -502,6 +529,7 @@ internal fun ExthruChatBottomBar(
                 } else {
                     RecordingBar(
                         isExthru      = true,
+                        isForge       = isForge,
                         isDark        = isDark,
                         hapticEnabled = hapticEnabled,
                         onCancel      = onCancel,
@@ -517,6 +545,7 @@ internal fun ExthruChatBottomBar(
 private fun InteractiveExthruButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     isDark: Boolean,
+    isForge: Boolean,
     enabled: Boolean,
     hapticEnabled: Boolean,
     tint: Color? = null,
@@ -532,20 +561,23 @@ private fun InteractiveExthruButton(
         label = "btn_scale"
     )
 
-    val shadowMod = if (isPressed) {
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, offsetDp = 3.dp)
+    } else if (isPressed) {
         Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
     } else {
         Modifier.exthruSmallRaisedShadow(isDark)
     }
+    val shape = if (isForge) RectangleShape else CircleShape
 
     Box(
         modifier = Modifier
             .size(44.dp)
-            .scale(scale)
+            .scale(if(isForge) 1f else scale)
             .then(shadowMod)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-            .clip(CircleShape)
+            .background(if (isForge) ExthruChat.cardBg(isDark) else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+            .then(if(isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
                 haptic.perform(HapticType.CLICK, hapticEnabled)
                 onClick()
@@ -560,6 +592,7 @@ private fun InteractiveExthruButton(
 private fun InteractiveExthruSendButton(
     enabled: Boolean,
     isDark: Boolean,
+    isForge: Boolean,
     hapticEnabled: Boolean,
     onClick: () -> Unit,
 ) {
@@ -573,24 +606,28 @@ private fun InteractiveExthruSendButton(
         label = "send_scale"
     )
 
-    val shadowMod = if (isPressed) {
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, offsetDp = 3.dp)
+    } else if (isPressed) {
         Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.8f else 0.5f)
     } else {
         Modifier.exthruSmallRaisedShadow(isDark)
     }
 
+    val shape = if (isForge) RectangleShape else CircleShape
+
     Box(
         modifier = Modifier
             .size(44.dp)
-            .scale(scale)
+            .scale(if(isForge) 1f else scale)
             .then(shadowMod)
             .background(
                 brush = if (enabled) Brush.radialGradient(listOf(Biolume.TealLight, Biolume.TealPulse))
                 else Brush.radialGradient(listOf(Biolume.TealLight.copy(0.5f), Biolume.TealPulse.copy(0.5f))),
-                shape = CircleShape,
+                shape = shape,
             )
-            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = 0.2f), CircleShape)
-            .clip(CircleShape)
+            .then(if(isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = 0.2f), shape))
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
                 haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
                 onClick()
@@ -605,6 +642,7 @@ private fun InteractiveExthruSendButton(
 @Composable
 private fun InteractiveExthruMicButton(
     isDark: Boolean,
+    isForge: Boolean,
     enabled: Boolean,
     hapticEnabled: Boolean,
     audioPermission: PermissionState,
@@ -621,16 +659,20 @@ private fun InteractiveExthruMicButton(
         label = "mic_scale"
     )
 
-    val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, offsetDp = 3.dp)
+    } else if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+    val shape = if (isForge) RectangleShape else CircleShape
 
     Box(
         modifier = Modifier
             .size(44.dp)
-            .scale(scale)
+            .scale(if (isForge) 1f else scale)
             .then(shadowMod)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-            .clip(CircleShape)
+            .background(if (isForge) ExthruChat.cardBg(isDark) else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+            .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(interactionSource = interactionSource, indication = null, enabled = enabled) {
                 if (audioPermission.status.isGranted) {
                     haptic.perform(HapticType.LONG_PRESS, hapticEnabled)

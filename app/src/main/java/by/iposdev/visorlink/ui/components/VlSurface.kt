@@ -20,10 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -33,7 +30,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.ui.theme.accentGlowShadow
-import by.iposdev.visorlink.ui.theme.forgeHardShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.ui.theme.nmRaisedShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
@@ -107,17 +104,17 @@ fun VlSurface(
             val style = rememberExthruStyle(appTheme)
             val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg
 
+            val shadowMod = Modifier.forgeNeuBrutalism(
+                isPressed = isPressed,
+                isDark = isDark,
+                offsetDp = if (isButton) 3.dp else 4.dp
+            )
+
             Box(
                 modifier = modifier
-                    .then(
-                        if (!showInset) Modifier.forgeHardShadow(
-                            color = style.darkShadow,
-                            offset = if (isButton) 3.dp else 4.dp,
-                        ) else Modifier
-                    )
-                    .scale(scale)
+                    // Не рисуем тень для полей ввода (чтобы они не выпирали, а были плоскими)
+                    .then(if (!isInput) shadowMod else Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape))
                     .background(bg, shape)
-                    .forgeBevelBorder(isDark = isDark, inset = showInset)
                     .then(clickModifier)
                     .padding(contentPadding),
                 contentAlignment = Alignment.Center,
@@ -183,22 +180,4 @@ fun VlSurface(
             }
         }
     }
-}
-
-private fun Modifier.forgeBevelBorder(
-    isDark: Boolean,
-    inset: Boolean,
-    width: Dp = 2.dp,
-): Modifier = this.drawBehind {
-    val w = width.toPx()
-    val light = if (isDark) Color.White.copy(alpha = 0.24f) else Color.White
-    val dark = if (isDark) Color.Black.copy(alpha = 0.87f) else Color.Black.copy(alpha = 0.38f)
-
-    val topLeft = if (inset) dark else light
-    val bottomRight = if (inset) light else dark
-
-    drawRect(color = topLeft, topLeft = Offset(0f, 0f), size = Size(size.width, w))
-    drawRect(color = topLeft, topLeft = Offset(0f, 0f), size = Size(w, size.height))
-    drawRect(color = bottomRight, topLeft = Offset(0f, size.height - w), size = Size(size.width, w))
-    drawRect(color = bottomRight, topLeft = Offset(size.width - w, 0f), size = Size(w, size.height))
 }

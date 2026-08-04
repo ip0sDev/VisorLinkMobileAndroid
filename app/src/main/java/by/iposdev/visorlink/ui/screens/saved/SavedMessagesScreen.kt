@@ -1,3 +1,4 @@
+// ui/screens/saved/SavedMessagesScreen.kt
 package by.iposdev.visorlink.ui.screens.saved
 
 import android.Manifest
@@ -28,7 +29,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
@@ -56,36 +56,46 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import java.io.File
 
-private fun SavedMessage.toMessage(currentUid: String, decryptedBytes: ByteArray? = null): Message = Message(
-    id         = id,
-    senderId   = currentUid,
-    senderUsername = "",
-    type       = type,
-    text       = text,
-    url        = url,
-    cdnMediaId = cdnMediaId,
-    localBytes = decryptedBytes ?: localBytes,
-    fileName   = fileName,
-    duration   = duration,
-    caption    = caption,
-    images     = emptyList(),
-    spoiler    = spoiler,
-    stickerId  = stickerId,
-    packId     = packId,
-    packName   = packName,
-    packEmoji  = packEmoji,
-    deleted    = deleted,
-    deletedAt  = deletedAt,
-    createdAt  = createdAt,
-    forwardFrom = forwardFrom,
-    tg_forwarded = tg_forwarded,
-    tg_forwarded_from = tg_forwarded_from,
-    tg_forwarded_from_fallback = tg_forwarded_from_fallback,
-    isUnofficialClient = isUnofficialClient,
-    readBy     = emptyList(),
-    reactions  = emptyList()
-)
+private fun SavedMessage.toMessage(currentUid: String, decryptedFile: File? = null): Message {
+    val resolvedUrl = when {
+        encrypted == true && decryptedFile != null -> Uri.fromFile(decryptedFile).toString()
+        encrypted == true -> null // Скрываем URL, пока не расшифровано
+        else -> url
+    }
+
+    return Message(
+        id         = id,
+        senderId   = currentUid,
+        senderUsername = "",
+        type       = type,
+        text       = text,
+        url        = resolvedUrl,
+        cdnMediaId = if (encrypted == true && decryptedFile == null) null else cdnMediaId,
+        localFile  = decryptedFile,  // ИСПРАВЛЕНО ЗДЕСЬ: у SavedMessage нет localFile
+        localBytes = localBytes,     // Возвращаем старое поле для обратной совместимости
+        fileName   = fileName,
+        duration   = duration,
+        caption    = caption,
+        images     = emptyList(),
+        spoiler    = spoiler,
+        stickerId  = stickerId,
+        packId     = packId,
+        packName   = packName,
+        packEmoji  = packEmoji,
+        deleted    = deleted,
+        deletedAt  = deletedAt,
+        createdAt  = createdAt,
+        forwardFrom = forwardFrom,
+        tg_forwarded = tg_forwarded,
+        tg_forwarded_from = tg_forwarded_from,
+        tg_forwarded_from_fallback = tg_forwarded_from_fallback,
+        isUnofficialClient = isUnofficialClient,
+        readBy     = emptyList(),
+        reactions  = emptyList()
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -240,15 +250,18 @@ fun SavedMessagesScreen(
                                 contentPadding = PaddingValues(vertical = 8.dp)
                             ) {
                                 items(items = uiState.messages.asReversed(), key = { it.id }) { saved ->
-                                    var decryptedBytes by remember(saved.id) { mutableStateOf<ByteArray?>(null) }
+                                    var decryptedFile by remember(saved.id) { mutableStateOf<File?>(null) }
 
                                     LaunchedEffect(saved) {
-                                        if (saved.encrypted == true && saved.cdnMediaId != null && decryptedBytes == null) {
-                                            decryptedBytes = viewModel.decryptMediaToCache(saved)
+                                        if (saved.encrypted == true && saved.cdnMediaId != null && decryptedFile == null) {
+                                            val file = viewModel.getDecryptedFile(saved)
+                                            if (file != null) {
+                                                decryptedFile = file
+                                            }
                                         }
                                     }
 
-                                    val msg = saved.toMessage(viewModel.currentUid, decryptedBytes)
+                                    val msg = saved.toMessage(viewModel.currentUid, decryptedFile)
 
                                     SwipeableMessage(
                                         message       = msg,
@@ -476,7 +489,7 @@ private fun SavedBottomBar(
     } else {
         when {
             isExthru -> ExthruChatBottomBar(
-                uiState = syncedState, inputText = inputText, isDark = isDark, canSendMessage = true, canSendMedia = true,
+                uiState = syncedState, inputText = inputText, isDark = isDark, isForge = appTheme == AppTheme.FORGE, canSendMessage = true, canSendMedia = true,
                 hapticEnabled = hapticEnabled, showStickerSheet = false, audioPermission = audioPermission, focusRequester = focusRequester,
                 onInputChange = onTextChange, onAttach = onPickImage, onStickerClick = { }, onSend = onSend,
                 onStartRecord = onStartRecord, onRequestAudioPerm = onRequestAudioPerm, onCancel = onCancelRecord,

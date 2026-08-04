@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,16 +27,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -60,8 +64,12 @@ fun ProfileScreen(
 
     val currentTheme by themeViewModel.appTheme.collectAsState()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
-    val isExthru = currentTheme == AppTheme.EXTHRU
+
+    val isExthru = currentTheme.isExthruFamily
+    val style = rememberExthruStyle(currentTheme)
+    val isForge = style.isForge
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
+
     val haptic = rememberHaptic()
 
     LaunchedEffect(uiState.successMessage) {
@@ -75,8 +83,8 @@ fun ProfileScreen(
         containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
         topBar = {
             Surface(
-                color = if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent,
-                modifier = if (isExthru) Modifier.nmDividerBottom(isDark) else Modifier
+                color = if (isForge) style.cardBg else if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent,
+                modifier = if (isExthru && !isForge) Modifier.nmDividerBottom(isDark) else Modifier
             ) {
                 TopAppBar(
                     title = {
@@ -84,22 +92,40 @@ fun ProfileScreen(
                         else stringResource(R.string.profile_title)
                         if (isExthru) {
                             Text(
-                                text = titleText,
+                                text = if (isForge) "> ${titleText.uppercase()}_" else titleText,
                                 style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontSize = 34.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                    fontSize = if (isForge) 28.sp else 34.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isForge) FontFamily.Monospace else null
+                                ),
+                                color = if (isForge) style.accent else Color.Unspecified
                             )
                         } else {
                             Text(titleText)
                         }
                     },
                     navigationIcon = {
+                        val interactionSource = remember { MutableInteractionSource() }
+                        val isPressed by interactionSource.collectIsPressedAsState()
+                        val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "back_scale")
+
+                        val shape = if (isForge) RectangleShape else CircleShape
+                        val shadowMod = if (isForge) {
+                            Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+                        } else if (isPressed) {
+                            Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                        } else {
+                            Modifier.exthruSmallRaisedShadow(isDark)
+                        }
+
                         val btnModifier = if (isExthru) Modifier
                             .padding(start = 12.dp, end = 4.dp)
                             .size(42.dp)
-                            .exthruSmallRaisedShadow(isDark)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape)
+                            .scale(if(isForge) 1f else scale)
+                            .then(shadowMod)
+                            .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface, shape)
+                            .then(if(isForge) Modifier else Modifier.border(1.dp, if(isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                            .clip(shape)
                         else Modifier
 
                         IconButton(
@@ -107,45 +133,88 @@ fun ProfileScreen(
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
                             },
-                            modifier = btnModifier
+                            modifier = btnModifier,
+                            interactionSource = interactionSource
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 stringResource(R.string.action_back),
-                                modifier = if (isExthru) Modifier.size(20.dp) else Modifier
+                                modifier = if (isExthru) Modifier.size(20.dp) else Modifier,
+                                tint = if (isExthru) MaterialTheme.colorScheme.primary else LocalContentColor.current
                             )
                         }
                     },
                     actions = {
-                        val btnModifier = if (isExthru) Modifier
-                            .size(42.dp)
-                            .exthruSmallRaisedShadow(isDark)
-                            .background(MaterialTheme.colorScheme.surface, CircleShape)
-                        else Modifier
-
                         if (!uiState.isEditing) {
+                            val intEdit = remember { MutableInteractionSource() }
+                            val isEditPressed by intEdit.collectIsPressedAsState()
+                            val editScale by animateFloatAsState(if (isEditPressed) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "edit_scale")
+
+                            val shape = if (isForge) RectangleShape else CircleShape
+                            val editShadow = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isEditPressed, isDark, 3.dp)
+                            } else if (isEditPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
+
+                            val editMod = if (isExthru) Modifier
+                                .size(42.dp)
+                                .scale(if(isForge) 1f else editScale)
+                                .then(editShadow)
+                                .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface, shape)
+                                .then(if(isForge) Modifier else Modifier.border(1.dp, if(isEditPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                .clip(shape)
+                            else Modifier
+
                             IconButton(
                                 onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
                                     viewModel.startEditing()
                                 },
-                                modifier = btnModifier
+                                modifier = editMod,
+                                interactionSource = intEdit
                             ) {
                                 Icon(
                                     Icons.Default.Edit,
                                     stringResource(R.string.action_edit),
-                                    modifier = if (isExthru) Modifier.size(20.dp) else Modifier
+                                    modifier = if (isExthru) Modifier.size(20.dp) else Modifier,
+                                    tint = if (isExthru) MaterialTheme.colorScheme.primary else LocalContentColor.current
                                 )
                             }
 
                             if (isExthru) Spacer(Modifier.width(10.dp))
+
+                            val intLogout = remember { MutableInteractionSource() }
+                            val isLogoutPressed by intLogout.collectIsPressedAsState()
+                            val logoutScale by animateFloatAsState(if (isLogoutPressed) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "logout_scale")
+
+                            val logoutShadow = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isLogoutPressed, isDark, 3.dp)
+                            } else if (isLogoutPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
+
+                            val logoutMod = if (isExthru) Modifier
+                                .then(if(isExthru) Modifier.padding(end = 12.dp) else Modifier)
+                                .size(42.dp)
+                                .scale(if(isForge) 1f else logoutScale)
+                                .then(logoutShadow)
+                                .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface, shape)
+                                .then(if(isForge) Modifier else Modifier.border(1.dp, if(isLogoutPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                .clip(shape)
+                            else Modifier
 
                             IconButton(
                                 onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
                                     showLogout = true
                                 },
-                                modifier = btnModifier.then(if (isExthru) Modifier.padding(end = 12.dp) else Modifier)
+                                modifier = logoutMod,
+                                interactionSource = intLogout
                             ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.Logout,
@@ -160,6 +229,7 @@ fun ProfileScreen(
                                     text = stringResource(R.string.action_save),
                                     isEnabled = !uiState.isLoading,
                                     isDark = isDark,
+                                    isForge = isForge,
                                     modifier = Modifier.padding(end = 16.dp),
                                     onClick = {
                                         haptic.perform(HapticType.CLICK, hapticEnabled)
@@ -191,21 +261,27 @@ fun ProfileScreen(
         ) {
             Spacer(Modifier.height(32.dp))
 
-            // Avatar
-            val avatarModifier = if (isExthru) {
+            // ── Avatar ──
+            val avatarShape = if (isForge) RectangleShape else CircleShape
+            val avatarModifier = if (isForge) {
+                Modifier
+                    .size(120.dp)
+                    .forgeNeuBrutalism(false, isDark, 6.dp)
+                    .background(style.inputBg, avatarShape)
+            } else if (isExthru) {
                 Modifier
                     .size(110.dp)
                     .exthruSmallRaisedShadow(isDark)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, CircleShape)
-                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant, avatarShape)
+                    .clip(avatarShape)
             } else {
                 Modifier
                     .size(100.dp)
-                    .clip(CircleShape)
+                    .clip(avatarShape)
                     .background(MaterialTheme.colorScheme.primaryContainer)
             }
 
-            Box(Modifier.size(110.dp), contentAlignment = Alignment.BottomEnd) {
+            Box(Modifier.size(120.dp), contentAlignment = Alignment.BottomEnd) {
                 Box(
                     modifier = avatarModifier
                         .then(if (uiState.isEditing)
@@ -215,10 +291,11 @@ fun ProfileScreen(
                 ) {
                     if (!uiState.user?.avatarUrl.isNullOrEmpty()) {
                         AsyncImage(model = uiState.user?.avatarUrl, contentDescription = null,
-                            modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            modifier = Modifier.fillMaxSize().clip(avatarShape), contentScale = ContentScale.Crop)
                     } else {
                         Text(uiState.user?.displayName?.firstOrNull()?.uppercase() ?: "?",
                             style = MaterialTheme.typography.headlineLarge,
+                            fontFamily = if (isForge) FontFamily.Monospace else null,
                             color = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer)
                     }
                 }
@@ -226,38 +303,43 @@ fun ProfileScreen(
                 if (uiState.isEditing) {
                     val cameraBg = if (isExthru) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary
                     val cameraFg = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                    val cameraMod = if (isExthru) {
-                        Modifier.size(36.dp).exthruSmallRaisedShadow(isDark)
+                    val cameraShape = if (isForge) RectangleShape else CircleShape
+
+                    val cameraMod = if (isForge) {
+                        Modifier.size(38.dp).forgeNeuBrutalism(false, isDark, 3.dp).background(cameraBg, cameraShape)
+                    } else if (isExthru) {
+                        Modifier.size(36.dp).exthruSmallRaisedShadow(isDark).background(cameraBg, cameraShape)
                     } else {
-                        Modifier.size(32.dp).border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                        Modifier.size(32.dp).background(cameraBg, cameraShape).border(2.dp, MaterialTheme.colorScheme.surface, cameraShape)
                     }
 
-                    Surface(shape = CircleShape, color = cameraBg, modifier = cameraMod) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.CameraAlt, null,
-                                tint = cameraFg,
-                                modifier = Modifier.size(16.dp))
-                        }
+                    Box(modifier = cameraMod, contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.CameraAlt, null,
+                            tint = cameraFg,
+                            modifier = Modifier.size(16.dp))
                     }
                 }
             }
 
             Spacer(Modifier.height(16.dp))
-            if (uiState.isLoading) { CircularProgressIndicator(Modifier.size(24.dp)); Spacer(Modifier.height(8.dp)) }
+            if (uiState.isLoading) { CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(8.dp)) }
 
             if (!uiState.isEditing) {
                 Text(uiState.user?.displayName ?: "",
                     style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
                     color = if (isExthru) MaterialTheme.colorScheme.onSurface else Color.Unspecified)
 
                 Text("@${uiState.user?.username ?: ""}",
                     style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
                     color = MaterialTheme.colorScheme.primary)
 
                 if (!uiState.user?.bio.isNullOrEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(uiState.user?.bio ?: "",
                         style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = if (isForge) FontFamily.Monospace else null,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
@@ -266,7 +348,7 @@ fun ProfileScreen(
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     verticalArrangement = Arrangement.spacedBy(if (isExthru) 16.dp else 12.dp)) {
 
-                    val tfShape = RoundedCornerShape(16.dp)
+                    val tfShape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
                     val nmColors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Color.Transparent,
                         unfocusedBorderColor = Color.Transparent,
@@ -275,43 +357,52 @@ fun ProfileScreen(
                     )
 
                     val buildModifier: @Composable (Modifier) -> Modifier = { m ->
-                        if (isExthru) {
+                        if (isForge) {
                             m.fillMaxWidth()
-                                .nmInsetShadow(isDark, cornerRadius = 16.dp)
+                                .forgeNeuBrutalism(false, isDark, 3.dp)
+                                .background(style.inputBg, tfShape)
+                        } else if (isExthru) {
+                            m.fillMaxWidth()
+                                .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
                                 .background(MaterialTheme.colorScheme.surface, tfShape)
                         } else m.fillMaxWidth()
                     }
 
+                    val textStyle = if (isForge) LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface) else LocalTextStyle.current
+
                     OutlinedTextField(
                         value = uiState.editDisplayName,
                         onValueChange = viewModel::onDisplayNameChange,
-                        label = { Text(stringResource(R.string.profile_field_display_name)) },
+                        label = { Text(stringResource(R.string.profile_field_display_name), fontFamily = if(isForge) FontFamily.Monospace else null) },
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         singleLine = true,
+                        textStyle = textStyle,
                         modifier = buildModifier(Modifier),
-                        shape = if (isExthru) tfShape else MaterialTheme.shapes.medium,
+                        shape = tfShape,
                         colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
                     )
 
                     OutlinedTextField(
                         value = uiState.editBio, onValueChange = viewModel::onBioChange,
-                        label = { Text(stringResource(R.string.profile_field_bio)) },
+                        label = { Text(stringResource(R.string.profile_field_bio), fontFamily = if(isForge) FontFamily.Monospace else null) },
                         leadingIcon = { Icon(Icons.Default.Info, null) },
-                        supportingText = { Text("${uiState.editBio.length}/160") },
+                        supportingText = { Text("${uiState.editBio.length}/160", fontFamily = if(isForge) FontFamily.Monospace else null) },
                         maxLines = 3,
+                        textStyle = textStyle,
                         modifier = buildModifier(Modifier),
-                        shape = if (isExthru) tfShape else MaterialTheme.shapes.medium,
+                        shape = tfShape,
                         colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
                     )
 
                     OutlinedTextField(
                         value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
-                        label = { Text(stringResource(R.string.profile_field_username)) },
+                        label = { Text(stringResource(R.string.profile_field_username), fontFamily = if(isForge) FontFamily.Monospace else null) },
                         leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
+                        textStyle = textStyle,
                         trailingIcon = {
                             when {
                                 uiState.checkingUsername -> CircularProgressIndicator(
-                                    Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
                                 uiState.usernameAvailable == true -> Icon(
                                     Icons.Default.CheckCircle, null,
                                     tint = MaterialTheme.colorScheme.primary)
@@ -324,7 +415,7 @@ fun ProfileScreen(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         modifier = buildModifier(Modifier),
-                        shape = if (isExthru) tfShape else MaterialTheme.shapes.medium,
+                        shape = tfShape,
                         colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
                     )
 
@@ -334,6 +425,7 @@ fun ProfileScreen(
                         NmButton(
                             text = stringResource(R.string.profile_check_username),
                             isDark = isDark,
+                            isForge = isForge,
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
@@ -359,6 +451,7 @@ fun ProfileScreen(
             title = { Text(stringResource(R.string.dialog_logout_title)) },
             text  = { Text(stringResource(R.string.dialog_logout_body)) },
             containerColor = if (isExthru) MaterialTheme.colorScheme.surface else AlertDialogDefaults.containerColor,
+            shape = if (isForge) RectangleShape else AlertDialogDefaults.shape,
             confirmButton = {
                 TextButton(onClick = {
                     showLogout = false; viewModel.logout(); onLoggedOut()
@@ -376,43 +469,7 @@ fun ProfileScreen(
     }
 }
 
-// ─── Вспомогательные компоненты для Exthru ────────────────────────────────────
-
-@Composable
-private fun NmActionCard(
-    icon: ImageVector,
-    label: String,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, label = "action_scale")
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .scale(scale)
-            .exthruRaisedShadow(isDark)
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
-            .clip(RoundedCornerShape(20.dp))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-    ) {
-        Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-            Spacer(Modifier.width(16.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
+// ─── Вспомогательные компоненты ────────────────────────────────────────────────
 
 @Composable
 private fun NmButton(
@@ -420,29 +477,40 @@ private fun NmButton(
     icon: ImageVector? = null,
     isEnabled: Boolean = true,
     isDark: Boolean,
+    isForge: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed && isEnabled) 0.95f else 1f, label = "btn_scale")
+    val scale by animateFloatAsState(if (isPressed && isEnabled) 0.95f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "btn_scale")
 
     val bgColor = MaterialTheme.colorScheme.surface
     val contentColor = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
+
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed && isEnabled, isDark, 3.dp)
+    } else if (isPressed && isEnabled) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp)
+    } else if (isEnabled) {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    } else Modifier
 
     Box(
         modifier = modifier
-            .scale(scale)
-            .then(if (isEnabled) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
-            .background(bgColor, RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
+            .scale(if(isForge) 1f else scale)
+            .then(shadowMod)
+            .background(bgColor, shape)
+            .then(if(isForge) Modifier else Modifier.border(1.dp, if (isPressed || !isEnabled) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 enabled = isEnabled,
                 onClick = onClick
             )
-            .padding(vertical = 10.dp, horizontal = 16.dp),
+            .padding(vertical = 14.dp, horizontal = 16.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -453,7 +521,7 @@ private fun NmButton(
                 Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
             }
-            Text(text, fontWeight = FontWeight.Bold, color = contentColor)
+            Text(text, fontWeight = FontWeight.Bold, fontFamily = if(isForge) FontFamily.Monospace else null, color = contentColor)
         }
     }
 }

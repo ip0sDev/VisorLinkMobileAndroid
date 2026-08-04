@@ -1,9 +1,7 @@
-// data/repository/SavedMessageRepository.kt
 package by.iposdev.visorlink.data.repository
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -17,7 +15,6 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
 import javax.crypto.SecretKey
 
 class SavedMessagesRepository(
@@ -72,6 +69,8 @@ class SavedMessagesRepository(
 
     suspend fun saveText(uid: String, text: String, key: SecretKey?, forwardFrom: ForwardFrom? = null) {
         val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
+        val userRef = db.collection("users").document(uid) // Ссылка на кулдаун пользователя
+
         val data = buildMap<String, Any?> {
             put("senderId",  uid); put("type", MessageType.TEXT); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
             forwardFrom?.let { put("forwardFrom", it.toMap()) }
@@ -82,44 +81,76 @@ class SavedMessagesRepository(
                 put("text", text)
             }
         }
-        msgRef.set(data).await()
+
+        // Отправляем батчем (вместе с кулдауном), чтобы пройти правила безопасности Firestore
+        val batch = db.batch()
+        batch.set(msgRef, data)
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
     }
 
     suspend fun saveImage(uid: String, uri: Uri, caption: String? = null, key: SecretKey? = null, isSpoiler: Boolean = false, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "image.jpg"}"
-        val bytes = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@withContext
-        val (uploadBytes, ivStr) = if (key != null) {
-            val (encBytes, iv) = encryptBytes(bytes, key)
-            encBytes to iv
-        } else {
-            bytes to null
-        }
-        val tempFile = File(context.cacheDir, fileName).apply { writeBytes(uploadBytes) }
-        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = true)
-        tempFile.delete()
+        val tempOriginalFile = File(context.cacheDir, "orig_$fileName")
+        val tempUploadFile = File(context.cacheDir, "upload_$fileName")
 
-        saveMediaMeta(uid, MessageType.IMAGE, mediaId, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, ivStr)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            tempOriginalFile.outputStream().use { output -> input.copyTo(output) }
+        }
+
+        val fileIv: String?
+        val fileToUpload: File
+
+        if (key != null) {
+            fileIv = encryptFile(tempOriginalFile, tempUploadFile, key)
+            fileToUpload = tempUploadFile
+        } else {
+            fileIv = null
+            fileToUpload = tempOriginalFile
+        }
+
+        val mediaId = CdnService.uploadFile(fileToUpload, "image/jpeg", isVault = true)
+
+        tempOriginalFile.delete()
+        tempUploadFile.delete()
+
+        saveMediaMeta(uid, MessageType.IMAGE, mediaId, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, fileIv)
     }
 
     suspend fun saveVoice(uid: String, uri: Uri, durationSec: Int, key: SecretKey? = null, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
-        val bytes = context.contentResolver.openInputStream(uri)?.readBytes() ?: return@withContext
-        val (uploadBytes, ivStr) = if (key != null) {
-            val (encBytes, iv) = encryptBytes(bytes, key)
-            encBytes to iv
-        } else {
-            bytes to null
-        }
-        val tempFile = File(context.cacheDir, "voice_${System.currentTimeMillis()}.webm").apply { writeBytes(uploadBytes) }
-        val mediaId = CdnService.uploadFile(tempFile, "audio/webm", isVault = true)
-        tempFile.delete()
+        val fileName = "voice_${System.currentTimeMillis()}.webm"
+        val tempOriginalFile = File(context.cacheDir, "orig_$fileName")
+        val tempUploadFile = File(context.cacheDir, "upload_$fileName")
 
-        saveMediaMeta(uid, MessageType.VOICE, mediaId, null, durationSec, null, emptyList(), null, null, null, null, false, forwardFrom, key, ivStr)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            tempOriginalFile.outputStream().use { output -> input.copyTo(output) }
+        }
+
+        val fileIv: String?
+        val fileToUpload: File
+
+        if (key != null) {
+            fileIv = encryptFile(tempOriginalFile, tempUploadFile, key)
+            fileToUpload = tempUploadFile
+        } else {
+            fileIv = null
+            fileToUpload = tempOriginalFile
+        }
+
+        val mediaId = CdnService.uploadFile(fileToUpload, "audio/webm", isVault = true)
+
+        tempOriginalFile.delete()
+        tempUploadFile.delete()
+
+        saveMediaMeta(uid, MessageType.VOICE, mediaId, null, durationSec, null, emptyList(), null, null, null, null, false, forwardFrom, key, fileIv)
     }
 
     private suspend fun saveMediaMeta(
         uid: String, type: String, cdnMediaId: String, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?
     ) {
         val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
+        val userRef = db.collection("users").document(uid) // Ссылка на кулдаун пользователя
+
         val data = buildMap<String, Any?> {
             put("senderId", uid); put("type", type); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
             put("cdnMediaId", cdnMediaId)
@@ -133,12 +164,11 @@ class SavedMessagesRepository(
             if (images.isNotEmpty()) put("images", images.map { it.toMap() })
             forwardFrom?.let { put("forwardFrom", it.toMap()) }
 
-            // Если шифровали сам файл
             if (fileIv != null) {
                 put("encrypted", true)
                 put("iv", fileIv)
             }
-            // Шифруем caption
+
             if (!caption.isNullOrBlank()) {
                 if (key != null) {
                     val (ct, iv) = encryptText(caption, key)
@@ -149,7 +179,36 @@ class SavedMessagesRepository(
                 }
             }
         }
-        msgRef.set(data).await()
+
+        // Отправляем батчем (вместе с кулдауном), чтобы пройти правила безопасности Firestore
+        val batch = db.batch()
+        batch.set(msgRef, data)
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
+    }
+
+    suspend fun getDecryptedMediaFile(message: SavedMessage, key: SecretKey?): File? = withContext(Dispatchers.IO) {
+        if (message.encrypted != true || key == null || message.cdnMediaId == null || message.iv == null) return@withContext null
+
+        val decryptedFile = File(context.cacheDir, "decrypted_${message.id}_${message.cdnMediaId}")
+
+        if (decryptedFile.exists() && decryptedFile.length() > 0) {
+            return@withContext decryptedFile
+        }
+
+        try {
+            val url = CdnService.getFileUrl(message.cdnMediaId)
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 15000
+            connection.readTimeout = 30000
+
+            decryptStreamToFile(connection.inputStream, decryptedFile, message.iv, key)
+
+            decryptedFile
+        } catch (e: Exception) {
+            decryptedFile.delete()
+            null
+        }
     }
 
     suspend fun deleteMessage(uid: String, messageId: String) {

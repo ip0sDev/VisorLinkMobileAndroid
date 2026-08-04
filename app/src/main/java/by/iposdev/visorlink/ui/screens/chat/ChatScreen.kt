@@ -36,7 +36,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
@@ -44,6 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -146,7 +149,8 @@ fun ChatScreen(
     val appTheme by themeVm.appTheme.collectAsState()
     val dynamicInput by themeVm.dynamicChatInput.collectAsState()
     val isOneUi  = appTheme == AppTheme.ONE_UI
-    val isExthru = appTheme == AppTheme.EXTHRU || appTheme == AppTheme.BIOLUME
+    val isExthru = appTheme.isExthruFamily
+    val isForge  = appTheme == AppTheme.FORGE
     val isDark   = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     val useGestureMenu = isExthru
@@ -210,7 +214,7 @@ fun ChatScreen(
                 topBar = {
                     if (isExthru) {
                         ExthruChatTopBar(
-                            uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark,
+                            uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark, isForge = isForge,
                             canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
                             hapticEnabled = hapticEnabled,
                             onWallpaperClick = { showWallpaperSheet = true },
@@ -260,7 +264,7 @@ fun ChatScreen(
                     } else {
                         if (isExthru) {
                             ExthruChatBottomBar(
-                                uiState = uiState, inputText = inputText, isDark = isDark,
+                                uiState = uiState, inputText = inputText, isDark = isDark, isForge = isForge,
                                 canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                                 hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                                 audioPermission = audioPermission, focusRequester = focusRequester,
@@ -322,7 +326,7 @@ fun ChatScreen(
                     }
 
                     if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
-                        EmptyChatPlaceholder(modifier = Modifier.fillMaxSize(), isExthru = isExthru, isDark = isDark)
+                        EmptyChatPlaceholder(modifier = Modifier.fillMaxSize(), isExthru = isExthru, isForge = isForge, isDark = isDark)
                     } else {
                         val listBg = when {
                             uiState.wallpaperUrl != null -> Modifier
@@ -348,7 +352,6 @@ fun ChatScreen(
                                     }
                                 }
                             ) { index, item ->
-                                // ИСПРАВЛЕНИЕ ПАГИНАЦИИ: Железобетонный триггер в рендере списка
                                 if (index >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {
                                     LaunchedEffect(index) {
                                         viewModel.loadMore()
@@ -357,7 +360,7 @@ fun ChatScreen(
 
                                 when (item) {
                                     is MessageListItem.DateHeader -> DateSeparator(
-                                        item.label, isOneUi, isExthru, isDark, uiState.wallpaperUrl != null)
+                                        item.label, isOneUi, isExthru, isForge, isDark, uiState.wallpaperUrl != null)
                                     is MessageListItem.MessageItem -> {
                                         val isMine = item.message.senderId == viewModel.currentUid
                                         SwipeableMessage(
@@ -375,7 +378,7 @@ fun ChatScreen(
                                                 chatType = uiState.chatType, hapticEnabled = hapticEnabled,
                                                 showSenderName = uiState.chatType != ChatType.DIRECT,
                                                 voicePlayback = uiState.voicePlayback,
-                                                isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
+                                                isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
                                                 hasWallpaper = uiState.wallpaperUrl != null,
                                                 onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
                                                 onSeekVoice = { viewModel.seekVoice(it) },
@@ -432,9 +435,10 @@ fun ChatScreen(
                                 else     -> MaterialTheme.colorScheme.primary
                             }
                             Surface(
-                                shape = CircleShape,
+                                shape = if (isForge) RectangleShape else CircleShape,
                                 color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
-                                shadowElevation = 4.dp, modifier = Modifier.size(36.dp),
+                                shadowElevation = if (isForge) 0.dp else 4.dp, modifier = Modifier.size(36.dp),
+                                border = if (isForge) androidx.compose.foundation.BorderStroke(2.dp, if(isDark) Color(0xFF333333) else Color.Black) else null
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = indicatorColor)
@@ -454,17 +458,25 @@ fun ChatScreen(
                             val interactionSource = remember { MutableInteractionSource() }
                             val isPressed by interactionSource.collectIsPressedAsState()
                             val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "fab_scale")
-                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if(isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+                            val shape = if (isForge) RectangleShape else CircleShape
+
+                            val shadowMod = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isPressed, isDark, 4.dp)
+                            } else if (isPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
 
                             Box {
                                 Box(
                                     modifier = Modifier
                                         .size(44.dp)
-                                        .scale(scale)
+                                        .scale(if(isForge) 1f else scale)
                                         .then(shadowMod)
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                        .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                        .clip(CircleShape)
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+                                        .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                        .clip(shape)
                                         .clickable(interactionSource = interactionSource, indication = null) {
                                             scope.launch { listState.animateScrollToItem(0) }
                                         },
@@ -476,7 +488,7 @@ fun ChatScreen(
                                     Box(
                                         modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
                                             .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                            .background(Color.Red, CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
+                                            .background(Color.Red, if (isForge) RectangleShape else CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
@@ -548,7 +560,7 @@ fun ChatScreen(
                         }
                     },
                     onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it, menuData.message.type) } },
-                    onForward = null, // В разработке (вызов ForwardPickerDialog)
+                    onForward = null, // В разработке
                     onReact = { emoji ->
                         viewModel.toggleReaction(menuData.message.id, emoji, menuData.message.parsedReactions)
                     }
@@ -562,6 +574,7 @@ fun ChatScreen(
             hasWallpaper = uiState.wallpaperUrl != null,
             isGroupOrChannel = uiState.chatType != ChatType.DIRECT,
             isExthru = isExthru,
+            isForge = isForge,
             isDark = isDark,
             onDismiss = { showWallpaperSheet = false },
             onPickWallpaper = { showWallpaperSheet = false; wallpaperPicker.launch("image/*") },
@@ -572,7 +585,7 @@ fun ChatScreen(
     if (uiState.showAlbumPreview) {
         AlbumPreviewSheet(
             images = uiState.albumDraft, caption = uiState.albumCaption,
-            isExthru = isExthru, isDark = isDark,
+            isExthru = isExthru, isForge = isForge, isDark = isDark,
             hapticEnabled = hapticEnabled,
             onSpoilerToggle = { viewModel.onAlbumSpoilerToggle(it) },
             onCaptionChange = { viewModel.onAlbumCaptionChange(it) },
@@ -611,6 +624,7 @@ fun ChatScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             },
+            shape = if (isForge) RectangleShape else AlertDialogDefaults.shape
         )
     }
 
@@ -631,6 +645,7 @@ fun ChatScreen(
                     Text(stringResource(R.string.action_cancel))
                 }
             },
+            shape = if (isForge) RectangleShape else AlertDialogDefaults.shape
         )
     }
 
@@ -648,7 +663,7 @@ fun ChatScreen(
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-//  Вспомогательные Bottom Sheets для ChatScreen (без изменений)
+//  Вспомогательные Bottom Sheets для ChatScreen
 // ──────────────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -657,6 +672,7 @@ private fun WallpaperBottomSheet(
     hasWallpaper: Boolean,
     isGroupOrChannel: Boolean,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     onDismiss: () -> Unit,
     onPickWallpaper: () -> Unit,
@@ -665,7 +681,8 @@ private fun WallpaperBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        shape = if (isForge) RectangleShape else BottomSheetDefaults.ExpandedShape
     ) {
         Column(
             modifier = Modifier
@@ -688,11 +705,11 @@ private fun WallpaperBottomSheet(
                 )
             }
 
-            val itemMod = if (isExthru) Modifier
-                .fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)
-                .nmInsetShadow(isDark, cornerRadius = 16.dp).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                .clip(RoundedCornerShape(16.dp))
-            else Modifier
+            val itemMod = if (isForge) {
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape).background(MaterialTheme.colorScheme.surface)
+            } else if (isExthru) {
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).nmInsetShadow(isDark, cornerRadius = 16.dp).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+            } else Modifier
 
             ListItem(
                 headlineContent = { Text("Выбрать из галереи") },
@@ -719,6 +736,7 @@ private fun AlbumPreviewSheet(
     images: List<AlbumImageLocal>,
     caption: String,
     isExthru: Boolean,
+    isForge: Boolean,
     isDark: Boolean,
     hapticEnabled: Boolean,
     onSpoilerToggle: (Int) -> Unit,
@@ -732,7 +750,8 @@ private fun AlbumPreviewSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = MaterialTheme.colorScheme.surface
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = if (isForge) RectangleShape else BottomSheetDefaults.ExpandedShape
     ) {
         Column(
             modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
@@ -769,6 +788,7 @@ private fun AlbumPreviewSheet(
                     AlbumThumbnailCell(
                         uri = item.uri,
                         spoiler = item.spoiler,
+                        isForge = isForge,
                         onToggleSpoiler = { haptic.perform(HapticType.SELECTION, hapticEnabled); onSpoilerToggle(index) }
                     )
                 }
@@ -776,8 +796,10 @@ private fun AlbumPreviewSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            val tfShape = RoundedCornerShape(16.dp)
-            val tfModifier = if (isExthru) {
+            val tfShape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
+            val tfModifier = if (isForge) {
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).forgeNeuBrutalism(false, isDark, 2.dp).background(MaterialTheme.colorScheme.surface)
+            } else if (isExthru) {
                 Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
                     .background(MaterialTheme.colorScheme.surface, tfShape)
@@ -811,10 +833,11 @@ private fun AlbumPreviewSheet(
             val isPressed by interactionSource.collectIsPressedAsState()
             val scale by animateFloatAsState(if (isPressed && images.isNotEmpty()) 0.95f else 1f, spring(dampingRatio = 0.5f), label = "btn_scale")
 
+            val btnShape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
             val btnMod = if (isExthru) {
-                val shadow = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.8f else 0.5f) else Modifier.exthruSmallRaisedShadow(isDark)
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(52.dp).scale(scale).then(shadow)
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp)).clip(RoundedCornerShape(16.dp))
+                val shadow = if (isForge) Modifier.forgeNeuBrutalism(isPressed && images.isNotEmpty(), isDark, 4.dp) else if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.8f else 0.5f) else Modifier.exthruSmallRaisedShadow(isDark)
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(52.dp).scale(if (isForge) 1f else scale).then(shadow)
+                    .background(MaterialTheme.colorScheme.primary, btnShape).then(if (isForge) Modifier else Modifier.border(1.dp, if(isPressed) Color.Transparent else Color.White.copy(0.1f), btnShape)).clip(btnShape)
                     .clickable(interactionSource = interactionSource, indication = null, enabled = images.isNotEmpty()) {
                         haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled)
                         onSend()
@@ -849,9 +872,9 @@ private fun AlbumPreviewSheet(
 }
 
 @Composable
-private fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, onToggleSpoiler: () -> Unit) {
+private fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, isForge: Boolean, onToggleSpoiler: () -> Unit) {
     val blurRadius by animateDpAsState(targetValue = if (spoiler) 12.dp else 0.dp, animationSpec = tween(200), label = "thumb_blur")
-    Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(12.dp))) {
+    Box(modifier = Modifier.size(140.dp).clip(if (isForge) RectangleShape else RoundedCornerShape(12.dp))) {
         AsyncImage(
             model = uri, contentDescription = null, contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
@@ -862,7 +885,7 @@ private fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, onToggleSpoiler: () -
             }
         }
         Box(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(28.dp).clip(CircleShape)
+            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(28.dp).clip(if(isForge) RectangleShape else CircleShape)
                 .background(if (spoiler) Color(0xFF1259C3) else Color.Black.copy(alpha = 0.5f))
                 .clickable(onClick = onToggleSpoiler),
             contentAlignment = Alignment.Center
@@ -872,6 +895,26 @@ private fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, onToggleSpoiler: () -
                 contentDescription = if (spoiler) "Убрать spoiler" else "Пометить spoiler",
                 tint = Color.White, modifier = Modifier.size(16.dp)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun EmptyChatPlaceholder(modifier: Modifier = Modifier, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false) {
+    val emptyTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "empty")
+    val emptyScale by emptyTransition.animateFloat(
+        initialValue = 0.92f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "empty_scale",
+    )
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icons.Default.ChatBubbleOutline, null, modifier = Modifier.size(64.dp).scale(emptyScale), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.25f))
+            Spacer(Modifier.height(16.dp))
+            Text(stringResource(R.string.chat_empty_title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f))
+            Spacer(Modifier.height(4.dp))
+            Text(stringResource(R.string.chat_empty_subtitle), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.35f))
         }
     }
 }
@@ -951,6 +994,94 @@ private fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: 
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun RecordingBar(
+    isExthru: Boolean = false,
+    isForge: Boolean = false,
+    isDark: Boolean = false,
+    hapticEnabled: Boolean,
+    onCancel: () -> Unit,
+    onSend: () -> Unit,
+) {
+    val haptic = rememberHaptic()
+    var elapsed by remember { mutableIntStateOf(0) }
+    val dotAlpha by androidx.compose.animation.core.rememberInfiniteTransition(label = "dot").animateFloat(
+        initialValue = 1f, targetValue = 0.2f,
+        animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
+        label = "dot_alpha",
+    )
+
+    val timerColor = if (isExthru) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error
+    val labelColor = if (isExthru) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant
+
+    LaunchedEffect(Unit) {
+        while (true) { delay(1000); elapsed++; haptic.perform(HapticType.CLICK, hapticEnabled) }
+    }
+    Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (isExthru) {
+            val intCancel = remember { MutableInteractionSource() }
+            val isCancelPressed by intCancel.collectIsPressedAsState()
+            val scale by animateFloatAsState(if (isCancelPressed) 0.85f else 1f, spring(dampingRatio = 0.5f), label = "")
+
+            val shape = if (isForge) RectangleShape else CircleShape
+            val shadowMod = if (isForge) {
+                Modifier.forgeNeuBrutalism(isCancelPressed, isDark, 3.dp)
+            } else if (isCancelPressed) {
+                Modifier.nmInsetShadow(isDark, cornerRadius = 24.dp)
+            } else {
+                Modifier.exthruSmallRaisedShadow(isDark)
+            }
+
+            Box(
+                modifier = Modifier.size(48.dp).scale(if(isForge) 1f else scale).then(shadowMod).background(MaterialTheme.colorScheme.surface, shape).clip(shape)
+                    .then(if(isForge) Modifier else Modifier.border(1.dp, if(isCancelPressed) Color.Transparent else Color.White.copy(0.1f), shape))
+                    .clickable(interactionSource = intCancel, indication = null) { haptic.perform(HapticType.ERROR, hapticEnabled); onCancel() },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.Delete, "Cancel", tint = MaterialTheme.colorScheme.error) }
+        } else {
+            IconButton(onClick = { haptic.perform(HapticType.ERROR, hapticEnabled); onCancel() }) {
+                Icon(Icons.Default.Delete, "Cancel", tint = MaterialTheme.colorScheme.error)
+            }
+        }
+
+        Row(Modifier.weight(1f).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), if(isForge) RectangleShape else CircleShape))
+            Spacer(Modifier.width(8.dp))
+            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = timerColor, fontFamily = if(isForge) FontFamily.Monospace else null)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.chat_recording_label), style = MaterialTheme.typography.bodySmall, color = labelColor, fontFamily = if(isForge) FontFamily.Monospace else null)
+        }
+
+        if (isExthru) {
+            val intSend = remember { MutableInteractionSource() }
+            val isSendPressed by intSend.collectIsPressedAsState()
+            val scale by animateFloatAsState(if (isSendPressed) 0.85f else 1f, spring(dampingRatio = 0.5f), label = "")
+
+            val shape = if (isForge) RectangleShape else CircleShape
+            val shadowMod = if (isForge) {
+                Modifier.forgeNeuBrutalism(isSendPressed, isDark, 3.dp)
+            } else if (isSendPressed) {
+                Modifier.nmInsetShadow(isDark, cornerRadius = 24.dp, darkAlpha = if(isDark)0.8f else 0.5f)
+            } else {
+                Modifier.exthruSmallRaisedShadow(isDark)
+            }
+
+            Box(
+                modifier = Modifier.size(48.dp).scale(if(isForge) 1f else scale).then(shadowMod)
+                    .background(Brush.radialGradient(listOf(Biolume.TealLight, Biolume.TealPulse)), shape).clip(shape)
+                    .then(if(isForge) Modifier else Modifier.border(1.dp, if(isSendPressed) Color.Transparent else Color.White.copy(0.1f), shape))
+                    .clickable(interactionSource = intSend, indication = null) { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSend() },
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = Color.White) }
+        } else {
+            IconButton(
+                onClick = { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSend() },
+                modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+            ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.action_send), tint = MaterialTheme.colorScheme.onPrimary) }
         }
     }
 }

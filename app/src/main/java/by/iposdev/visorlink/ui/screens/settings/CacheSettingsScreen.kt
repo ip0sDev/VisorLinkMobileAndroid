@@ -23,14 +23,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.isExthruFamily
+import by.iposdev.visorlink.ui.components.ExthruIconTray
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.theme.*
@@ -54,7 +59,10 @@ fun CacheSettingsScreen(
     val state by viewModel.state.collectAsState()
 
     val currentTheme by themeViewModel.appTheme.collectAsState()
-    val isExthru = currentTheme == AppTheme.EXTHRU || currentTheme == AppTheme.BIOLUME
+    val isExthru = currentTheme.isExthruFamily
+    val style = rememberExthruStyle(currentTheme)
+    val isForge = style.isForge
+
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -76,36 +84,52 @@ fun CacheSettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 if (isExthru) {
-                    val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
-                    TopAppBar(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .hazeChild(
+                    val topBarBg = if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+                    val topBarMod = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isForge) Modifier.background(topBarBg)
+                            else Modifier.hazeChild(
                                 state = hazeState,
                                 style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
-                            )
-                            .background(topBarBg),
+                            ).background(topBarBg)
+                        )
+
+                    TopAppBar(
+                        modifier = topBarMod,
                         title = {
                             Text(
                                 text = stringResource(R.string.cache_title),
-                                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontSize = 34.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isForge) FontFamily.Monospace else null
+                                )
                             )
                         },
                         navigationIcon = {
                             val interactionSource = remember { MutableInteractionSource() }
                             val isPressed by interactionSource.collectIsPressedAsState()
                             val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_btn_scale")
-                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                            val shape = if (isForge) RectangleShape else CircleShape
+                            val shadowMod = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+                            } else if (isPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
 
                             Box(
                                 modifier = Modifier
                                     .padding(start = 12.dp, end = 4.dp)
                                     .size(42.dp)
-                                    .scale(scale)
+                                    .scale(if (isForge) 1f else scale)
                                     .then(shadowMod)
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                    .clip(CircleShape)
+                                    .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+                                    .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                    .clip(shape)
                                     .clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
@@ -123,17 +147,25 @@ fun CacheSettingsScreen(
                             val interactionSource = remember { MutableInteractionSource() }
                             val isPressed by interactionSource.collectIsPressedAsState()
                             val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "refresh_btn_scale")
-                            val shadowMod = if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f) else Modifier.exthruSmallRaisedShadow(isDark)
+
+                            val shape = if (isForge) RectangleShape else CircleShape
+                            val shadowMod = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+                            } else if (isPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
 
                             Box(
                                 modifier = Modifier
                                     .padding(end = 12.dp)
                                     .size(42.dp)
-                                    .scale(scale)
+                                    .scale(if (isForge) 1f else scale)
                                     .then(shadowMod)
-                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-                                    .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-                                    .clip(CircleShape)
+                                    .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+                                    .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                    .clip(shape)
                                     .clickable(
                                         interactionSource = interactionSource,
                                         indication = null,
@@ -197,7 +229,7 @@ fun CacheSettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .let { if (isExthru) it.haze(state = hazeState) else it }
+                    .let { if (isExthru && !isForge) it.haze(state = hazeState) else it }
                     .background(scaffoldBg)
             ) {
                 VlAmbientGlow(appTheme = currentTheme)
@@ -210,21 +242,21 @@ fun CacheSettingsScreen(
                     Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
                     // ── Использование кэша ────────────────────────────────────────────
-                    SectionHeader(stringResource(R.string.cache_section_usage), isExthru)
+                    SectionHeader(stringResource(R.string.cache_section_usage), currentTheme)
 
                     CacheUsageCard(
                         sizes     = state.sizes,
                         isLoading = state.isLoading,
-                        isExthru  = isExthru,
+                        appTheme  = currentTheme,
                         isDark    = isDark
                     )
 
                     // ── Очистка ───────────────────────────────────────────────────────
-                    SectionHeader(stringResource(R.string.cache_section_clear), isExthru)
+                    SectionHeader(stringResource(R.string.cache_section_clear), currentTheme)
 
                     ClearActionsCard(
                         isClearing    = state.isClearing,
-                        isExthru      = isExthru,
+                        appTheme      = currentTheme,
                         isDark        = isDark,
                         onClearImages = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
                         onClearVoice  = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
@@ -232,13 +264,13 @@ fun CacheSettingsScreen(
                     )
 
                     // ── Лимиты ────────────────────────────────────────────────────────
-                    SectionHeader(stringResource(R.string.cache_section_limits), isExthru)
+                    SectionHeader(stringResource(R.string.cache_section_limits), currentTheme)
 
                     LimitsCard(
                         imageLimitMb  = state.config.maxImageMb,
                         voiceLimitMb  = state.config.maxVoiceMb,
                         cacheDays     = state.config.chatCacheDays,
-                        isExthru      = isExthru,
+                        appTheme      = currentTheme,
                         isDark        = isDark,
                         onImageLimit  = { viewModel.setMaxImageMb(it) },
                         onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
@@ -255,8 +287,12 @@ fun CacheSettingsScreen(
 // ─── Секция: текущий размер ───────────────────────────────────────────────────
 
 @Composable
-private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: Boolean, isDark: Boolean) {
-    SettingsCard(isExthru = isExthru, isDark = isDark) {
+private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, appTheme: AppTheme, isDark: Boolean) {
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val isExthru = appTheme.isExthruFamily
+
+    SettingsCard(appTheme = appTheme, isDark = isDark) {
         if (isLoading || sizes == null) {
             Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
@@ -274,12 +310,14 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
                 Column {
                     Text(stringResource(R.string.cache_total_label),
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontFamily = if (isForge) FontFamily.Monospace else null)
                     Text(
                         formatMb(sizes.totalMb),
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        fontFamily = if (isForge) FontFamily.Monospace else null
                     )
                 }
                 Icon(Icons.Default.Storage, null,
@@ -291,7 +329,14 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
 
             val totalFraction = (sizes.totalMb / 500f).coerceIn(0f, 1f)
 
-            val progressModifier = if (isExthru) {
+            val progressModifier = if (isForge) {
+                Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .padding(horizontal = 8.dp)
+                    .forgeNeuBrutalism(false, isDark, 2.dp)
+                    .background(style.inputBg)
+            } else if (isExthru) {
                 Modifier
                     .fillMaxWidth()
                     .height(10.dp)
@@ -320,10 +365,10 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
                 Spacer(Modifier.height(24.dp))
             }
 
-            UsageRow(Icons.Default.Image, stringResource(R.string.cache_row_images), sizes.imagesMb, isExthru, isDark)
-            UsageRow(Icons.Default.Mic, stringResource(R.string.cache_row_voice), sizes.voiceMb, isExthru, isDark)
-            UsageRow(Icons.Default.GraphicEq, stringResource(R.string.cache_row_waveforms), sizes.waveformMb, isExthru, isDark)
-            UsageRow(Icons.Default.ChatBubble, stringResource(R.string.cache_row_chat), sizes.chatMb, isExthru, isDark)
+            UsageRow(Icons.Default.Image, stringResource(R.string.cache_row_images), sizes.imagesMb, appTheme, isDark)
+            UsageRow(Icons.Default.Mic, stringResource(R.string.cache_row_voice), sizes.voiceMb, appTheme, isDark)
+            UsageRow(Icons.Default.GraphicEq, stringResource(R.string.cache_row_waveforms), sizes.waveformMb, appTheme, isDark)
+            UsageRow(Icons.Default.ChatBubble, stringResource(R.string.cache_row_chat), sizes.chatMb, appTheme, isDark)
 
             Spacer(Modifier.height(8.dp))
         }
@@ -331,7 +376,10 @@ private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, isExthru: 
 }
 
 @Composable
-private fun UsageRow(icon: ImageVector, label: String, mb: Float, isExthru: Boolean, isDark: Boolean) {
+private fun UsageRow(icon: ImageVector, label: String, mb: Float, appTheme: AppTheme, isDark: Boolean) {
+    val isExthru = appTheme.isExthruFamily
+    val isForge = appTheme == AppTheme.FORGE
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -340,7 +388,7 @@ private fun UsageRow(icon: ImageVector, label: String, mb: Float, isExthru: Bool
         horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         if (isExthru) {
-            ExthruIconTray(icon = icon, isDark = isDark)
+            ExthruIconTray(appTheme = appTheme, icon = icon)
         } else {
             Icon(icon, null,
                 modifier = Modifier.size(18.dp),
@@ -349,13 +397,15 @@ private fun UsageRow(icon: ImageVector, label: String, mb: Float, isExthru: Bool
 
         Text(label,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface, // Исправлено: белый/черный цвет текста
+            fontFamily = if (isForge) FontFamily.Monospace else null,
             modifier = Modifier.weight(1f))
 
         Text(
             formatMb(mb),
             style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.SemiBold,
+            fontFamily = if (isForge) FontFamily.Monospace else null,
             color = if (mb > 50f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
         )
     }
@@ -366,15 +416,16 @@ private fun UsageRow(icon: ImageVector, label: String, mb: Float, isExthru: Bool
 @Composable
 private fun ClearActionsCard(
     isClearing: Boolean,
-    isExthru: Boolean,
+    appTheme: AppTheme,
     isDark: Boolean,
     onClearImages: () -> Unit,
     onClearVoice: () -> Unit,
     onClearAll: () -> Unit
 ) {
     var showConfirmAll by remember { mutableStateOf(false) }
+    val isExthru = appTheme.isExthruFamily
 
-    SettingsCard(isExthru = isExthru, isDark = isDark, contentPadding = PaddingValues(if (isExthru) 0.dp else 8.dp)) {
+    SettingsCard(appTheme = appTheme, isDark = isDark, contentPadding = PaddingValues(if (isExthru) 0.dp else 8.dp)) {
         if (isExthru) Spacer(Modifier.height(8.dp))
 
         ClearButton(
@@ -382,7 +433,7 @@ private fun ClearActionsCard(
             label      = stringResource(R.string.cache_clear_images),
             sublabel   = stringResource(R.string.cache_clear_images_sub),
             isLoading  = isClearing,
-            isExthru   = isExthru,
+            appTheme   = appTheme,
             isDark     = isDark,
             onClick    = onClearImages
         )
@@ -393,7 +444,7 @@ private fun ClearActionsCard(
             label      = stringResource(R.string.cache_clear_voice),
             sublabel   = stringResource(R.string.cache_clear_voice_sub),
             isLoading  = isClearing,
-            isExthru   = isExthru,
+            appTheme   = appTheme,
             isDark     = isDark,
             onClick    = onClearVoice
         )
@@ -409,13 +460,13 @@ private fun ClearActionsCard(
                 if (isExthru) {
                     NmButton(
                         text = stringResource(R.string.action_cancel),
-                        isDestructive = false, isDark = isDark,
+                        isPrimary = false, isDark = isDark, isForge = appTheme == AppTheme.FORGE,
                         modifier = Modifier.weight(1f)
                     ) { showConfirmAll = false }
 
                     NmButton(
                         text = stringResource(R.string.cache_clear_all_confirm),
-                        isDestructive = true, isDark = isDark,
+                        isPrimary = true, isDark = isDark, isForge = appTheme == AppTheme.FORGE,
                         modifier = Modifier.weight(1f)
                     ) { showConfirmAll = false; onClearAll() }
                 } else {
@@ -438,7 +489,7 @@ private fun ClearActionsCard(
                 sublabel   = stringResource(R.string.cache_clear_all_sub),
                 isLoading  = isClearing,
                 destructive = true,
-                isExthru   = isExthru,
+                appTheme   = appTheme,
                 isDark     = isDark,
                 onClick    = { showConfirmAll = true }
             )
@@ -455,11 +506,15 @@ private fun ClearButton(
     sublabel: String,
     isLoading: Boolean,
     destructive: Boolean = false,
-    isExthru: Boolean = false,
+    appTheme: AppTheme,
     isDark: Boolean = false,
     onClick: () -> Unit
 ) {
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val isExthru = appTheme.isExthruFamily
     val color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -478,11 +533,13 @@ private fun ClearButton(
         animationSpec = tween(100), label = "clear_btn_bg"
     )
 
+    val shape = if (isForge) RectangleShape else if (isExthru) RoundedCornerShape(0.dp) else MaterialTheme.shapes.medium
+
     Surface(
         onClick   = onClick,
         color     = bgColor,
-        shape     = if (isExthru) RoundedCornerShape(0.dp) else MaterialTheme.shapes.medium,
-        modifier  = Modifier.fillMaxWidth().scale(scale),
+        shape     = shape,
+        modifier  = Modifier.fillMaxWidth().scale(if (isForge) 1f else scale),
         enabled   = !isLoading,
         interactionSource = interactionSource
     ) {
@@ -492,7 +549,7 @@ private fun ClearButton(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (isExthru) {
-                ExthruIconTray(icon = icon, isDark = isDark, isError = destructive)
+                ExthruIconTray(appTheme = appTheme, icon = icon, isError = destructive)
             } else {
                 Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
             }
@@ -500,9 +557,11 @@ private fun ClearButton(
             Column(Modifier.weight(1f)) {
                 Text(label,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = color, fontWeight = FontWeight.Medium)
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
+                    color = color, fontWeight = FontWeight.Medium) // Цвет уже был передан верно
                 Text(sublabel,
                     style = MaterialTheme.typography.bodySmall,
+                    fontFamily = if (isForge) FontFamily.Monospace else null,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (isLoading) {
@@ -527,19 +586,20 @@ private fun LimitsCard(
     imageLimitMb: Int,
     voiceLimitMb: Int,
     cacheDays: Int,
-    isExthru: Boolean,
+    appTheme: AppTheme,
     isDark: Boolean,
     onImageLimit: (Int) -> Unit,
     onVoiceLimit: (Int) -> Unit,
     onCacheDays:  (Int) -> Unit
 ) {
-    SettingsCard(isExthru = isExthru, isDark = isDark) {
+    val isExthru = appTheme.isExthruFamily
+    SettingsCard(appTheme = appTheme, isDark = isDark) {
         SliderRow(
             icon     = Icons.Default.Image,
             label    = stringResource(R.string.cache_limit_images),
             value    = imageLimitMb.toFloat(),
             min      = 50f, max = 500f, steps = 8,
-            isExthru = isExthru, isDark = isDark,
+            appTheme = appTheme, isDark = isDark,
             format   = { "${it.toInt()} MB" },
             onChange = { onImageLimit(it.toInt()) }
         )
@@ -557,7 +617,7 @@ private fun LimitsCard(
             label    = stringResource(R.string.cache_limit_voice),
             value    = voiceLimitMb.toFloat(),
             min      = 50f, max = 500f, steps = 8,
-            isExthru = isExthru, isDark = isDark,
+            appTheme = appTheme, isDark = isDark,
             format   = { "${it.toInt()} MB" },
             onChange = { onVoiceLimit(it.toInt()) }
         )
@@ -575,7 +635,7 @@ private fun LimitsCard(
             label    = stringResource(R.string.cache_limit_history),
             value    = cacheDays.toFloat(),
             min      = 1f, max = 30f, steps = 28,
-            isExthru = isExthru, isDark = isDark,
+            appTheme = appTheme, isDark = isDark,
             format   = { "${it.toInt()} days" },
             onChange = { onCacheDays(it.toInt()) }
         )
@@ -590,18 +650,22 @@ private fun SliderRow(
     min: Float,
     max: Float,
     steps: Int,
-    isExthru: Boolean,
+    appTheme: AppTheme,
     isDark: Boolean,
     format: (Float) -> String,
     onChange: (Float) -> Unit
 ) {
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val isExthru = appTheme.isExthruFamily
+
     Column(modifier = if (isExthru) Modifier.padding(horizontal = 4.dp, vertical = 4.dp) else Modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (isExthru) {
-                ExthruIconTray(icon = icon, isDark = isDark)
+                ExthruIconTray(appTheme = appTheme, icon = icon)
             } else {
                 Icon(icon, null,
                     modifier = Modifier.size(18.dp),
@@ -610,12 +674,15 @@ private fun SliderRow(
 
             Text(label,
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface, // Исправлено: белый текст в темной теме
+                fontFamily = if (isForge) FontFamily.Monospace else null,
                 fontWeight = if (isExthru) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier.weight(1f))
 
             Text(
                 format(value),
                 style = MaterialTheme.typography.labelMedium,
+                fontFamily = if (isForge) FontFamily.Monospace else null,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.primary,
                 fontSize = 13.sp
@@ -641,12 +708,26 @@ private fun SliderRow(
 
 @Composable
 private fun SettingsCard(
-    isExthru: Boolean,
+    appTheme: AppTheme,
     isDark: Boolean,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
-    if (isExthru) {
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val isExthru = appTheme.isExthruFamily
+
+    if (isForge) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 4.dp)
+                .background(style.cardBg)
+                .padding(contentPadding),
+            content = content
+        )
+    } else if (isExthru) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -682,8 +763,23 @@ private fun SettingsCard(
 }
 
 @Composable
-private fun SectionHeader(title: String, isExthru: Boolean) {
-    if (isExthru) {
+private fun SectionHeader(title: String, appTheme: AppTheme) {
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val isExthru = appTheme.isExthruFamily
+
+    if (isForge) {
+        Text(
+            text = "> ${title.uppercase()}_",
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace
+            ),
+            color = style.accent,
+            modifier = Modifier.padding(start = 28.dp, top = 26.dp, bottom = 8.dp)
+        )
+    } else if (isExthru) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge.copy(
@@ -704,58 +800,52 @@ private fun SectionHeader(title: String, isExthru: Boolean) {
 }
 
 @Composable
-private fun ExthruIconTray(icon: ImageVector, isDark: Boolean, isError: Boolean = false) {
-    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.7f)
-    val iconColor = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .exthruSmallRaisedShadow(isDark)
-            .background(bgColor, CircleShape)
-            .border(1.dp, Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun NmButton(text: String, isDestructive: Boolean, isDark: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun NmButton(
+    text: String,
+    isPrimary: Boolean,
+    isDark: Boolean,
+    isForge: Boolean,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed && enabled) 0.95f else 1f, spring(dampingRatio = 0.5f), label = "btn_scale")
 
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
-        label = "btn_scale"
-    )
+    val bgColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val textColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
 
-    val bgColor = if (isDestructive) MaterialTheme.colorScheme.error.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surface.copy(alpha = if(isDark) 0.4f else 0.6f)
-    val textColor = if (isDestructive) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.primary
+    val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
 
-    val shadowMod = if (isPressed) {
-        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
-    } else {
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+    } else if (isPressed && enabled) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp)
+    } else if (enabled) {
         Modifier.exthruSmallRaisedShadow(isDark)
-    }
+    } else Modifier
 
     Box(
         modifier = modifier
-            .scale(scale)
+            .scale(if (isForge) 1f else scale)
             .then(shadowMod)
-            .background(bgColor, RoundedCornerShape(16.dp))
-            .border(
+            .background(if (enabled) bgColor else MaterialTheme.colorScheme.surfaceVariant, shape)
+            .then(if (isForge) Modifier else Modifier.border(
                 1.dp,
-                if (isPressed) Color.Transparent else Color.White.copy(alpha = if(isDark) 0.05f else 0.3f),
-                RoundedCornerShape(16.dp)
-            )
-            .clip(RoundedCornerShape(16.dp))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+                if (isPressed || !enabled) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f),
+                shape
+            ))
+            .clip(shape)
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick)
             .padding(vertical = 14.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(text, fontWeight = FontWeight.Bold, color = textColor)
+        Text(
+            text = text,
+            style = TextStyle(fontFamily = if (isForge) FontFamily.Monospace else FontFamily.SansSerif, fontWeight = FontWeight.Black, fontSize = 14.sp),
+            color = if (enabled) textColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
     }
 }
 

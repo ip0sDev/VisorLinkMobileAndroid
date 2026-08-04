@@ -1,9 +1,11 @@
 package by.iposdev.visorlink.data.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.IgnoreExtraProperties
 
 // ─── Saved Messages ───────────────────────────────────────────────────────────
 
+@IgnoreExtraProperties
 data class SavedMessage(
     val id: String = "",
     val senderId: String = "",
@@ -14,7 +16,7 @@ data class SavedMessage(
     val encryptedCaption: String? = null,
     val iv: String? = null,
     val url: String? = null,
-    val cdnMediaId: String? = null, // ДОБАВЛЕНО
+    val cdnMediaId: String? = null,
     val fileName: String? = null,
     val duration: Int? = null,
     val caption: String? = null,
@@ -30,8 +32,8 @@ data class SavedMessage(
     val packName: String? = null,
     val packEmoji: String? = null,
     val deleted: Boolean = false,
-    val deletedAt: com.google.firebase.Timestamp? = null,
-    val createdAt: com.google.firebase.Timestamp? = null,
+    val deletedAt: Timestamp? = null,
+    val createdAt: Timestamp? = null,
     // Временные/Локальные данные для расшифровки на лету в UI
     val localBytes: ByteArray? = null
 ) {

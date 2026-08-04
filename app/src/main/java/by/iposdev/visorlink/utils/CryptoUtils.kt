@@ -2,8 +2,12 @@
 package by.iposdev.visorlink.utils
 
 import android.util.Base64
+import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 import javax.crypto.Cipher
+import javax.crypto.CipherInputStream
+import javax.crypto.CipherOutputStream
 import javax.crypto.SecretKey
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
@@ -57,7 +61,7 @@ fun decryptText(ciphertextB64: String, ivB64: String, key: SecretKey): String? =
     String(cipher.doFinal(ciphertext), Charsets.UTF_8)
 } catch (_: Exception) { null }
 
-// ─── AES-GCM-256 Encrypt/Decrypt (Bytes for Files) ───────────────────────────
+// ─── AES-GCM-256 Encrypt/Decrypt (Bytes for Files - In Memory) ───────────────
 
 fun encryptBytes(plaintext: ByteArray, key: SecretKey): Pair<ByteArray, String> {
     val iv = ByteArray(GCM_IV_LENGTH).also { java.security.SecureRandom().nextBytes(it) }
@@ -73,3 +77,38 @@ fun decryptBytes(ciphertext: ByteArray, ivB64: String, key: SecretKey): ByteArra
     cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
     cipher.doFinal(ciphertext)
 } catch (_: Exception) { null }
+
+// ─── AES-GCM-256 Encrypt/Decrypt (Files / Streaming) ─────────────────────────
+
+/**
+ * Потоковое шифрование файла.
+ * Читает из [inputFile], шифрует и пишет в [outputFile].
+ * Возвращает сгенерированный IV в Base64.
+ */
+fun encryptFile(inputFile: File, outputFile: File, key: SecretKey): String {
+    val iv = ByteArray(GCM_IV_LENGTH).also { java.security.SecureRandom().nextBytes(it) }
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+
+    inputFile.inputStream().use { fis ->
+        CipherOutputStream(outputFile.outputStream(), cipher).use { cos ->
+            fis.copyTo(cos)
+        }
+    }
+    return Base64.encodeToString(iv, Base64.NO_WRAP)
+}
+
+/**
+ * Потоковая расшифровка из InputStream (например, сети) в локальный файл.
+ */
+fun decryptStreamToFile(inputStream: InputStream, outputFile: File, ivB64: String, key: SecretKey) {
+    val iv = Base64.decode(ivB64, Base64.NO_WRAP)
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_LENGTH, iv))
+
+    CipherInputStream(inputStream, cipher).use { cis ->
+        outputFile.outputStream().use { fos ->
+            cis.copyTo(fos)
+        }
+    }
+}

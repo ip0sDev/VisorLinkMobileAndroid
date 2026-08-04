@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -38,6 +39,7 @@ import by.iposdev.visorlink.ui.components.AvatarWithPresence
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.screens.chatlist.GroupChannelAvatar
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -58,6 +60,7 @@ internal fun ExthruChatTopBar(
     otherUid: String,
     chatId: String,
     isDark: Boolean,
+    isForge: Boolean,
     canSetWallpaper: Boolean,
     isAdmin: Boolean,
     isOwner: Boolean,
@@ -69,19 +72,20 @@ internal fun ExthruChatTopBar(
     onLeaveClick: () -> Unit,
 ) {
     val hazeState = LocalHazeState.current
-    val topBarBg = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+    val topBarBg = if (isForge) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
 
     TopAppBar(
         modifier = Modifier
             .fillMaxWidth()
-            .hazeEffect(
+            .then(if (isForge) Modifier.background(topBarBg) else Modifier.hazeEffect(
                 state = hazeState,
                 style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = HazeTint(topBarBg))
-            ),
+            )),
         navigationIcon = {
             InteractiveTopBarIcon(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 isDark = isDark,
+                isForge = isForge,
                 hapticEnabled = hapticEnabled,
                 modifier = Modifier.padding(start = 12.dp, end = 4.dp),
                 onClick = onNavigateBack
@@ -91,7 +95,7 @@ internal fun ExthruChatTopBar(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(if(isForge) RectangleShape else RoundedCornerShape(12.dp))
                     .clickable {
                         when (uiState.chatType) {
                             ChatType.DIRECT -> onOpenOtherProfile(otherUid)
@@ -170,6 +174,7 @@ internal fun ExthruChatTopBar(
                 InteractiveTopBarIcon(
                     icon = Icons.Default.Wallpaper,
                     isDark = isDark,
+                    isForge = isForge,
                     hapticEnabled = hapticEnabled,
                     tint = if (uiState.wallpaperUrl != null) ExthruChat.Accent else ExthruChat.textSecondary(isDark),
                     onClick = onWallpaperClick
@@ -180,6 +185,7 @@ internal fun ExthruChatTopBar(
                 InteractiveTopBarIcon(
                     icon = Icons.Default.Settings,
                     isDark = isDark,
+                    isForge = isForge,
                     hapticEnabled = hapticEnabled,
                     tint = ExthruChat.textSecondary(isDark),
                     onClick = { onOpenChatSettings(chatId) }
@@ -190,6 +196,7 @@ internal fun ExthruChatTopBar(
                 InteractiveTopBarIcon(
                     icon = Icons.Default.ExitToApp,
                     isDark = isDark,
+                    isForge = isForge,
                     hapticEnabled = hapticEnabled,
                     tint = ExthruChat.Destructive,
                     onClick = onLeaveClick
@@ -208,6 +215,7 @@ internal fun ExthruChatTopBar(
 private fun InteractiveTopBarIcon(
     icon: ImageVector,
     isDark: Boolean,
+    isForge: Boolean,
     hapticEnabled: Boolean,
     modifier: Modifier = Modifier,
     tint: Color = MaterialTheme.colorScheme.primary,
@@ -223,20 +231,24 @@ private fun InteractiveTopBarIcon(
         label = "icon_scale"
     )
 
-    val shadowMod = if (isPressed) {
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+    } else if (isPressed) {
         Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
     } else {
         Modifier.exthruSmallRaisedShadow(isDark)
     }
 
+    val shape = if (isForge) RectangleShape else CircleShape
+
     Box(
         modifier = modifier
             .size(42.dp)
-            .scale(scale)
+            .scale(if(isForge) 1f else scale)
             .then(shadowMod)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), CircleShape)
-            .border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), CircleShape)
-            .clip(CircleShape)
+            .background(if(isForge) ExthruChat.cardBg(isDark) else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+            .then(if(isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+            .clip(shape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

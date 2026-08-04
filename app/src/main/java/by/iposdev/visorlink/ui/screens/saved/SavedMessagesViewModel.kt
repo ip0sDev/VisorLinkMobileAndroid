@@ -1,3 +1,4 @@
+// ui/screens/saved/SavedMessagesViewModel.kt
 package by.iposdev.visorlink.ui.screens.saved
 
 import android.content.Context
@@ -27,10 +28,7 @@ import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
-import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 data class SavedMessagesUiState(
     val messages: List<SavedMessage>         = emptyList(),
@@ -232,14 +230,8 @@ class SavedMessagesViewModel(
         }
     }
 
-    suspend fun decryptMediaToCache(message: SavedMessage): ByteArray? = withContext(Dispatchers.IO) {
-        if (message.encrypted != true || encryptionKey == null || message.cdnMediaId == null) return@withContext null
-        try {
-            val url = CdnService.getFileUrl(message.cdnMediaId)
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-            val encryptedBytes = connection.inputStream.readBytes()
-            decryptBytes(encryptedBytes, message.iv ?: return@withContext null, encryptionKey!!)
-        } catch (e: Exception) { null }
+    suspend fun getDecryptedFile(message: SavedMessage): File? {
+        return repository.getDecryptedMediaFile(message, encryptionKey)
     }
 
     fun onTextChanged(text: String) {
