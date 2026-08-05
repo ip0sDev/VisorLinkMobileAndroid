@@ -406,9 +406,9 @@ fun ChatListScreen(
                                 item(key = "compact_chats_card") {
                                     val shape = if (isForge) RectangleShape else RoundedCornerShape(24.dp)
                                     val shadowMod = if (isForge) Modifier.forgeNeuBrutalism(false, isDark, 4.dp) else if (isExthru) Modifier.exthruRaisedShadow(isDark) else Modifier.shadow(4.dp, shape)
-                                    val bgAlpha = if (isDark) 0.4f else 0.55f
-                                    val bgColor = if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = bgAlpha)
-                                    val borderColor = if (isForge) Color.Transparent else if (isExthru) Color.White.copy(alpha = if (isDark) 0.05f else 0.2f) else Color.Transparent
+                                    val bgAlpha = if (isDark) 0.4f else 0.75f
+                                    val bgColor = if (isForge) style.cardBg else (if (isDark) MaterialTheme.colorScheme.surface else Color.White).copy(alpha = bgAlpha)
+                                    val borderColor = if (isForge) Color.Transparent else if (isExthru) (if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)) else Color.Transparent
 
                                     Column(
                                         modifier = Modifier
@@ -808,8 +808,8 @@ private fun ChatListItem(
                 .padding(horizontal = 14.dp, vertical = verticalPadding)
                 .scale(if (isForge) 1f else itemScale)
                 .then(shadowMod)
-                .background(if (isForge) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f), shape)
-                .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed || (isCompactList && !isSavedMessages)) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.2f), shape))
+                .background(if (isForge) MaterialTheme.colorScheme.surface else (if (isDark) MaterialTheme.colorScheme.surface else Color.White).copy(alpha = if (isDark) 0.4f else 0.75f), shape)
+                .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed || (isCompactList && !isSavedMessages)) Color.Transparent else (if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)), shape))
                 .clip(shape)
                 .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
         ) {

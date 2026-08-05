@@ -27,7 +27,9 @@ fun hashPin(pin: String, uid: String): String {
 
 fun deriveKey(pin: String, uid: String): SecretKey {
     val salt = uid.padEnd(16, '0').substring(0, 16).toByteArray(Charsets.UTF_8)
-    val spec = PBEKeySpec(pin.toCharArray(), salt, 200_000, 256)
+    // Согласовано с WEB-версией: используем "$pin:$uid" в качестве пароля для PBKDF2
+    val password = "$pin:$uid"
+    val spec = PBEKeySpec(password.toCharArray(), salt, 200_000, 256)
     return try {
         val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
         val keyBytes = factory.generateSecret(spec).encoded

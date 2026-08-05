@@ -126,12 +126,15 @@ fun VlSurface(
             // Фон делаем немного прозрачным, чтобы Haze и Glow красиво просвечивали
             val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f)
 
-            val shadowModifier = if (overrideColor == Color.Transparent) Modifier else if (!showInset) {
+            val isBiolume = appTheme == AppTheme.BIOLUME
+            val shadowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (!showInset) {
                 Modifier.nmRaisedShadow(
                     isDark = isDark,
-                    shadowRadius = if (isButton) 8.dp else 16.dp, // Увеличил размытие тени для глубины
-                    offsetDp = if (isButton) 4.dp else 6.dp,
+                    shadowRadius = if (isBiolume) 20.dp else if (isButton) 8.dp else 16.dp, 
+                    offsetDp = if (isBiolume) 8.dp else if (isButton) 4.dp else 6.dp,
                     cornerRadius = baseRadius,
+                    darkAlpha = if (isDark) 0.6f else 0.25f,
+                    lightAlpha = if (isDark) 0.05f else 0.75f
                 )
             } else {
                 Modifier.nmInsetShadow(
@@ -141,9 +144,18 @@ fun VlSurface(
                 )
             }
 
-            val glowModifier = if (overrideColor == Color.Transparent) Modifier else if (onClick != null && !isInput) {
+            val glowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (onClick != null && !isInput) {
                 Modifier.accentGlowShadow(accent = style.accent, isPressed = isPressed, cornerRadius = baseRadius)
             } else Modifier
+
+            val borderColor = if (overrideColor == Color.Transparent && !isBiolume) {
+                Color.Transparent
+            } else if (isDark) {
+                Color.White.copy(alpha = 0.05f)
+            } else {
+                // Светлая тема Biolume: почти незаметный акцент по краям
+                style.accent.copy(alpha = 0.12f)
+            }
 
             Box(
                 modifier = modifier
@@ -152,16 +164,21 @@ fun VlSurface(
                     .then(glowModifier)
                     .background(bg, shape)
                     .clip(shape)
-                    .then(if (overrideColor == Color.Transparent) Modifier else Modifier.border(
+                    .then(if (borderColor == Color.Transparent) Modifier else Modifier.border(
                         width = 1.dp,
-                        color = Color.White.copy(alpha = if (isDark) 0.05f else 0.4f),
+                        color = borderColor,
                         shape = shape
                     ))
+                    .then(if (isBiolume && !showInset) Modifier.border(
+                        width = 0.5.dp,
+                        brush = Brush.verticalGradient(listOf(Color.White.copy(0.4f), Color.Transparent)),
+                        shape = shape
+                    ) else Modifier)
                     .then(clickModifier),
                 contentAlignment = Alignment.Center,
             ) {
                 // Внутренний блик
-                if (!showInset && overrideColor != Color.Transparent) {
+                if (!showInset && (overrideColor != Color.Transparent || isBiolume)) {
                     Box(
                         Modifier
                             .matchParentSize()

@@ -3,6 +3,8 @@ package by.iposdev.visorlink.ui.screens.diary
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -24,6 +26,7 @@ import java.security.KeyStore
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
@@ -37,7 +40,8 @@ data class DiaryUiState(
     val userProfile: UserProfile? = null,
     val selectedDate: Calendar = Calendar.getInstance(),
     val stats: DiaryStats = DiaryStats(),
-    val error: String? = null
+    val error: String? = null,
+    val isBiometricEnabled: Boolean = false
 )
 
 data class DiaryStats(
@@ -77,7 +81,7 @@ class DiaryViewModel(
         viewModelScope.launch {
             repository.settingsFlow(currentUid).collect { settings ->
                 val pinEnabled = settings?.pinEnabled == true
-                _uiState.update { it.copy(isEncryptionEnabled = pinEnabled) }
+                _uiState.update { it.copy(isEncryptionEnabled = pinEnabled, isBiometricEnabled = hasBiometricPinSaved()) }
 
                 if (!pinEnabled) {
                     encryptionKey = null
@@ -139,13 +143,16 @@ class DiaryViewModel(
         return DiaryStats(total, monthly, streak)
     }
 
-    fun onPinEntered(pin: String) {
+    fun onPinEntered(pin: String, saveBiometrics: Boolean = false) {
         viewModelScope.launch {
             val valid = repository.verifyPin(currentUid, pin)
             if (valid) {
+                if (saveBiometrics) {
+                    savePinToKeystoreSecurely(pin)
+                }
                 encryptionKey = deriveKey(pin, currentUid)
                 lastUnlockTime = System.currentTimeMillis()
-                _uiState.update { it.copy(isUnlocked = true, showPinInput = false, pinError = false) }
+                _uiState.update { it.copy(isUnlocked = true, showPinInput = false, pinError = false, isBiometricEnabled = hasBiometricPinSaved()) }
                 startDiaryFlow()
             } else {
                 _uiState.update { it.copy(pinError = true) }
@@ -202,8 +209,8 @@ class DiaryViewModel(
         return sb.toString()
     }
 
-    // Biometric reuse from SavedMessages
-    fun launchBiometricUnlock(activity: FragmentActivity) {
+    // Biometric logic
+    fun launchBiometricUnlock(activity: FragmentActivity, onResult: (Boolean) -> Unit = {}) {
         val executor = ContextCompat.getMainExecutor(activity)
         val prompt = BiometricPrompt(activity, executor, object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
@@ -213,13 +220,25 @@ class DiaryViewModel(
                     lastUnlockTime = System.currentTimeMillis()
                     _uiState.update { it.copy(isUnlocked = true, showPinInput = false) }
                     startDiaryFlow()
+                    onResult(true)
                 }
+            }
+
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                onResult(false)
+            }
+
+            override fun onAuthenticationFailed() {
+                super.onAuthenticationFailed()
+                onResult(false)
             }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
             .setTitle("Diary")
             .setSubtitle("Unlock with biometrics")
             .setNegativeButtonText("Cancel")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             .build()
         prompt.authenticate(info)
     }
@@ -227,6 +246,39 @@ class DiaryViewModel(
     fun hasBiometricPinSaved(): Boolean {
         val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
         return prefs.contains("pin_enc_$currentUid")
+    }
+
+    private fun savePinToKeystoreSecurely(pin: String) {
+        try {
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val alias = "visorlink_bio_key_$currentUid"
+
+            if (!keyStore.containsAlias(alias)) {
+                val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
+                val spec = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                    .setUserAuthenticationRequired(true) // Максимальная безопасность - требуется биометрия для использования ключа
+                    .setInvalidatedByBiometricEnrollment(true) // Инвалидировать ключ, если добавлены новые отпечатки
+                    .build()
+                keyGenerator.init(spec)
+                keyGenerator.generateKey()
+            }
+
+            val secretKey = keyStore.getKey(alias, null) as SecretKey
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey)
+            val iv = cipher.iv
+            val encrypted = cipher.doFinal(pin.toByteArray(Charsets.UTF_8))
+
+            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("pin_iv_$currentUid", Base64.encodeToString(iv, Base64.DEFAULT))
+                .putString("pin_enc_$currentUid", Base64.encodeToString(encrypted, Base64.DEFAULT))
+                .apply()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun getPinFromKeystoreSecurely(): String? {

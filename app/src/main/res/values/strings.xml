@@ -498,6 +498,16 @@
     <string name="diary_toggle_preview">Toggle Preview</string>
     <string name="diary_reminder_title">Diary Time</string>
     <string name="diary_reminder_text">Don\'t forget to write down your thoughts for today!</string>
+
+    <!-- Intro / Onboarding -->
+    <string name="action_next">Next</string>
+    <string name="intro_welcome_title">Welcome to VisorLink</string>
+    <string name="intro_welcome_desc">Let\'s set up the app for you. You can change these settings later.</string>
+    <string name="intro_features_title">Choose Features</string>
+    <string name="intro_features_section">Available Modules</string>
+    <string name="intro_final_title">Ready to Go!</string>
+    <string name="intro_final_desc">Your personal space is ready. Enjoy the experience.</string>
+    <string name="intro_start_btn">Get Started</string>
     <string name="diary_enable_title">Enable Diary</string>
     <string name="diary_enable_sub">Separate interface for daily notes</string>
     <string name="diary_reminders_title">Reminders</string>

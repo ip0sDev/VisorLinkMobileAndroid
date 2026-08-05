@@ -14,8 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -38,18 +37,80 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.isExthruFamily
+import by.iposdev.visorlink.data.model.ColorPreset
+import by.iposdev.visorlink.ui.theme.accentGlowShadow
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
 import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
+import by.iposdev.visorlink.ui.theme.nmRaisedShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeEffect
 
 // Провайдер состояния Haze для размытия заднего фона (определен 1 раз для всего приложения)
 val LocalHazeState = compositionLocalOf { HazeState() }
+
+@Composable
+fun ColorPresetCircle(
+    preset: ColorPreset,
+    isSelected: Boolean,
+    appTheme: AppTheme,
+    isDark: Boolean = false,
+    onClick: () -> Unit
+) {
+    val isDefault = preset == ColorPreset.DEFAULT
+    val color = preset.seedColor ?: Color.Transparent
+    val cs = MaterialTheme.colorScheme
+
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else if (isSelected) 1.25f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "scale"
+    )
+
+    val shape = if (isForge) RectangleShape else CircleShape
+
+    val bgModifier = if (isDefault) {
+        Modifier.background(Brush.sweepGradient(listOf(Color.Blue, Color.Magenta, Color.Red, Color(0xFFFFA500), Color.Blue)), shape)
+    } else {
+        Modifier.background(color, shape)
+    }
+
+    val shadowMod = if (isForge) {
+        Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+    } else if (appTheme.isExthruFamily) {
+        if (isSelected || isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+        else Modifier.exthruSmallRaisedShadow(isDark)
+    } else Modifier
+
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .scale(if(isForge) 1f else scale)
+            .then(shadowMod)
+            .then(bgModifier)
+            .border(
+                width = if (isSelected && !appTheme.isExthruFamily) 3.dp else 1.dp,
+                color = if (isSelected && !appTheme.isExthruFamily) cs.onSurface else if (appTheme.isExthruFamily) Color.White.copy(alpha = if (isDark) 0.05f else 0.3f) else cs.outlineVariant.copy(alpha = 0.3f),
+                shape = shape
+            )
+            .clip(shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isDefault) Icon(Icons.Default.Palette, null, tint = Color.White, modifier = Modifier.size(20.dp))
+        else if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(22.dp))
+    }
+}
 
 private fun monoFamily(style: by.iposdev.visorlink.ui.theme.ExthruStyle): FontFamily? =
     if (style.isForge) FontFamily.Monospace else null
@@ -70,10 +131,10 @@ fun VlAmbientGlow(
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
 
-    // Более богатая цветовая палитра для утонченного глассморфизма
-    val c1 = accent.copy(alpha = if (isDark) 0.20f else 0.35f)
-    val c2 = cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.25f)
-    val c3 = cs.secondary.copy(alpha = if (isDark) 0.15f else 0.25f)
+    // Значительно уменьшена интенсивность для светлой темы
+    val c1 = accent.copy(alpha = if (isDark) 0.20f else 0.10f)
+    val c2 = cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.06f)
+    val c3 = cs.secondary.copy(alpha = if (isDark) 0.15f else 0.06f)
 
     val infiniteTransition = rememberInfiniteTransition(label = "glow_mesh")
 
@@ -105,6 +166,7 @@ fun VlGlassPanel(
 ) {
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
+    val style = rememberExthruStyle(appTheme)
 
     if (!appTheme.isExthruFamily || appTheme == AppTheme.FORGE) {
         val style = rememberExthruStyle(appTheme)
@@ -125,27 +187,29 @@ fun VlGlassPanel(
     val glassModifier = if (simplifiedGraphics || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
         Modifier
             .clip(shape)
-            .background(cs.surface.copy(alpha = if (isDark) 0.8f else 0.9f))
+            .background((if (isDark) cs.surface else Color.White).copy(alpha = if (isDark) 0.8f else 0.9f))
     } else {
         Modifier
             .clip(shape)
-            .hazeChild(
+            .hazeEffect(
                 state = hazeState,
-                style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                style = HazeStyle(blurRadius = 32.dp, noiseFactor = 0.02f, tint = null)
             )
-            .background(cs.surface.copy(alpha = if (isDark) 0.35f else 0.55f)) // Сквозная прозрачность
+            .background((if (isDark) cs.surface else Color.White).copy(alpha = if (isDark) 0.25f else 0.35f)) // Сквозная прозрачность
     }
 
     Box(
         modifier = modifier
+            .scale(1f) // Just to trigger recomposition if needed
+            .then(if (simplifiedGraphics) Modifier else Modifier.nmRaisedShadow(isDark, cornerRadius = radius, shadowRadius = 12.dp))
             .then(glassModifier)
             .border(
-                width = 1.5.dp,
+                width = 1.2.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = if (isDark) 0.15f else 0.5f),
+                        Color.White.copy(alpha = if (isDark) 0.15f else 0.6f),
                         Color.Transparent,
-                        Color.Black.copy(alpha = if (isDark) 0.4f else 0.05f)
+                        if (isDark) Color.Black.copy(alpha = 0.4f) else style.accent.copy(alpha = 0.2f)
                     )
                 ),
                 shape = shape
@@ -508,18 +572,18 @@ fun VlSettingsSection(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp)
                     .exthruSmallRaisedShadow(isDark)
-                    .hazeChild(
+                    .hazeEffect(
                         state = hazeState,
                         style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
                     )
-                    .background(cs.surface.copy(alpha = if (isDark) 0.4f else 0.55f), RoundedCornerShape(20.dp))
+                    .background((if (isDark) cs.surface else Color.White).copy(alpha = if (isDark) 0.4f else 0.75f), RoundedCornerShape(20.dp))
                     .clip(RoundedCornerShape(20.dp))
                     .border(
                         1.5.dp,
                         Brush.linearGradient(
                             listOf(
                                 Color.White.copy(alpha = if (isDark) 0.15f else 0.5f),
-                                Color.Transparent,
+                                if (isDark) Color.Transparent else style.accent.copy(alpha = 0.06f),
                                 Color.Black.copy(alpha = if (isDark) 0.4f else 0.05f)
                             )
                         ),

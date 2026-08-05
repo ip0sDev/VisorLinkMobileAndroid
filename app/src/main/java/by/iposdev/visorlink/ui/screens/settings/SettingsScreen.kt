@@ -407,10 +407,25 @@ fun SettingsScreen(
 
                     // ── Управление ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_management)) {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 4)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 4)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = 4)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 5)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 5)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = 5)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = 5)
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = Color(0xFF10B981),
+                            icon = Icons.Default.Explore,
+                            title = "Discover (Лента)",
+                            subtitle = "Показывать вкладку с глобальной лентой",
+                            index = 4, total = 5,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = themeViewModel.discoverEnabled.collectAsState().value,
+                                    onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }
+                                )
+                            }
+                        )
                     }
 
                     // ── Дневник ──
@@ -1325,65 +1340,6 @@ fun BotItem(bot: DmBot, onRegenerate: () -> Unit, onDelete: () -> Unit) {
 }
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun ColorPresetCircle(
-    preset: ColorPreset,
-    isSelected: Boolean,
-    appTheme: AppTheme,
-    isDark: Boolean = false,
-    onClick: () -> Unit
-) {
-    val isDefault = preset == ColorPreset.DEFAULT
-    val color = preset.seedColor ?: Color.Transparent
-    val cs = MaterialTheme.colorScheme
-
-    val style = rememberExthruStyle(appTheme)
-    val isForge = style.isForge
-
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.9f else if (isSelected) 1.25f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "scale"
-    )
-
-    val shape = if (isForge) RectangleShape else CircleShape
-
-    val bgModifier = if (isDefault) {
-        Modifier.background(Brush.sweepGradient(listOf(Color.Blue, Color.Magenta, Color.Red, Color(0xFFFFA500), Color.Blue)), shape)
-    } else {
-        Modifier.background(color, shape)
-    }
-
-    val shadowMod = if (isForge) {
-        Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
-    } else if (appTheme.isExthruFamily) {
-        if (isSelected || isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
-        else Modifier.exthruSmallRaisedShadow(isDark)
-    } else Modifier
-
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .scale(if(isForge) 1f else scale)
-            .then(shadowMod)
-            .then(bgModifier)
-            .border(
-                width = if (isSelected && !appTheme.isExthruFamily) 3.dp else 1.dp,
-                color = if (isSelected && !appTheme.isExthruFamily) cs.onSurface else if (appTheme.isExthruFamily) Color.White.copy(alpha = if (isDark) 0.05f else 0.3f) else cs.outlineVariant.copy(alpha = 0.3f),
-                shape = shape
-            )
-            .clip(shape)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isDefault) Icon(Icons.Default.Palette, null, tint = Color.White, modifier = Modifier.size(20.dp))
-        else if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(22.dp))
-    }
-}
 
 @Composable
 fun ChannelSelectionDialog(

@@ -4,6 +4,7 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Register : Screen("register")
     object VerifyEmail : Screen("verify_email")
+    object Onboarding : Screen("onboarding")
     object ChatList : Screen("chat_list")
     object Profile : Screen("profile")
     object Settings : Screen("settings")

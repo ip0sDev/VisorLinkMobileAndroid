@@ -67,6 +67,8 @@ class SavedMessagesRepository(
                 }
                 val messages = snap?.documents?.mapNotNull { doc ->
                     try {
+                        if (doc.getBoolean("deleted") == true) return@mapNotNull null
+                        
                         val isDiary = doc.getBoolean("isDiary") ?: false
                         if (!includeDiary && isDiary) return@mapNotNull null
 
@@ -90,7 +92,12 @@ class SavedMessagesRepository(
                     return@addSnapshotListener
                 }
                 val messages = snap?.documents?.mapNotNull { doc ->
-                    try { doc.toObject(SavedMessage::class.java)?.copy(id = doc.id)?.let { msg -> decryptIfNeeded(msg, key) } } catch (e: Exception) { null }
+                    try {
+                        if (doc.getBoolean("deleted") == true) return@mapNotNull null
+                        doc.toObject(SavedMessage::class.java)?.copy(id = doc.id)?.let { msg -> decryptIfNeeded(msg, key) }
+                    } catch (e: Exception) {
+                        null
+                    }
                 } ?: emptyList()
                 trySend(messages)
             }
@@ -245,7 +252,7 @@ class SavedMessagesRepository(
     }
 
     suspend fun deleteMessage(uid: String, messageId: String) {
-        db.collection("savedMessages").document(uid).collection("messages").document(messageId).update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
+        db.collection("savedMessages").document(uid).collection("messages").document(messageId).delete().await()
     }
 
     private fun decryptIfNeeded(msg: SavedMessage, key: SecretKey?): SavedMessage {

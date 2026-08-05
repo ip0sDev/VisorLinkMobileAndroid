@@ -21,6 +21,10 @@ private const val KEY_NOTIF       = "notifications_enabled"
 private const val KEY_LANGUAGE    = "app_language"
 private const val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
 private const val KEY_COMPACT_LIST  = "compact_chat_list"
+private const val KEY_DISCOVER_ENABLED = "discover_enabled"
+private const val KEY_ONBOARDING_VER   = "onboarding_version"
+
+private const val CURRENT_ONBOARDING_VERSION = 1
 
 class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -56,6 +60,14 @@ class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferen
     private val _compactChatList = MutableStateFlow(prefs.getBoolean(KEY_COMPACT_LIST, true))
     val compactChatList: StateFlow<Boolean> = _compactChatList.asStateFlow()
 
+    private val _discoverEnabled = MutableStateFlow(prefs.getBoolean(KEY_DISCOVER_ENABLED, true))
+    val discoverEnabled: StateFlow<Boolean> = _discoverEnabled.asStateFlow()
+
+    private val _showOnboarding = MutableStateFlow(
+        prefs.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION
+    )
+    val showOnboarding: StateFlow<Boolean> = _showOnboarding.asStateFlow()
+
     // ── Language ───────────────────────────────────────────────────────────────
 
     private val _language = MutableStateFlow(
@@ -85,6 +97,10 @@ class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferen
             KEY_NOTIF -> _notificationsEnabled.value = sharedPreferences.getBoolean(KEY_NOTIF, true)
             KEY_DYNAMIC_INPUT -> _dynamicChatInput.value = sharedPreferences.getBoolean(KEY_DYNAMIC_INPUT, true)
             KEY_COMPACT_LIST -> _compactChatList.value = sharedPreferences.getBoolean(KEY_COMPACT_LIST, true)
+            KEY_DISCOVER_ENABLED -> _discoverEnabled.value = sharedPreferences.getBoolean(KEY_DISCOVER_ENABLED, true)
+            KEY_ONBOARDING_VER -> {
+                _showOnboarding.value = sharedPreferences.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION
+            }
             KEY_LANGUAGE -> {
                 val langStr = sharedPreferences.getString(KEY_LANGUAGE, null)
                 if (langStr != null) {
@@ -127,6 +143,14 @@ class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferen
 
     fun setCompactChatList(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_COMPACT_LIST, enabled).apply()
+    }
+
+    fun setDiscoverEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DISCOVER_ENABLED, enabled).apply()
+    }
+
+    fun completeOnboarding() {
+        prefs.edit().putInt(KEY_ONBOARDING_VER, CURRENT_ONBOARDING_VERSION).apply()
     }
 
     fun setLanguage(language: AppLanguage) {

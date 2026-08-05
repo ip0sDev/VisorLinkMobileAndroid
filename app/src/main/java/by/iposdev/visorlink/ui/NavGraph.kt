@@ -23,6 +23,7 @@ import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
 import by.iposdev.visorlink.ui.screens.main.MainScreen
 import by.iposdev.visorlink.ui.screens.feed.FeedScreen
+import by.iposdev.visorlink.ui.screens.onboarding.OnboardingScreen
 import by.iposdev.visorlink.ui.screens.comments.CommentsScreen
 import by.iposdev.visorlink.ui.screens.decoy.DecoyHomeScreen
 import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
@@ -67,12 +68,18 @@ fun VisorLinkNavGraph(
     }
 
     val authState by authViewModel.authState.collectAsState()
+    val showOnboarding by themeViewModel.showOnboarding.collectAsState()
 
-    // ── Three-state auth guard ────────────────────────────────────────────────
-    // Выполняет роутинг в зависимости от статуса авторизации.
-    // Если стелс-режим заблокирован, мы откладываем навигацию авторизации.
-    LaunchedEffect(authState, isStealthUnlocked) {
+    // ── Three-state auth guard + Onboarding ──────────────────────────────────
+    LaunchedEffect(authState, isStealthUnlocked, showOnboarding) {
         if (stealthManager.isEnabled() && !isStealthUnlocked) {
+            return@LaunchedEffect
+        }
+
+        if (showOnboarding) {
+            navController.navigate(Screen.Onboarding.route) {
+                popUpTo(0) { inclusive = true }
+            }
             return@LaunchedEffect
         }
 
@@ -89,12 +96,13 @@ fun VisorLinkNavGraph(
         }
     }
 
-    // Start destination is resolved synchronously so the first frame is correct.
+    // Start destination resolution
     val start = when {
         stealthManager.isEnabled() && !isStealthUnlocked -> "decoy"
+        showOnboarding                    -> Screen.Onboarding.route
         authState is AuthState.Verified   -> Screen.ChatList.route
         authState is AuthState.Unverified -> Screen.VerifyEmail.route
-        else                    -> Screen.Login.route
+        else                              -> Screen.Login.route
     }
 
     NavHost(navController = navController, startDestination = start) {
@@ -106,6 +114,15 @@ fun VisorLinkNavGraph(
                     isStealthUnlocked = true
                     // При изменении isStealthUnlocked на true сработает LaunchedEffect
                     // и перенаправит юзера на нужный экран в зависимости от authState
+                }
+            )
+        }
+
+        // ── Onboarding ───────────────────────────────────────────────────────
+        composable(Screen.Onboarding.route) {
+            OnboardingScreen(
+                onFinish = {
+                    // Reactive guard will handle navigation to ChatList/Login
                 }
             )
         }

@@ -67,7 +67,7 @@ fun rememberExthruStyle(appTheme: AppTheme): ExthruStyle {
         // BIOLUME (и переходно EXTHRU) — стеклянно-неоморфная ветка
         val bg = cs.background
 
-        val dShadow = if (isDark) Color.Black.copy(alpha = 0.4f) else Color(0xFFA3B1C6).copy(alpha = 0.35f)
+        val dShadow = if (isDark) Color.Black.copy(alpha = 0.4f) else Color(0xFFA3B1C6).copy(alpha = 0.20f)
         val lShadow = if (isDark) Color.White.copy(alpha = 0.02f) else Color.White.copy(alpha = 0.8f)
 
         val myBg = lerp(bg, primary, if (isDark) 0.25f else 0.12f)
@@ -75,11 +75,14 @@ fun rememberExthruStyle(appTheme: AppTheme): ExthruStyle {
 
         val themeFg = if (isDark) Color.White.copy(alpha = 0.95f) else Color.Black.copy(alpha = 0.87f)
 
+        // Светлая тема: карточки белые, темная: в цвет фона
+        val cardBgColor = if (isDark) bg else Color.White
+
         ExthruStyle(
             isForge = false, radius = 24.dp,
             darkShadow = dShadow,
             lightShadow = lShadow,
-            cardBg = bg,
+            cardBg = cardBgColor,
             inputBg = bg,
             accent = primary,
             destructive = Color(0xFFE50027),

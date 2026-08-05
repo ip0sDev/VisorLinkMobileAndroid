@@ -8,19 +8,20 @@ import androidx.compose.ui.graphics.Color
 
 object Biolume {
     // ── LIGHT (Daylight) ──
-    val Abyss         = Color(0xFFB8D4D2)
-    val AbyssSurface  = Color(0xFFC0DADA)
-    val DeepWater     = Color(0xFFCCE2E0)
-    val MidWater      = Color(0xFFD4E8E6)
-    val ShallowWater  = Color(0xFFDDF0EE)
-    val LightSurface  = Color(0xFFE8F5F3)
+    // Сделано намного светлее, чтобы белый был основным цветом
+    val Abyss         = Color(0xFFE2EFED)
+    val AbyssSurface  = Color(0xFFEBF5F3)
+    val DeepWater     = Color(0xFFF2F9F8)
+    val MidWater      = Color(0xFFF7FBFB)
+    val ShallowWater  = Color(0xFFFBFEFE)
+    val LightSurface  = Color(0xFFFFFFFF)
 
-    val ShadowDark    = Color(0xFF5C8C88)
+    val ShadowDark    = Color(0xFF94B1AF)
     val ShadowLight   = Color(0xFFFFFFFF)
 
-    val TextPrimary   = Color(0xFF1A4040)
-    val TextSecondary = Color(0xFF2D6060)
-    val TextHint      = Color(0xFF7AACAA)
+    val TextPrimary   = Color(0xFF0F2B2B)
+    val TextSecondary = Color(0xFF3D6363)
+    val TextHint      = Color(0xFF8DB6B4)
 
     val BubbleMine    = Color(0xFFC2DBD8)
     val BubbleOther   = Color(0xFFCDE4E2)

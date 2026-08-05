@@ -508,6 +508,16 @@
     <string name="diary_format_link">Ссылка</string>
     <string name="diary_format_check">Чекбокс</string>
     <string name="diary_format_image">Картинка</string>
+
+    <!-- Intro / Onboarding -->
+    <string name="action_next">Далее</string>
+    <string name="intro_welcome_title">Добро пожаловать в VisorLink</string>
+    <string name="intro_welcome_desc">Давайте настроим приложение под вас. Эти параметры можно изменить позже.</string>
+    <string name="intro_features_title">Выберите функции</string>
+    <string name="intro_features_section">Доступные модули</string>
+    <string name="intro_final_title">Всё готово!</string>
+    <string name="intro_final_desc">Ваше личное пространство настроено. Приятного использования.</string>
+    <string name="intro_start_btn">Начать работу</string>
     <string name="diary_format_draw">Рисовать</string>
     <string name="diary_format_color">Цвет</string>
     <string name="diary_stats_total_entries">Всего записей</string>

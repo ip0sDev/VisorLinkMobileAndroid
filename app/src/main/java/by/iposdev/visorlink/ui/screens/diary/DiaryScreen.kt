@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +71,21 @@ fun DiaryScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     
+    var autoBioTriggered by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.showPinInput) {
+        if (uiState.showPinInput && !autoBioTriggered && viewModel.hasBiometricPinSaved()) {
+            autoBioTriggered = true
+            (context as? FragmentActivity)?.let { activity ->
+                viewModel.launchBiometricUnlock(activity) { success ->
+                    if (!success) autoBioTriggered = false
+                }
+            }
+        } else if (!uiState.showPinInput) {
+            autoBioTriggered = false
+        }
+    }
+
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
@@ -79,7 +96,8 @@ fun DiaryScreen(
         // Simple reuse of logic, though ideally we'd have a shared PIN component
         DiaryPinDialog(
             pinError = uiState.pinError,
-            onPinEntered = { viewModel.onPinEntered(it) },
+            hasBiometric = viewModel.hasBiometricPinSaved(),
+            onPinEntered = { pin, saveBio -> viewModel.onPinEntered(pin, saveBio) },
             onBiometric = { (context as? FragmentActivity)?.let { viewModel.launchBiometricUnlock(it) } },
             onDismiss = onNavigateBack,
             clearError = { viewModel.clearPinError() }
@@ -283,7 +301,9 @@ fun DateSelector(selectedDate: Calendar, onDateSelected: (Calendar) -> Unit, app
 
 @Composable
 fun DiaryEntryCard(entry: SavedMessage, appTheme: AppTheme, onClick: () -> Unit, onDelete: () -> Unit) {
-    val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(entry.createdAt?.toDate() ?: Date())
+    val time = remember(entry.createdAt) {
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(entry.createdAt?.toDate() ?: Date())
+    }
     
     VlSurface(
         appTheme = appTheme,
@@ -307,31 +327,66 @@ fun DiaryEntryCard(entry: SavedMessage, appTheme: AppTheme, onClick: () -> Unit,
 @Composable
 fun DiaryPinDialog(
     pinError: Boolean,
-    onPinEntered: (String) -> Unit,
+    hasBiometric: Boolean,
+    onPinEntered: (String, Boolean) -> Unit,
     onBiometric: () -> Unit,
     onDismiss: () -> Unit,
     clearError: () -> Unit
 ) {
     var pin by remember { mutableStateOf("") }
+    var useBiometrics by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.diary_locked)) },
         text = {
             Column {
                 OutlinedTextField(
-                    value = pin, onValueChange = { pin = it; clearError() },
+                    value = pin, onValueChange = { 
+                        if (it.length <= 8 && it.all { char -> char.isDigit() }) {
+                            pin = it
+                            clearError()
+                        }
+                    },
                     label = { Text(stringResource(R.string.diary_pin_prompt)) },
                     visualTransformation = PasswordVisualTransformation(),
-                    isError = pinError
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    isError = pinError,
+                    singleLine = true
                 )
+                if (pinError) {
+                    Text(stringResource(R.string.saved_pin_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                }
+
+                if (!hasBiometric) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { useBiometrics = !useBiometrics }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Checkbox(checked = useBiometrics, onCheckedChange = { useBiometrics = it })
+                        Text(stringResource(R.string.saved_biometric_enable), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onPinEntered(pin) }) { Text(stringResource(R.string.saved_action_unlock)) }
+            Button(
+                onClick = { onPinEntered(pin, useBiometrics) },
+                enabled = pin.length in 4..8
+            ) { Text(stringResource(R.string.saved_action_unlock)) }
         },
         dismissButton = {
-            Row {
-                IconButton(onClick = onBiometric) { Icon(Icons.Default.Fingerprint, stringResource(R.string.diary_bio_unlock)) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (hasBiometric) {
+                    IconButton(onClick = onBiometric) { 
+                        Icon(Icons.Default.Fingerprint, stringResource(R.string.diary_bio_unlock), tint = MaterialTheme.colorScheme.primary) 
+                    }
+                }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
             }
         }
