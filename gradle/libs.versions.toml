@@ -13,13 +13,15 @@ lifecycleRuntimeKtx = "2.11.0"
 lifecycleProcess = "2.11.0"
 activityCompose = "1.13.0"
 composeBom = "2026.06.01"
-media3Exoplayer = "1.10.1"
-media3Ui = "1.10.1"
+media3Exoplayer = "1.11.0"
+media3Ui = "1.11.0"
 navigationCompose = "2.9.8"
 mediaVersion = "1.8.0"
 animation = "1.11.4"
 foundationLayout = "1.11.4"
 materialIconsExtended = "1.7.8"
+sentry-sdk = "8.52.0"
+sentry-plugin = "6.18.0"
 
 koin = "4.2.2"
 coil = "2.7.0"
@@ -92,6 +94,7 @@ kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-cor
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coil" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
+sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry-sdk" }
 
 # --- Test ---
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -107,3 +110,4 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version = "4.5.0" }
+sentry-android = { id = "io.sentry.android.gradle", version.ref = "sentry-plugin" }

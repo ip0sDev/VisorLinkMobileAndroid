@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -19,6 +20,11 @@ import androidx.core.view.WindowCompat
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
+import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.utils.CustomizationHelper
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import org.koin.compose.viewmodel.koinViewModel
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
 
@@ -213,7 +219,52 @@ val TypographyOneUI = Typography(
     labelSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
 )
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// ── User Profile Theme Wrapper ─────────────────────────────────────────────
+
+@Composable
+fun UserProfileTheme(
+    profile: UserProfile?,
+    currentUser: UserProfile?,
+    content: @Composable () -> Unit
+) {
+    val themeVm: ThemeViewModel = koinViewModel()
+    val globalAppTheme by themeVm.appTheme.collectAsState()
+    val globalPreset by themeVm.colorPreset.collectAsState()
+    val currentThemeMode by themeVm.themeMode.collectAsState()
+
+    val applyCust = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
+    val cust = if (applyCust) profile?.customization ?: emptyMap() else emptyMap()
+
+    val customAppTheme = if (cust["style"] != null && cust["style"] != "default") {
+        CustomizationHelper.parseStyle(cust["style"] as String)
+    } else globalAppTheme
+
+    val customPreset = if (cust["accent"] != null && cust["accent"] != "default") {
+        CustomizationHelper.parseAccent(cust["accent"] as String)
+    } else globalPreset
+
+    val fontStr = cust["font"] as? String ?: "default"
+
+    VisorLinkTheme(
+        appTheme = customAppTheme,
+        themeMode = currentThemeMode,
+        colorPreset = customPreset
+    ) {
+        val currentTypography = MaterialTheme.typography
+        val customizedTypography = if (fontStr != "default") {
+            CustomizationHelper.getTypography(fontStr, currentTypography)
+        } else currentTypography
+
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme,
+            shapes = MaterialTheme.shapes,
+            typography = customizedTypography,
+            content = content
+        )
+    }
+}
+
+// ── VisorLink Theme Composable ────────────────────────────────────────────────
 
 @Composable
 @Suppress("DEPRECATION")
@@ -275,6 +326,10 @@ fun VisorLinkTheme(
             AppTheme.FORGE   -> ForgeTypography
             else             -> TypographyM3
         },
-        content = content
+        content = {
+            CompositionLocalProvider(LocalAppThemeOverride provides resolvedTheme) {
+                content()
+            }
+        }
     )
 }

@@ -34,10 +34,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.*
+import by.iposdev.visorlink.utils.CustomizationHelper
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
@@ -90,6 +92,56 @@ fun CustomizationScreen(
                         .padding(16.dp)
                 ) {
                    ProfilePreview(profile, currentTheme)
+                }
+            }
+
+            // Style/Theme
+            VlSettingsSection(appTheme = currentTheme, title = "Design Style") {
+                val styles = listOf("default", "biolume", "forge", "material")
+                styles.forEachIndexed { index, s ->
+                    VlOptionRow(
+                        appTheme = currentTheme,
+                        icon = when(s) {
+                            "biolume" -> Icons.Default.AutoAwesome
+                            "forge" -> Icons.Default.Terminal
+                            "material" -> Icons.Default.Palette
+                            else -> Icons.Default.Settings
+                        },
+                        label = s.replaceFirstChar { it.uppercase() },
+                        selected = (cust["style"] as? String ?: "default") == s,
+                        index = index,
+                        total = styles.size,
+                        onClick = { viewModel.updateCustomization("style", s) }
+                    )
+                }
+            }
+
+            // Accent Color
+            VlSettingsSection(appTheme = currentTheme, title = "Accent Color") {
+                val presets = listOf(
+                    "default" to ColorPreset.DEFAULT,
+                    "purple" to ColorPreset.PURPLE,
+                    "blue" to ColorPreset.BLUE,
+                    "emerald" to ColorPreset.EMERALD,
+                    "crimson" to ColorPreset.CRIMSON
+                )
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    presets.forEach { (name, preset) ->
+                        ColorPresetCircle(
+                            preset = preset,
+                            isSelected = (cust["accent"] as? String ?: "default") == name,
+                            appTheme = currentTheme,
+                            isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f,
+                            onClick = { viewModel.updateCustomization("accent", name) }
+                        )
+                    }
                 }
             }
 

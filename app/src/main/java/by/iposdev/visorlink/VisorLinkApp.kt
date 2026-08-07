@@ -9,6 +9,7 @@ import by.iposdev.visorlink.di.appModule
 import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.PresenceManager
+import io.sentry.android.core.SentryAndroid
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.GifDecoder
@@ -36,6 +37,16 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        
+        SentryAndroid.init(this) { options ->
+            // Performance monitoring
+            options.tracesSampleRate = 1.0
+            // User feedback
+            options.isEnableUserInteractionTracing = true
+            // Profile sessions
+            options.profilesSampleRate = 1.0
+        }
+
         NotificationHelper.createChannels(this)
 
         // ─── Firebase App Check ───────────────────────────────────────────────

@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -201,12 +202,7 @@ fun ChatScreen(
     }
 
     val hazeState = remember { HazeState() }
-    val scaffoldBg = when {
-        isExthru -> ExthruChat.pageBg(isDark)
-        isOneUi  -> if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg
-        else     -> MaterialTheme.colorScheme.background
-    }
-
+    
     val otherUser = uiState.otherUser
     val currentUser = uiState.currentUser
     val isOtherPro = otherUser?.isProActive() == true
@@ -214,90 +210,71 @@ fun ChatScreen(
     val cust = if (applyCustom) otherUser?.customization ?: emptyMap() else emptyMap()
     val chatBgUrl = cust["bgUrl"] as? String ?: uiState.wallpaperUrl
 
-    CompositionLocalProvider(LocalHazeState provides hazeState) {
-        Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
-            if (chatBgUrl != null) {
-                AsyncImage(
-                    model = chatBgUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    alpha = if (isDark) 0.6f else 0.8f
-                )
-            }
-            Scaffold(
-                containerColor = Color.Transparent,
-                topBar = {
-                    if (isExthru) {
-                        ExthruChatTopBar(
-                            uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark, isForge = isForge,
-                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                            hapticEnabled = hapticEnabled,
-                            onWallpaperClick = { showWallpaperSheet = true },
-                            onNavigateBack = onNavigateBack,
-                            onOpenOtherProfile = onOpenOtherProfile,
-                            onOpenChatSettings = onOpenChatSettings,
-                            onLeaveClick = { showLeaveDialog = true }
-                        )
-                    } else if (isOneUi) {
-                        OneUiChatTopBar(
-                            uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDark,
-                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                            hapticEnabled = hapticEnabled,
-                            onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
-                            onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
-                            onLeaveClick = { showLeaveDialog = true }
-                        )
-                    } else {
-                        DefaultChatTopBar(
-                            uiState = uiState, otherUid = otherUid, chatId = chatId,
-                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                            hapticEnabled = hapticEnabled,
-                            onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
-                            onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
-                            onLeaveClick = { showLeaveDialog = true }
-                        )
-                    }
-                },
-                bottomBar = {
-                    if (dynamicInput) {
-                        DynamicChatInputBar(
-                            uiState = uiState, inputText = inputText, isDark = isDark, appTheme = appTheme,
-                            canSendMessage = canSendMessage, canSendMedia = canSendMedia,
-                            hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                            audioPermission = audioPermission, focusRequester = focusRequester,
-                            onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                            onAttach = { imagePicker.launch("image/*") },
-                            onStickerClick = { showStickerSheet = true },
-                            onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
-                            onStartRecord = { viewModel.startRecording() },
-                            onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                            onCancelRecord = { viewModel.cancelRecording() },
-                            onSendRecord = { viewModel.stopRecordingAndSend() },
-                            onClearReply = { viewModel.clearReply() },
-                            haptic = haptic
-                        )
-                    } else {
-                        if (isExthru) {
-                            ExthruChatBottomBar(
-                                uiState = uiState, inputText = inputText, isDark = isDark, isForge = isForge,
-                                canSendMessage = canSendMessage, canSendMedia = canSendMedia,
-                                hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                                audioPermission = audioPermission, focusRequester = focusRequester,
-                                onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                                onAttach = { imagePicker.launch("image/*") },
-                                onStickerClick = { showStickerSheet = true },
-                                onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
-                                onStartRecord = { viewModel.startRecording() },
-                                onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                                onCancel = { viewModel.cancelRecording() },
-                                onSendRecord = { viewModel.stopRecordingAndSend() },
-                                onClearReply = { viewModel.clearReply() },
-                                haptic = haptic
+    UserProfileTheme(profile = otherUser, currentUser = currentUser) {
+        val effectiveTheme = LocalAppThemeOverride.current ?: appTheme
+        val isExthruEff = effectiveTheme.isExthruFamily
+        val isOneUiEff  = effectiveTheme == AppTheme.ONE_UI
+        val isForgeEff  = effectiveTheme == AppTheme.FORGE
+        
+        val cs = MaterialTheme.colorScheme
+        val isDarkTheme = cs.surface.luminance() < 0.5f
+        val style = rememberExthruStyle(effectiveTheme)
+        
+        val chatScaffoldBg = when {
+            isExthruEff -> ExthruChat.pageBg(isDarkTheme)
+            isOneUiEff  -> if (isDarkTheme) OneUiChat.PageBgDark else OneUiChat.PageBg
+            else        -> cs.background
+        }
+
+        CompositionLocalProvider(LocalHazeState provides hazeState) {
+            Box(modifier = Modifier.fillMaxSize().background(chatScaffoldBg)) {
+                if (chatBgUrl != null) {
+                    AsyncImage(
+                        model = chatBgUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        alpha = if (isDarkTheme) 0.6f else 0.8f
+                    )
+                }
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    topBar = {
+                        if (isExthruEff) {
+                            ExthruChatTopBar(
+                                uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDarkTheme, isForge = isForgeEff,
+                                canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                                hapticEnabled = hapticEnabled,
+                                onWallpaperClick = { showWallpaperSheet = true },
+                                onNavigateBack = onNavigateBack,
+                                onOpenOtherProfile = onOpenOtherProfile,
+                                onOpenChatSettings = onOpenChatSettings,
+                                onLeaveClick = { showLeaveDialog = true }
                             )
-                        } else if (isOneUi) {
-                            OneUiChatBottomBar(
-                                uiState = uiState, inputText = inputText, isDark = isDark,
+                        } else if (isOneUiEff) {
+                            OneUiChatTopBar(
+                                uiState = uiState, otherUid = otherUid, chatId = chatId, isDark = isDarkTheme,
+                                canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                                hapticEnabled = hapticEnabled,
+                                onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
+                                onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
+                                onLeaveClick = { showLeaveDialog = true }
+                            )
+                        } else {
+                            DefaultChatTopBar(
+                                uiState = uiState, otherUid = otherUid, chatId = chatId,
+                                canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                                hapticEnabled = hapticEnabled,
+                                onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
+                                onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
+                                onLeaveClick = { showLeaveDialog = true }
+                            )
+                        }
+                    },
+                    bottomBar = {
+                        if (dynamicInput) {
+                            DynamicChatInputBar(
+                                uiState = uiState, inputText = inputText, isDark = isDarkTheme, appTheme = effectiveTheme,
                                 canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                                 hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                                 audioPermission = audioPermission, focusRequester = focusRequester,
@@ -307,234 +284,270 @@ fun ChatScreen(
                                 onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
                                 onStartRecord = { viewModel.startRecording() },
                                 onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                                onCancel = { viewModel.cancelRecording() },
+                                onCancelRecord = { viewModel.cancelRecording() },
                                 onSendRecord = { viewModel.stopRecordingAndSend() },
                                 onClearReply = { viewModel.clearReply() },
                                 haptic = haptic
                             )
                         } else {
-                            DefaultChatBottomBar(
-                                uiState = uiState, inputText = inputText,
-                                canSendMessage = canSendMessage, canSendMedia = canSendMedia,
-                                hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                                audioPermission = audioPermission, focusRequester = focusRequester,
-                                onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                                onAttach = { imagePicker.launch("image/*") },
-                                onStickerClick = { showStickerSheet = true },
-                                onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
-                                onStartRecord = { viewModel.startRecording() },
-                                onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                                onCancel = { viewModel.cancelRecording() },
-                                onSendRecord = { viewModel.stopRecordingAndSend() },
-                                onClearReply = { viewModel.clearReply() },
-                                haptic = haptic
-                            )
+                            if (isExthruEff) {
+                                ExthruChatBottomBar(
+                                    uiState = uiState, inputText = inputText, isDark = isDarkTheme, isForge = isForgeEff,
+                                    canSendMessage = canSendMessage, canSendMedia = canSendMedia,
+                                    hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
+                                    audioPermission = audioPermission, focusRequester = focusRequester,
+                                    onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                                    onAttach = { imagePicker.launch("image/*") },
+                                    onStickerClick = { showStickerSheet = true },
+                                    onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
+                                    onStartRecord = { viewModel.startRecording() },
+                                    onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
+                                    onCancel = { viewModel.cancelRecording() },
+                                    onSendRecord = { viewModel.stopRecordingAndSend() },
+                                    onClearReply = { viewModel.clearReply() },
+                                    haptic = haptic
+                                )
+                            } else if (isOneUiEff) {
+                                OneUiChatBottomBar(
+                                    uiState = uiState, inputText = inputText, isDark = isDarkTheme,
+                                    canSendMessage = canSendMessage, canSendMedia = canSendMedia,
+                                    hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
+                                    audioPermission = audioPermission, focusRequester = focusRequester,
+                                    onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                                    onAttach = { imagePicker.launch("image/*") },
+                                    onStickerClick = { showStickerSheet = true },
+                                    onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
+                                    onStartRecord = { viewModel.startRecording() },
+                                    onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
+                                    onCancel = { viewModel.cancelRecording() },
+                                    onSendRecord = { viewModel.stopRecordingAndSend() },
+                                    onClearReply = { viewModel.clearReply() },
+                                    haptic = haptic
+                                )
+                            } else {
+                                DefaultChatBottomBar(
+                                    uiState = uiState, inputText = inputText,
+                                    canSendMessage = canSendMessage, canSendMedia = canSendMedia,
+                                    hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
+                                    audioPermission = audioPermission, focusRequester = focusRequester,
+                                    onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                                    onAttach = { imagePicker.launch("image/*") },
+                                    onStickerClick = { showStickerSheet = true },
+                                    onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
+                                    onStartRecord = { viewModel.startRecording() },
+                                    onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
+                                    onCancel = { viewModel.cancelRecording() },
+                                    onSendRecord = { viewModel.stopRecordingAndSend() },
+                                    onClearReply = { viewModel.clearReply() },
+                                    haptic = haptic
+                                )
+                            }
                         }
                     }
-                }
-            ) { innerPadding ->
-                Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
-                    if (uiState.wallpaperUrl != null) {
-                        AsyncImage(model = uiState.wallpaperUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(), alpha = if (isDark) 0.35f else 0.7f)
-                    } else {
-                        VlAmbientGlow(appTheme = appTheme)
-                    }
+                ) { innerPadding ->
+                    Box(modifier = Modifier.fillMaxSize().hazeSource(state = hazeState)) {
+                        if (uiState.wallpaperUrl != null && !applyCustom) {
+                            AsyncImage(model = uiState.wallpaperUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(), alpha = if (isDarkTheme) 0.35f else 0.7f)
+                        } else if (!applyCustom) {
+                            VlAmbientGlow(appTheme = effectiveTheme)
+                        }
 
-                    if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
-                        EmptyChatPlaceholder(modifier = Modifier.fillMaxSize(), isExthru = isExthru, isForge = isForge, isDark = isDark)
-                    } else {
-                        val listBg = when {
-                            uiState.wallpaperUrl != null -> Modifier
-                            isExthru -> Modifier.background(ExthruChat.pageBg(isDark))
-                            isOneUi  -> Modifier.background(if (isDark) OneUiChat.PageBgDark else OneUiChat.PageBg)
-                            else     -> Modifier
-                        }
-                        LazyColumn(
-                            state = listState, reverseLayout = true,
-                            userScrollEnabled = contextMenuData == null,
-                            modifier = Modifier.fillMaxSize().then(listBg),
-                            contentPadding = PaddingValues(
-                                top = innerPadding.calculateTopPadding() + 12.dp,
-                                bottom = innerPadding.calculateBottomPadding() + 12.dp
-                            ),
-                        ) {
-                            itemsIndexed(
-                                items = uiState.messageListItems.asReversed(),
-                                key = { _, item ->
+                        if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
+                            EmptyChatPlaceholder(modifier = Modifier.fillMaxSize(), isExthru = isExthruEff, isForge = isForgeEff, isDark = isDarkTheme)
+                        } else {
+                            val listBg = when {
+                                (uiState.wallpaperUrl != null || applyCustom) -> Modifier
+                                isExthruEff -> Modifier.background(ExthruChat.pageBg(isDarkTheme))
+                                isOneUiEff  -> Modifier.background(if (isDarkTheme) OneUiChat.PageBgDark else OneUiChat.PageBg)
+                                else        -> Modifier
+                            }
+                            LazyColumn(
+                                state = listState, reverseLayout = true,
+                                userScrollEnabled = contextMenuData == null,
+                                modifier = Modifier.fillMaxSize().then(listBg),
+                                contentPadding = PaddingValues(
+                                    top = innerPadding.calculateTopPadding() + 12.dp,
+                                    bottom = innerPadding.calculateBottomPadding() + 12.dp
+                                ),
+                            ) {
+                                itemsIndexed(
+                                    items = uiState.messageListItems.asReversed(),
+                                    key = { _, item ->
+                                        when (item) {
+                                            is MessageListItem.DateHeader  -> "date_${item.label}"
+                                            is MessageListItem.MessageItem -> item.message.id
+                                        }
+                                    }
+                                ) { index, item ->
+                                    if (index >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {
+                                        LaunchedEffect(index) {
+                                            viewModel.loadMore()
+                                        }
+                                    }
+
                                     when (item) {
-                                        is MessageListItem.DateHeader  -> "date_${item.label}"
-                                        is MessageListItem.MessageItem -> item.message.id
-                                    }
-                                }
-                            ) { index, item ->
-                                if (index >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {
-                                    LaunchedEffect(index) {
-                                        viewModel.loadMore()
-                                    }
-                                }
-
-                                when (item) {
-                                    is MessageListItem.DateHeader -> DateSeparator(
-                                        item.label, isOneUi, isExthru, isForge, isDark, uiState.wallpaperUrl != null)
-                                    is MessageListItem.MessageItem -> {
-                                        val isMine = item.message.senderId == viewModel.currentUid
-                                        SwipeableMessage(
-                                            message = item.message, isMine = isMine,
-                                            hapticEnabled = hapticEnabled,
-                                            isOneUi = isOneUi, isExthru = isExthru, isDark = isDark,
-                                            onReply = {
-                                                haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                                viewModel.setReplyTo(item.message)
-                                            },
-                                        ) {
-                                            MessageBubble(
+                                        is MessageListItem.DateHeader -> DateSeparator(
+                                            item.label, isOneUiEff, isExthruEff, isForgeEff, isDarkTheme, (uiState.wallpaperUrl != null || applyCustom))
+                                        is MessageListItem.MessageItem -> {
+                                            val isMine = item.message.senderId == viewModel.currentUid
+                                            SwipeableMessage(
                                                 message = item.message, isMine = isMine,
-                                                otherUid = otherUid, currentUid = viewModel.currentUid,
-                                                chatType = uiState.chatType, hapticEnabled = hapticEnabled,
-                                                showSenderName = uiState.chatType != ChatType.DIRECT,
-                                                voicePlayback = uiState.voicePlayback,
-                                                isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
-                                                hasWallpaper = uiState.wallpaperUrl != null,
-                                                onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
-                                                onSeekVoice = { viewModel.seekVoice(it) },
-                                                onLongPressStart = { offset ->
-                                                    contextMenuData = ContextMenuData(item.message, isMine, offset)
-                                                    dragOffset = Offset.Zero
+                                                hapticEnabled = hapticEnabled,
+                                                isOneUi = isOneUiEff, isExthru = isExthruEff, isDark = isDarkTheme,
+                                                onReply = {
+                                                    haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                                    viewModel.setReplyTo(item.message)
                                                 },
-                                                onLongPressDrag = { delta -> dragOffset += delta },
-                                                onLongPressEnd = {
-                                                    contextMenuData = null
-                                                    dragOffset = Offset.Zero
-                                                },
-                                                onMediaTap = onOpenImageViewer,
-                                                onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
-                                                onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
-                                                onReplyClick = onScrollToMessage,
-                                                onMentionClick = onMentionClick,
-                                                onOpenComments = { onOpenComments(item.message.id) },
-                                                chat = uiState.chat,
-                                            )
+                                            ) {
+                                                MessageBubble(
+                                                    message = item.message, isMine = isMine,
+                                                    otherUid = otherUid, currentUid = viewModel.currentUid,
+                                                    chatType = uiState.chatType, hapticEnabled = hapticEnabled,
+                                                    showSenderName = uiState.chatType != ChatType.DIRECT,
+                                                    voicePlayback = uiState.voicePlayback,
+                                                    isOneUi = isOneUiEff, isExthru = isExthruEff, isForge = isForgeEff, isDark = isDarkTheme,
+                                                    hasWallpaper = (uiState.wallpaperUrl != null || applyCustom),
+                                                    onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
+                                                    onSeekVoice = { viewModel.seekVoice(it) },
+                                                    onLongPressStart = { offset ->
+                                                        contextMenuData = ContextMenuData(item.message, isMine, offset)
+                                                        dragOffset = Offset.Zero
+                                                    },
+                                                    onLongPressDrag = { delta -> dragOffset += delta },
+                                                    onLongPressEnd = {
+                                                        contextMenuData = null
+                                                        dragOffset = Offset.Zero
+                                                    },
+                                                    onMediaTap = onOpenImageViewer,
+                                                    onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
+                                                    onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
+                                                    onReplyClick = onScrollToMessage,
+                                                    onMentionClick = onMentionClick,
+                                                    onOpenComments = { onOpenComments(item.message.id) },
+                                                    chat = uiState.chat,
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Top overlays
-                    Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = innerPadding.calculateTopPadding() + 16.dp)) {
-                        AnimatedVisibility(
-                            visible = uiState.showUnofficialClientWarning,
-                            enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()
-                        ) {
-                            Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                                Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(stringResource(R.string.chat_client_unsafe_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
-                                    IconButton(onClick = { viewModel.dismissUnofficialWarning() }, modifier = Modifier.size(24.dp)) {
-                                        Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                            }
-                        }
-
-                        AnimatedVisibility(
-                            visible = uiState.isLoadingMore,
-                            enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
-                            exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
-                        ) {
-                            val indicatorColor = when {
-                                isExthru -> ExthruChat.Accent
-                                isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
-                                else     -> MaterialTheme.colorScheme.primary
-                            }
-                            Surface(
-                                shape = if (isForge) RectangleShape else CircleShape,
-                                color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
-                                shadowElevation = if (isForge) 0.dp else 4.dp, modifier = Modifier.size(36.dp),
-                                border = if (isForge) androidx.compose.foundation.BorderStroke(2.dp, if(isDark) Color(0xFF333333) else Color.Black) else null
+                        // Top overlays
+                        Column(modifier = Modifier.align(Alignment.TopCenter).padding(top = innerPadding.calculateTopPadding() + 16.dp)) {
+                            AnimatedVisibility(
+                                visible = uiState.showUnofficialClientWarning,
+                                enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()
                             ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = indicatorColor)
-                                }
-                            }
-                        }
-                    }
-
-                    // ── КРАСИВАЯ КНОПКА СКРОЛЛА ВНИЗ ──
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showScrollDown,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp),
-                        enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
-                        exit = scaleOut(tween(150)) + fadeOut(tween(150)),
-                    ) {
-                        if (isExthru) {
-                            val interactionSource = remember { MutableInteractionSource() }
-                            val isPressed by interactionSource.collectIsPressedAsState()
-                            val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "fab_scale")
-                            val shape = if (isForge) RectangleShape else CircleShape
-
-                            val shadowMod = if (isForge) {
-                                Modifier.forgeNeuBrutalism(isPressed, isDark, 4.dp)
-                            } else if (isPressed) {
-                                Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-                            } else {
-                                Modifier.exthruSmallRaisedShadow(isDark)
-                            }
-
-                            Box {
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .scale(if(isForge) 1f else scale)
-                                        .then(shadowMod)
-                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
-                                        .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
-                                        .clip(shape)
-                                        .clickable(interactionSource = interactionSource, indication = null) {
-                                            scope.launch { listState.animateScrollToItem(0) }
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Default.KeyboardArrowDown, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                                }
-                                if (unreadCount > 0) {
-                                    Box(
-                                        modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
-                                            .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                            .background(Color.Red, if (isForge) RectangleShape else CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                                    Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(12.dp))
+                                        Text(stringResource(R.string.chat_client_unsafe_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+                                        IconButton(onClick = { viewModel.dismissUnofficialWarning() }, modifier = Modifier.size(24.dp)) {
+                                            Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.size(18.dp))
+                                        }
                                     }
                                 }
                             }
-                        } else {
-                            val fabColor = when {
-                                isOneUi  -> if (isDark) Color(0xFF4D90F0) else Color(0xFF1259C3)
-                                else     -> MaterialTheme.colorScheme.primary
-                            }
-                            Box {
-                                FloatingActionButton(
-                                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                                    modifier = Modifier.size(44.dp),
-                                    containerColor = fabColor,
-                                    contentColor = Color.White,
-                                    shape = CircleShape,
-                                    elevation = FloatingActionButtonDefaults.elevation()
-                                ) {
-                                    Icon(Icons.Default.KeyboardArrowDown, null)
+
+                            AnimatedVisibility(
+                                visible = uiState.isLoadingMore,
+                                enter = fadeIn() + slideInVertically(initialOffsetY = { -it }),
+                                exit = fadeOut() + slideOutVertically(targetOffsetY = { -it }),
+                            ) {
+                                val indicatorColor = when {
+                                    isExthru -> ExthruChat.Accent
+                                    isOneUi  -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
+                                    else     -> MaterialTheme.colorScheme.primary
                                 }
-                                if (unreadCount > 0) {
+                                Surface(
+                                    shape = if (isForge) RectangleShape else CircleShape,
+                                    color = if (isOneUi && isDark) OneUiChat.CardBgDark else MaterialTheme.colorScheme.surface,
+                                    shadowElevation = if (isForge) 0.dp else 4.dp, modifier = Modifier.size(36.dp),
+                                    border = if (isForge) BorderStroke(2.dp, if(isDark) Color(0xFF333333) else Color.Black) else null
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp, color = indicatorColor)
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── КРАСИВАЯ КНОПКА СКРОЛЛА ВНИЗ ──
+                        AnimatedVisibility(
+                            visible = showScrollDown,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = innerPadding.calculateBottomPadding() + 16.dp),
+                            enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(tween(200)),
+                            exit = scaleOut(tween(150)) + fadeOut(tween(150)),
+                        ) {
+                            if (isExthru) {
+                                val interactionSource = remember { MutableInteractionSource() }
+                                val isPressed by interactionSource.collectIsPressedAsState()
+                                val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "fab_scale")
+                                val shape = if (isForge) RectangleShape else CircleShape
+
+                                val shadowMod = if (isForge) {
+                                    Modifier.forgeNeuBrutalism(isPressed, isDark, 4.dp)
+                                } else if (isPressed) {
+                                    Modifier.nmInsetShadow(isDark, cornerRadius = 22.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+                                } else {
+                                    Modifier.exthruSmallRaisedShadow(isDark)
+                                }
+
+                                Box {
                                     Box(
-                                        modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
-                                            .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
-                                            .background(Color.Red, CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
-                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(44.dp)
+                                            .scale(if(isForge) 1f else scale)
+                                            .then(shadowMod)
+                                            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+                                            .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                            .clip(shape)
+                                            .clickable(interactionSource = interactionSource, indication = null) {
+                                                scope.launch { listState.animateScrollToItem(0) }
+                                            },
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        Icon(Icons.Default.KeyboardArrowDown, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                                    }
+                                    if (unreadCount > 0) {
+                                        Box(
+                                            modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
+                                                .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                                                .background(Color.Red, if (isForge) RectangleShape else CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            } else {
+                                val fabColor = when {
+                                    isOneUi  -> if (isDark) Color(0xFF4D90F0) else Color(0xFF1259C3)
+                                    else     -> MaterialTheme.colorScheme.primary
+                                }
+                                Box {
+                                    FloatingActionButton(
+                                        onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                                        modifier = Modifier.size(44.dp),
+                                        containerColor = fabColor,
+                                        contentColor = Color.White,
+                                        shape = CircleShape,
+                                        elevation = FloatingActionButtonDefaults.elevation()
+                                    ) {
+                                        Icon(Icons.Default.KeyboardArrowDown, null)
+                                    }
+                                    if (unreadCount > 0) {
+                                        Box(
+                                            modifier = Modifier.align(Alignment.TopEnd).offset(4.dp, (-4).dp)
+                                                .sizeIn(minWidth = 18.dp, minHeight = 18.dp)
+                                                .background(Color.Red, CircleShape).padding(horizontal = 4.dp, vertical = 2.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Text(if (unreadCount > 99) "99+" else unreadCount.toString(), color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
                                     }
                                 }
                             }
@@ -684,7 +697,7 @@ fun ChatScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun WallpaperBottomSheet(
+fun WallpaperBottomSheet(
     hasWallpaper: Boolean,
     isGroupOrChannel: Boolean,
     isExthru: Boolean,
@@ -748,7 +761,7 @@ private fun WallpaperBottomSheet(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AlbumPreviewSheet(
+fun AlbumPreviewSheet(
     images: List<AlbumImageLocal>,
     caption: String,
     isExthru: Boolean,
@@ -888,7 +901,7 @@ private fun AlbumPreviewSheet(
 }
 
 @Composable
-private fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, isForge: Boolean, onToggleSpoiler: () -> Unit) {
+fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, isForge: Boolean, onToggleSpoiler: () -> Unit) {
     val blurRadius by animateDpAsState(targetValue = if (spoiler) 12.dp else 0.dp, animationSpec = tween(200), label = "thumb_blur")
     Box(modifier = Modifier.size(140.dp).clip(if (isForge) RectangleShape else RoundedCornerShape(12.dp))) {
         AsyncImage(
@@ -915,10 +928,9 @@ private fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, isForge: Boolean, onT
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun EmptyChatPlaceholder(modifier: Modifier = Modifier, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false) {
-    val emptyTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "empty")
+fun EmptyChatPlaceholder(modifier: Modifier = Modifier, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false) {
+    val emptyTransition = rememberInfiniteTransition(label = "empty")
     val emptyScale by emptyTransition.animateFloat(
         initialValue = 0.92f, targetValue = 1.08f,
         animationSpec = infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing), RepeatMode.Reverse),
@@ -937,7 +949,7 @@ private fun EmptyChatPlaceholder(modifier: Modifier = Modifier, isExthru: Boolea
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Unit) {
+fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Unit) {
     val pagerState = rememberPagerState(initialPage = startIndex, pageCount = { images.size })
 
     Dialog(
@@ -1025,14 +1037,14 @@ fun RecordingBar(
 ) {
     val haptic = rememberHaptic()
     var elapsed by remember { mutableIntStateOf(0) }
-    val dotAlpha by androidx.compose.animation.core.rememberInfiniteTransition(label = "dot").animateFloat(
+    val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(
         initialValue = 1f, targetValue = 0.2f,
         animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
         label = "dot_alpha",
     )
 
-    val timerColor = if (isExthru) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.error
-    val labelColor = if (isExthru) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant
+    val timerColor = MaterialTheme.colorScheme.error
+    val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     LaunchedEffect(Unit) {
         while (true) { delay(1000); elapsed++; haptic.perform(HapticType.CLICK, hapticEnabled) }
@@ -1067,9 +1079,9 @@ fun RecordingBar(
         Row(Modifier.weight(1f).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), if(isForge) RectangleShape else CircleShape))
             Spacer(Modifier.width(8.dp))
-            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = timerColor, fontFamily = if(isForge) FontFamily.Monospace else null)
+            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = timerColor)
             Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.chat_recording_label), style = MaterialTheme.typography.bodySmall, color = labelColor, fontFamily = if(isForge) FontFamily.Monospace else null)
+            Text(stringResource(R.string.chat_recording_label), style = MaterialTheme.typography.bodySmall, color = labelColor)
         }
 
         if (isExthru) {

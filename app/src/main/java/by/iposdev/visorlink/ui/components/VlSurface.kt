@@ -126,7 +126,7 @@ fun VlSurface(
             // Фон делаем немного прозрачным, чтобы Haze и Glow красиво просвечивали
             val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f)
 
-            val isBiolume = appTheme == AppTheme.BIOLUME
+            val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU
             val shadowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (!showInset) {
                 Modifier.nmRaisedShadow(
                     isDark = isDark,
@@ -183,12 +183,13 @@ fun VlSurface(
                         Modifier
                             .matchParentSize()
                             .background(
-                                Brush.linearGradient(
+                                brush = Brush.linearGradient(
                                     colors = if (isDark)
                                         listOf(Color.White.copy(0.04f), Color.Transparent)
                                     else
                                         listOf(Color.White.copy(0.2f), Color.Transparent)
-                                )
+                                ),
+                                shape = shape
                             )
                     )
                 }

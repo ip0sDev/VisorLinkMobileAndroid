@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -44,6 +45,10 @@ import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextAlign
+import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.utils.CustomizationHelper
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,111 +65,93 @@ fun OtherProfileScreen(
     val currentUser by userRepository.currentUserFlow().collectAsState(initial = null)
     val scope = rememberCoroutineScope()
 
-    val currentTheme by themeViewModel.appTheme.collectAsState()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    UserProfileTheme(profile = user, currentUser = currentUser) {
+        val currentTheme by themeViewModel.appTheme.collectAsState()
+        val effectiveTheme = LocalAppThemeOverride.current ?: currentTheme
+        
+        val cs = MaterialTheme.colorScheme
+        val isDarkTheme = cs.surface.luminance() < 0.5f
+        val style = rememberExthruStyle(effectiveTheme)
+        val isForgeTheme = style.isForge
+        val haptic = rememberHaptic()
+        val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
-    val isExthru = currentTheme.isExthruFamily
-    val style = rememberExthruStyle(currentTheme)
-    val isForge = style.isForge
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
+        val targetUser = user
+        val cust = if (CustomizationHelper.shouldApplyCustomization(targetUser, currentUser)) {
+            targetUser?.customization ?: emptyMap()
+        } else emptyMap()
 
-    val haptic = rememberHaptic()
+        val layout = cust["layout"] as? String ?: "default"
+        val bgUrl = cust["bgUrl"] as? String
+        val gifUrl = cust["gifUrl"] as? String
+        val bannerUrl = gifUrl ?: bgUrl
 
-    val targetUser = user
-    val isPro = targetUser?.isProActive() == true
-    val applyCustom = isPro && (currentUser?.ignoreCustomizations != true)
-    val cust = if (applyCustom) targetUser?.customization ?: emptyMap() else emptyMap()
-    
-    val layout = cust["layout"] as? String ?: "default"
-    val bgUrl = cust["bgUrl"] as? String
-    val gifUrl = cust["gifUrl"] as? String
-    val bannerUrl = gifUrl ?: bgUrl
-    
-    val fontName = cust["font"] as? String
-    val customFont = when(fontName) {
-        "mono" -> FontFamily.Monospace
-        "serif" -> FontFamily.Serif
-        else -> if (isForge) FontFamily.Monospace else null
-    }
-
-    Scaffold(
-        containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
-        topBar = {
-            Surface(
-                color = if (isForge) style.cardBg else if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if (applyCustom && bannerUrl != null) 0.6f else 1f) else Color.Transparent,
-                modifier = if (isExthru && !isForge) Modifier.nmDividerBottom(isDark) else Modifier
-            ) {
-                TopAppBar(
-                    title = {
-                        val titleText = targetUser?.displayName ?: stringResource(R.string.profile_title)
-                        if (isExthru) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                Surface(
+                    color = if (isForgeTheme) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (bannerUrl != null) 0.6f else 1f),
+                    modifier = if (!isForgeTheme) Modifier.nmDividerBottom(isDarkTheme) else Modifier
+                ) {
+                    TopAppBar(
+                        title = {
+                            val titleText = stringResource(R.string.profile_title)
                             Text(
-                                text = if (isForge) "> ${titleText.uppercase()}_" else titleText,
-                                style = MaterialTheme.typography.headlineLarge.copy(
-                                    fontSize = if (isForge) 28.sp else 34.sp,
+                                text = if (isForgeTheme) "> ${titleText.uppercase()}_" else titleText,
+                                style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = customFont
                                 ),
-                                color = if (isForge) style.accent else Color.Unspecified
+                                color = if (isForgeTheme) style.accent else Color.Unspecified
                             )
-                        } else {
-                            Text(titleText, fontFamily = customFont)
-                        }
-                    },
-                    navigationIcon = {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        val isPressed by interactionSource.collectIsPressedAsState()
-                        val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "back_scale")
+                        },
+                        navigationIcon = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f), label = "back_scale")
 
-                        val shape = if (isForge) RectangleShape else CircleShape
-                        val shadowMod = if (isForge) {
-                            Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
-                        } else if (isPressed) {
-                            Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
-                        } else {
-                            Modifier.exthruSmallRaisedShadow(isDark)
-                        }
+                            val shape = if (isForgeTheme) RectangleShape else CircleShape
+                            val shadowMod = if (isForgeTheme) {
+                                Modifier.forgeNeuBrutalism(isPressed, isDarkTheme, 3.dp)
+                            } else if (isPressed) {
+                                Modifier.nmInsetShadow(isDarkTheme, cornerRadius = 21.dp, darkAlpha = if (isDarkTheme) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDarkTheme)
+                            }
 
-                        val btnModifier = if (isExthru) Modifier
-                            .padding(start = 12.dp, end = 4.dp)
-                            .size(42.dp)
-                            .scale(if(isForge) 1f else scale)
-                            .then(shadowMod)
-                            .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (applyCustom && bannerUrl != null) 0.5f else 1f), shape)
-                            .then(if (isForge) Modifier else Modifier.border(1.dp, if(isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
-                            .clip(shape)
-                        else Modifier
-
-                        IconButton(
-                            onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                onNavigateBack()
-                            },
-                            modifier = btnModifier,
-                            interactionSource = interactionSource
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                stringResource(R.string.action_back),
-                                modifier = if (isExthru) Modifier.size(20.dp) else Modifier,
-                                tint = if (isExthru) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 12.dp, end = 4.dp)
+                                    .size(42.dp)
+                                    .scale(if (isForgeTheme) 1f else scale)
+                                    .then(shadowMod)
+                                    .background(if (isForgeTheme) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (bannerUrl != null) 0.5f else 1f), shape)
+                                    .then(if (isForgeTheme) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDarkTheme) 0.05f else 0.3f), shape))
+                                    .clip(shape)
+                                    .clickable(interactionSource = interactionSource, indication = null) {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        onNavigateBack()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    stringResource(R.string.action_back),
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                     )
-                )
-            }
-        },
-        floatingActionButton = {
-            if (targetUser != null) {
-                if (isExthru) {
+                }
+            },
+            floatingActionButton = {
+                if (targetUser != null) {
                     NmExtendedFab(
                         text = stringResource(R.string.other_profile_message),
                         icon = Icons.Default.Chat,
-                        isDark = isDark,
-                        isForge = isForge,
+                        isDark = isDarkTheme,
+                        isForge = isForgeTheme,
                         onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             scope.launch {
@@ -173,169 +160,203 @@ fun OtherProfileScreen(
                             }
                         }
                     )
-                } else {
-                    ExtendedFloatingActionButton(
-                        onClick = {
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            scope.launch {
-                                val chatId = viewModel.openOrCreateChat()
-                                onOpenChat(chatId, viewModel.targetUid)
-                            }
-                        },
-                        icon = { Icon(Icons.Default.Chat, null) },
-                        text = { Text(stringResource(R.string.other_profile_message)) },
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor   = MaterialTheme.colorScheme.onPrimary
-                    )
                 }
             }
-        }
-    ) { padding ->
-        if (targetUser == null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-            }
-            return@Scaffold
-        }
+        ) { padding ->
+            if (targetUser == null) {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                }
+            } else {
+                val u = targetUser
+                Box(Modifier.fillMaxSize()) {
+                    if (bgUrl != null) {
+                        AsyncImage(
+                            model = bgUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
 
-        val u = targetUser
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            if (applyCustom && bgUrl != null) {
-                AsyncImage(
-                    model = bgUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(if (applyCustom && bgUrl != null) Color.Black.copy(alpha = 0.2f) else Color.Transparent)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = if (layout == "banner") Alignment.Start else Alignment.CenterHorizontally
-            ) {
-                if (applyCustom && bannerUrl != null) {
-                    AsyncImage(
-                        model = bannerUrl,
-                        contentDescription = null,
+                    Column(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .height(160.dp),
-                        contentScale = ContentScale.Crop
-                    )
-                    Spacer(Modifier.height((-40).dp))
-                } else {
-                    Spacer(Modifier.height(32.dp))
-                }
+                            .fillMaxSize()
+                            .padding(padding)
+                            .background(if (bgUrl != null) Color.Black.copy(alpha = 0.2f) else Color.Transparent)
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = if (layout == "banner") Alignment.Start else Alignment.CenterHorizontally
+                    ) {
+                        val avatarShape = if (isForgeTheme) RectangleShape else CircleShape
 
-                // ── Avatar ──
-                val avatarShape = if (isForge) RectangleShape else CircleShape
-                val avatarModifier = if (isForge) {
-                    Modifier
-                        .size(if (layout == "compact") 80.dp else 120.dp)
-                        .forgeNeuBrutalism(false, isDark, 6.dp)
-                        .background(style.inputBg, avatarShape)
-                } else if (isExthru) {
-                    Modifier
-                        .size(if (layout == "compact") 80.dp else 110.dp)
-                        .exthruSmallRaisedShadow(isDark)
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (applyCustom && bgUrl != null) 0.5f else 1f), avatarShape)
-                        .clip(avatarShape)
-                } else {
-                    Modifier
-                        .size(if (layout == "compact") 70.dp else 100.dp)
-                        .clip(avatarShape)
-                }
-
-                val avatarContainerPadding = if (layout == "banner") 20.dp else 0.dp
-
-                Box(modifier = Modifier.padding(start = avatarContainerPadding)) {
-                    Box(avatarModifier) {
-                        if (!u.avatarUrl.isNullOrEmpty()) {
-                            AsyncImage(model = u.avatarUrl, contentDescription = null,
-                                modifier = Modifier.fillMaxSize().clip(avatarShape), contentScale = ContentScale.Crop)
-                        } else {
-                            Surface(
-                                color = if (isExthru && !isForge) Color.Transparent else if (isForge) style.inputBg else MaterialTheme.colorScheme.primaryContainer,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        u.displayName.firstOrNull()?.uppercase() ?: "?",
-                                        style = if (layout == "compact") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
-                                        fontFamily = customFont,
-                                        color = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
+                        if (layout == "banner") {
+                            Box(contentAlignment = Alignment.BottomStart) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(bottom = 40.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                                ) {
+                                    if (bannerUrl != null) {
+                                        AsyncImage(
+                                            model = bannerUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier.padding(start = 24.dp),
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(100.dp)
+                                            .background(style.accent.copy(alpha = 0.2f), CircleShape)
+                                            .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                            .clip(CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        AvatarContent(u, 100.dp)
+                                    }
+                                    Spacer(Modifier.width(16.dp))
+                                    Column(Modifier.padding(bottom = 8.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                u.displayName,
+                                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                                                color = Color.White
+                                            )
+                                            val emojis = cust["emojis"] as? String
+                                            if (!emojis.isNullOrEmpty()) {
+                                                Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
+                                            }
+                                        }
+                                        Text(
+                                            "@${u.username}",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = style.accent
+                                        )
+                                    }
                                 }
                             }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(20.dp))
-                
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                ) {
-                    Text(u.displayName,
-                        style = if (layout == "compact") MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = customFont,
-                        color = if (applyCustom && bgUrl != null) Color.White else if (isExthru) MaterialTheme.colorScheme.onSurface else Color.Unspecified)
-                    
-                    if (isPro) {
-                        Spacer(Modifier.width(8.dp))
-                        ProBadge()
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                ) {
-                    Text("@${u.username}", style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = customFont,
-                        color = if (applyCustom && bgUrl != null) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.primary)
-
-                    if (u.online) {
-                        Spacer(Modifier.width(8.dp))
-
-                        val badgeBg = if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if (applyCustom && bgUrl != null) 0.5f else 1f) else MaterialTheme.colorScheme.primaryContainer
-                        val badgeColor = if (isExthru) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary
-
-                        val badgeShape = if (isForge) RectangleShape else RoundedCornerShape(8.dp)
-                        val badgeModifier = if (isForge) {
-                            Modifier
-                                .forgeNeuBrutalism(false, isDark, 2.dp)
-                                .background(badgeBg, badgeShape)
-                        } else if (isExthru) {
-                            Modifier
-                                .exthruSmallRaisedShadow(isDark)
-                                .background(badgeBg, badgeShape)
+                        } else if (layout == "compact") {
+                            Row(
+                                modifier = Modifier
+                                    .padding(top = 24.dp, start = 24.dp, end = 24.dp)
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(80.dp)
+                                        .background(style.accent.copy(alpha = 0.2f), CircleShape)
+                                        .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                        .clip(CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AvatarContent(u, 80.dp)
+                                }
+                                Spacer(Modifier.width(24.dp))
+                                Column {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            u.displayName,
+                                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                                            color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        val emojis = cust["emojis"] as? String
+                                        if (!emojis.isNullOrEmpty()) {
+                                            Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
+                                        }
+                                    }
+                                    Text("@${u.username}", style = MaterialTheme.typography.bodyLarge, color = style.accent)
+                                }
+                            }
                         } else {
-                            Modifier.background(badgeBg, MaterialTheme.shapes.extraSmall)
+                            // Default Layout
+                            Column(
+                                modifier = Modifier.padding(top = 24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(140.dp)
+                                        .background(style.accent.copy(alpha = 0.2f), CircleShape)
+                                        .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                        .clip(CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AvatarContent(u, 140.dp)
+                                }
+                                Spacer(Modifier.height(16.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        u.displayName,
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                                        color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    val emojis = cust["emojis"] as? String
+                                    if (!emojis.isNullOrEmpty()) {
+                                        Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
+                                    }
+                                }
+                                Text("@${u.username}", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = style.accent)
+                            }
                         }
 
-                        Box(modifier = badgeModifier) {
-                            Text(
-                                stringResource(R.string.other_profile_online),
-                                style = MaterialTheme.typography.labelSmall,
-                                fontFamily = customFont,
-                                color = badgeColor,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
+                        // Profile body
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (u.online) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(10.dp).background(Color.Green, CircleShape))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("В сети", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Spacer(Modifier.height(16.dp))
+                            }
+
+                            if (layout != "banner" && !gifUrl.isNullOrEmpty()) {
+                                Spacer(Modifier.height(24.dp))
+                                AsyncImage(
+                                    model = gifUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(120.dp)
+                                        .clip(RoundedCornerShape(16.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(Modifier.height(32.dp))
+                            }
+
+                            if (u.isAdmin) {
+                                Spacer(Modifier.height(16.dp))
+                                AdminBadge()
+                            }
+
+                            if (u.isProActive()) {
+                                Spacer(Modifier.height(12.dp))
+                                ProBadge()
+                            }
+
+                            if (u.bio.isNotEmpty()) {
+                                Spacer(Modifier.height(16.dp))
+                                LinkifiedText(
+                                    text = u.bio,
+                                    color = if (bgUrl != null) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurface,
+                                    linkColor = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
-                }
-                if (u.bio.isNotEmpty()) {
-                    Spacer(Modifier.height(16.dp))
-                    Text(u.bio, style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = customFont,
-                        color = if (applyCustom && bgUrl != null) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 32.dp))
                 }
             }
         }

@@ -172,40 +172,46 @@ fun CustomVlNavigationBar(
     val isForge = appTheme.name == "FORGE"
     val isM3E = appTheme == AppTheme.MATERIAL3_EXPRESSIVE
 
+    val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU
+    val horizontalPadding = if (isForge) 0.dp else if (isBiolume) 32.dp else 24.dp
+    val bottomPadding = if (isForge) 0.dp else if (isBiolume) 28.dp else 16.dp
+    val topPadding = if (isForge) 0.dp else if (isBiolume) 28.dp else 4.dp
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .then(if (isForge) Modifier.background(MaterialTheme.colorScheme.surface) else Modifier)
-            .padding(horizontal = if (isForge) 0.dp else 24.dp)
-            .padding(bottom = if (isForge) 0.dp else 16.dp, top = 4.dp),
+            .padding(horizontal = horizontalPadding)
+            .padding(bottom = bottomPadding, top = topPadding),
         contentAlignment = Alignment.Center
     ) {
         VlSurface(
             appTheme = appTheme,
             isButton = false,
             customRadius = if (isForge) 0.dp else 32.dp,
-            modifier = (if (isForge) Modifier.fillMaxWidth() else Modifier.widthIn(min = 220.dp))
-                .animateContentSize(spring(dampingRatio = 0.8f, stiffness = 300f)),
+            modifier = (if (isForge) Modifier.fillMaxWidth() else Modifier.widthIn(min = 220.dp)),
             overrideColor = if (!isForge && !isM3E) Color.Transparent else null
         ) {
             val blurModifier = if (!isForge && !isM3E) {
-                val isBiolume = appTheme == AppTheme.BIOLUME
                 val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-                Modifier.hazeEffect(
-                    state = hazeState,
-                    style = HazeStyle(blurRadius = if (isBiolume) 40.dp else 24.dp, noiseFactor = 0.03f, tint = null)
-                ).background(
-                    if (isBiolume) {
-                        Brush.radialGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.15f else 0.25f),
-                                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.35f else 0.5f)
+                Modifier
+                    .clip(RoundedCornerShape(32.dp))
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(blurRadius = if (isBiolume) 40.dp else 24.dp, noiseFactor = 0.03f, tint = null)
+                    )
+                    .background(
+                        brush = if (isBiolume) {
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.15f else 0.25f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.35f else 0.5f)
+                                )
                             )
-                        )
-                    } else {
-                        SolidColor(MaterialTheme.colorScheme.surface.copy(alpha = 0.45f))
-                    }
-                ).then(
+                        } else {
+                            SolidColor(MaterialTheme.colorScheme.surface.copy(alpha = 0.45f))
+                        }
+                    ).then(
                     if (isBiolume) {
                         Modifier.border(
                             width = 1.2.dp,
@@ -234,6 +240,7 @@ fun CustomVlNavigationBar(
 
             Row(
                 modifier = Modifier
+                    .animateContentSize(spring(dampingRatio = 0.8f, stiffness = 300f))
                     .then(blurModifier)
                     .padding(horizontal = if (isForge) 0.dp else 12.dp, vertical = if (isForge) 0.dp else 4.dp)
                     .height(if (isForge) 64.dp else 60.dp),

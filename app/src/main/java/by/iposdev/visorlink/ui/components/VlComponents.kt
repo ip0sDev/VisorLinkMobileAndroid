@@ -1,6 +1,7 @@
 package by.iposdev.visorlink.ui.components
 
 import android.os.Build
+import android.util.Patterns
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -49,12 +50,126 @@ import by.iposdev.visorlink.ui.theme.nmRaisedShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import by.iposdev.visorlink.data.model.UserProfile
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.text.TextStyle
+
 // Провайдер состояния Haze для размытия заднего фона (определен 1 раз для всего приложения)
 val LocalHazeState = compositionLocalOf { HazeState() }
+
+@Composable
+fun LinkifiedText(
+    text: String,
+    color: Color,
+    linkColor: Color,
+    style: TextStyle = MaterialTheme.typography.bodyLarge,
+    textAlign: TextAlign = TextAlign.Start,
+    modifier: Modifier = Modifier,
+    onMentionClick: (String) -> Unit = {},
+) {
+    val uriHandler = LocalUriHandler.current
+    val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
+
+    val (urlList, mentionList) = remember(text) {
+        val urls = mutableListOf<Triple<String, Int, Int>>()
+        val urlMatcher = Patterns.WEB_URL.matcher(text)
+        while (urlMatcher.find()) {
+            var url = urlMatcher.group() ?: continue
+            if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
+            urls.add(Triple(url, urlMatcher.start(), urlMatcher.end()))
+        }
+        val mentions = mutableListOf<Triple<String, Int, Int>>()
+        val mentionRegex = Regex("(?<!\\w)@[a-zA-Z0-9_]+")
+        mentionRegex.findAll(text).forEach { match ->
+            val start = match.range.first
+            val end = match.range.last + 1
+            val isInsideUrl = urls.any { start >= it.second && end <= it.third }
+            if (!isInsideUrl) mentions.add(Triple(match.value, start, end))
+        }
+        Pair(urls, mentions)
+    }
+
+    val annotatedString = remember(text, color, linkColor) {
+        buildAnnotatedString {
+            append(text)
+            urlList.forEach { (url, start, end) ->
+                addStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline), start, end)
+                addStringAnnotation("URL", url, start, end)
+            }
+            mentionList.forEach { (mention, start, end) ->
+                addStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold), start, end)
+                addStringAnnotation("MENTION", mention, start, end)
+            }
+        }
+    }
+
+    Text(
+        text = annotatedString,
+        color = color,
+        style = style,
+        textAlign = textAlign,
+        onTextLayout = { layoutResult.value = it },
+        modifier = modifier.pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                var upEvent: PointerInputChange? = null
+                var isTap = true
+
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull() ?: break
+
+                    if (change.isConsumed) {
+                        isTap = false
+                    }
+
+                    if (!change.pressed) {
+                        upEvent = change
+                        break
+                    }
+                }
+
+                if (isTap && upEvent != null) {
+                    val pos = upEvent.position
+                    layoutResult.value?.let { layout ->
+                        if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
+                            val offset = layout.getOffsetForPosition(pos)
+                            annotatedString.getStringAnnotations("URL", offset, offset)
+                                .firstOrNull()?.let { annotation ->
+                                    try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
+                                    upEvent.consume()
+                                    return@awaitEachGesture
+                                }
+                            annotatedString.getStringAnnotations("MENTION", offset, offset)
+                                .firstOrNull()?.let { annotation ->
+                                    onMentionClick(annotation.item.removePrefix("@"))
+                                    upEvent.consume()
+                                    return@awaitEachGesture
+                                }
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
 
 @Composable
 fun ColorPresetCircle(
@@ -808,5 +923,54 @@ fun ProBadge(modifier: Modifier = Modifier) {
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 0.5.sp
         )
+    }
+}
+
+// ── AvatarContent ────────────────────────────────────────────────────────────
+
+@Composable
+fun AvatarContent(user: UserProfile, size: Dp) {
+    if (!user.avatarUrl.isNullOrEmpty()) {
+        AsyncImage(
+            model = user.avatarUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        val name = user.displayName.ifEmpty { user.username }
+        val initial = name.firstOrNull()?.uppercase() ?: "?"
+        Text(
+            initial,
+            style = MaterialTheme.typography.headlineLarge.copy(fontSize = (size.value * 0.4).sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+// ── AdminBadge ───────────────────────────────────────────────────────────────
+
+@Composable
+fun AdminBadge() {
+    Box(
+        modifier = Modifier
+            .background(
+                Brush.linearGradient(listOf(Color(0xFFFF0055), Color(0xFFFF4B2B))),
+                RoundedCornerShape(6.dp)
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.AdminPanelSettings, null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                "VISORLINK ADMIN",
+                color = Color.White,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.5.sp
+            )
+        }
     }
 }

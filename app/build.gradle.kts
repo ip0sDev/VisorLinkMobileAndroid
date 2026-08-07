@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
+    alias(libs.plugins.sentry.android)
 }
 
 // Читаем CommitID из свойства, которое передаёт CI (./gradlew assembleDebug -PcommitId=abc1234)
@@ -26,7 +27,7 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 94
+        versionCode = 95
         versionName = "3.0.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
@@ -67,6 +68,17 @@ android {
     }
 }
 
+sentry {
+    // Automatically upload ProGuard/R8 mapping files
+    includeProguardMapping.set(true)
+    // Automatically upload Native Symbols (if using NDK)
+    uploadNativeSymbols.set(true)
+    // Enable auto-instrumentation (HTTP, fragments, etc.)
+    tracingInstrumentation {
+        enabled.set(true)
+    }
+}
+
 dependencies {
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
@@ -94,6 +106,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.media)
+    implementation(libs.sentry.android)
 
     // ── Koin ─────────────────────────────────────────────────────────────────
     implementation(libs.koin.android)
