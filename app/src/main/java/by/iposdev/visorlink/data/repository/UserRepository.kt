@@ -34,8 +34,10 @@ class UserRepository(
 ) {
     private val currentUid get() = auth.currentUser!!.uid
 
-    fun currentUserFlow(): Flow<UserProfile?> = callbackFlow {
-        val uid = auth.currentUser?.uid ?: run { trySend(null); close(); return@callbackFlow }
+    fun currentUserFlow(): Flow<UserProfile?> = userProfileFlow(auth.currentUser?.uid ?: "")
+
+    fun userProfileFlow(uid: String): Flow<UserProfile?> = callbackFlow {
+        if (uid.isEmpty()) { trySend(null); close(); return@callbackFlow }
 
         launch(Dispatchers.IO) {
             val cached = ChatDataCache.loadProfile(context, uid)
@@ -76,19 +78,25 @@ class UserRepository(
     }
 
     suspend fun uploadAvatar(uri: Uri): String = withContext(Dispatchers.IO) {
-        val tempFile = File(context.cacheDir, "avatar_${System.currentTimeMillis()}.jpg")
+        val url = uploadFile(uri)
+        db.collection("users").document(currentUid)
+            .update("avatarUrl", url, "updatedAt", FieldValue.serverTimestamp()).await()
+        return@withContext url
+    }
+
+    suspend fun uploadFile(uri: Uri): String = withContext(Dispatchers.IO) {
+        val tempFile = File(context.cacheDir, "upload_${System.currentTimeMillis()}")
         context.contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(tempFile).use { output -> input.copyTo(output) }
         }
 
-        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = false)
+        // Determine mime type
+        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+
+        val mediaId = CdnService.uploadFile(tempFile, mimeType, isVault = false)
         tempFile.delete()
 
-        val url = "${CdnService.BASE_URL}/p/$mediaId"
-
-        db.collection("users").document(currentUid)
-            .update("avatarUrl", url, "updatedAt", FieldValue.serverTimestamp()).await()
-        return@withContext url
+        return@withContext "${CdnService.BASE_URL}/p/$mediaId"
     }
 
     suspend fun checkUsername(username: String): Pair<Boolean, String?> {
@@ -170,5 +178,15 @@ class UserRepository(
     suspend fun updateShowStreak(show: Boolean) {
         db.collection("users").document(currentUid)
             .update("showStreak", show).await()
+    }
+
+    suspend fun updateCustomization(customization: Map<String, Any?>) {
+        db.collection("users").document(currentUid)
+            .update("customization", customization).await()
+    }
+
+    suspend fun updateIgnoreCustomizations(ignore: Boolean) {
+        db.collection("users").document(currentUid)
+            .update("ignoreCustomizations", ignore).await()
     }
 }

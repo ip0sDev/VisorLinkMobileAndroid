@@ -64,7 +64,8 @@ data class ChatUiState(
     val albumCaption: String = "",
     val showAlbumPreview: Boolean = false,
     val singlePickedUri: Uri? = null,
-    val initialDraft: String = ""
+    val initialDraft: String = "",
+    val currentUser: UserProfile? = null
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -108,7 +109,10 @@ class ChatViewModel(
 
         viewModelScope.launch {
             userRepository.currentUserFlow().catch { }
-                .collect { currentUsername = it?.username ?: "" }
+                .collect { profile ->
+                    currentUsername = profile?.username ?: ""
+                    _uiState.update { it.copy(currentUser = profile) }
+                }
         }
 
         val draft = draftManager.getDraft(chatId)
@@ -173,9 +177,9 @@ class ChatViewModel(
                 _uiState.update { it.copy(chatType = ChatType.DIRECT) }
 
                 launch {
-                    val profile = try { userRepository.getUserProfile(otherUid) }
-                    catch (_: Exception) { null }
-                    _uiState.update { it.copy(otherUser = profile) }
+                    userRepository.userProfileFlow(otherUid).collect { profile ->
+                        _uiState.update { it.copy(otherUser = profile) }
+                    }
                 }
 
                 launch {

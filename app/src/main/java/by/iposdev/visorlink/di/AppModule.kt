@@ -25,6 +25,7 @@ import by.iposdev.visorlink.ui.screens.search.SearchViewModel
 import by.iposdev.visorlink.ui.screens.settings.CacheViewModel
 import by.iposdev.visorlink.ui.screens.settings.StorageViewModel
 import by.iposdev.visorlink.ui.screens.settings.ProViewModel
+import by.iposdev.visorlink.ui.screens.settings.CustomizationViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
@@ -128,4 +129,5 @@ val appModule = module {
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }
+    viewModel { CustomizationViewModel(get()) }
 }

@@ -14,6 +14,7 @@ import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
+import by.iposdev.visorlink.ui.screens.settings.CustomizationScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
@@ -299,9 +300,14 @@ fun VisorLinkNavGraph(
                 onNavigateBack      = { navController.popBackStack() },
                 onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
                 onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
+                onOpenCustomization = { navController.navigate(Screen.Customization.route) },
                 themeViewModel      = themeViewModel,
                 appUpdateViewModel  = appUpdateViewModel
             )
+        }
+
+        composable(Screen.Customization.route) {
+            CustomizationScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         composable(Screen.CacheSettings.route) {

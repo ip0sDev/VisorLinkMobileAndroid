@@ -207,8 +207,24 @@ fun ChatScreen(
         else     -> MaterialTheme.colorScheme.background
     }
 
+    val otherUser = uiState.otherUser
+    val currentUser = uiState.currentUser
+    val isOtherPro = otherUser?.isProActive() == true
+    val applyCustom = isOtherPro && (currentUser?.ignoreCustomizations != true) && (uiState.chatType == ChatType.DIRECT)
+    val cust = if (applyCustom) otherUser?.customization ?: emptyMap() else emptyMap()
+    val chatBgUrl = cust["bgUrl"] as? String ?: uiState.wallpaperUrl
+
     CompositionLocalProvider(LocalHazeState provides hazeState) {
         Box(modifier = Modifier.fillMaxSize().background(scaffoldBg)) {
+            if (chatBgUrl != null) {
+                AsyncImage(
+                    model = chatBgUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    alpha = if (isDark) 0.6f else 0.8f
+                )
+            }
             Scaffold(
                 containerColor = Color.Transparent,
                 topBar = {

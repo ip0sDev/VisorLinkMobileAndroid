@@ -20,7 +20,9 @@ class OtherProfileViewModel(
     val user: StateFlow<UserProfile?> = _user.asStateFlow()
 
     init {
-        viewModelScope.launch { _user.value = userRepository.getUserProfile(targetUid) }
+        viewModelScope.launch { 
+            userRepository.userProfileFlow(targetUid).collect { _user.value = it }
+        }
     }
 
     suspend fun openOrCreateChat(): String {

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -28,6 +29,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.data.model.ColorPreset
+import by.iposdev.visorlink.ui.theme.ExthruStyle
 import by.iposdev.visorlink.ui.theme.accentGlowShadow
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
 import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
@@ -112,7 +115,7 @@ fun ColorPresetCircle(
     }
 }
 
-private fun monoFamily(style: by.iposdev.visorlink.ui.theme.ExthruStyle): FontFamily? =
+private fun monoFamily(style: ExthruStyle): FontFamily? =
     if (style.isForge) FontFamily.Monospace else null
 
 // ── VlAmbientGlow — Анимированное фоновое свечение ─────────────────────────
@@ -243,7 +246,7 @@ fun VlButton(
             onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
         ) {
             CompositionLocalProvider(
-                androidx.compose.material3.LocalContentColor provides (if (isDestructive) cs.onError else cs.onPrimary)
+                LocalContentColor provides (if (isDestructive) cs.onError else cs.onPrimary)
             ) { content() }
         }
         return
@@ -287,7 +290,7 @@ fun VlButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides textColor) {
+        CompositionLocalProvider(LocalContentColor provides textColor) {
             content()
         }
     }
@@ -483,7 +486,7 @@ fun VlTapFeedback(
     onClick: (() -> Unit)?,
     tintColor: Color,
     modifier: Modifier = Modifier,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(0.dp),
+    shape: Shape = RoundedCornerShape(0.dp),
     content: @Composable () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -783,5 +786,27 @@ fun VlOptionRow(
                 }
             }
         }
+    }
+}
+
+// ── ProBadge ─────────────────────────────────────────────────────────────────
+
+@Composable
+fun ProBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFF39C12))),
+                RoundedCornerShape(6.dp)
+            )
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = "PRO",
+            color = Color.Black,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 0.5.sp
+        )
     }
 }

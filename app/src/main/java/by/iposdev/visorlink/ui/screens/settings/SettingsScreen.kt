@@ -95,6 +95,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
     onOpenStorageManager: () -> Unit = {},
+    onOpenCustomization: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
@@ -338,7 +339,7 @@ fun SettingsScreen(
                             onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 if (profile?.isProActive() == true) {
-                                    Toast.makeText(context, context.getString(R.string.settings_custom_in_development), Toast.LENGTH_SHORT).show()
+                                    onOpenCustomization()
                                 } else {
                                     Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show()
                                 }
@@ -356,7 +357,9 @@ fun SettingsScreen(
                                     checked = profile?.ignoreCustomizations ?: false,
                                     onCheckedChange = { v ->
                                         haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                        // TODO: Update ignoreCustomizations in Firestore
+                                        scope.launch {
+                                            userRepository.updateIgnoreCustomizations(v)
+                                        }
                                     }
                                 )
                             }

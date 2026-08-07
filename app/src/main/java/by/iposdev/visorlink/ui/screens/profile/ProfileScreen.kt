@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.isExthruFamily
+import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -72,6 +73,21 @@ fun ProfileScreen(
 
     val haptic = rememberHaptic()
 
+    val user = uiState.user
+    val isPro = user?.isProActive() == true
+    val cust = user?.customization ?: emptyMap()
+    val layout = cust["layout"] as? String ?: "default"
+    val bgUrl = cust["bgUrl"] as? String
+    val gifUrl = cust["gifUrl"] as? String
+    val bannerUrl = gifUrl ?: bgUrl
+    
+    val fontName = cust["font"] as? String
+    val customFont = when(fontName) {
+        "mono" -> FontFamily.Monospace
+        "serif" -> FontFamily.Serif
+        else -> if (isForge) FontFamily.Monospace else null
+    }
+
     LaunchedEffect(uiState.successMessage) {
         uiState.successMessage?.let { snackbar.showSnackbar(it); viewModel.clearMessages() }
     }
@@ -83,7 +99,7 @@ fun ProfileScreen(
         containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
         topBar = {
             Surface(
-                color = if (isForge) style.cardBg else if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent,
+                color = if (isForge) style.cardBg else if (isExthru) MaterialTheme.colorScheme.surface.copy(alpha = if (isPro && bannerUrl != null) 0.6f else 1f) else Color.Transparent,
                 modifier = if (isExthru && !isForge) Modifier.nmDividerBottom(isDark) else Modifier
             ) {
                 TopAppBar(
@@ -96,12 +112,12 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontSize = if (isForge) 28.sp else 34.sp,
                                     fontWeight = FontWeight.Bold,
-                                    fontFamily = if (isForge) FontFamily.Monospace else null
+                                    fontFamily = customFont
                                 ),
                                 color = if (isForge) style.accent else Color.Unspecified
                             )
                         } else {
-                            Text(titleText)
+                            Text(titleText, fontFamily = customFont)
                         }
                     },
                     navigationIcon = {
@@ -123,7 +139,7 @@ fun ProfileScreen(
                             .size(42.dp)
                             .scale(if(isForge) 1f else scale)
                             .then(shadowMod)
-                            .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface, shape)
+                            .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isPro && bannerUrl != null) 0.5f else 1f), shape)
                             .then(if(isForge) Modifier else Modifier.border(1.dp, if(isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
                             .clip(shape)
                         else Modifier
@@ -163,7 +179,7 @@ fun ProfileScreen(
                                 .size(42.dp)
                                 .scale(if(isForge) 1f else editScale)
                                 .then(editShadow)
-                                .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface, shape)
+                                .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isPro && bannerUrl != null) 0.5f else 1f), shape)
                                 .then(if(isForge) Modifier else Modifier.border(1.dp, if(isEditPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
                                 .clip(shape)
                             else Modifier
@@ -203,7 +219,7 @@ fun ProfileScreen(
                                 .size(42.dp)
                                 .scale(if(isForge) 1f else logoutScale)
                                 .then(logoutShadow)
-                                .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface, shape)
+                                .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isPro && bannerUrl != null) 0.5f else 1f), shape)
                                 .then(if(isForge) Modifier else Modifier.border(1.dp, if(isLogoutPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
                                 .clip(shape)
                             else Modifier
@@ -247,201 +263,242 @@ fun ProfileScreen(
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (isExthru) Color.Transparent else MaterialTheme.colorScheme.surface
+                        containerColor = Color.Transparent
                     )
                 )
             }
         },
         snackbarHost = { SnackbarHost(snackbar) }
     ) { padding ->
-        Column(
-            modifier = Modifier.fillMaxSize().padding(padding)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(Modifier.height(32.dp))
-
-            // ── Avatar ──
-            val avatarShape = if (isForge) RectangleShape else CircleShape
-            val avatarModifier = if (isForge) {
-                Modifier
-                    .size(120.dp)
-                    .forgeNeuBrutalism(false, isDark, 6.dp)
-                    .background(style.inputBg, avatarShape)
-            } else if (isExthru) {
-                Modifier
-                    .size(110.dp)
-                    .exthruSmallRaisedShadow(isDark)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, avatarShape)
-                    .clip(avatarShape)
-            } else {
-                Modifier
-                    .size(100.dp)
-                    .clip(avatarShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
+        Box(Modifier.fillMaxSize()) {
+            if (isPro && bgUrl != null) {
+                AsyncImage(
+                    model = bgUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
             }
 
-            Box(Modifier.size(120.dp), contentAlignment = Alignment.BottomEnd) {
-                Box(
-                    modifier = avatarModifier
-                        .then(if (uiState.isEditing)
-                            Modifier.clickable { avatarPicker.launch("image/*") }
-                        else Modifier),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (!uiState.user?.avatarUrl.isNullOrEmpty()) {
-                        AsyncImage(model = uiState.user?.avatarUrl, contentDescription = null,
-                            modifier = Modifier.fillMaxSize().clip(avatarShape), contentScale = ContentScale.Crop)
-                    } else {
-                        Text(uiState.user?.displayName?.firstOrNull()?.uppercase() ?: "?",
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontFamily = if (isForge) FontFamily.Monospace else null,
-                            color = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer)
-                    }
-                }
-
-                if (uiState.isEditing) {
-                    val cameraBg = if (isExthru) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary
-                    val cameraFg = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
-                    val cameraShape = if (isForge) RectangleShape else CircleShape
-
-                    val cameraMod = if (isForge) {
-                        Modifier.size(38.dp).forgeNeuBrutalism(false, isDark, 3.dp).background(cameraBg, cameraShape)
-                    } else if (isExthru) {
-                        Modifier.size(36.dp).exthruSmallRaisedShadow(isDark).background(cameraBg, cameraShape)
-                    } else {
-                        Modifier.size(32.dp).background(cameraBg, cameraShape).border(2.dp, MaterialTheme.colorScheme.surface, cameraShape)
-                    }
-
-                    Box(modifier = cameraMod, contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.CameraAlt, null,
-                            tint = cameraFg,
-                            modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-            if (uiState.isLoading) { CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(8.dp)) }
-
-            if (!uiState.isEditing) {
-                Text(uiState.user?.displayName ?: "",
-                    style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
-                    fontFamily = if (isForge) FontFamily.Monospace else null,
-                    color = if (isExthru) MaterialTheme.colorScheme.onSurface else Color.Unspecified)
-
-                Text("@${uiState.user?.username ?: ""}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = if (isForge) FontFamily.Monospace else null,
-                    color = MaterialTheme.colorScheme.primary)
-
-                if (!uiState.user?.bio.isNullOrEmpty()) {
-                    Spacer(Modifier.height(8.dp))
-                    Text(uiState.user?.bio ?: "",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = if (isForge) FontFamily.Monospace else null,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-
-                Spacer(Modifier.height(36.dp))
-            } else {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (isExthru) 16.dp else 12.dp)) {
-
-                    val tfShape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
-                    val nmColors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent,
-                        disabledBorderColor = Color.Transparent,
-                        errorBorderColor = Color.Transparent
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .background(if (isPro && bgUrl != null) Color.Black.copy(alpha = 0.2f) else Color.Transparent)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = if (layout == "banner") Alignment.Start else Alignment.CenterHorizontally
+            ) {
+                if (isPro && bannerUrl != null) {
+                    AsyncImage(
+                        model = bannerUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(160.dp),
+                        contentScale = ContentScale.Crop
                     )
+                    Spacer(Modifier.height((-40).dp))
+                } else {
+                    Spacer(Modifier.height(32.dp))
+                }
 
-                    val buildModifier: @Composable (Modifier) -> Modifier = { m ->
-                        if (isForge) {
-                            m.fillMaxWidth()
-                                .forgeNeuBrutalism(false, isDark, 3.dp)
-                                .background(style.inputBg, tfShape)
+                // ── Avatar ──
+                val avatarShape = if (isForge) RectangleShape else CircleShape
+                val avatarModifier = if (isForge) {
+                    Modifier
+                        .size(if (layout == "compact") 80.dp else 120.dp)
+                        .forgeNeuBrutalism(false, isDark, 6.dp)
+                        .background(style.inputBg, avatarShape)
+                } else if (isExthru) {
+                    Modifier
+                        .size(if (layout == "compact") 80.dp else 110.dp)
+                        .exthruSmallRaisedShadow(isDark)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (bgUrl != null) 0.5f else 1f), avatarShape)
+                        .clip(avatarShape)
+                } else {
+                    Modifier
+                        .size(if (layout == "compact") 70.dp else 100.dp)
+                        .clip(avatarShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                }
+
+                val avatarContainerPadding = if (layout == "banner") 20.dp else 0.dp
+
+                Box(Modifier.size(if (layout == "compact") 80.dp else 120.dp).padding(start = avatarContainerPadding), contentAlignment = Alignment.BottomEnd) {
+                    Box(
+                        modifier = avatarModifier
+                            .then(if (uiState.isEditing)
+                                Modifier.clickable { avatarPicker.launch("image/*") }
+                            else Modifier),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (!uiState.user?.avatarUrl.isNullOrEmpty()) {
+                            AsyncImage(model = uiState.user?.avatarUrl, contentDescription = null,
+                                modifier = Modifier.fillMaxSize().clip(avatarShape), contentScale = ContentScale.Crop)
+                        } else {
+                            Text(uiState.user?.displayName?.firstOrNull()?.uppercase() ?: "?",
+                                style = if (layout == "compact") MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
+                                fontFamily = customFont,
+                                color = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimaryContainer)
+                        }
+                    }
+
+                    if (uiState.isEditing) {
+                        val cameraBg = if (isExthru) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary
+                        val cameraFg = if (isExthru) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onPrimary
+                        val cameraShape = if (isForge) RectangleShape else CircleShape
+
+                        val cameraMod = if (isForge) {
+                            Modifier.size(38.dp).forgeNeuBrutalism(false, isDark, 3.dp).background(cameraBg, cameraShape)
                         } else if (isExthru) {
-                            m.fillMaxWidth()
-                                .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-                                .background(MaterialTheme.colorScheme.surface, tfShape)
-                        } else m.fillMaxWidth()
-                    }
+                            Modifier.size(36.dp).exthruSmallRaisedShadow(isDark).background(cameraBg, cameraShape)
+                        } else {
+                            Modifier.size(32.dp).background(cameraBg, cameraShape).border(2.dp, MaterialTheme.colorScheme.surface, cameraShape)
+                        }
 
-                    val textStyle = if (isForge) LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface) else LocalTextStyle.current
-
-                    OutlinedTextField(
-                        value = uiState.editDisplayName,
-                        onValueChange = viewModel::onDisplayNameChange,
-                        label = { Text(stringResource(R.string.profile_field_display_name), fontFamily = if(isForge) FontFamily.Monospace else null) },
-                        leadingIcon = { Icon(Icons.Default.Person, null) },
-                        singleLine = true,
-                        textStyle = textStyle,
-                        modifier = buildModifier(Modifier),
-                        shape = tfShape,
-                        colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
-                    )
-
-                    OutlinedTextField(
-                        value = uiState.editBio, onValueChange = viewModel::onBioChange,
-                        label = { Text(stringResource(R.string.profile_field_bio), fontFamily = if(isForge) FontFamily.Monospace else null) },
-                        leadingIcon = { Icon(Icons.Default.Info, null) },
-                        supportingText = { Text("${uiState.editBio.length}/160", fontFamily = if(isForge) FontFamily.Monospace else null) },
-                        maxLines = 3,
-                        textStyle = textStyle,
-                        modifier = buildModifier(Modifier),
-                        shape = tfShape,
-                        colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
-                    )
-
-                    OutlinedTextField(
-                        value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
-                        label = { Text(stringResource(R.string.profile_field_username), fontFamily = if(isForge) FontFamily.Monospace else null) },
-                        leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
-                        textStyle = textStyle,
-                        trailingIcon = {
-                            when {
-                                uiState.checkingUsername -> CircularProgressIndicator(
-                                    Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
-                                uiState.usernameAvailable == true -> Icon(
-                                    Icons.Default.CheckCircle, null,
-                                    tint = MaterialTheme.colorScheme.primary)
-                                uiState.usernameAvailable == false -> Icon(
-                                    Icons.Default.Cancel, null,
-                                    tint = MaterialTheme.colorScheme.error)
-                            }
-                        },
-                        isError = uiState.usernameAvailable == false,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        modifier = buildModifier(Modifier),
-                        shape = tfShape,
-                        colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
-                    )
-
-                    Spacer(Modifier.height(4.dp))
-
-                    if (isExthru) {
-                        NmButton(
-                            text = stringResource(R.string.profile_check_username),
-                            isDark = isDark,
-                            isForge = isForge,
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                viewModel.checkUsername()
-                            }
-                        )
-                    } else {
-                        OutlinedButton(onClick = { viewModel.checkUsername() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium) {
-                            Text(stringResource(R.string.profile_check_username))
+                        Box(modifier = cameraMod, contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.CameraAlt, null,
+                                tint = cameraFg,
+                                modifier = Modifier.size(16.dp))
                         }
                     }
                 }
+
+                Spacer(Modifier.height(16.dp))
+                if (uiState.isLoading) { CircularProgressIndicator(Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary); Spacer(Modifier.height(8.dp)) }
+
+                if (!uiState.isEditing) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    ) {
+                        Text(uiState.user?.displayName ?: "",
+                            style = if (layout == "compact") MaterialTheme.typography.titleLarge else MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = customFont,
+                            color = if (bgUrl != null) Color.White else if (isExthru) MaterialTheme.colorScheme.onSurface else Color.Unspecified)
+                        
+                        if (user?.isProActive() == true) {
+                            Spacer(Modifier.width(8.dp))
+                            ProBadge()
+                        }
+                    }
+
+                    Text("@${uiState.user?.username ?: ""}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = customFont,
+                        color = if (bgUrl != null) Color.White.copy(0.7f) else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 20.dp))
+
+                    if (!uiState.user?.bio.isNullOrEmpty()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(uiState.user?.bio ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = customFont,
+                            color = if (bgUrl != null) Color.White.copy(0.9f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 20.dp))
+                    }
+
+                    Spacer(Modifier.height(36.dp))
+                } else {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isExthru) 16.dp else 12.dp)) {
+
+                        val tfShape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
+                        val nmColors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent,
+                            disabledBorderColor = Color.Transparent,
+                            errorBorderColor = Color.Transparent
+                        )
+
+                        val buildModifier: @Composable (Modifier) -> Modifier = { m ->
+                            if (isForge) {
+                                m.fillMaxWidth()
+                                    .forgeNeuBrutalism(false, isDark, 3.dp)
+                                    .background(style.inputBg, tfShape)
+                            } else if (isExthru) {
+                                m.fillMaxWidth()
+                                    .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+                                    .background(MaterialTheme.colorScheme.surface, tfShape)
+                            } else m.fillMaxWidth()
+                        }
+
+                        val textStyle = if (isForge) LocalTextStyle.current.copy(fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface) else LocalTextStyle.current
+
+                        OutlinedTextField(
+                            value = uiState.editDisplayName,
+                            onValueChange = viewModel::onDisplayNameChange,
+                            label = { Text(stringResource(R.string.profile_field_display_name), fontFamily = if(isForge) FontFamily.Monospace else null) },
+                            leadingIcon = { Icon(Icons.Default.Person, null) },
+                            singleLine = true,
+                            textStyle = textStyle,
+                            modifier = buildModifier(Modifier),
+                            shape = tfShape,
+                            colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.editBio, onValueChange = viewModel::onBioChange,
+                            label = { Text(stringResource(R.string.profile_field_bio), fontFamily = if(isForge) FontFamily.Monospace else null) },
+                            leadingIcon = { Icon(Icons.Default.Info, null) },
+                            supportingText = { Text("${uiState.editBio.length}/160", fontFamily = if(isForge) FontFamily.Monospace else null) },
+                            maxLines = 3,
+                            textStyle = textStyle,
+                            modifier = buildModifier(Modifier),
+                            shape = tfShape,
+                            colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
+                        )
+
+                        OutlinedTextField(
+                            value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
+                            label = { Text(stringResource(R.string.profile_field_username), fontFamily = if(isForge) FontFamily.Monospace else null) },
+                            leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
+                            textStyle = textStyle,
+                            trailingIcon = {
+                                when {
+                                    uiState.checkingUsername -> CircularProgressIndicator(
+                                        Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                                    uiState.usernameAvailable == true -> Icon(
+                                        Icons.Default.CheckCircle, null,
+                                        tint = MaterialTheme.colorScheme.primary)
+                                    uiState.usernameAvailable == false -> Icon(
+                                        Icons.Default.Cancel, null,
+                                        tint = MaterialTheme.colorScheme.error)
+                                }
+                            },
+                            isError = uiState.usernameAvailable == false,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            modifier = buildModifier(Modifier),
+                            shape = tfShape,
+                            colors = if (isExthru) nmColors else OutlinedTextFieldDefaults.colors()
+                        )
+
+                        Spacer(Modifier.height(4.dp))
+
+                        if (isExthru) {
+                            NmButton(
+                                text = stringResource(R.string.profile_check_username),
+                                isDark = isDark,
+                                isForge = isForge,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    viewModel.checkUsername()
+                                }
+                            )
+                        } else {
+                            OutlinedButton(onClick = { viewModel.checkUsername() },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium) {
+                                Text(stringResource(R.string.profile_check_username))
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(32.dp))
             }
-            Spacer(Modifier.height(32.dp))
         }
     }
 

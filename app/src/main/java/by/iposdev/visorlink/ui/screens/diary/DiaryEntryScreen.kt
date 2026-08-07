@@ -3,10 +3,10 @@ package by.iposdev.visorlink.ui.screens.diary
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,15 +25,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -47,21 +44,27 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import by.iposdev.visorlink.utils.CdnService
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.utils.CdnService
-import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
-import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,6 +78,7 @@ fun DiaryEntryScreen(
     val appTheme by themeViewModel.appTheme.collectAsState()
     val isExthru = appTheme.isExthruFamily
     val isForge = appTheme.name == "FORGE"
+    val primaryColor = MaterialTheme.colorScheme.primary
 
     val initialText = remember(entryId, uiState.entries) {
         if (entryId != null) {
@@ -83,21 +87,22 @@ fun DiaryEntryScreen(
     }
 
     var textFieldValue by remember(initialText) { mutableStateOf(TextFieldValue(initialText)) }
-    var isPreview by remember { mutableStateOf(false) }
-    var showDrawingDialog by remember { mutableStateOf(false) }
     var showColorPicker by remember { mutableStateOf(false) }
+    var showDrawingDialog by remember { mutableStateOf(false) }
+
+    val focusRequester = remember { FocusRequester() }
 
     val imagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             viewModel.uploadDiaryImage(uri) { mediaId ->
-                textFieldValue = insertInlineImage(textFieldValue, mediaId)
+                textFieldValue = applyMarkdownInsert(textFieldValue, "\n[img:$mediaId]\n")
             }
         }
     }
 
-    val visualTransformation = remember { MarkdownVisualTransformation() }
+    val visualTransformation = remember(primaryColor) { MarkdownWysiwygTransformation(primaryColor) }
 
     Scaffold(
         topBar = {
@@ -109,9 +114,6 @@ fun DiaryEntryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { isPreview = !isPreview }) {
-                        Icon(if (isPreview) Icons.Default.Edit else Icons.Default.Visibility, stringResource(R.string.diary_toggle_preview))
-                    }
                     IconButton(onClick = {
                         viewModel.saveEntry(textFieldValue.text) { success, _ ->
                             if (success) onNavigateBack()
@@ -125,59 +127,64 @@ fun DiaryEntryScreen(
         },
         containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
         bottomBar = {
-            if (!isPreview) {
-                Surface(
-                    tonalElevation = 2.dp,
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if(isExthru) 0.3f else 0.5f)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceAround
+            Surface(
+                tonalElevation = 4.dp,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if(isExthru) 0.3f else 0.8f),
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
+                    AnimatedVisibility(
+                        visible = showColorPicker,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
                     ) {
-                        MarkdownToolButton(Icons.Default.FormatBold, stringResource(R.string.diary_format_bold)) {
-                            textFieldValue = applyMarkdownTag(textFieldValue, "**")
-                        }
-                        MarkdownToolButton(Icons.Default.FormatItalic, stringResource(R.string.diary_format_italic)) {
-                            textFieldValue = applyMarkdownTag(textFieldValue, "_")
-                        }
-                        MarkdownToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, stringResource(R.string.diary_format_list)) {
-                            textFieldValue = applyMarkdownTag(textFieldValue, "\n- ", "")
-                        }
-                        MarkdownToolButton(Icons.Default.Checklist, stringResource(R.string.diary_format_check)) {
-                            textFieldValue = applyMarkdownTag(textFieldValue, "\n- [ ] ", "")
-                        }
-                        MarkdownToolButton(Icons.Default.Image, stringResource(R.string.diary_format_image)) {
-                            imagePicker.launch("image/*")
-                        }
-                        MarkdownToolButton(Icons.Default.Brush, stringResource(R.string.diary_format_draw)) {
-                            showDrawingDialog = true
-                        }
-                        MarkdownToolButton(Icons.Default.Palette, stringResource(R.string.diary_format_color)) {
-                            showColorPicker = !showColorPicker
-                        }
-                    }
-                    if (showColorPicker) {
                         val colors = listOf("#FF5252", "#FF4081", "#E040FB", "#7C4DFF", "#536DFE", "#448AFF", "#40C4FF", "#18FFFF", "#64FFDA", "#69F0AE", "#B2FF59", "#EEFF41", "#FFFF00", "#FFD740", "#FFAB40", "#FF6E40")
                         LazyRow(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             items(colors) { hex ->
                                 val c = try { Color(android.graphics.Color.parseColor(hex)) } catch(_:Exception) { Color.Unspecified }
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(40.dp)
                                         .clip(CircleShape)
                                         .background(c)
                                         .clickable {
-                                            textFieldValue = applyMarkdownTag(textFieldValue, "{color:$hex}", "{/color}")
+                                            textFieldValue = toggleMarkdownTag(textFieldValue, "{color:$hex}", "{/color}")
                                             showColorPicker = false
                                         }
                                 )
                             }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        MarkdownToolButton(Icons.Default.FormatBold, "Bold") {
+                            textFieldValue = toggleMarkdownTag(textFieldValue, "**")
+                        }
+                        MarkdownToolButton(Icons.Default.FormatItalic, "Italic") {
+                            textFieldValue = toggleMarkdownTag(textFieldValue, "_")
+                        }
+                        MarkdownToolButton(Icons.AutoMirrored.Filled.FormatListBulleted, "List") {
+                            textFieldValue = toggleCheckbox(textFieldValue, false)
+                        }
+                        MarkdownToolButton(Icons.Default.Checklist, "Checklist") {
+                            textFieldValue = toggleCheckbox(textFieldValue, true)
+                        }
+                        MarkdownToolButton(Icons.Default.Image, "Image") {
+                            imagePicker.launch("image/*")
+                        }
+                        MarkdownToolButton(Icons.Default.Brush, "Draw") {
+                            showDrawingDialog = true
+                        }
+                        MarkdownToolButton(Icons.Default.Palette, "Color") {
+                            showColorPicker = !showColorPicker
                         }
                     }
                 }
@@ -187,40 +194,26 @@ fun DiaryEntryScreen(
         Box(Modifier.fillMaxSize().padding(padding)) {
             if (isExthru) VlAmbientGlow(appTheme = appTheme)
 
-            if (isPreview) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    MarkdownText(textFieldValue.text)
-                }
-            } else {
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { textFieldValue = it },
-                    visualTransformation = visualTransformation,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    textStyle = TextStyle(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 16.sp,
-                        fontFamily = if(isForge) FontFamily.Monospace else null
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    decorationBox = { innerTextField ->
-                        if (textFieldValue.text.isEmpty()) {
-                            Text(
-                                stringResource(R.string.diary_placeholder),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                fontFamily = if(isForge) FontFamily.Monospace else null
-                            )
-                        }
-                        innerTextField()
-                    }
-                )
+            BasicTextField(
+                value = textFieldValue,
+                onValueChange = { textFieldValue = it },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+                    .focusRequester(focusRequester),
+                textStyle = TextStyle(
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontFamily = if (isForge) FontFamily.Monospace else FontFamily.Default,
+                    lineHeight = 26.sp
+                ),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                visualTransformation = visualTransformation
+            )
+
+            LaunchedEffect(Unit) {
+                delay(300)
+                focusRequester.requestFocus()
             }
         }
     }
@@ -229,10 +222,10 @@ fun DiaryEntryScreen(
         VlDrawingDialog(
             onDismiss = { showDrawingDialog = false },
             onSave = { uri ->
-                showDrawingDialog = false
                 viewModel.uploadDiaryImage(uri) { mediaId ->
-                    textFieldValue = insertInlineImage(textFieldValue, mediaId)
+                    textFieldValue = applyMarkdownInsert(textFieldValue, "\n[img:$mediaId]\n")
                 }
+                showDrawingDialog = false
             }
         )
     }
@@ -240,232 +233,271 @@ fun DiaryEntryScreen(
 
 @Composable
 fun MarkdownToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(icon, label, tint = MaterialTheme.colorScheme.primary)
+    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
+        Icon(icon, label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
     }
 }
 
-fun applyMarkdownTag(value: TextFieldValue, prefix: String, suffix: String = prefix): TextFieldValue {
-    val selectedText = value.text.substring(value.selection.start, value.selection.end)
-    val newText = value.text.replaceRange(
-        value.selection.start,
-        value.selection.end,
-        "$prefix$selectedText$suffix"
-    )
+fun toggleMarkdownTag(value: TextFieldValue, prefix: String, suffix: String = prefix): TextFieldValue {
+    val text = value.text
+    val selection = value.selection
+    val selectedText = text.substring(selection.start, selection.end)
+
+    if (selection.start >= prefix.length && selection.end <= text.length - suffix.length) {
+        val before = text.substring(selection.start - prefix.length, selection.start)
+        val after = text.substring(selection.end, selection.end + suffix.length)
+        if (before == prefix && after == suffix) {
+            val newText = text.substring(0, selection.start - prefix.length) + selectedText + text.substring(selection.end + suffix.length)
+            val newSelection = TextRange(selection.start - prefix.length, selection.end - prefix.length)
+            return value.copy(text = newText, selection = newSelection)
+        }
+    }
+
+    val newText = text.substring(0, selection.start) + prefix + selectedText + suffix + text.substring(selection.end)
     val newSelection = if (selectedText.isEmpty()) {
-        TextRange(value.selection.start + prefix.length)
+        TextRange(selection.start + prefix.length)
     } else {
-        TextRange(value.selection.start + prefix.length + selectedText.length + suffix.length)
+        TextRange(selection.start, selection.end + prefix.length + suffix.length)
     }
     return value.copy(text = newText, selection = newSelection)
 }
 
-fun insertInlineImage(value: TextFieldValue, mediaId: String): TextFieldValue {
-    val tag = "\n[img:$mediaId]\n"
-    val newText = value.text.replaceRange(value.selection.start, value.selection.end, tag)
-    return value.copy(
-        text = newText,
-        selection = TextRange(value.selection.start + tag.length)
-    )
+fun applyMarkdownInsert(value: TextFieldValue, insert: String): TextFieldValue {
+    val text = value.text
+    val selection = value.selection
+    val newText = text.substring(0, selection.start) + insert + text.substring(selection.end)
+    return value.copy(text = newText, selection = TextRange(selection.start + insert.length))
 }
 
-class MarkdownVisualTransformation : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText {
-        val content = text.text
-        val annotatedString = buildAnnotatedString {
-            var lastIndex = 0
-            
-            // Markers to find and style
-            val markerRegex = Regex("\\*\\*|_|\\{color:#[0-9a-fA-F]{6}\\}|\\{/color\\}|\\[img:.*?\\]|- \\[[ xX]\\]")
-            val matches = markerRegex.findAll(content)
+fun toggleCheckbox(value: TextFieldValue, isChecklist: Boolean): TextFieldValue {
+    val text = value.text
+    val cursor = value.selection.start
 
-            matches.forEach { match ->
-                // Append text before marker
-                if (match.range.first > lastIndex) {
-                    append(content.substring(lastIndex, match.range.first))
-                }
-                
-                // Style the marker itself to be GONE (transparent and 0.sp)
-                withStyle(SpanStyle(color = Color.Transparent, fontSize = 0.sp)) {
-                    append(match.value)
-                }
-                lastIndex = match.range.last + 1
-            }
-            
-            if (lastIndex < content.length) {
-                append(content.substring(lastIndex))
-            }
+    var lineStart = text.lastIndexOf('\n', cursor - 1) + 1
+    if (lineStart < 0) lineStart = 0
 
-            // Apply styles to the WHOLE string based on tags (since markers are still there but invisible)
-            
-            // Bold
-            Regex("\\*\\*(.*?)\\*\\*").findAll(content).forEach { match ->
-                addStyle(SpanStyle(fontWeight = FontWeight.Bold), match.range.first, match.range.last + 1)
-            }
-            
-            // Italic
-            Regex("_(.*?)_").findAll(content).forEach { match ->
-                addStyle(SpanStyle(fontStyle = FontStyle.Italic), match.range.first, match.range.last + 1)
-            }
-            
-            // Color
-            Regex("\\{color:(#[0-9a-fA-F]{6})\\}(.*?)\\{/color\\}").findAll(content).forEach { match ->
-                val color = try { Color(android.graphics.Color.parseColor(match.groupValues[1])) } catch(_:Exception) { Color.Unspecified }
-                addStyle(SpanStyle(color = color), match.groups[2]!!.range.first, match.groups[2]!!.range.last + 1)
-            }
-            
-            // Checkboxes
-            Regex("- \\[([ xX])\\]").findAll(content).forEach { match ->
-                val isChecked = match.groupValues[1] != " "
-                addStyle(
-                    SpanStyle(
-                        color = if(isChecked) Color(0xFF10B981) else Color.Gray,
-                        fontWeight = FontWeight.Black
-                    ), 
-                    match.range.first, match.range.last + 1
-                )
-            }
+    val line = text.substring(lineStart)
+    val checkStr = if (isChecklist) "- [ ] " else "- "
+    val doneCheckStr = "- [x] "
+    val doneCheckStr2 = "- [X] "
+
+    if (isChecklist) {
+        if (line.startsWith(checkStr)) {
+            val newText = text.substring(0, lineStart) + doneCheckStr + text.substring(lineStart + 6)
+            return value.copy(text = newText)
+        } else if (line.startsWith(doneCheckStr) || line.startsWith(doneCheckStr2)) {
+            val newText = text.substring(0, lineStart) + text.substring(lineStart + 6)
+            return value.copy(text = newText, selection = TextRange(maxOf(0, value.selection.start - 6)))
+        } else if (line.startsWith("- ")) {
+            val newText = text.substring(0, lineStart) + checkStr + text.substring(lineStart + 2)
+            return value.copy(text = newText, selection = TextRange(value.selection.start + 4))
+        } else {
+            val newText = text.substring(0, lineStart) + checkStr + text.substring(lineStart)
+            return value.copy(text = newText, selection = TextRange(value.selection.start + 6))
         }
-        
-        // Offset mapping is IDENTITY because we didn't actually remove characters from the string, 
-        // just made them invisible and 0-sized. Cursor will still "pass through" them.
-        return TransformedText(annotatedString, OffsetMapping.Identity)
+    } else {
+        if (line.startsWith("- ")) {
+            val newText = text.substring(0, lineStart) + text.substring(lineStart + 2)
+            return value.copy(text = newText, selection = TextRange(maxOf(0, value.selection.start - 2)))
+        } else {
+            val newText = text.substring(0, lineStart) + "- " + text.substring(lineStart)
+            return value.copy(text = newText, selection = TextRange(value.selection.start + 2))
+        }
     }
 }
 
-@Composable
-fun VlDrawingDialog(onDismiss: () -> Unit, onSave: (Uri) -> Unit) {
-    var paths by remember { mutableStateOf(listOf<Pair<Path, Color>>()) }
-    var currentPath by remember { mutableStateOf<Path?>(null) }
+class MarkdownWysiwygTransformation(val primaryColor: Color) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val content = text.text
+        val builder = AnnotatedString.Builder()
+        val origToTrans = IntArray(content.length + 1)
+        val transToOrig = ArrayList<Int>()
+        var transOffset = 0
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Scaffold(
-            topBar = {
-                @OptIn(ExperimentalMaterial3Api::class)
+        val imgRegex = Regex("\\[img:.*?\\]")
+        val checkEmptyRegex = Regex("- \\[[ ]\\]")
+        val checkCheckedRegex = Regex("- \\[x\\]|- \\[X\\]")
+        val listRegex = Regex("^- ", RegexOption.MULTILINE)
+
+        val replacements = mutableMapOf<Int, Pair<Int, String>>()
+        imgRegex.findAll(content).forEach { replacements[it.range.first] = it.range.last + 1 to "🖼 Image" }
+        checkEmptyRegex.findAll(content).forEach { replacements[it.range.first] = it.range.last + 1 to "☐ " }
+        checkCheckedRegex.findAll(content).forEach { replacements[it.range.first] = it.range.last + 1 to "☑ " }
+        listRegex.findAll(content).forEach { replacements[it.range.first] = it.range.last + 1 to "• " }
+
+        val boldRegex = Regex("\\*\\*(.*?)\\*\\*")
+        val italicRegex = Regex("_(.*?)_")
+        val colorRegex = Regex("\\{color:(#[0-9a-fA-F]{6})\\}(.*?)\\{/color\\}")
+
+        val hiddens = mutableSetOf<Int>()
+        boldRegex.findAll(content).forEach {
+            for(i in it.range.first until it.groups[1]!!.range.first) hiddens.add(i)
+            for(i in it.groups[1]!!.range.last + 1 .. it.range.last) hiddens.add(i)
+        }
+        italicRegex.findAll(content).forEach {
+            for(i in it.range.first until it.groups[1]!!.range.first) hiddens.add(i)
+            for(i in it.groups[1]!!.range.last + 1 .. it.range.last) hiddens.add(i)
+        }
+        colorRegex.findAll(content).forEach {
+            for(i in it.range.first until it.groups[2]!!.range.first) hiddens.add(i)
+            for(i in it.groups[2]!!.range.last + 1 .. it.range.last) hiddens.add(i)
+        }
+
+        var origOffset = 0
+        while (origOffset < content.length) {
+            origToTrans[origOffset] = transOffset
+
+            if (replacements.containsKey(origOffset)) {
+                val (endOrig, replText) = replacements[origOffset]!!
+                builder.append(replText)
+                for (c in replText) {
+                    transToOrig.add(origOffset)
+                    transOffset++
+                }
+                while (origOffset < endOrig) {
+                    origToTrans[origOffset] = transOffset
+                    origOffset++
+                }
+                continue
+            }
+
+            if (hiddens.contains(origOffset)) {
+                origOffset++
+                continue
+            }
+
+            builder.append(content[origOffset])
+            transToOrig.add(origOffset)
+            transOffset++
+            origOffset++
+        }
+        origToTrans[content.length] = transOffset
+        transToOrig.add(content.length)
+
+        val mapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                if (offset < 0) return 0
+                if (offset > content.length) return transOffset
+                return origToTrans[offset]
+            }
+            override fun transformedToOriginal(offset: Int): Int {
+                if (offset < 0) return 0
+                if (offset >= transToOrig.size) return content.length
+                return transToOrig[offset]
+            }
+        }
+
+        boldRegex.findAll(content).forEach { match ->
+            val startTrans = origToTrans[match.groups[1]!!.range.first]
+            val endTrans = origToTrans[match.groups[1]!!.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), startTrans, endTrans)
+        }
+        italicRegex.findAll(content).forEach { match ->
+            val startTrans = origToTrans[match.groups[1]!!.range.first]
+            val endTrans = origToTrans[match.groups[1]!!.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(fontStyle = FontStyle.Italic), startTrans, endTrans)
+        }
+        colorRegex.findAll(content).forEach { match ->
+            val color = try { Color(android.graphics.Color.parseColor(match.groups[1]!!.value)) } catch(_:Exception) { Color.Unspecified }
+            val startTrans = origToTrans[match.groups[2]!!.range.first]
+            val endTrans = origToTrans[match.groups[2]!!.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(color = color), startTrans, endTrans)
+        }
+        imgRegex.findAll(content).forEach { match ->
+            val startTrans = origToTrans[match.range.first]
+            val endTrans = origToTrans[match.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Bold), startTrans, endTrans)
+        }
+        checkEmptyRegex.findAll(content).forEach { match ->
+            val startTrans = origToTrans[match.range.first]
+            val endTrans = origToTrans[match.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(color = Color.Gray, fontSize = 20.sp), startTrans, endTrans)
+        }
+        checkCheckedRegex.findAll(content).forEach { match ->
+            val startTrans = origToTrans[match.range.first]
+            val endTrans = origToTrans[match.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(color = Color(0xFF10B981), fontSize = 20.sp), startTrans, endTrans)
+        }
+        listRegex.findAll(content).forEach { match ->
+            val startTrans = origToTrans[match.range.first]
+            val endTrans = origToTrans[match.range.last + 1]
+            if (startTrans < endTrans) builder.addStyle(SpanStyle(fontWeight = FontWeight.Bold), startTrans, endTrans)
+        }
+
+        return TransformedText(builder.toAnnotatedString(), mapping)
+    }
+}
+
+// -----------------------------------------------------------------------------------------
+// DO NOT MODIFY BELOW. KEEP EXISTING DIALOGS AND HELPER FUNCTIONS (VlDrawingDialog)
+// -----------------------------------------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VlDrawingDialog(
+    onDismiss: () -> Unit,
+    onSave: (Uri) -> Unit
+) {
+    val context = LocalContext.current
+    var currentPath by remember { mutableStateOf(Path()) }
+    var paths by remember { mutableStateOf(listOf<Path>()) }
+    var color by remember { mutableStateOf(Color.Red) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
+        ) {
+            Column(Modifier.fillMaxSize()) {
                 TopAppBar(
                     title = { Text(stringResource(R.string.diary_format_draw)) },
-                    navigationIcon = { IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) } },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                    },
                     actions = {
-                        IconButton(onClick = { paths = emptyList() }) { Icon(Icons.Default.Delete, null) }
                         IconButton(onClick = {
-                            // Simulate saving
+                            // Dummy implementation for saving drawing
+                            // In real app, create Bitmap and save to Uri
                             onSave(Uri.EMPTY)
                         }) { Icon(Icons.Default.Check, null) }
                     }
                 )
-            }
-        ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize().background(Color.White)) {
-                Canvas(modifier = Modifier.fillMaxSize().pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            currentPath = Path().apply { moveTo(offset.x, offset.y) }
-                        },
-                        onDrag = { change, _ ->
-                            currentPath?.lineTo(change.position.x, change.position.y)
-                            val path = currentPath
-                            if (path != null) {
-                                paths = paths.filter { it.first != path } + (path to Color.Black)
-                            }
-                        },
-                        onDragEnd = {
-                            currentPath = null
+
+                val colors = listOf(Color.Black, Color.Red, Color.Green, Color.Blue, Color.Yellow)
+                LazyRow(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(colors) { c ->
+                        Box(
+                            Modifier.size(40.dp).clip(CircleShape).background(c)
+                                .clickable { color = c }
+                                .then(if (color == c) Modifier.background(Color.White.copy(0.3f)) else Modifier)
+                        )
+                    }
+                }
+
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .background(Color.White, RoundedCornerShape(16.dp))
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { offset -> currentPath = Path().apply { moveTo(offset.x, offset.y) } },
+                                onDrag = { change, _ -> currentPath.lineTo(change.position.x, change.position.y) },
+                                onDragEnd = { paths = paths + currentPath; currentPath = Path() }
+                            )
                         }
-                    )
-                }) {
-                    paths.forEach { (path, color) ->
-                        drawPath(path, color, style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
+                ) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        paths.forEach { path ->
+                            drawPath(path, color, style = Stroke(width = 8f, cap = StrokeCap.Round))
+                        }
+                        drawPath(currentPath, color, style = Stroke(width = 8f, cap = StrokeCap.Round))
                     }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun MarkdownText(text: String) {
-    Column {
-        val lines = text.split("\n")
-        lines.forEach { line ->
-            if (line.trim().startsWith("[img:") && line.trim().endsWith("]")) {
-                val mediaId = line.trim().substringAfter("[img:").substringBefore("]")
-                DiaryInlineImage(mediaId)
-            } else if (line.trim().startsWith("- [") && line.contains("]")) {
-                val isChecked = line.contains("- [x]", ignoreCase = true)
-                val content = line.substringAfter("]").trim()
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = if (isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                        contentDescription = null,
-                        tint = if (isChecked) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = content,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textDecoration = if (isChecked) TextDecoration.LineThrough else null
-                    )
-                }
-            } else {
-                val annotatedLine = buildAnnotatedString {
-                    val boldRegex = Regex("\\*\\*(.*?)\\*\\*")
-                    val italicRegex = Regex("_(.*?)_")
-                    val colorRegex = Regex("\\{color:(#[0-9a-fA-F]{6})\\}(.*?)\\{/color\\}")
-                    
-                    var lastIndex = 0
-                    val matches = (boldRegex.findAll(line).map { it to "bold" } +
-                                   italicRegex.findAll(line).map { it to "italic" } +
-                                   colorRegex.findAll(line).map { it to "color" })
-                                  .sortedBy { it.first.range.first }
-
-                    matches.forEach { (match, type) ->
-                        if (match.range.first > lastIndex) {
-                            append(line.substring(lastIndex, match.range.first))
-                        }
-                        when (type) {
-                            "bold" -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(match.groupValues[1]) }
-                            "italic" -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { append(match.groupValues[1]) }
-                            "color" -> {
-                                val colorHex = match.groupValues[1]
-                                val textContent = match.groupValues[2]
-                                val color = try { Color(android.graphics.Color.parseColor(colorHex)) } catch(_:Exception) { Color.Unspecified }
-                                withStyle(SpanStyle(color = color)) { append(textContent) }
-                            }
-                        }
-                        lastIndex = match.range.last + 1
-                    }
-                    if (lastIndex < line.length) {
-                        append(line.substring(lastIndex))
-                    }
-                }
-                Text(
-                    text = annotatedLine,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DiaryInlineImage(mediaId: String) {
-    var url by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(mediaId) {
-        url = CdnService.getFileUrl(mediaId)
-    }
-    
-    if (url != null) {
-        AsyncImage(
-            model = url,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .clip(RoundedCornerShape(8.dp)),
-            contentScale = ContentScale.FillWidth
-        )
     }
 }

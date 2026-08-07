@@ -12,6 +12,7 @@ sealed class Screen(val route: String) {
     object CreateChat : Screen("create_chat")
     object Notifications : Screen("notifications")
     object CacheSettings : Screen("cache_settings")
+    object Customization : Screen("customization")
 
     object Search : Screen("search?query={query}") {
         fun createRoute(query: String? = null) =

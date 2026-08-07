@@ -134,7 +134,8 @@ fun DiaryScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
-        containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
+        containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         floatingActionButton = {
             Box(modifier = Modifier.padding(bottom = if (isForge) 64.dp else 80.dp)) {
                 VlSurface(

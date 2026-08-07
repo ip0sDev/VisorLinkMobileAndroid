@@ -9,6 +9,10 @@ import by.iposdev.visorlink.di.appModule
 import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.PresenceManager
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import com.google.firebase.Firebase
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
@@ -18,9 +22,17 @@ import com.google.firebase.messaging.FirebaseMessaging
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
 
-class VisorLinkApp : Application() {
+class VisorLinkApp : Application(), ImageLoaderFactory {
 
     private var presenceManager: PresenceManager? = null
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                add(ImageDecoderDecoder.Factory())
+            }
+            .build()
+    }
 
     override fun onCreate() {
         super.onCreate()
