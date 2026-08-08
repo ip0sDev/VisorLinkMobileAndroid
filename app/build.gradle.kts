@@ -69,10 +69,13 @@ android {
 }
 
 sentry {
+    // Включаем загрузку маппингов и символов только если есть токен (чтобы билд не падал локально или в CI без секретов)
+    val hasSentryToken = System.getenv("SENTRY_AUTH_TOKEN") != null || project.hasProperty("SENTRY_AUTH_TOKEN")
+
     // Automatically upload ProGuard/R8 mapping files
-    includeProguardMapping.set(true)
+    includeProguardMapping.set(hasSentryToken)
     // Automatically upload Native Symbols (if using NDK)
-    uploadNativeSymbols.set(true)
+    uploadNativeSymbols.set(hasSentryToken)
     // Enable auto-instrumentation (HTTP, fragments, etc.)
     tracingInstrumentation {
         enabled.set(true)
