@@ -6,7 +6,7 @@ plugins {
 }
 
 // Читаем CommitID из свойства, которое передаёт CI (./gradlew assembleDebug -PcommitId=abc1234)
-// При локальной сборке берём из git напрямую, либо оставляем пустым
+// При локальной сборке оставляем пустым
 val commitId: String = if (project.hasProperty("commitId")) {
     project.property("commitId").toString()
 } else {
