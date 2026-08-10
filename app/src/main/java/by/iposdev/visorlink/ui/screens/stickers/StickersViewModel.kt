@@ -39,6 +39,9 @@ class StickerPackViewModel(
 
     init {
         viewModelScope.launch {
+            repo.refreshPacks()
+        }
+        viewModelScope.launch {
             repo.observeUserPacks()
                 .catch { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
                 .collect { packs ->
@@ -65,18 +68,9 @@ class StickerPackViewModel(
 
     // ─── Delete pack ──────────────────────────────────────────────────────────
 
-    fun deletePack(packId: String) {
+    fun deletePack(packId: String, isOwner: Boolean) {
         viewModelScope.launch {
-            try { repo.deletePack(packId) }
-            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
-        }
-    }
-
-    // ─── Rename ───────────────────────────────────────────────────────────────
-
-    fun renamePack(packId: String, name: String, emoji: String) {
-        viewModelScope.launch {
-            try { repo.renamePack(packId, name, emoji) }
+            try { repo.deletePack(packId, isOwner) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }

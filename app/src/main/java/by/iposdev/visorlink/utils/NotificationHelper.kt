@@ -21,7 +21,11 @@ object NotificationHelper {
 
     private const val CHANNEL_MESSAGES    = "messages"
     private const val CHANNEL_MESSAGES_NAME = "Messages"
+    private const val CHANNEL_DIARY       = "diary_reminders"
+    private const val CHANNEL_DIARY_NAME  = "Diary Reminders"
     private const val TAG = "NotificationHelper"
+    private const val GROUP_KEY = "by.iposdev.visorlink.MESSAGES"
+    private const val SUMMARY_ID = 9999
 
     fun createChannels(context: Context) {
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -31,10 +35,12 @@ object NotificationHelper {
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
 
-        val channel = NotificationChannel(
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // 1. Messages Channel
+        val msgChannel = NotificationChannel(
             CHANNEL_MESSAGES,
             CHANNEL_MESSAGES_NAME,
-            // IMPORTANCE_HIGH — единственный уровень, который даёт heads-up (всплывающий баннер)
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description          = "New message notifications"
@@ -42,23 +48,27 @@ object NotificationHelper {
             vibrationPattern     = longArrayOf(0, 150, 80, 150)
             enableLights(true)
             setSound(soundUri, audioAttrs)
-            // Блокируем режим «не беспокоить» только для этого канала
             setBypassDnd(true)
             lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
         }
 
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 2. Diary Reminders Channel
+        val diaryChannel = NotificationChannel(
+            CHANNEL_DIARY,
+            CHANNEL_DIARY_NAME,
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Daily diary entry reminders"
+        }
 
-        // Если канал уже существует с другими настройками — удалить и пересоздать.
-        // (Изменить importance существующего канала нельзя без удаления.)
         val existing = manager.getNotificationChannel(CHANNEL_MESSAGES)
         if (existing != null && existing.importance < NotificationManager.IMPORTANCE_HIGH) {
             manager.deleteNotificationChannel(CHANNEL_MESSAGES)
             Log.d(TAG, "Old low-priority channel removed")
         }
 
-        manager.createNotificationChannel(channel)
-        Log.d(TAG, "Notification channel created: importance=${channel.importance}")
+        manager.createNotificationChannel(msgChannel)
+        manager.createNotificationChannel(diaryChannel)
     }
 
     fun showMessageNotification(
@@ -91,27 +101,68 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // ── Группировка уведомлений (Inbox Style) ──
+        val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        val historyKey = "unread_msgs_$chatId"
+        val historyStr = prefs.getString(historyKey, "") ?: ""
+        val history = if (historyStr.isEmpty()) mutableListOf() else historyStr.split("|||").toMutableList()
+
+        history.add(messagePreview)
+        if (history.size > 7) {
+            history.removeAt(0)
+        }
+        prefs.edit().putString(historyKey, history.joinToString("|||")).apply()
+
+        val inboxStyle = NotificationCompat.InboxStyle()
+            .setBigContentTitle(senderName)
+
+        if (history.size > 1) {
+            inboxStyle.setSummaryText("+${history.size} новых")
+        }
+        history.forEach { inboxStyle.addLine(it) }
+
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
 
+        // Само уведомление чата
         val notification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
-            // Замени R.drawable.ic_notification на свою иконку из drawable
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(senderName)
             .setContentText(messagePreview)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(messagePreview))
-            // MAX на уровне NotificationCompat (совместимость со старыми API < 26)
+            .setStyle(inboxStyle)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
+            .setGroup(GROUP_KEY) // ГРУППИРОВКА
             .setVibrate(longArrayOf(0, 150, 80, 150))
             .setSound(soundUri)
-            // Heads-up (всплывающий баннер) — требует IMPORTANCE_HIGH на канале
-            .setFullScreenIntent(pendingIntent, /* highPriority = */ true)
+            .setFullScreenIntent(pendingIntent, true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
 
-        NotificationManagerCompat.from(context).notify(notificationId, notification)
-        Log.d(TAG, "Notification shown for chat $chatId from $senderName")
+        // Сводное уведомление для группы (чтобы Android не удалял все чаты разом)
+        val summaryNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setStyle(NotificationCompat.InboxStyle().setSummaryText("Новые сообщения"))
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setGroup(GROUP_KEY)
+            .setGroupSummary(true)
+            .setAutoCancel(true)
+            .build()
+
+        with(NotificationManagerCompat.from(context)) {
+            notify(notificationId, notification)
+            notify(SUMMARY_ID, summaryNotification)
+        }
+    }
+
+    fun clearNotification(context: Context, chatId: String) {
+        try {
+            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            prefs.edit().remove("unread_msgs_$chatId").apply()
+            NotificationManagerCompat.from(context).cancel(chatId.hashCode())
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear notification", e)
+        }
     }
 }

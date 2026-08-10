@@ -4,25 +4,29 @@ import android.content.Context
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.ActiveChatTracker
+import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.PresenceManager
+import by.iposdev.visorlink.utils.DraftManager
+import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
-import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import com.google.firebase.database.database
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
-import com.google.firebase.storage.storage
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -34,6 +38,7 @@ import java.util.*
 
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
+    val tempMessages: List<Message> = emptyList(),
     val messageListItems: List<MessageListItem> = emptyList(),
     val isLoadingMore: Boolean = false,
     val hasMore: Boolean = true,
@@ -47,7 +52,7 @@ data class ChatUiState(
     val onlineCount: Int = 0,
     val replyingTo: Message? = null,
     val isUploading: Boolean = false,
-    val isCooldown: Boolean = false, // <-- Кулдаун
+    val isCooldown: Boolean = false,
     val error: String? = null,
     val isRecording: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
@@ -58,7 +63,9 @@ data class ChatUiState(
     val albumDraft: List<AlbumImageLocal> = emptyList(),
     val albumCaption: String = "",
     val showAlbumPreview: Boolean = false,
-    val singlePickedUri: Uri? = null
+    val singlePickedUri: Uri? = null,
+    val initialDraft: String = "",
+    val currentUser: UserProfile? = null
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -71,8 +78,9 @@ class ChatViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val db: com.google.firebase.firestore.FirebaseFirestore,
+    private val db: FirebaseFirestore,
     private val context: Context,
+    private val draftManager: DraftManager,
     val chatId: String,
     val otherUid: String
 ) : ViewModel() {
@@ -101,7 +109,15 @@ class ChatViewModel(
 
         viewModelScope.launch {
             userRepository.currentUserFlow().catch { }
-                .collect { currentUsername = it?.username ?: "" }
+                .collect { profile ->
+                    currentUsername = profile?.username ?: ""
+                    _uiState.update { it.copy(currentUser = profile) }
+                }
+        }
+
+        val draft = draftManager.getDraft(chatId)
+        if (draft.isNotEmpty()) {
+            _uiState.update { it.copy(initialDraft = draft) }
         }
 
         viewModelScope.launch {
@@ -161,9 +177,9 @@ class ChatViewModel(
                 _uiState.update { it.copy(chatType = ChatType.DIRECT) }
 
                 launch {
-                    val profile = try { userRepository.getUserProfile(otherUid) }
-                    catch (_: Exception) { null }
-                    _uiState.update { it.copy(otherUser = profile) }
+                    userRepository.userProfileFlow(otherUid).collect { profile ->
+                        _uiState.update { it.copy(otherUser = profile) }
+                    }
                 }
 
                 launch {
@@ -193,19 +209,33 @@ class ChatViewModel(
             }
 
             launch {
-                chatRepository.latestMessagesFlow(chatId) { messages, lastDoc ->
-                    val items = buildMessageList(messages)
-                    _uiState.update {
-                        it.copy(
-                            messages = messages,
+                chatRepository.latestMessagesFlow(chatId) { latestMessages, latestLastDoc ->
+                    _uiState.update { state ->
+                        val latestMap = latestMessages.associateBy { it.id }
+                        val olderMessages = state.messages.filter { it.id !in latestMap }
+                        val combined = (olderMessages + latestMessages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+
+                        val allMessages = combined + state.tempMessages
+                        val items = buildMessageList(allMessages)
+
+                        // ИСПРАВЛЕНИЕ: Восстанавливаем курсор из сети (latestLastDoc), если кэш (state.lastDoc) пустой
+                        val newLastDoc = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.lastDoc else latestLastDoc
+                        val newHasMore = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.hasMore else (latestLastDoc != null)
+
+                        state.copy(
+                            messages = combined,
                             messageListItems = items,
-                            lastDoc = lastDoc,
-                            hasMore = lastDoc != null
+                            lastDoc = newLastDoc,
+                            hasMore = newHasMore
                         )
                     }
-                    if (_uiState.value.chatType == ChatType.DIRECT) {
+
+                    if (ActiveChatTracker.activeChatId == chatId) {
                         viewModelScope.launch {
-                            try { chatRepository.markMessagesAsRead(chatId, messages, currentUid) }
+                            try {
+                                chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
+                                NotificationHelper.clearNotification(context, chatId)
+                            }
                             catch (_: Exception) {}
                         }
                     }
@@ -214,7 +244,6 @@ class ChatViewModel(
         }
     }
 
-    // ─── Логика кулдауна (UI) ──────────────────────────────────────────────────
     private fun startCooldown(): Boolean {
         if (_uiState.value.isCooldown) return false
         viewModelScope.launch {
@@ -243,13 +272,18 @@ class ChatViewModel(
                 _uiState.update { it.copy(isUploading = true) }
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
-                val storagePath = "chats/$chatId/wallpapers/${docId}_${System.currentTimeMillis()}.jpg"
-                val storageRef = Firebase.storage.reference.child(storagePath)
-                storageRef.putFile(uri).await()
-                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                val tempFile = java.io.File(context.cacheDir, "wallpaper_${System.currentTimeMillis()}.jpg")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                }
+
+                val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = false)
+                tempFile.delete()
+
+                val downloadUrl = "${CdnService.BASE_URL}/p/$mediaId"
                 val data = hashMapOf(
                     "url" to downloadUrl,
-                    "storagePath" to storageRef.path,
                     "setBy" to currentUid,
                     "setAt" to FieldValue.serverTimestamp()
                 )
@@ -270,13 +304,7 @@ class ChatViewModel(
                 _uiState.update { it.copy(isUploading = true) }
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
-                val docRef = db.collection("chats").document(chatId).collection("wallpapers").document(docId)
-                val snap = docRef.get().await()
-                val storagePath = snap.getString("storagePath")
-                docRef.delete().await()
-                if (storagePath != null) {
-                    Firebase.storage.getReference(storagePath).delete().await()
-                }
+                db.collection("chats").document(chatId).collection("wallpapers").document(docId).delete().await()
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Failed to remove wallpaper: ${e.message}") }
             } finally {
@@ -344,6 +372,90 @@ class ChatViewModel(
         }
     }
 
+    fun sendVideoOrGif(file: java.io.File, isGif: Boolean) {
+        if (!_uiState.value.canSendMedia) return
+        if (!startCooldown()) return
+
+        val type = if (isGif) MessageType.GIF else MessageType.VIDEO
+        val tempId = "temp_${System.currentTimeMillis()}"
+        val reply = _uiState.value.replyingTo?.toReplyData()
+
+        val tempMsg = Message(
+            id = tempId,
+            senderId = currentUid,
+            senderUsername = currentUsername,
+            type = type,
+            localFile = file,
+            uploadProgress = 0.01f,
+            createdAt = com.google.firebase.Timestamp.now(),
+            readBy = listOf(currentUid),
+            deleted = false,
+            replyTo = reply?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
+            status = SendStatus.SENDING
+        )
+
+        _uiState.update { state ->
+            val newTemp = state.tempMessages + tempMsg
+            state.copy(
+                tempMessages = newTemp,
+                messageListItems = buildMessageList(state.messages + newTemp)
+            )
+        }
+
+        clearReply()
+
+        viewModelScope.launch {
+            try {
+                val mediaId = CdnService.uploadFile(file, if (isGif) "image/gif" else "video/mp4", isVault = false) { progress ->
+                    _uiState.update { state ->
+                        val updatedTemp = state.tempMessages.map {
+                            if (it.id == tempId) it.copy(uploadProgress = progress) else it
+                        }
+                        state.copy(
+                            tempMessages = updatedTemp,
+                            messageListItems = buildMessageList(state.messages + updatedTemp)
+                        )
+                    }
+                }
+
+                val msgRef = db.collection("chats").document(chatId).collection("messages").document()
+                val batch = db.batch()
+
+                batch.set(msgRef, mapOf(
+                    "senderId" to currentUid,
+                    "senderUsername" to currentUsername,
+                    "type" to type,
+                    "cdnMediaId" to mediaId,
+                    "fileName" to file.name,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "readBy" to listOf(currentUid),
+                    "deleted" to false,
+                    "replyTo" to tempMsg.replyTo
+                ))
+
+                val preview = if (isGif) "🖼️ GIF" else "🎥 Видео"
+                batch.update(db.collection("chats").document(chatId), mapOf(
+                    "lastMessage" to preview,
+                    "lastMessageAt" to FieldValue.serverTimestamp()
+                ))
+
+                batch.update(db.collection("users").document(currentUid), "lastMessageAt", FieldValue.serverTimestamp())
+                batch.commit().await()
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Ошибка CDN: ${e.message}") }
+            } finally {
+                _uiState.update { state ->
+                    val cleanTemp = state.tempMessages.filter { it.id != tempId }
+                    state.copy(
+                        tempMessages = cleanTemp,
+                        messageListItems = buildMessageList(state.messages + cleanTemp)
+                    )
+                }
+            }
+        }
+    }
+
     fun playVoice(messageId: String, url: String, durationSec: Int) {
         voicePlayer.play(messageId, url, durationSec)
     }
@@ -362,9 +474,9 @@ class ChatViewModel(
 
     private fun startGroupOnlineCount(memberIds: List<String>) {
         onlineCountListener?.let {
-            Firebase.database.getReference("presence").removeEventListener(it)
+            FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
         }
-        val presenceRef = Firebase.database.getReference("presence")
+        val presenceRef = FirebaseDatabase.getInstance().getReference("presence")
         onlineCountListener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
                 val count = memberIds.count { uid ->
@@ -379,34 +491,59 @@ class ChatViewModel(
     }
 
     fun loadMore() {
-        val state = _uiState.value
-        if (!state.hasMore || state.isLoadingMore || state.lastDoc == null) return
+        var currentLastDoc: DocumentSnapshot? = null
+
+        // Защита от дублей: блокируем дальнейшие вызовы пока грузим
+        _uiState.update { state ->
+            if (!state.hasMore || state.isLoadingMore || state.lastDoc == null) {
+                return@update state
+            }
+            currentLastDoc = state.lastDoc
+            state.copy(isLoadingMore = true)
+        }
+
+        if (currentLastDoc == null) return
+
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingMore = true) }
             try {
-                val (older, newLastDoc) = chatRepository.loadOlderMessages(chatId, state.lastDoc)
-                val combined = older + state.messages
-                _uiState.update {
-                    it.copy(
+                val (older, newLastDoc) = chatRepository.loadOlderMessages(chatId, currentLastDoc!!)
+
+                _uiState.update { currentState ->
+                    val olderFiltered = older.filter { oldMsg ->
+                        currentState.messages.none { it.id == oldMsg.id }
+                    }
+                    val combined = (olderFiltered + currentState.messages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+
+                    currentState.copy(
                         messages = combined,
-                        messageListItems = buildMessageList(combined),
+                        messageListItems = buildMessageList(combined + currentState.tempMessages),
                         isLoadingMore = false,
                         hasMore = newLastDoc != null,
-                        lastDoc = newLastDoc ?: it.lastDoc
+                        lastDoc = newLastDoc ?: currentState.lastDoc
                     )
                 }
+
+                if (ActiveChatTracker.activeChatId == chatId) {
+                    try {
+                        chatRepository.markMessagesAsRead(chatId, older, currentUid)
+                        NotificationHelper.clearNotification(context, chatId)
+                    }
+                    catch (_: Exception) {}
+                }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoadingMore = false, error = e.message) }
+                Log.e("ChatViewModel", "Pagination error", e)
+                _uiState.update { it.copy(isLoadingMore = false, error = "Ошибка загрузки: ${e.message}") }
             }
         }
     }
 
-    private fun buildMessageList(messages: List<Message>): List<MessageListItem> {
+    private fun buildMessageList(allMessages: List<Message>): List<MessageListItem> {
         val result = mutableListOf<MessageListItem>()
         var lastDate: LocalDate? = null
         val today = LocalDate.now()
         val yesterday = today.minusDays(1)
-        for (message in messages) {
+
+        for (message in allMessages) {
             val msgDate = message.createdAt?.toDate()
                 ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: continue
             if (msgDate != lastDate) {
@@ -426,6 +563,7 @@ class ChatViewModel(
     fun onTextChanged(text: String) {
         if (text.isNotEmpty()) typingManager?.onTyping()
         else typingManager?.stopTyping()
+        draftManager.saveDraft(chatId, text)
     }
 
     fun sendText(text: String) {
@@ -439,6 +577,7 @@ class ChatViewModel(
         viewModelScope.launch {
             typingManager?.stopTyping()
             clearReply()
+            draftManager.clearDraft(chatId)
             try { chatRepository.sendText(chatId, trimmed, currentUsername, reply) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
@@ -484,6 +623,11 @@ class ChatViewModel(
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.WEBM)
             setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
+
+            setAudioChannels(1)
+            setAudioSamplingRate(48000)
+            setAudioEncodingBitRate(96000)
+
             setOutputFile(file.absolutePath)
             prepare()
             start()
@@ -520,7 +664,20 @@ class ChatViewModel(
 
     fun deleteMessage(messageId: String) {
         viewModelScope.launch {
-            try { chatRepository.deleteMessage(chatId, messageId) }
+            try {
+                chatRepository.deleteMessage(chatId, messageId)
+
+                // Optimistic Local Update
+                _uiState.update { state ->
+                    val newMessages = state.messages.map {
+                        if (it.id == messageId) it.copy(deleted = true) else it
+                    }
+                    state.copy(
+                        messages = newMessages,
+                        messageListItems = buildMessageList(newMessages + state.tempMessages)
+                    )
+                }
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
@@ -528,7 +685,37 @@ class ChatViewModel(
     fun toggleReaction(messageId: String, emoji: String, currentReactions: List<Reaction>) {
         if (!_uiState.value.canReact) return
         viewModelScope.launch {
-            try { chatRepository.toggleReaction(chatId, messageId, emoji, currentReactions) }
+            try {
+                chatRepository.toggleReaction(chatId, messageId, emoji, currentReactions)
+
+                // Optimistic Local Update
+                _uiState.update { state ->
+                    val updatedReactions = currentReactions.toMutableList()
+                    val existing = updatedReactions.find { it.emoji == emoji }
+                    if (existing != null) {
+                        if (currentUid in existing.uids) {
+                            val newUids = existing.uids - currentUid
+                            if (newUids.isEmpty()) updatedReactions.remove(existing)
+                            else updatedReactions[updatedReactions.indexOf(existing)] = existing.copy(uids = newUids, count = newUids.size)
+                        } else {
+                            updatedReactions[updatedReactions.indexOf(existing)] = existing.copy(uids = existing.uids + currentUid, count = existing.count + 1)
+                        }
+                    } else {
+                        updatedReactions.add(Reaction(emoji, listOf(currentUid), 1))
+                    }
+
+                    val newMessages = state.messages.map { msg ->
+                        if (msg.id == messageId) {
+                            val newRaw = updatedReactions.map { it.toMap() }
+                            msg.copy(reactions = newRaw)
+                        } else msg
+                    }
+                    state.copy(
+                        messages = newMessages,
+                        messageListItems = buildMessageList(newMessages + state.tempMessages)
+                    )
+                }
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
@@ -561,7 +748,7 @@ class ChatViewModel(
     override fun onCleared() {
         typingManager?.cleanup()
         onlineCountListener?.let {
-            Firebase.database.getReference("presence").removeEventListener(it)
+            FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
         }
         wallpaperListener?.remove()
         voicePlayer.release()

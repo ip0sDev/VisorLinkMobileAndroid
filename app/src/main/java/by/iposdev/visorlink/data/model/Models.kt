@@ -1,6 +1,8 @@
 package by.iposdev.visorlink.data.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.PropertyName
+import com.google.firebase.firestore.IgnoreExtraProperties
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
@@ -15,8 +17,43 @@ data class UserProfile(
     val lastSeen: Timestamp? = null,
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
-    val fcmTokens: List<String> = emptyList()
-)
+    val fcmTokens: List<String> = emptyList(),
+
+    val isAdmin: Boolean = false,
+    val isBot: Boolean = false,
+    val botBadge: String = "unverified",
+    val ownerId: String? = null,
+    val bits: Int = 0,
+    val streak: Int = 0,
+    val showStreak: Boolean = true,
+    val proUntil: Timestamp? = null,
+    val trialUsed: Boolean = false,
+    val registeredViaOfficialClient: Boolean = true,
+
+    // ДОБАВЛЕНО:
+    val ignoreCustomizations: Boolean = false,
+    val interestWeights: Map<String, Double> = emptyMap(),
+    val tg_username: String? = null,
+    val tg_uid: Long? = null,
+
+    val diaryEnabled: Boolean = false,
+    val diaryRemindersEnabled: Boolean = false,
+    val diaryReminderTime: String = "21:00", // HH:mm
+
+    // Fields from Firestore warnings
+    val stickerPackIds: List<String> = emptyList(),
+    val customization: Map<String, Any?> = emptyMap(),
+    val lastStreakUpdate: Timestamp? = null,
+    val ntfyTopics: List<String> = emptyList(),
+    val settings: Map<String, Any?> = emptyMap(),
+    val mutedChatIds: List<String> = emptyList(),
+    val lastBitsClaim: Timestamp? = null
+) {
+    fun isProActive(): Boolean {
+        if (proUntil == null) return false
+        return proUntil.toDate().time > System.currentTimeMillis()
+    }
+}
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
@@ -43,10 +80,18 @@ data class Chat(
     val memberCount: Int = 0,
     val memberIds: List<String> = emptyList(),
     val settings: ChatSettings = ChatSettings(),
-    val lastMessage: String? = null,
+    val lastMessage: Any? = null,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null
 ) {
+    fun lastMessageText(): String {
+        return when (lastMessage) {
+            is String -> lastMessage
+            is Map<*, *> -> (lastMessage["text"] as? String) ?: ""
+            else -> ""
+        }
+    }
+
     fun chatType() = when (type) {
         "group"   -> ChatType.GROUP
         "channel" -> ChatType.CHANNEL
@@ -115,8 +160,6 @@ fun canReact(chat: Chat, chatType: ChatType): Boolean {
     return chat.settings.allowReactions
 }
 
-// ─── v4: Two-level comments-allowed check ─────────────────────────────────────
-
 fun commentsAllowed(channel: Chat, post: Message): Boolean {
     if (channel.settings.allowComments == false) return false
     if (post.commentsEnabled == false) return false
@@ -160,14 +203,16 @@ data class TagSearchResult(
 // ─── Album Image ──────────────────────────────────────────────────────────────
 
 data class AlbumImage(
-    val url: String = "",
+    val url: String? = null,
+    val cdnMediaId: String? = null,
     val fileName: String = "",
     val spoiler: Boolean = false
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
-        "url"      to url,
-        "fileName" to fileName,
-        "spoiler"  to spoiler
+        "url"        to url,
+        "cdnMediaId" to cdnMediaId,
+        "fileName"   to fileName,
+        "spoiler"    to spoiler
     )
 }
 
@@ -194,6 +239,7 @@ data class StickerItem(
     val url: String = "",
     val emoji: String = "🎭",
     val storagePath: String = "",
+    val sortOrder: Int = 0,
     val createdAt: Timestamp? = null
 )
 
@@ -213,11 +259,9 @@ data class Message(
     val fileName: String? = null,
     val duration: Int? = null,
     val stickerId: String? = null,
-    // ─── Sticker Pack fields ──────────────────────────────────────────────────
     val packId: String? = null,
     val packName: String? = null,
     val packEmoji: String? = null,
-    // ─────────────────────────────────────────────────────────────────────────
     val createdAt: Timestamp? = null,
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
@@ -225,12 +269,31 @@ data class Message(
     val reactions: List<Map<String, Any>> = emptyList(),
     val readBy: List<String> = emptyList(),
     val spoiler: Boolean = false,
-    // ─── v4 ───────────────────────────────────────────────────────────────────
     val commentsEnabled: Boolean? = null,
     val commentsCount: Int = 0,
-    // ─── Album ────────────────────────────────────────────────────────────────
     val caption: String? = null,
-    val images: List<AlbumImage> = emptyList()
+    val images: List<AlbumImage> = emptyList(),
+    val forwardFrom: Map<String, Any?>? = null,
+
+    // Telegram Bot Forwarding
+    val tg_forwarded: Boolean? = null,
+    val tg_forwarded_from: String? = null,
+    val tg_forwarded_from_fallback: String? = null,
+    val isUnofficialClient: Boolean? = null,
+
+    // Подарки
+    val redeemed: Boolean = false,
+    val redeemedByUid: String? = null,
+    val redeemedByUsername: String? = null,
+    val giftType: String? = null,
+
+    // CDN / Временные файлы
+    val cdnMediaId: String? = null,
+    val mimeType: String? = null,
+    val uploadProgress: Float? = null,
+    val localFile: java.io.File? = null,
+    val localBytes: ByteArray? = null,
+    val status: String = "sent"
 ) {
     val replyData: ReplyData?
         get() = replyTo?.let {
@@ -254,6 +317,19 @@ data class Message(
                 )
             } catch (e: Exception) { null }
         }
+
+    val parsedForwardFrom: ForwardFrom?
+        get() = forwardFrom?.let {
+            try {
+                ForwardFrom(
+                    senderId       = it["senderId"] as? String ?: "",
+                    senderUsername = it["senderUsername"] as? String ?: "",
+                    chatId         = it["chatId"] as? String,
+                    chatName       = it["chatName"] as? String,
+                    messageId      = it["messageId"] as? String ?: ""
+                )
+            } catch (_: Exception) { null }
+        }
 }
 
 object MessageType {
@@ -262,6 +338,16 @@ object MessageType {
     const val VOICE   = "voice"
     const val STICKER = "sticker"
     const val ALBUM   = "album"
+    const val GIFT    = "gift"
+    const val VIDEO   = "video"
+    const val GIF     = "gif"
+}
+
+object SendStatus {
+    const val SENDING = "sending"
+    const val QUEUED  = "queued"
+    const val SENT    = "sent"
+    const val ERROR   = "error"
 }
 
 data class ReplyData(
@@ -288,8 +374,6 @@ data class Reaction(
     fun toMap() = mapOf("emoji" to emoji, "uids" to uids, "count" to count)
 }
 
-// ─── Legacy Sticker (kept for backward compat — old user sticker collection) ──
-
 data class Sticker(
     val id: String = "",
     val url: String = "",
@@ -297,8 +381,6 @@ data class Sticker(
     val storagePath: String = "",
     val createdAt: Timestamp? = null
 )
-
-// ─── v4: Comment ──────────────────────────────────────────────────────────────
 
 data class Comment(
     val id: String = "",
@@ -314,7 +396,8 @@ data class Comment(
     val reactions: List<Map<String, Any>> = emptyList(),
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
-    val createdAt: Timestamp? = null
+    val createdAt: Timestamp? = null,
+    val status: String = "sent"
 ) {
     val parsedReactions: List<Reaction>
         get() = reactions.mapNotNull { map ->
@@ -353,7 +436,74 @@ fun Comment.toCommentReplyData() = CommentReplyData(
     senderUsername = senderUsername
 )
 
-// ─── Presence / Topbar ───────────────────────────────────────────────────────
+// ─── Feed ──────────────────────────────────────────────────────────────────────
+
+@IgnoreExtraProperties
+data class FeedChannelData(
+    var name: String? = null,
+    var avatarUrl: String? = null,
+    var avatar_url: String? = null,
+    var tag: String? = null
+)
+
+@IgnoreExtraProperties
+data class FeedItem(
+    var id: String = "",
+    var chatId: String? = null,
+    var messageId: String? = null,
+    var channelData: FeedChannelData? = null,
+    var channel_data: FeedChannelData? = null,
+    var authorData: FeedChannelData? = null,
+
+    // Web version might put author name at root too
+    var author_name: String? = null,
+    var authorName: String? = null,
+    var author_avatar_url: String? = null,
+    var authorAvatarUrl: String? = null,
+
+    var type: String = "post",
+    var title: String? = null,
+    var text: String? = null,
+    var caption: String? = null,
+    var url: String? = null,
+    var cdnMediaId: String? = null,
+    var images: List<AlbumImage>? = null,
+    var duration: Int? = null,
+    var tags: List<String> = emptyList(),
+
+    // Field names from web
+    var likeCount: Int = 0,
+    var likers: List<String> = emptyList(),
+
+    // Field names from previous turn (fallback)
+    var likes_count: Int = 0,
+    var liked_uids: List<String> = emptyList(),
+    var views_count: Int = 0,
+    var comments_count: Int = 0,
+
+    var createdAt: Timestamp? = null
+) {
+    val displayAuthorName: String
+        get() = (channelData?.name ?: channel_data?.name ?: authorData?.name ?: author_name ?: authorName ?: "Unknown Channel").ifEmpty { "Unknown Channel" }
+
+    val displayAuthorAvatarUrl: String?
+        get() = channelData?.avatarUrl ?: channelData?.avatar_url ?: channel_data?.avatarUrl ?: channel_data?.avatar_url ?: authorData?.avatarUrl ?: author_avatar_url ?: authorAvatarUrl
+
+    val displayChatId: String?
+        get() = chatId
+
+    val displayLikesCount: Int
+        get() = if (likeCount != 0) likeCount else likes_count
+
+    val displayViewsCount: Int
+        get() = views_count
+
+    val displayCommentsCount: Int
+        get() = comments_count
+
+    val displayLikedUids: List<String>
+        get() = if (likers.isNotEmpty()) likers else liked_uids
+}
 
 data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null)
 
@@ -365,17 +515,41 @@ sealed class TopbarStatus {
     data class MemberCount(val total: Int, val online: Int) : TopbarStatus()
 }
 
-// ─── Message list items ───────────────────────────────────────────────────────
-
 sealed class MessageListItem {
     data class MessageItem(val message: Message) : MessageListItem()
     data class DateHeader(val label: String) : MessageListItem()
 }
 
-// ─── Theme ────────────────────────────────────────────────────────────────────
+enum class AppTheme {
+    MATERIAL3_EXPRESSIVE,
+    @Deprecated("Заменяется на BIOLUME/FORGE — оставлено для совместимости")
+    ONE_UI,
+    @Deprecated("Используй BIOLUME", ReplaceWith("BIOLUME"))
+    EXTHRU,
+    BIOLUME,
+    FORGE,
+    FORGE_TERMINAL,
+}
 
-enum class AppTheme { MATERIAL3_EXPRESSIVE, ONE_UI }
+val AppTheme.isExthruFamily: Boolean
+    @Suppress("DEPRECATION")
+    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE || this == AppTheme.FORGE_TERMINAL || this == AppTheme.EXTHRU
+
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
+enum class ColorPreset {
+    DEFAULT, PURPLE, BLUE, EMERALD, CRIMSON;
+
+    val seedColor: androidx.compose.ui.graphics.Color?
+        get() = when (this) {
+            DEFAULT -> null
+            PURPLE  -> androidx.compose.ui.graphics.Color(0xFF831AD4)
+            BLUE    -> androidx.compose.ui.graphics.Color(0xFF0EA5E9)
+            EMERALD -> androidx.compose.ui.graphics.Color(0xFF10B981)
+            CRIMSON -> androidx.compose.ui.graphics.Color(0xFFE11D48)
+        }
+}
+
 data class AppSettings(
     val hapticFeedback: Boolean = true,
     val notificationsEnabled: Boolean = true

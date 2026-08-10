@@ -16,15 +16,16 @@ private const val KEY_CHAT_CACHE_DAYS = "chat_cache_days"
 
 // Имена папок в cacheDir
 const val CACHE_DIR_IMAGES   = "coil_cache"        // Coil пишет сюда сам
+const val CACHE_DIR_CUSTOM_IMAGES = "image_cache"
 const val CACHE_DIR_VOICE    = "voice_cache"
 const val CACHE_DIR_WAVEFORM = "waveform_cache"
 const val CACHE_DIR_CHAT     = "chat_data_cache"
 
 data class CacheConfig(
-    val maxImageMb: Int    = 150,
-    val maxVoiceMb: Int    = 100,
-    val maxWaveformMb: Int = 10,
-    val chatCacheDays: Int = 7
+    val maxImageMb: Int    = 1024,
+    val maxVoiceMb: Int    = 512,
+    val maxWaveformMb: Int = 50,
+    val chatCacheDays: Int = 365
 )
 
 data class CacheSizeInfo(
@@ -43,10 +44,10 @@ class CacheManager(private val context: Context) {
     // ── Конфигурация ──────────────────────────────────────────────────────────
 
     fun loadConfig(): CacheConfig = CacheConfig(
-        maxImageMb    = prefs.getInt(KEY_MAX_IMAGE_MB, 150),
-        maxVoiceMb    = prefs.getInt(KEY_MAX_VOICE_MB, 100),
-        maxWaveformMb = prefs.getInt(KEY_MAX_WAVEFORM_MB, 10),
-        chatCacheDays = prefs.getInt(KEY_CHAT_CACHE_DAYS, 7)
+        maxImageMb    = prefs.getInt(KEY_MAX_IMAGE_MB, 1024),
+        maxVoiceMb    = prefs.getInt(KEY_MAX_VOICE_MB, 512),
+        maxWaveformMb = prefs.getInt(KEY_MAX_WAVEFORM_MB, 50),
+        chatCacheDays = prefs.getInt(KEY_CHAT_CACHE_DAYS, 365)
     )
 
     fun saveConfig(config: CacheConfig) {
@@ -61,10 +62,10 @@ class CacheManager(private val context: Context) {
     // ── Подсчёт размера ───────────────────────────────────────────────────────
 
     suspend fun getCacheSizes(): CacheSizeInfo = withContext(Dispatchers.IO) {
-        val images   = dirSizeMb(File(context.cacheDir, CACHE_DIR_IMAGES))
+        val images   = dirSizeMb(File(context.cacheDir, CACHE_DIR_IMAGES)) + dirSizeMb(File(context.cacheDir, CACHE_DIR_CUSTOM_IMAGES))
         val voice    = dirSizeMb(File(context.cacheDir, CACHE_DIR_VOICE))
         val waveform = dirSizeMb(File(context.cacheDir, CACHE_DIR_WAVEFORM))
-        val chat     = dirSizeMb(File(context.cacheDir, CACHE_DIR_CHAT))
+        val chat     = dirSizeMb(File(context.cacheDir, CACHE_DIR_CHAT)) + (context.getDatabasePath("visorlink_cache.db").length().toFloat() / (1024 * 1024))
         CacheSizeInfo(
             imagesMb   = images,
             voiceMb    = voice,
@@ -78,14 +79,13 @@ class CacheManager(private val context: Context) {
 
     suspend fun clearImages() = withContext(Dispatchers.IO) {
         clearDir(File(context.cacheDir, CACHE_DIR_IMAGES))
-        // Также чистим Coil memory cache через CoilImageLoader singleton
+        clearDir(File(context.cacheDir, CACHE_DIR_CUSTOM_IMAGES))
         AppImageLoader.clearMemoryCache(context)
         Log.d(TAG, "Image cache cleared")
     }
 
     suspend fun clearVoice() = withContext(Dispatchers.IO) {
         clearDir(File(context.cacheDir, CACHE_DIR_VOICE))
-        // Также временные .tmp файлы для анализа спектрограмм
         context.cacheDir.listFiles()
             ?.filter { it.name.startsWith("waveform_") && it.name.endsWith(".tmp") }
             ?.forEach { it.delete() }
@@ -98,7 +98,8 @@ class CacheManager(private val context: Context) {
     }
 
     suspend fun clearChatData() = withContext(Dispatchers.IO) {
-        clearDir(File(context.cacheDir, CACHE_DIR_CHAT))
+        ChatDataCache.clearAll(context) // Очищаем SQLite
+        clearDir(File(context.cacheDir, CACHE_DIR_CHAT)) // Очищаем старую папку (если осталась)
         Log.d(TAG, "Chat data cache cleared")
     }
 
@@ -114,12 +115,12 @@ class CacheManager(private val context: Context) {
 
     suspend fun evictIfNeeded() = withContext(Dispatchers.IO) {
         val config = loadConfig()
+        evictDir(File(context.cacheDir, CACHE_DIR_CUSTOM_IMAGES), config.maxImageMb.toLong())
         evictDir(File(context.cacheDir, CACHE_DIR_VOICE), config.maxVoiceMb.toLong())
         evictDir(File(context.cacheDir, CACHE_DIR_WAVEFORM), config.maxWaveformMb.toLong())
         evictDir(File(context.cacheDir, CACHE_DIR_CHAT), 50L)
     }
 
-    // Удаляет старые файлы пока размер папки > maxMb
     private fun evictDir(dir: File, maxMb: Long) {
         if (!dir.exists()) return
         val maxBytes = maxMb * 1024 * 1024
@@ -131,8 +132,6 @@ class CacheManager(private val context: Context) {
             file.delete()
         }
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun dirSizeMb(dir: File): Float {
         if (!dir.exists()) return 0f

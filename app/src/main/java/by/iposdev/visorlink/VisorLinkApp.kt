@@ -1,55 +1,71 @@
 package by.iposdev.visorlink
 
 import android.app.Application
+import android.util.Log
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import by.iposdev.visorlink.di.appModule
+import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.NotificationHelper
+import by.iposdev.visorlink.utils.OutboxManager
 import by.iposdev.visorlink.utils.PresenceManager
+import io.sentry.android.core.SentryAndroid
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
 import com.google.firebase.Firebase
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.functions.functions
+import com.google.firebase.messaging.FirebaseMessaging
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.component.KoinComponent
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 
-class VisorLinkApp : Application() {
+class VisorLinkApp : Application(), ImageLoaderFactory {
 
     private var presenceManager: PresenceManager? = null
 
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                add(ImageDecoderDecoder.Factory())
+            }
+            .build()
+    }
+
     override fun onCreate() {
         super.onCreate()
+        
+        SentryAndroid.init(this) { options ->
+            // Performance monitoring
+            options.tracesSampleRate = 1.0
+            // User feedback
+            options.isEnableUserInteractionTracing = true
+            // Profile sessions
+            options.profilesSampleRate = 1.0
+        }
+
         NotificationHelper.createChannels(this)
 
         // ─── Firebase App Check ───────────────────────────────────────────────
-        // Debug builds → DebugAppCheckProviderFactory.
-        //   Класс подключается через рефлексию, чтобы release-сборка не требовала
-        //   firebase-appcheck-debug артефакт (он добавлен как debugImplementation).
-        //   При первом запуске печатает в logcat:
-        //   "D/ProviderInstaller: Debug secret: XXXXXXXX-XXXX-..."
-        //   Этот UUID нужно добавить в Firebase Console →
-        //   App Check → ваше приложение → Manage debug tokens.
-        //
-        // Release builds → PlayIntegrityAppCheckProviderFactory.
         if (BuildConfig.DEBUG) {
             try {
-                val factoryClass = Class.forName(
-                    "com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory"
-                )
+                val factoryClass = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
                 val getInstance = factoryClass.getMethod("getInstance")
                 val factory = getInstance.invoke(null)
                 Firebase.appCheck.installAppCheckProviderFactory(
                     factory as com.google.firebase.appcheck.AppCheckProviderFactory
                 )
             } catch (e: Exception) {
-                // firebase-appcheck-debug не подключён — fallback на Play Integrity
-                Firebase.appCheck.installAppCheckProviderFactory(
-                    PlayIntegrityAppCheckProviderFactory.getInstance()
-                )
+                Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
             }
         } else {
-            Firebase.appCheck.installAppCheckProviderFactory(
-                PlayIntegrityAppCheckProviderFactory.getInstance()
-            )
+            Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
         }
 
         startKoin {
@@ -57,10 +73,35 @@ class VisorLinkApp : Application() {
             modules(appModule)
         }
 
-        // Автоматически управляем presence при смене auth state
+        // Initialize OutboxManager to start background processing
+        GlobalContext.get().get<OutboxManager>()
+
+        // Регистрируем наблюдатель за жизненным циклом (свернуто/развернуто)
+        // через анонимный объект, чтобы не было конфликтов с методами Application
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                ActiveChatTracker.isAppInForeground = true
+            }
+
+            override fun onStop(owner: LifecycleOwner) {
+                ActiveChatTracker.isAppInForeground = false
+            }
+        })
+
+        // Автоматически управляем presence и FCM токеном при смене auth state
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             val uid = auth.currentUser?.uid
             if (uid != null) {
+                // ── ИСПРАВЛЕНИЕ FCM: Отправляем токен сразу после авторизации ──
+                FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+                    try {
+                        Firebase.functions.getHttpsCallable("saveFcmToken").call(mapOf("token" to token))
+                        Log.d("FCM", "Token synced on auth state change")
+                    } catch (e: Exception) {
+                        Log.e("FCM", "Failed to sync token on auth state change", e)
+                    }
+                }
+
                 presenceManager?.detach()
                 presenceManager = PresenceManager(uid).also {
                     it.attach(ProcessLifecycleOwner.get().lifecycle)

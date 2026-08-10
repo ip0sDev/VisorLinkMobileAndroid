@@ -1,19 +1,33 @@
-package by.iposdev.visorlink.ui.screens
+// ui/screens/settings/SettingsScreen.kt
+package by.iposdev.visorlink.ui.screens.settings
 
+import android.app.TimePickerDialog
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,1029 +35,1346 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.BuildConfig
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
+import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.data.model.isExthruFamily
+import by.iposdev.visorlink.data.repository.AuthRepository
+import by.iposdev.visorlink.data.repository.BotRepository
+import by.iposdev.visorlink.data.repository.DmBot
+import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
+import by.iposdev.visorlink.ui.theme.nmInsetShadow
+import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
-import by.iposdev.visorlink.ui.update.UpdateState
+import by.iposdev.visorlink.ui.update.UpdateChannel
 import by.iposdev.visorlink.utils.AppLanguage
-import by.iposdev.visorlink.utils.HapticHelper
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.StealthManager
 import by.iposdev.visorlink.utils.rememberHaptic
+import com.google.firebase.Firebase
+import com.google.firebase.auth.EmailAuthProvider
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.firestore
+import com.google.firebase.functions.functions
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.haze
+import dev.chrisbanes.haze.hazeChild
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.*
-
-// ════════════════════════════════════════════════════════════════════════════
-//  One UI colour tokens
-//  Все цвета — точные значения из One UI 7 light/dark палитры
-// ════════════════════════════════════════════════════════════════════════════
-
-private object OneUi {
-    val Blue        = Color(0xFF1259C3)
-    val BlueDark    = Color(0xFF4D90F0)
-
-    val PageBg      = Color(0xFFF4F4F4)
-    val PageBgDark  = Color(0xFF1A1A1A)
-    val CardBg      = Color(0xFFFFFFFF)
-    val CardBgDark  = Color(0xFF2C2C2C)
-
-    val TextPrimary       = Color(0xFF1A1A1A)
-    val TextPrimaryDark   = Color(0xFFEEEEEE)
-    val TextSecondary     = Color(0xFF888888)
-    val TextSecondaryDark = Color(0xFF999999)
-
-    val Divider     = Color(0xFFE8E8E8)
-    val DividerDark = Color(0xFF3A3A3A)
-
-    val SwitchOn    = Blue
-    val SwitchOnDark= BlueDark
-    val SwitchOff   = Color(0xFFD0D0D0)
-    val SwitchOffDk = Color(0xFF555555)
-
-    val SectionColor     = Blue
-    val SectionColorDark = BlueDark
-
-    val IconBgBlue    = Color(0xFFEBF1FD)
-    val IconBlueDark  = Color(0xFF1E3356)
-    val IconBgRed     = Color(0xFFFFF0F0)
-    val IconRedDark   = Color(0xFF3D1515)
-    val IconBgGreen   = Color(0xFFF0FFF4)
-    val IconGreenDark = Color(0xFF0D2E14)
-    val IconBgGray    = Color(0xFFF0F0F0)
-    val IconGrayDark  = Color(0xFF3A3A3A)
-
-    val IconBlue  = Blue
-    val IconRed   = Color(0xFFE53935)
-    val IconGreen = Color(0xFF2E7D32)
-    val IconGray  = Color(0xFF777777)
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  M3E shape system
-// ════════════════════════════════════════════════════════════════════════════
-
-private val M3E_BIG   = 20.dp
-private val M3E_SMALL = 4.dp
-private val M3E_GAP   = 2.dp
-
-private fun shapeAt(index: Int, total: Int) = when {
-    total == 1         -> RoundedCornerShape(M3E_BIG)
-    index == 0         -> RoundedCornerShape(topStart = M3E_BIG, topEnd = M3E_BIG,
-        bottomStart = M3E_SMALL, bottomEnd = M3E_SMALL)
-    index == total - 1 -> RoundedCornerShape(topStart = M3E_SMALL, topEnd = M3E_SMALL,
-        bottomStart = M3E_BIG, bottomEnd = M3E_BIG)
-    else               -> RoundedCornerShape(M3E_SMALL)
-}
-
-private val OUI_CARD_SHAPE = RoundedCornerShape(24.dp)
-
-// ════════════════════════════════════════════════════════════════════════════
-//  Screen
-// ════════════════════════════════════════════════════════════════════════════
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
+    onOpenStorageManager: () -> Unit = {},
+    onOpenCustomization: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
-    appUpdateViewModel: AppUpdateViewModel = koinViewModel()
+    appUpdateViewModel: AppUpdateViewModel,
+    userRepository: UserRepository = koinInject(),
+    authRepository: AuthRepository = koinInject(),
+    proViewModel: ProViewModel = koinViewModel()
 ) {
-    val currentTheme  by themeViewModel.appTheme.collectAsState()
-    val currentMode   by themeViewModel.themeMode.collectAsState()
+    val currentTheme by themeViewModel.appTheme.collectAsState()
+    val currentMode by themeViewModel.themeMode.collectAsState()
+    val currentPreset by themeViewModel.colorPreset.collectAsState()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
-    val notifEnabled  by themeViewModel.notificationsEnabled.collectAsState()
-    val currentLang   by themeViewModel.language.collectAsState()
-    val haptic = rememberHaptic()
+    val notifEnabled by themeViewModel.notificationsEnabled.collectAsState()
+    val currentLang by themeViewModel.language.collectAsState()
+    val currentChannel by appUpdateViewModel.currentChannel.collectAsState()
+    val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
+    val compactChatList by themeViewModel.compactChatList.collectAsState()
 
-    val isOneUi = currentTheme == AppTheme.ONE_UI
-    val isDark  = MaterialTheme.colorScheme.surface.luminance() < 0.1f
-
-    val buildDate = remember {
-        SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault())
-            .format(Date(BuildConfig.BUILD_TIMESTAMP))
-    }
-    val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate"
+    val profile by userRepository.currentUserFlow().collectAsState(initial = null)
+    val proState by proViewModel.uiState.collectAsState()
 
     val context = LocalContext.current
-    val updateState by appUpdateViewModel.updateState.collectAsState()
-    var isManualCheck by remember { mutableStateOf(false) }
+    val haptic = rememberHaptic()
+    val scope = rememberCoroutineScope()
 
-    // Логика ручной проверки обновлений
-    LaunchedEffect(updateState) {
-        if (isManualCheck) {
-            when (updateState) {
-                is UpdateState.None -> {
-                    Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
-                    isManualCheck = false
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
+    val style = rememberExthruStyle(currentTheme)
+    val isForge = style.isForge
+
+    // ── Стелс-режим ──
+    val stealthManager = remember { StealthManager(context) }
+    var isStealthEnabled by remember { mutableStateOf(stealthManager.isEnabled()) }
+    var hasStealthPin by remember { mutableStateOf(stealthManager.hasPin()) }
+
+    var showStealthSetup by remember { mutableStateOf(false) }
+    var showStealthDisable by remember { mutableStateOf(false) }
+    var showStealthChangePin by remember { mutableStateOf(false) }
+
+    // ── Telegram Account Binding ──
+    var showTgBindingDialog by remember { mutableStateOf(false) }
+    var tgCode by remember { mutableStateOf<String?>(null) }
+    var isGeneratingTgCode by remember { mutableStateOf(false) }
+    var tgError by remember { mutableStateOf<String?>(null) }
+
+    // ── Админка и боты ──
+    var showAdminPanel by remember { mutableStateOf(false) }
+    var showBotsManager by remember { mutableStateOf(false) }
+
+    // ── Диалоги ──
+    var showChannelDialog by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    val buildDate = remember {
+        SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP))
+    }
+    val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
+    val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
+
+    // Семантические цвета для иконок
+    val colorNotif = Color(0xFFF59E0B)
+    val colorVibro = Color(0xFFEC4899)
+    val colorDynInput = Color(0xFF10B981)
+    val colorCompact = Color(0xFF3B82F6)
+    val colorStealth = Color(0xFF8B5CF6)
+    val colorStealthPin = Color(0xFF6366F1)
+    val colorStorage = Color(0xFF3B82F6)
+    val colorBots = Color(0xFF14B8A6)
+    val colorUpdateChan = Color(0xFFF59E0B)
+    val colorUpdateCheck = Color(0xFF10B981)
+    val colorEmail = Color(0xFF64748B)
+    val colorPassword = Color(0xFFF43F5E)
+
+    val hazeState = remember { HazeState() }
+    val scaffoldBg = if (currentTheme.isExthruFamily) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
+
+    // Обработка уведомлений PRO
+    LaunchedEffect(proState.successMessage) {
+        proState.successMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            proViewModel.clearMessages()
+        }
+    }
+    LaunchedEffect(proState.error) {
+        proState.error?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            proViewModel.clearMessages()
+        }
+    }
+
+    CompositionLocalProvider(LocalHazeState provides hazeState) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                if (currentTheme.isExthruFamily) {
+                    val topBarBg = if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
+
+                    val topBarMod = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isForge) Modifier.background(topBarBg)
+                            else Modifier.hazeChild(
+                                state = hazeState,
+                                style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
+                            ).background(topBarBg)
+                        )
+
+                    TopAppBar(
+                        modifier = topBarMod,
+                        title = {
+                            Text(
+                                text = stringResource(R.string.settings_title),
+                                style = MaterialTheme.typography.headlineLarge.copy(
+                                    fontSize = 34.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = if (isForge) FontFamily.Monospace else null
+                                )
+                            )
+                        },
+                        navigationIcon = {
+                            val interactionSource = remember { MutableInteractionSource() }
+                            val isPressed by interactionSource.collectIsPressedAsState()
+                            val scale by animateFloatAsState(if (isPressed) 0.9f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f), label = "back_btn_scale")
+
+                            val shape = if (isForge) RectangleShape else CircleShape
+                            val shadowMod = if (isForge) {
+                                Modifier.forgeNeuBrutalism(isPressed, isDark, 3.dp)
+                            } else if (isPressed) {
+                                Modifier.nmInsetShadow(isDark, cornerRadius = 21.dp, darkAlpha = if (isDark) 0.6f else 0.35f)
+                            } else {
+                                Modifier.exthruSmallRaisedShadow(isDark)
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .padding(start = 12.dp, end = 4.dp)
+                                    .size(42.dp)
+                                    .scale(if(isForge) 1f else scale)
+                                    .then(shadowMod)
+                                    .background(if (isForge) style.cardBg else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.5f else 0.8f), shape)
+                                    .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f), shape))
+                                    .clip(shape)
+                                    .clickable(interactionSource = interactionSource, indication = null) {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        onNavigateBack()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent)
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
+                        navigationIcon = {
+                            IconButton(onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                onNavigateBack()
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
                 }
-                is UpdateState.Required, is UpdateState.Recommended -> {
-                    isManualCheck = false // AppUpdateWrapper перехватит состояние и покажет диалог
+            }
+        ) { padding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .let { if (currentTheme.isExthruFamily && !isForge) it.haze(state = hazeState) else it }
+                    .background(scaffoldBg)
+            ) {
+                VlAmbientGlow(appTheme = currentTheme)
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
+
+                    // ── Профиль ──
+                    profile?.let { p ->
+                        VlSurface(
+                            appTheme = currentTheme,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
+                            onClick = { /* To Profile (can be implemented later) */ }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(20.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AvatarWithPresence(
+                                    avatarUrl = p.avatarUrl,
+                                    displayName = p.displayName.ifEmpty { p.username },
+                                    isOnline = false,
+                                    size = 64.dp
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = p.displayName.ifEmpty { p.username },
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontFamily = if (isForge) FontFamily.Monospace else null
+                                    )
+                                    Text(
+                                        text = "@${p.username}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontFamily = if (isForge) FontFamily.Monospace else null
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // ── PRO ──
+                    profile?.let { p ->
+                        ProStatusBanner(
+                            profile = p,
+                            proViewModel = proViewModel,
+                            proState = proState,
+                            appTheme = currentTheme,
+                            isDark = isDark,
+                            hapticEnabled = hapticEnabled
+                        )
+                    }
+
+                    // ── Кастомизация ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_custom_title), isPremium = true) {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = Color(0xFFC5A059),
+                            icon = Icons.Default.Brush,
+                            title = stringResource(R.string.settings_custom_design_title),
+                            subtitle = stringResource(R.string.settings_custom_design_sub),
+                            index = 0, total = 2,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                if (profile?.isProActive() == true) {
+                                    onOpenCustomization()
+                                } else {
+                                    Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            icon = Icons.Default.HideImage,
+                            title = stringResource(R.string.settings_custom_hide_title),
+                            subtitle = stringResource(R.string.settings_custom_hide_sub),
+                            index = 1, total = 2,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = profile?.ignoreCustomizations ?: false,
+                                    onCheckedChange = { v ->
+                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                        scope.launch {
+                                            userRepository.updateIgnoreCustomizations(v)
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
+
+                    // ── Акцент ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_accent)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            ColorPreset.entries.forEach { preset ->
+                                ColorPresetCircle(
+                                    preset = preset,
+                                    isSelected = currentPreset == preset,
+                                    appTheme = currentTheme,
+                                    isDark = isDark,
+                                    onClick = {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        themeViewModel.setColorPreset(preset)
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // ── Внешний вид ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_appearance)) {
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Layers, label = "Biolume", desc = "Органичный неоморфизм", selected = currentTheme == AppTheme.BIOLUME || currentTheme == AppTheme.EXTHRU, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.BIOLUME) })
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.AutoAwesome, label = stringResource(R.string.settings_theme_m3_name), desc = stringResource(R.string.settings_theme_m3_desc), selected = currentTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Shield, label = "Forge", desc = "Квадратный киберпанк, Arasaka", selected = currentTheme == AppTheme.FORGE, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.FORGE) })
+                    }
+
+                    // ── Тёмный режим ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_dark_title)) {
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.LIGHT) })
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.DARK) })
+                    }
+
+                    // ── Язык ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_language)) {
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setLanguage(AppLanguage.SYSTEM) })
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setLanguage(AppLanguage.EN) })
+                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setLanguage(AppLanguage.RU) })
+                    }
+
+                    // ── Управление ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_management)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorNotif, icon = Icons.Default.NotificationsActive, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(appTheme = currentTheme, checked = notifEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setNotifications(it) }) }, index = 0, total = 5)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorVibro, icon = Icons.Default.Vibration, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(appTheme = currentTheme, checked = hapticEnabled, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setHaptic(it) }) }, index = 1, total = 5)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorDynInput, icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", subtitle = "Стиль Flutter. Скрывает меню при наборе.", trailing = { VlSwitch(appTheme = currentTheme, checked = dynamicInput, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setDynamicChatInput(it) }) }, index = 2, total = 5)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorCompact, icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", subtitle = "Объединяет чаты в единую карточку", trailing = { VlSwitch(appTheme = currentTheme, checked = compactChatList, onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setCompactChatList(it) }) }, index = 3, total = 5)
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = Color(0xFF10B981),
+                            icon = Icons.Default.Explore,
+                            title = "Discover (Лента)",
+                            subtitle = "Показывать вкладку с глобальной лентой",
+                            index = 4, total = 5,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = themeViewModel.discoverEnabled.collectAsState().value,
+                                    onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }
+                                )
+                            }
+                        )
+                    }
+
+                    // ── Дневник ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.diary_title)) {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            icon = Icons.Default.Book,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            title = stringResource(R.string.diary_enable_title),
+                            subtitle = stringResource(R.string.diary_enable_sub),
+                            index = 0, total = 2,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = profile?.diaryEnabled ?: false,
+                                    onCheckedChange = { v ->
+                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                        scope.launch {
+                                            val uid = profile?.uid ?: return@launch
+                                            Firebase.firestore.collection("users").document(uid)
+                                                .update("diaryEnabled", v)
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                        if (profile?.diaryEnabled == true) {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.Notifications,
+                                iconColor = Color(0xFFF59E0B),
+                                title = stringResource(R.string.diary_reminders_title),
+                                subtitle = stringResource(R.string.diary_reminders_sub, profile?.diaryReminderTime ?: "21:00"),
+                                index = 1, total = 2,
+                                onClick = {
+                                    val parts = (profile?.diaryReminderTime ?: "21:00").split(":")
+                                    val picker = TimePickerDialog(
+                                        context,
+                                        { _, h, m ->
+                                            val time = String.format(Locale.US, "%02d:%02d", h, m)
+                                            scope.launch {
+                                                val uid = profile?.uid ?: return@launch
+                                                Firebase.firestore.collection("users").document(uid)
+                                                    .update("diaryReminderTime", time)
+                                            }
+                                        },
+                                        parts[0].toInt(),
+                                        parts[1].toInt(),
+                                        true
+                                    )
+                                    picker.show()
+                                },
+                                trailing = {
+                                    VlSwitch(
+                                        appTheme = currentTheme,
+                                        checked = profile?.diaryRemindersEnabled ?: false,
+                                        onCheckedChange = { v ->
+                                            haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                            scope.launch {
+                                                val uid = profile?.uid ?: return@launch
+                                                Firebase.firestore.collection("users").document(uid)
+                                                    .update("diaryRemindersEnabled", v)
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    // ── Приватность ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_privacy)) {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = colorStealth,
+                            icon = Icons.Default.VisibilityOff,
+                            title = stringResource(R.string.settings_stealth_title),
+                            subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off),
+                            index = 0, total = if (hasStealthPin) 2 else 1,
+                            trailing = {
+                                VlSwitch(
+                                    appTheme = currentTheme,
+                                    checked = isStealthEnabled,
+                                    onCheckedChange = { checked ->
+                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                        if (checked) {
+                                            if (hasStealthPin) {
+                                                stealthManager.setEnabled(true)
+                                                isStealthEnabled = true
+                                                Toast.makeText(context, context.getString(R.string.settings_stealth_sub_on), Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                showStealthSetup = true
+                                            }
+                                        } else {
+                                            showStealthDisable = true
+                                        }
+                                    }
+                                )
+                            }
+                        )
+
+                        if (hasStealthPin) {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                iconColor = colorStealthPin,
+                                icon = Icons.Default.Password,
+                                title = stringResource(R.string.settings_stealth_change_pin),
+                                subtitle = stringResource(R.string.settings_stealth_change_pin_sub),
+                                index = 1, total = 2,
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    showStealthChangePin = true
+                                }
+                            )
+                        }
+                    }
+
+                    // ── Память ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_storage)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.Storage, title = stringResource(R.string.settings_cache_title), subtitle = stringResource(R.string.settings_cache_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }, index = 0, total = 2)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorStorage, icon = Icons.Default.CloudQueue, title = stringResource(R.string.storage_title), subtitle = stringResource(R.string.storage_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenStorageManager() }, index = 1, total = 2)
+                    }
+
+                    // ── Боты ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.stickers_title)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorBots, icon = Icons.Default.SmartToy, title = stringResource(R.string.settings_bots_title), subtitle = stringResource(R.string.settings_bots_subtitle), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showBotsManager = true }, index = 0, total = 1)
+                    }
+
+                    // ── Администрирование ──
+                    if (profile?.isAdmin == true) {
+                        VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_admin_panel)) {
+                            VlSettingsItem(appTheme = currentTheme, icon = Icons.Default.AdminPanelSettings, iconColor = MaterialTheme.colorScheme.error, title = "Admin Panel", onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showAdminPanel = true }, index = 0, total = 1)
+                        }
+                    }
+
+                    // ── Обновления ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_updates)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorUpdateChan, icon = Icons.Default.Science, title = stringResource(R.string.settings_update_channel), subtitle = stringResource(R.string.settings_update_channel_current, currentChannel.title), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showChannelDialog = true }, index = 0, total = 2)
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = colorUpdateCheck,
+                            icon = Icons.Default.Sync,
+                            title = stringResource(R.string.settings_check_updates),
+                            subtitle = stringResource(R.string.settings_check_updates_sub),
+                            onClick = {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
+                                appUpdateViewModel.checkForUpdates(isManual = true) { hasUpdate ->
+                                    if (!hasUpdate) {
+                                        Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            index = 1,
+                            total = 2
+                        )
+                    }
+
+                    // ── Аккаунт ──
+                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_account)) {
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorEmail, icon = Icons.Default.Email, title = "Email", subtitle = profile?.email ?: "", index = 0, total = 4)
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = Color(0xFF2AABEE),
+                            icon = Icons.Default.Send,
+                            title = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked, profile?.tg_username ?: "") else stringResource(R.string.settings_tg_link),
+                            subtitle = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
+                            index = 1, total = 4,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                if (profile?.tg_username != null) {
+                                    scope.launch {
+                                        try {
+                                            Firebase.functions("europe-west1").getHttpsCallable("unlinkTelegram").call().await()
+                                            Toast.makeText(context, context.getString(R.string.settings_tg_unlinked_toast), Toast.LENGTH_SHORT).show()
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } else {
+                                    showTgBindingDialog = true
+                                    isGeneratingTgCode = true
+                                    tgCode = null
+                                    tgError = null
+                                    scope.launch {
+                                        try {
+                                            val result = Firebase.functions("europe-west1").getHttpsCallable("generateTgCode").call().await()
+                                            val data = result.data as Map<*, *>
+                                            if (data["success"] == true) {
+                                                tgCode = data["code"] as String
+                                            } else {
+                                                tgError = "Ошибка: ${data["error"]}"
+                                            }
+                                        } catch (e: Exception) {
+                                            tgError = e.message ?: "Неизвестная ошибка сети"
+                                        } finally {
+                                            isGeneratingTgCode = false
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorPassword, icon = Icons.Default.Password, title = stringResource(R.string.settings_password_change), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showPasswordDialog = true }, index = 2, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = MaterialTheme.colorScheme.error, icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); showLogoutDialog = true }, index = 3, total = 4)
+                    }
+
+                    // ── About ──
+                    VlSettingsSection(appTheme = currentTheme, title = "О приложении") {
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            icon = Icons.Default.Info,
+                            title = "VisorLink",
+                            subtitle = "Версия $versionString",
+                            index = 0, total = 1,
+                            onClick = null // Отключаем клик, шеврона не будет
+                        )
+                    }
+
+                    Spacer(Modifier.height(padding.calculateBottomPadding() + 32.dp))
                 }
-                UpdateState.Loading -> { } // Ждём
             }
         }
     }
 
-    val onCheckUpdates = {
-        haptic.perform(HapticType.CLICK, hapticEnabled)
-        isManualCheck = true
-        appUpdateViewModel.checkForUpdates()
-        Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
+    // ── ДИАЛОГИ STEALTH MODE ──
+    if (showStealthSetup) {
+        StealthSetupDialog(
+            appTheme = currentTheme,
+            onDismiss = { showStealthSetup = false },
+            onConfirm = { pin ->
+                stealthManager.setPin(pin)
+                stealthManager.setEnabled(true)
+                isStealthEnabled = true
+                hasStealthPin = true
+                showStealthSetup = false
+                Toast.makeText(context, "Режим скрытия включён", Toast.LENGTH_SHORT).show()
+            }
+        )
     }
 
-    Scaffold(
-        containerColor = if (isOneUi)
-            if (isDark) OneUi.PageBgDark else OneUi.PageBg
-        else
-            MaterialTheme.colorScheme.surface,
-        topBar = {
-            if (isOneUi) {
-                TopAppBar(
-                    title = {
-                        Text(stringResource(R.string.settings_title),
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.5).sp,
-                            color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Box(
-                                Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isDark) Color(0xFF3A3A3A) else Color(0xFFE8E8E8)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, null,
-                                    tint = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary,
-                                    modifier = Modifier.size(18.dp))
+    if (showStealthDisable) {
+        StealthDisableDialog(
+            appTheme = currentTheme,
+            stealthManager = stealthManager,
+            onDismiss = { showStealthDisable = false },
+            onSuccess = {
+                stealthManager.setEnabled(false)
+                isStealthEnabled = false
+                showStealthDisable = false
+                Toast.makeText(context, "Режим скрытия отключён", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (showStealthChangePin) {
+        StealthChangePinDialog(
+            appTheme = currentTheme,
+            stealthManager = stealthManager,
+            onDismiss = { showStealthChangePin = false },
+            onSuccess = { newPin ->
+                stealthManager.setPin(newPin)
+                showStealthChangePin = false
+                Toast.makeText(context, "PIN-код обновлён", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // ── ДИАЛОГ TELEGRAM ACCOUNT BINDING ──
+    if (showTgBindingDialog) {
+        VlAlertDialog(
+            appTheme = currentTheme,
+            onDismissRequest = { showTgBindingDialog = false },
+            title = { Text("Привязка Telegram") },
+            text = {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isGeneratingTgCode) {
+                        CircularProgressIndicator(modifier = Modifier.size(36.dp), color = MaterialTheme.colorScheme.primary)
+                    } else if (tgError != null) {
+                        Text(tgError!!, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    } else if (tgCode != null) {
+                        Text(
+                            text = tgCode!!,
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 8.sp
+                            ),
+                            color = Color(0xFF2AABEE),
+                            modifier = Modifier.padding(vertical = 16.dp)
+                        )
+                        Text(
+                            "Отправьте нашему боту в Telegram команду:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        ) {
+                            Text(
+                                "/start ${tgCode!!}",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            )
+                        }
+                        Text(
+                            "Срок действия кода — 5 минут.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            actions = {
+                VlDialogButton(onClick = { showTgBindingDialog = false }, appTheme = currentTheme) {
+                    Text("Закрыть", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        )
+    }
+
+    // ── ДРУГИЕ ДИАЛОГИ ──
+    if (showAdminPanel) { AdminPanelSheet { showAdminPanel = false } }
+    if (showBotsManager) { BotsManagerSheet { showBotsManager = false } }
+
+    if (showChannelDialog) {
+        ChannelSelectionDialog(
+            currentChannel = currentChannel,
+            onDismiss = { showChannelDialog = false },
+            onSelect = { channel ->
+                appUpdateViewModel.setChannel(channel) { success ->
+                    if (!success) {
+                        Toast.makeText(context, "Отказано в доступе к каналу (возможно Canary?)", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                showChannelDialog = false
+            }
+        )
+    }
+
+    if (showPasswordDialog) {
+        ChangePasswordDialog(
+            appTheme = currentTheme,
+            onDismiss = { showPasswordDialog = false },
+            onConfirm = { current, newPass ->
+                scope.launch {
+                    try {
+                        val user = FirebaseAuth.getInstance().currentUser ?: throw Exception("Not logged in")
+                        val cred = EmailAuthProvider.getCredential(user.email!!, current)
+                        user.reauthenticate(cred).await()
+                        user.updatePassword(newPass).await()
+                        Toast.makeText(context, "Пароль изменён", Toast.LENGTH_SHORT).show()
+                        showPasswordDialog = false
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
+    }
+
+    if (showLogoutDialog) {
+        VlAlertDialog(
+            appTheme = currentTheme,
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Выйти из аккаунта?") },
+            actions = {
+                VlDialogButton(appTheme = currentTheme, onClick = { showLogoutDialog = false }) { Text("Отмена") }
+                VlDialogButton(appTheme = currentTheme, isDestructive = true, onClick = {
+                    showLogoutDialog = false
+                    authRepository.logout()
+                }) { Text("Выйти") }
+            }
+        )
+    }
+}
+
+// ── PRO Status Banner ─────────────────────────────────────────────────────────
+
+@Composable
+private fun ProStatusBanner(
+    profile: UserProfile,
+    proViewModel: ProViewModel,
+    proState: ProUiState,
+    appTheme: AppTheme,
+    isDark: Boolean,
+    hapticEnabled: Boolean
+) {
+    val haptic = rememberHaptic()
+    val isActive = profile.isProActive()
+    val canAfford = profile.bits >= 1000
+
+    val cal = Calendar.getInstance()
+    profile.proUntil?.toDate()?.let { cal.time = it }
+    val isEternalPro = profile.proUntil != null && cal.get(Calendar.YEAR) > 2090
+
+    val goldColor = Color(0xFFC5A059)
+    val cs = MaterialTheme.colorScheme
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+
+    fun formatDate(date: java.util.Date?): String {
+        if (date == null) return ""
+        return java.text.SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(date)
+    }
+
+    VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.pro_title), isPremium = true) {
+        VlSettingsItem(
+            appTheme = appTheme,
+            icon = if (isActive) Icons.Default.WorkspacePremium else Icons.Default.Stars,
+            iconColor = if (isActive) goldColor else cs.onSurfaceVariant,
+            title = if (isActive) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive),
+            subtitle = if (isEternalPro) stringResource(R.string.pro_eternal) else (if (isActive) stringResource(R.string.pro_until, formatDate(profile.proUntil?.toDate())) else stringResource(R.string.pro_unlock_hint)),
+            index = 0, total = if (isActive) 3 else 4
+        )
+
+        VlSettingsItem(
+            appTheme = appTheme,
+            icon = Icons.Default.Toll,
+            iconColor = goldColor,
+            title = stringResource(R.string.pro_bits),
+            trailing = {
+                Text(
+                    profile.bits.toString(),
+                    style = TextStyle(fontWeight = FontWeight.Bold, fontSize = 16.sp, color = goldColor)
+                )
+            },
+            index = 1, total = if (isActive) 3 else 4
+        )
+
+        VlSettingsItem(
+            appTheme = appTheme,
+            icon = Icons.Default.LocalFireDepartment,
+            iconColor = Color(0xFFE11D48),
+            title = stringResource(R.string.pro_streak, profile.streak),
+            subtitle = stringResource(R.string.pro_streak_sub),
+            trailing = {
+                VlSwitch(
+                    appTheme = appTheme,
+                    checked = profile.showStreak,
+                    onCheckedChange = { v ->
+                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                        proViewModel.toggleShowStreak(v)
+                    }
+                )
+            },
+            index = 2, total = if (isActive) 3 else 4
+        )
+
+        if (!isActive && !isEternalPro) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(R.string.pro_description),
+                    style = MaterialTheme.typography.bodySmall.copy(color = cs.onSurfaceVariant, fontSize = 13.sp, lineHeight = 18.sp),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
+                    Button(
+                        onClick = {
+                            if (canAfford) {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                proViewModel.buyPro(useTrial = false)
+                            }
+                        },
+                        enabled = canAfford && !proState.isLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = goldColor, contentColor = Color.White),
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        if (proState.isLoading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                        else Text(stringResource(R.string.pro_action_buy, 1000), fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                } else {
+                    VlSurface(
+                        appTheme = appTheme,
+                        isButton = true,
+                        customRadius = if (isForge) 0.dp else 16.dp,
+                        overrideColor = style.cardBg,
+                        onClick = if (canAfford && !proState.isLoading) {
+                            {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                proViewModel.buyPro(useTrial = false)
+                            }
+                        } else null,
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    ) {
+                        if (proState.isLoading) {
+                            CircularProgressIndicator(color = goldColor, modifier = Modifier.size(24.dp))
+                        } else {
+                            Text(
+                                stringResource(R.string.pro_action_buy, 1000),
+                                color = if (canAfford) goldColor else cs.onSurfaceVariant.copy(alpha = 0.5f),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                fontFamily = if (isForge) FontFamily.Monospace else null
+                            )
+                        }
+                    }
+                }
+
+                if (!profile.trialUsed) {
+                    Spacer(Modifier.height(12.dp))
+                    if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
+                        OutlinedButton(
+                            onClick = {
+                                if (!proState.isLoading) {
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                    proViewModel.buyPro(useTrial = true)
+                                }
+                            },
+                            enabled = !proState.isLoading,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = goldColor),
+                            border = BorderStroke(1.dp, goldColor),
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Text(stringResource(R.string.pro_action_trial), fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        VlSurface(
+                            appTheme = appTheme,
+                            isButton = true,
+                            customRadius = if (isForge) 0.dp else 16.dp,
+                            overrideColor = style.cardBg,
+                            onClick = if (!proState.isLoading) {
+                                {
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                    proViewModel.buyPro(useTrial = true)
+                                }
+                            } else null,
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.pro_action_trial),
+                                color = cs.onSurface,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                fontFamily = if (isForge) FontFamily.Monospace else null
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ── Stealth Dialogs ──────────────────────────────────────────────────────────
+
+@Composable
+private fun StealthSetupDialog(appTheme: AppTheme, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        appTheme = appTheme,
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_stealth_setup_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.dialog_stealth_setup_text), fontSize = 13.sp)
+                OutlinedTextField(
+                    value = pin, onValueChange = { pin = it; error = null },
+                    label = { Text(stringResource(R.string.dialog_stealth_setup_pin)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = confirm, onValueChange = { confirm = it; error = null },
+                    label = { Text(stringResource(R.string.dialog_stealth_setup_confirm)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            VlDialogButton(appTheme = appTheme, isPrimary = true, onClick = {
+                if (pin.length < 4) error = "Минимум 4 цифры"
+                else if (pin != confirm) error = "PIN-коды не совпадают"
+                else onConfirm(pin)
+            }) { Text(stringResource(R.string.action_accept)) }
+        }
+    )
+}
+
+@Composable
+private fun StealthDisableDialog(appTheme: AppTheme, stealthManager: StealthManager, onDismiss: () -> Unit, onSuccess: () -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        appTheme = appTheme,
+        onDismissRequest = onDismiss,
+        title = { Text("Отключить режим скрытия?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Введите текущий PIN-код для подтверждения.", fontSize = 13.sp)
+                OutlinedTextField(
+                    value = pin, onValueChange = { pin = it; error = null },
+                    label = { Text("Текущий PIN-код") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(appTheme = appTheme, isDestructive = true, onClick = {
+                if (stealthManager.verifyPin(pin)) onSuccess()
+                else error = "Неверный PIN-код"
+            }) { Text("Отключить") }
+        }
+    )
+}
+
+@Composable
+private fun StealthChangePinDialog(appTheme: AppTheme, stealthManager: StealthManager, onDismiss: () -> Unit, onSuccess: (String) -> Unit) {
+    var current by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        appTheme = appTheme,
+        onDismissRequest = onDismiss,
+        title = { Text("Смена PIN-кода") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = current, onValueChange = { current = it; error = null },
+                    label = { Text("Текущий PIN-код") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = newPin, onValueChange = { newPin = it; error = null },
+                    label = { Text("Новый PIN-код") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = confirm, onValueChange = { confirm = it; error = null },
+                    label = { Text("Повторите новый PIN-код") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(appTheme = appTheme, isPrimary = true, onClick = {
+                if (!stealthManager.verifyPin(current)) error = "Неверный текущий PIN-код"
+                else if (newPin.length < 4) error = "Минимум 4 цифры"
+                else if (newPin != confirm) error = "Новые PIN-коды не совпадают"
+                else onSuccess(newPin)
+            }) { Text("Сохранить") }
+        }
+    )
+}
+
+@Composable
+fun ChangePasswordDialog(appTheme: AppTheme, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+    var current by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        appTheme = appTheme,
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_password_change_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = current, onValueChange = { current = it; error = null },
+                    label = { Text(stringResource(R.string.dialog_password_current)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = newPass, onValueChange = { newPass = it; error = null },
+                    label = { Text(stringResource(R.string.dialog_password_new)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = confirm, onValueChange = { confirm = it; error = null },
+                    label = { Text(stringResource(R.string.dialog_password_confirm)) },
+                    visualTransformation = PasswordVisualTransformation(),
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            VlDialogButton(appTheme = appTheme, isPrimary = true, onClick = {
+                if (newPass.length < 6) error = "Min 6 characters"
+                else if (newPass != confirm) error = "Passwords don't match"
+                else onConfirm(current, newPass)
+            }) { Text(stringResource(R.string.action_save)) }
+        }
+    )
+}
+
+// ── Admin & Bot Sheets ────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AdminPanelSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isSaving by remember { mutableStateOf(false) }
+
+    var botUid by remember { mutableStateOf("") }
+    var userUid by remember { mutableStateOf("") }
+    var channelId by remember { mutableStateOf("") }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 8.dp).navigationBarsPadding()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Админ-панель", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.error)
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+
+            Text("🤖 Управление ботами", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = botUid, onValueChange = { botUid = it }, label = { Text("UID бота") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminBanBot").call(mapOf("botUid" to botUid, "banned" to true)).await(); Toast.makeText(context, "Забанен", Toast.LENGTH_SHORT).show() } catch(e:Exception){Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()} finally{isSaving=false} } }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Ban") }
+                Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminBanBot").call(mapOf("botUid" to botUid, "banned" to false)).await(); Toast.makeText(context, "Разбанен", Toast.LENGTH_SHORT).show() } catch(e:Exception){} finally{isSaving=false} } }, modifier = Modifier.weight(1f)) { Text("Unban") }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 24.dp))
+
+            Text("📢 Каналы", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = channelId, onValueChange = { channelId = it }, label = { Text("Chat ID канала") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminVerifyChannel").call(mapOf("chatId" to channelId, "badge" to "official")).await(); Toast.makeText(context, "Верифицирован", Toast.LENGTH_SHORT).show() } catch(e:Exception){} finally{isSaving=false} } }, modifier = Modifier.fillMaxWidth()) { Text("Верифицировать") }
+
+            HorizontalDivider(Modifier.padding(vertical = 24.dp))
+
+            Text("👤 Пользователи", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(value = userUid, onValueChange = { userUid = it }, label = { Text("UID пользователя (пусто = себе)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminGrantEternalPro").call(mapOf("targetUid" to userUid)).await(); Toast.makeText(context, "Вечный PRO выдан", Toast.LENGTH_SHORT).show() } catch(e:Exception){} finally{isSaving=false} } }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC5A059))) { Text("Выдать Вечный PRO") }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BotsManagerSheet(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val botRepository: BotRepository = koinInject()
+
+    var bots by remember { mutableStateOf<List<DmBot>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var isSaving by remember { mutableStateOf(false) }
+
+    var botName by remember { mutableStateOf("") }
+    var botUsername by remember { mutableStateOf("") }
+
+    fun refresh() {
+        scope.launch {
+            isLoading = true
+            try {
+                bots = botRepository.listBots()
+            } catch (_: Exception) {}
+            isLoading = false
+        }
+    }
+
+    LaunchedEffect(Unit) { refresh() }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.settings_bots_manager_title), style = MaterialTheme.typography.titleLarge)
+                IconButton(onClick = onDismiss) { Icon(Icons.Default.Close, null) }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+
+            if (isLoading) {
+                CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                Text(stringResource(R.string.settings_bots_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                if (bots.isEmpty()) {
+                    Text(stringResource(R.string.settings_bots_empty), modifier = Modifier.padding(vertical = 16.dp))
+                } else {
+                    bots.forEach { bot ->
+                        BotItem(
+                            bot = bot,
+                            onRegenerate = {
+                                scope.launch {
+                                    try {
+                                        val newToken = botRepository.regenerateToken(bot.uid)
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("bot token", newToken)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, context.getString(R.string.settings_bots_token_copied), Toast.LENGTH_LONG).show()
+                                        refresh()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            },
+                            onDelete = {
+                                scope.launch {
+                                    try {
+                                        botRepository.deleteBot(bot.uid)
+                                        refresh()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "${context.getString(R.string.action_delete)} ${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+                Text(stringResource(R.string.settings_bots_create_title), fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(value = botName, onValueChange = { botName = it }, label = { Text(stringResource(R.string.settings_bots_field_name)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(value = botUsername, onValueChange = { botUsername = it }, label = { Text(stringResource(R.string.settings_bots_field_username)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(16.dp))
+
+                Button(
+                    onClick = {
+                        if (botName.isBlank() || botUsername.isBlank()) return@Button
+                        scope.launch {
+                            isSaving = true
+                            try {
+                                val token = botRepository.createBot(botName, botUsername)
+                                Toast.makeText(context, "${context.getString(R.string.settings_info_saved)} Token: $token", Toast.LENGTH_LONG).show()
+                                botName = ""; botUsername = ""
+                                refresh()
+                            } catch(e: Exception) {
+                                Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                            } finally {
+                                isSaving = false
                             }
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = if (isDark) OneUi.PageBgDark else OneUi.PageBg,
-                        scrolledContainerColor = if (isDark) OneUi.PageBgDark else OneUi.PageBg
-                    )
-                )
-            } else {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                    enabled = !isSaving,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isSaving) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    else Text(stringResource(R.string.action_accept))
+                }
+            }
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+
+@Composable
+fun BotItem(bot: DmBot, onRegenerate: () -> Unit, onDelete: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.SmartToy, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(bot.name, fontWeight = FontWeight.Bold)
+                    Text("@${bot.username}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                }
+            }
+            if (bot.token != null) {
+                Spacer(Modifier.height(8.dp))
+                Text("Token: ${bot.token}", fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            }
+            TextButton(onClick = onRegenerate) {
+                Text(stringResource(R.string.settings_bots_token_regenerate))
+            }
+        }
+    }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+
+@Composable
+fun ChannelSelectionDialog(
+    currentChannel: UpdateChannel,
+    onDismiss: () -> Unit,
+    onSelect: (UpdateChannel) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Канал обновлений", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                UpdateChannel.entries.forEach { channel ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(channel) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = currentChannel == channel, onClick = { onSelect(channel) })
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(channel.title, fontWeight = FontWeight.Medium)
+                            Text("Файл: ${channel.fileName}", style = MaterialTheme.typography.bodySmall)
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
+                    }
+                }
             }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = 32.dp)
-        ) {
-            if (isOneUi) {
-                OuiSettingsContent(
-                    currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, versionString, isDark, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates
-                )
-            } else {
-                M3eSettingsContent(
-                    currentTheme, currentMode, hapticEnabled, notifEnabled,
-                    currentLang, versionString, haptic, themeViewModel,
-                    onOpenCacheSettings, onCheckUpdates
-                )
-            }
-        }
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  ONE UI CONTENT
-// ════════════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun OuiSettingsContent(
-    currentTheme: AppTheme,
-    currentMode: ThemeMode,
-    hapticEnabled: Boolean,
-    notifEnabled: Boolean,
-    currentLang: AppLanguage,
-    versionString: String,
-    isDark: Boolean,
-    haptic: HapticHelper,
-    vm: ThemeViewModel,
-    onOpenCacheSettings: () -> Unit,
-    onCheckUpdates: () -> Unit
-) {
-    // ── Appearance ──────────────────────────────────────────────────────────
-    OuiSectionLabel(stringResource(R.string.settings_section_appearance), isDark)
-
-    OuiCard(isDark) {
-        OuiOptionRow(
-            label       = stringResource(R.string.settings_theme_m3_name),
-            desc        = stringResource(R.string.settings_theme_m3_desc),
-            icon        = Icons.Default.AutoAwesome,
-            iconBg      = if (isDark) OneUi.IconBlueDark  else OneUi.IconBgBlue,
-            iconTint    = if (isDark) OneUi.BlueDark       else OneUi.IconBlue,
-            selected    = currentTheme == AppTheme.MATERIAL3_EXPRESSIVE,
-            showDivider = false, isDark = isDark
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) }
-
-        OuiDivider(isDark)
-
-        OuiOptionRow(
-            label       = stringResource(R.string.settings_theme_oneui_name),
-            desc        = stringResource(R.string.settings_theme_oneui_desc),
-            icon        = Icons.Default.PhoneAndroid,
-            iconBg      = if (isDark) OneUi.IconGrayDark  else OneUi.IconBgGray,
-            iconTint    = if (isDark) OneUi.TextSecondaryDark else OneUi.IconGray,
-            selected    = currentTheme == AppTheme.ONE_UI,
-            showDivider = false, isDark = isDark
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.ONE_UI) }
-    }
-
-    // ── Dark mode ───────────────────────────────────────────────────────────
-    OuiSectionLabel(stringResource(R.string.settings_dark_title), isDark)
-
-    OuiCard(isDark) {
-        listOf(
-            Triple(ThemeMode.SYSTEM, stringResource(R.string.settings_dark_system),
-                stringResource(R.string.settings_dark_system_desc)) to Icons.Default.SettingsBrightness,
-            Triple(ThemeMode.LIGHT,  stringResource(R.string.settings_dark_light),
-                stringResource(R.string.settings_dark_light_desc))  to Icons.Default.LightMode,
-            Triple(ThemeMode.DARK,   stringResource(R.string.settings_dark_dark),
-                stringResource(R.string.settings_dark_dark_desc))   to Icons.Default.DarkMode,
-        ).forEachIndexed { i, (triple, icon) ->
-            val (mode, label, desc) = triple
-            if (i > 0) OuiDivider(isDark)
-            OuiOptionRow(
-                label = label, desc = desc, icon = icon,
-                iconBg   = if (currentMode == mode)
-                    (if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue)
-                else (if (isDark) OneUi.IconGrayDark else OneUi.IconBgGray),
-                iconTint = if (currentMode == mode)
-                    (if (isDark) OneUi.BlueDark else OneUi.IconBlue)
-                else (if (isDark) OneUi.TextSecondaryDark else OneUi.IconGray),
-                selected = currentMode == mode,
-                showDivider = false, isDark = isDark
-            ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setThemeMode(mode) }
-        }
-    }
-
-    // ── Language ────────────────────────────────────────────────────────────
-    OuiSectionLabel(stringResource(R.string.settings_section_language), isDark)
-
-    OuiCard(isDark) {
-        listOf(
-            AppLanguage.SYSTEM to stringResource(R.string.settings_language_system),
-            AppLanguage.EN     to stringResource(R.string.settings_language_en),
-            AppLanguage.RU     to stringResource(R.string.settings_language_ru),
-        ).forEachIndexed { i, (lang, label) ->
-            if (i > 0) OuiDivider(isDark)
-            OuiLangRow(
-                label    = label,
-                selected = currentLang == lang,
-                isDark   = isDark
-            ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setLanguage(lang) }
-        }
-    }
-
-    // ── Notifications ───────────────────────────────────────────────────────
-    OuiSectionLabel(stringResource(R.string.settings_section_notifications), isDark)
-
-    OuiCard(isDark) {
-        OuiSwitchRow(
-            icon     = Icons.Default.Notifications,
-            iconBg   = if (isDark) OneUi.IconRedDark else OneUi.IconBgRed,
-            iconTint = OneUi.IconRed,
-            title    = stringResource(R.string.settings_push_title),
-            sub      = stringResource(R.string.settings_push_sub),
-            checked  = notifEnabled,
-            isDark   = isDark
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setNotifications(it) }
-
-        OuiDivider(isDark)
-
-        OuiSwitchRow(
-            icon     = Icons.Default.Vibration,
-            iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
-            iconTint = if (isDark) OneUi.BlueDark else OneUi.IconBlue,
-            title    = stringResource(R.string.settings_haptic_title),
-            sub      = stringResource(R.string.settings_haptic_sub),
-            checked  = hapticEnabled,
-            isDark   = isDark
-        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setHaptic(it) }
-    }
-
-    // ── Storage ─────────────────────────────────────────────────────────────
-    OuiSectionLabel(stringResource(R.string.settings_section_storage), isDark)
-
-    OuiCard(isDark) {
-        OuiNavRow(
-            icon     = Icons.Default.Storage,
-            iconBg   = if (isDark) OneUi.IconGreenDark else OneUi.IconBgGreen,
-            iconTint = OneUi.IconGreen,
-            title    = stringResource(R.string.settings_cache_title),
-            sub      = stringResource(R.string.settings_cache_subtitle),
-            isDark   = isDark
-        ) { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
-    }
-
-    // ── About ───────────────────────────────────────────────────────────────
-    OuiSectionLabel(stringResource(R.string.settings_section_about), isDark)
-
-    OuiCard(isDark) {
-        OuiInfoRow(
-            icon     = Icons.Default.Info,
-            iconBg   = if (isDark) OneUi.IconGrayDark else OneUi.IconBgGray,
-            iconTint = if (isDark) OneUi.TextSecondaryDark else OneUi.IconGray,
-            title    = stringResource(R.string.settings_version),
-            subtitle = versionString,
-            isDark   = isDark
-        )
-
-        OuiDivider(isDark)
-
-        OuiNavRow(
-            icon     = Icons.Default.Sync,
-            iconBg   = if (isDark) OneUi.IconBlueDark else OneUi.IconBgBlue,
-            iconTint = if (isDark) OneUi.BlueDark else OneUi.IconBlue,
-            title    = stringResource(R.string.settings_check_updates),
-            sub      = stringResource(R.string.settings_check_updates_sub),
-            isDark   = isDark,
-            onClick  = onCheckUpdates
-        )
-    }
-}
-
-// ────────────────────────────────────────────────────────────────────────────
-//  One UI primitives
-// ────────────────────────────────────────────────────────────────────────────
-
-@Composable
-private fun OuiSectionLabel(text: String, isDark: Boolean) {
-    Text(
-        text = text.uppercase(),
-        fontSize = 12.sp,
-        fontWeight = FontWeight.W600,
-        letterSpacing = 0.5.sp,
-        color = if (isDark) OneUi.SectionColorDark else OneUi.SectionColor,
-        modifier = Modifier.padding(start = 28.dp, top = 18.dp, bottom = 6.dp)
     )
-}
-
-@Composable
-private fun OuiCard(isDark: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = OUI_CARD_SHAPE,
-        color = if (isDark) OneUi.CardBgDark else OneUi.CardBg,
-        shadowElevation = 0.dp,
-        content = { Column(content = content) }
-    )
-}
-
-@Composable
-private fun OuiDivider(isDark: Boolean) {
-    HorizontalDivider(
-        modifier  = Modifier.padding(start = 72.dp),
-        thickness = 0.5.dp,
-        color     = if (isDark) OneUi.DividerDark else OneUi.Divider
-    )
-}
-
-@Composable
-private fun OuiIconTray(bg: Color, tint: Color, icon: ImageVector) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(bg),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun OuiSwitch(checked: Boolean, isDark: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    val thumbOffset by animateFloatAsState(
-        targetValue = if (checked) 22f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "oui_thumb"
-    )
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val thumbWidth by animateFloatAsState(
-        targetValue = if (isPressed) 28f else 24f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
-        label = "thumb_w"
-    )
-    val trackColor by animateColorAsState(
-        targetValue = if (checked)
-            (if (isDark) OneUi.SwitchOnDark else OneUi.SwitchOn)
-        else
-            (if (isDark) OneUi.SwitchOffDk else OneUi.SwitchOff),
-        animationSpec = tween(200),
-        label = "track_color"
-    )
-
-    Box(
-        modifier = Modifier
-            .width(52.dp)
-            .height(30.dp)
-            .clip(RoundedCornerShape(15.dp))
-            .background(trackColor)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null
-            ) { onCheckedChange(!checked) }
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(start = 3.dp + thumbOffset.dp, top = 3.dp)
-                .width(thumbWidth.dp)
-                .height(24.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White)
-        )
-    }
-}
-
-@Composable
-private fun OuiRadio(selected: Boolean, isDark: Boolean) {
-    val dotScale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium),
-        label = "oui_radio_dot"
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (selected)
-            (if (isDark) OneUi.BlueDark else OneUi.Blue)
-        else
-            (if (isDark) Color(0xFF666666) else Color(0xFFD0D0D0)),
-        animationSpec = tween(200),
-        label = "oui_radio_border"
-    )
-    Box(
-        modifier = Modifier
-            .size(22.dp)
-            .clip(CircleShape)
-            .background(Color.Transparent),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(Color.Transparent),
-        )
-        Surface(
-            modifier = Modifier.size(22.dp),
-            shape = CircleShape,
-            color = Color.Transparent,
-            border = ButtonDefaults.outlinedButtonBorder.copy(
-                width = 2.dp,
-                brush = SolidColor(borderColor)
-            )
-        ) {}
-        Box(
-            modifier = Modifier
-                .size((11 * dotScale).dp)
-                .clip(CircleShape)
-                .background(if (isDark) OneUi.BlueDark else OneUi.Blue)
-        )
-    }
-}
-
-@Composable
-private fun OuiOptionRow(
-    label: String,
-    desc: String,
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    selected: Boolean,
-    showDivider: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed)
-            (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0))
-        else Color.Transparent,
-        animationSpec = tween(100),
-        label = "oui_opt_press"
-    )
-
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-            Column(Modifier.weight(1f)) {
-                Text(
-                    label,
-                    fontSize = 15.sp,
-                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                    color = if (selected)
-                        (if (isDark) OneUi.BlueDark else OneUi.Blue)
-                    else
-                        (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-                )
-                Text(
-                    desc,
-                    fontSize = 12.sp,
-                    color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                    modifier = Modifier.padding(top = 1.dp)
-                )
-            }
-            OuiRadio(selected = selected, isDark = isDark)
-        }
-    }
-}
-
-@Composable
-private fun OuiLangRow(
-    label: String,
-    selected: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0))
-        else Color.Transparent,
-        animationSpec = tween(100), label = "lang_press"
-    )
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                label,
-                fontSize = 15.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) (if (isDark) OneUi.BlueDark else OneUi.Blue)
-                else (if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary),
-                modifier = Modifier.weight(1f)
-            )
-            OuiRadio(selected = selected, isDark = isDark)
-        }
-    }
-}
-
-@Composable
-private fun OuiSwitchRow(
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    title: String,
-    sub: String,
-    checked: Boolean,
-    isDark: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-            Text(sub, fontSize = 12.sp,
-                color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                modifier = Modifier.padding(top = 1.dp))
-        }
-        OuiSwitch(checked = checked, isDark = isDark, onCheckedChange = onCheckedChange)
-    }
-}
-
-@Composable
-private fun OuiNavRow(
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    title: String,
-    sub: String,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val bgColor by animateColorAsState(
-        targetValue = if (isPressed) (if (isDark) Color(0xFF383838) else Color(0xFFF0F0F0))
-        else Color.Transparent,
-        animationSpec = tween(100), label = "nav_press"
-    )
-    Surface(
-        onClick = onClick,
-        interactionSource = interactionSource,
-        color = bgColor,
-        shape = RoundedCornerShape(0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-            Column(Modifier.weight(1f)) {
-                Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                    color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-                Text(sub, fontSize = 12.sp,
-                    color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary,
-                    modifier = Modifier.padding(top = 1.dp))
-            }
-            Icon(Icons.Default.ChevronRight, null,
-                tint = if (isDark) Color(0xFF666666) else Color(0xFFC0C0C0),
-                modifier = Modifier.size(20.dp))
-        }
-    }
-}
-
-@Composable
-private fun OuiInfoRow(
-    icon: ImageVector,
-    iconBg: Color,
-    iconTint: Color,
-    title: String,
-    subtitle: String,
-    isDark: Boolean
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        OuiIconTray(bg = iconBg, tint = iconTint, icon = icon)
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                color = if (isDark) OneUi.TextPrimaryDark else OneUi.TextPrimary)
-        }
-        Text(subtitle, fontSize = 13.sp,
-            color = if (isDark) OneUi.TextSecondaryDark else OneUi.TextSecondary)
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-//  M3E CONTENT
-// ════════════════════════════════════════════════════════════════════════════
-
-@Composable
-private fun M3eSettingsContent(
-    currentTheme: AppTheme,
-    currentMode: ThemeMode,
-    hapticEnabled: Boolean,
-    notifEnabled: Boolean,
-    currentLang: AppLanguage,
-    versionString: String,
-    haptic: HapticHelper,
-    vm: ThemeViewModel,
-    onOpenCacheSettings: () -> Unit,
-    onCheckUpdates: () -> Unit
-) {
-    SectionHeader(stringResource(R.string.settings_section_appearance))
-    GroupLabel(Icons.Default.Palette, stringResource(R.string.settings_theme_title))
-    Spacer(Modifier.height(4.dp))
-    OptionGroup {
-        ThemeOption(stringResource(R.string.settings_theme_m3_name),
-            stringResource(R.string.settings_theme_m3_desc), Icons.Default.AutoAwesome,
-            currentTheme == AppTheme.MATERIAL3_EXPRESSIVE, 0, 2, true)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) }
-        Spacer(Modifier.height(M3E_GAP))
-        ThemeOption(stringResource(R.string.settings_theme_oneui_name),
-            stringResource(R.string.settings_theme_oneui_desc), Icons.Default.PhoneAndroid,
-            currentTheme == AppTheme.ONE_UI, 1, 2, true)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setTheme(AppTheme.ONE_UI) }
-    }
-
-    SectionHeader(stringResource(R.string.settings_dark_title))
-    OptionGroup {
-        ThemeOption(stringResource(R.string.settings_dark_system), stringResource(R.string.settings_dark_system_desc),
-            Icons.Default.SettingsBrightness, currentMode == ThemeMode.SYSTEM, 0, 3, false)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setThemeMode(ThemeMode.SYSTEM) }
-        Spacer(Modifier.height(M3E_GAP))
-        ThemeOption(stringResource(R.string.settings_dark_light), stringResource(R.string.settings_dark_light_desc),
-            Icons.Default.LightMode, currentMode == ThemeMode.LIGHT, 1, 3, false)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setThemeMode(ThemeMode.LIGHT) }
-        Spacer(Modifier.height(M3E_GAP))
-        ThemeOption(stringResource(R.string.settings_dark_dark), stringResource(R.string.settings_dark_dark_desc),
-            Icons.Default.DarkMode, currentMode == ThemeMode.DARK, 2, 3, false)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setThemeMode(ThemeMode.DARK) }
-    }
-
-    SectionHeader(stringResource(R.string.settings_section_language))
-    GroupLabel(Icons.Default.Language, stringResource(R.string.settings_language_title))
-    Spacer(Modifier.height(4.dp))
-    OptionGroup {
-        LanguageOption(stringResource(R.string.settings_language_system), currentLang == AppLanguage.SYSTEM, 0, 3)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setLanguage(AppLanguage.SYSTEM) }
-        Spacer(Modifier.height(M3E_GAP))
-        LanguageOption(stringResource(R.string.settings_language_en), currentLang == AppLanguage.EN, 1, 3)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setLanguage(AppLanguage.EN) }
-        Spacer(Modifier.height(M3E_GAP))
-        LanguageOption(stringResource(R.string.settings_language_ru), currentLang == AppLanguage.RU, 2, 3)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setLanguage(AppLanguage.RU) }
-    }
-
-    SectionHeader(stringResource(R.string.settings_section_notifications))
-    OptionGroup {
-        SwitchRow(Icons.Default.Notifications, stringResource(R.string.settings_push_title),
-            stringResource(R.string.settings_push_sub), notifEnabled, 0, 2)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setNotifications(it) }
-        Spacer(Modifier.height(M3E_GAP))
-        SwitchRow(Icons.Default.Vibration, stringResource(R.string.settings_haptic_title),
-            stringResource(R.string.settings_haptic_sub), hapticEnabled, 1, 2)
-        { haptic.perform(HapticType.SELECTION, hapticEnabled); vm.setHaptic(it) }
-    }
-
-    SectionHeader(stringResource(R.string.settings_section_storage))
-    OptionGroup {
-        NavRow(Icons.Default.Storage, stringResource(R.string.settings_cache_title),
-            stringResource(R.string.settings_cache_subtitle), 0, 1)
-        { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenCacheSettings() }
-    }
-
-    SectionHeader(stringResource(R.string.settings_section_about))
-    OptionGroup {
-        InfoRow(Icons.Default.Info, stringResource(R.string.settings_version), versionString, 0, 2)
-        Spacer(Modifier.height(M3E_GAP))
-        NavRow(Icons.Default.Sync, stringResource(R.string.settings_check_updates),
-            stringResource(R.string.settings_check_updates_sub), 1, 2)
-        { onCheckUpdates() }
-    }
-}
-
-// ─── M3E helpers ─────────────────────────────────────────────────────────────
-
-@Composable private fun SectionHeader(title: String) {
-    Text(title.uppercase(), style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(start = 28.dp, top = 22.dp, bottom = 4.dp))
-}
-
-@Composable private fun GroupLabel(icon: ImageVector, text: String) {
-    Row(verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(start = 20.dp, bottom = 2.dp)) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
-        Spacer(Modifier.width(5.dp))
-        Text(text, style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable private fun OptionGroup(content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp), content = content)
-}
-
-@Composable private fun ThemeOption(
-    label: String, description: String, icon: ImageVector,
-    selected: Boolean, index: Int, total: Int, primaryColor: Boolean, onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f,
-        spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
-    val selectedBg = if (primaryColor) MaterialTheme.colorScheme.primaryContainer
-    else MaterialTheme.colorScheme.secondaryContainer
-    val selectedFg = if (primaryColor) MaterialTheme.colorScheme.onPrimaryContainer
-    else MaterialTheme.colorScheme.onSecondaryContainer
-    val checkColor = if (primaryColor) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
-    val bgColor by animateColorAsState(if (selected) selectedBg else MaterialTheme.colorScheme.surfaceContainerLow, tween(220), label = "bg")
-    val iconBg  by animateColorAsState(if (selected) checkColor.copy(.15f) else MaterialTheme.colorScheme.surfaceContainerHigh, tween(220), label = "ibg")
-    Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale), shape = shapeAt(index, total), color = bgColor) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(iconBg), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (selected) checkColor else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
-                    color = if (selected) selectedFg else MaterialTheme.colorScheme.onSurface)
-                Text(description, style = MaterialTheme.typography.bodySmall,
-                    color = if (selected) selectedFg.copy(.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            CheckIcon(selected, checkColor)
-        }
-    }
-}
-
-@Composable private fun LanguageOption(label: String, selected: Boolean, index: Int, total: Int, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
-    val bgColor by animateColorAsState(if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow, tween(220), label = "bg")
-    Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale), shape = shapeAt(index, total), color = bgColor) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f))
-            CheckIcon(selected, MaterialTheme.colorScheme.primary)
-        }
-    }
-}
-
-@Composable private fun SwitchRow(
-    icon: ImageVector, title: String, sub: String,
-    checked: Boolean, index: Int, total: Int, onCheckedChange: (Boolean) -> Unit
-) {
-    val bgColor by animateColorAsState(
-        if (checked) MaterialTheme.colorScheme.surfaceContainerHigh
-        else MaterialTheme.colorScheme.surfaceContainerLow, tween(200), label = "bg")
-    val iconBg by animateColorAsState(
-        if (checked) MaterialTheme.colorScheme.primary.copy(.12f)
-        else MaterialTheme.colorScheme.surfaceContainerHighest, tween(200), label = "ibg")
-    Surface(shape = shapeAt(index, total), color = bgColor, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(iconBg), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = if (checked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Switch(checked = checked, onCheckedChange = onCheckedChange,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                    checkedTrackColor = MaterialTheme.colorScheme.primary,
-                    uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                    uncheckedTrackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.outline))
-        }
-    }
-}
-
-@Composable private fun NavRow(icon: ImageVector, title: String, subtitle: String, index: Int, total: Int, onClick: () -> Unit) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.97f else 1f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessHigh), label = "sc")
-    Surface(onClick = onClick, interactionSource = interactionSource,
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale), shape = shapeAt(index, total),
-        color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary.copy(.1f)), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(.4f)
-            )
-        }
-    }
-}
-
-@Composable private fun InfoRow(icon: ImageVector, title: String, subtitle: String, index: Int, total: Int) {
-    Surface(shape = shapeAt(index, total), color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh), Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            }
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-    }
-}
-
-@Composable private fun CheckIcon(selected: Boolean, color: Color) {
-    Box(Modifier.size(22.dp)) {
-        AnimatedVisibility(selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)),
-            exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = color
-            )
-        }
-        AnimatedVisibility(!selected, enter = scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn(tween(150)),
-            exit = scaleOut(tween(100)) + fadeOut(tween(80))) {
-            Icon(
-                imageVector = Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-                modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.outline
-            )
-        }
-    }
 }

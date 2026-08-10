@@ -101,6 +101,9 @@ class VoicePlayerManager(private val context: Context) {
 
     private fun startPlayback(url: String, durationSec: Int) {
         try {
+            val cached = VoiceCache.getCachedPath(context, url)
+            val sourceUri = cached?.let { Uri.fromFile(it) } ?: Uri.parse(url)
+
             val player = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -108,7 +111,7 @@ class VoicePlayerManager(private val context: Context) {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .build()
                 )
-                setDataSource(context, Uri.parse(url))
+                setDataSource(context, sourceUri)
                 setOnPreparedListener { mp ->
                     _state.value = _state.value.copy(
                         isLoading = false,

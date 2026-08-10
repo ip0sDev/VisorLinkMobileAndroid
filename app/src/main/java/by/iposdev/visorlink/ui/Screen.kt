@@ -4,6 +4,7 @@ sealed class Screen(val route: String) {
     object Login : Screen("login")
     object Register : Screen("register")
     object VerifyEmail : Screen("verify_email")
+    object Onboarding : Screen("onboarding")
     object ChatList : Screen("chat_list")
     object Profile : Screen("profile")
     object Settings : Screen("settings")
@@ -11,6 +12,7 @@ sealed class Screen(val route: String) {
     object CreateChat : Screen("create_chat")
     object Notifications : Screen("notifications")
     object CacheSettings : Screen("cache_settings")
+    object Customization : Screen("customization")
 
     object Search : Screen("search?query={query}") {
         fun createRoute(query: String? = null) =
@@ -34,14 +36,23 @@ sealed class Screen(val route: String) {
         fun createRoute(chatId: String) = "chat_settings/$chatId"
     }
 
-    object ImageViewer : Screen("image_viewer?url={url}") {
-        fun createRoute(url: String): String {
+    object ImageViewer : Screen("media_viewer?url={url}&type={type}") {
+        fun createRoute(url: String, type: String = "image"): String {
             val encoded = java.net.URLEncoder.encode(url, "UTF-8")
-            return "image_viewer?url=$encoded"
+            return "media_viewer?url=$encoded&type=$type"
         }
     }
 
     object Comments : Screen("comments/{chatId}/{messageId}") {
         fun createRoute(chatId: String, messageId: String) = "comments/$chatId/$messageId"
+    }
+
+    object SavedMessages : Screen("saved_messages")
+    object SavedMessagesSettings : Screen("saved_messages_settings")
+    object Feed : Screen("feed")
+    object StorageManager : Screen("storage_manager")
+    object Diary : Screen("diary")
+    object DiaryEntry : Screen("diary_entry?id={id}") {
+        fun createRoute(id: String? = null) = if (id != null) "diary_entry?id=$id" else "diary_entry"
     }
 }

@@ -2,15 +2,23 @@ package by.iposdev.visorlink.ui.update
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.OpenInNew
@@ -18,15 +26,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import by.iposdev.visorlink.R
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.exthruRaisedShadow
+import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
+import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.ApkDownloader
+import java.util.Locale
 
 @Composable
 fun AppUpdateWrapper(
@@ -34,14 +54,17 @@ fun AppUpdateWrapper(
     content: @Composable () -> Unit
 ) {
     val updateState by viewModel.updateState.collectAsState()
+    val currentChannel by viewModel.currentChannel.collectAsState()
     val context = LocalContext.current
 
     var downloadProgress by remember { mutableFloatStateOf(0f) }
+    var downloadSpeed by remember { mutableLongStateOf(0L) }
     var isDownloading by remember { mutableStateOf(false) }
     var downloadError by remember { mutableStateOf(false) }
 
     LaunchedEffect(updateState) {
         downloadProgress = 0f
+        downloadSpeed = 0L
         isDownloading = false
         downloadError = false
     }
@@ -49,13 +72,14 @@ fun AppUpdateWrapper(
     content()
 
     when (val state = updateState) {
-        is UpdateState.Required -> UpdateDialog(
-            title = stringResource(R.string.update_required_title),
+        is UpdateState.Required -> BiolumeUpdateDialog(
+            title = "${stringResource(R.string.update_required_title)} ${state.versionName}",
             body = stringResource(R.string.update_required_body),
             changelog = state.changelog,
             dismissible = false,
             isDownloading = isDownloading,
             downloadProgress = downloadProgress,
+            downloadSpeed = downloadSpeed,
             downloadError = downloadError,
             onUpdate = {
                 isDownloading = true
@@ -63,9 +87,11 @@ fun AppUpdateWrapper(
                 ApkDownloader.downloadAndInstall(
                     context = context,
                     url = state.url,
-                    onProgress = { p ->
-                        if (p < 0f) { downloadError = true; isDownloading = false }
-                        else downloadProgress = p
+                    fileName = currentChannel.fileName,
+                    expectedSha256 = state.expectedSha256,
+                    onProgress = { p, speed ->
+                        if (p < 0f) { downloadError = true; isDownloading = false; downloadSpeed = 0L }
+                        else { downloadProgress = p; downloadSpeed = speed }
                     },
                     onComplete = { isDownloading = false }
                 )
@@ -73,13 +99,14 @@ fun AppUpdateWrapper(
             onDismiss = null
         )
 
-        is UpdateState.Recommended -> UpdateDialog(
-            title = stringResource(R.string.update_recommended_title),
+        is UpdateState.Recommended -> BiolumeUpdateDialog(
+            title = "${stringResource(R.string.update_recommended_title)} ${state.versionName}",
             body = stringResource(R.string.update_recommended_body),
             changelog = state.changelog,
             dismissible = true,
             isDownloading = isDownloading,
             downloadProgress = downloadProgress,
+            downloadSpeed = downloadSpeed,
             downloadError = downloadError,
             onUpdate = {
                 isDownloading = true
@@ -87,9 +114,11 @@ fun AppUpdateWrapper(
                 ApkDownloader.downloadAndInstall(
                     context = context,
                     url = state.url,
-                    onProgress = { p ->
-                        if (p < 0f) { downloadError = true; isDownloading = false }
-                        else downloadProgress = p
+                    fileName = currentChannel.fileName,
+                    expectedSha256 = state.expectedSha256,
+                    onProgress = { p, speed ->
+                        if (p < 0f) { downloadError = true; isDownloading = false; downloadSpeed = 0L }
+                        else { downloadProgress = p; downloadSpeed = speed }
                     },
                     onComplete = { isDownloading = false }
                 )
@@ -101,274 +130,344 @@ fun AppUpdateWrapper(
     }
 }
 
-// ─── Dialog ───────────────────────────────────────────────────────────────────
+// ─── Biolume Dialog ───────────────────────────────────────────────────────────
 
 @Composable
-private fun UpdateDialog(
+private fun BiolumeUpdateDialog(
     title: String,
     body: String,
     changelog: ChangelogInfo,
     dismissible: Boolean,
     isDownloading: Boolean,
     downloadProgress: Float,
+    downloadSpeed: Long,
     downloadError: Boolean,
     onUpdate: () -> Unit,
     onDismiss: (() -> Unit)?
 ) {
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
     val animatedProgress by animateFloatAsState(
         targetValue = downloadProgress,
         animationSpec = tween(300),
         label = "dl_progress"
     )
     val showProgress = isDownloading || downloadProgress > 0f
-    var changelogExpanded by remember { mutableStateOf(false) }
     val hasChangelog = changelog.entries != null || changelog.tooOld
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = {
             if (dismissible && !isDownloading) onDismiss?.invoke()
         },
         properties = DialogProperties(
+            usePlatformDefaultWidth = false,
             dismissOnBackPress = dismissible && !isDownloading,
             dismissOnClickOutside = dismissible && !isDownloading
-        ),
-        title = {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-        },
-        text = {
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .exthruRaisedShadow(isDark)
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(28.dp))
+                .padding(24.dp)
+        ) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(body, style = MaterialTheme.typography.bodyMedium)
-
-                // ── Changelog секция ──────────────────────────────────────────
-                if (hasChangelog) {
-                    ChangelogSection(
-                        info = changelog,
-                        expanded = changelogExpanded,
-                        onToggle = { changelogExpanded = !changelogExpanded }
+                // ── Заголовок (Кастомный жирный шрифт) ──
+                Text(
+                    text = title,
+                    style = TextStyle(
+                        fontFamily = FontFamily.SansSerif,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 26.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = (-0.5).sp
                     )
+                )
+
+                Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+
+                // ── Changelog ──
+                if (hasChangelog) {
+                    BiolumeChangelogSection(info = changelog, isDark = isDark)
                 }
 
-                // ── Прогресс загрузки ─────────────────────────────────────────
+                // ── Прогресс и скорость ──
                 AnimatedVisibility(
                     visible = showProgress,
                     enter = fadeIn(tween(200)) + expandVertically(),
                     exit = fadeOut(tween(200)) + shrinkVertically()
                 ) {
-                    DownloadProgressBlock(
+                    BiolumeDownloadProgress(
                         progress = downloadProgress,
                         animatedProgress = animatedProgress,
-                        downloadError = downloadError
+                        speedBps = downloadSpeed,
+                        downloadError = downloadError,
+                        isDark = isDark
+                    )
+                }
+
+                // ── Кнопки ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (onDismiss != null && !isDownloading) {
+                        NmButton(
+                            text = stringResource(R.string.update_btn_later),
+                            isPrimary = false,
+                            isDark = isDark,
+                            modifier = Modifier.weight(1f),
+                            onClick = onDismiss
+                        )
+                    }
+                    NmButton(
+                        text = when {
+                            isDownloading -> stringResource(R.string.update_btn_downloading)
+                            downloadProgress >= 1f -> stringResource(R.string.update_btn_installing)
+                            downloadError -> stringResource(R.string.update_btn_retry)
+                            else -> stringResource(R.string.update_btn_update)
+                        },
+                        isPrimary = true,
+                        isDark = isDark,
+                        enabled = !isDownloading && downloadProgress < 1f,
+                        modifier = Modifier.weight(1f),
+                        onClick = onUpdate
                     )
                 }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = onUpdate,
-                enabled = !isDownloading && downloadProgress < 1f
-            ) {
-                Text(
-                    when {
-                        isDownloading -> stringResource(R.string.update_btn_downloading)
-                        downloadProgress >= 1f -> stringResource(R.string.update_btn_installing)
-                        downloadError -> stringResource(R.string.update_btn_retry)
-                        else -> stringResource(R.string.update_btn_update)
-                    }
-                )
-            }
-        },
-        dismissButton = if (onDismiss != null && !isDownloading) {
-            { TextButton(onClick = onDismiss) { Text(stringResource(R.string.update_btn_later)) } }
-        } else null,
-        modifier = Modifier.fillMaxWidth()
-    )
+        }
+    }
 }
 
 // ─── Changelog section ────────────────────────────────────────────────────────
 
 @Composable
-private fun ChangelogSection(
+private fun BiolumeChangelogSection(
     info: ChangelogInfo,
-    expanded: Boolean,
-    onToggle: () -> Unit
+    isDark: Boolean
 ) {
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.5f else 0.2f)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.2f else 0.5f), RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { expanded = !expanded }
+            .padding(16.dp)
     ) {
-        Column {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    stringResource(R.string.update_whats_new),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp, top = 10.dp, bottom = 10.dp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                stringResource(R.string.update_whats_new),
+                style = TextStyle(
+                    fontFamily = FontFamily.SansSerif,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 15.sp
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            if (!info.tooOld) {
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                // Кнопка expand только если есть список (не tooOld — там всегда раскрыто)
-                if (!info.tooOld) {
-                    IconButton(
-                        onClick = onToggle,
-                        modifier = Modifier.padding(end = 4.dp)
+            }
+        }
+
+        AnimatedVisibility(
+            visible = expanded || info.tooOld,
+            enter = expandVertically() + fadeIn(tween(200)),
+            exit = shrinkVertically() + fadeOut(tween(150))
+        ) {
+            Column(
+                modifier = Modifier.padding(top = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (info.tooOld) {
+                    Text(
+                        stringResource(R.string.update_changelog_too_old),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.small
                     ) {
-                        Icon(
-                            imageVector = if (expanded) Icons.Default.ExpandLess
-                            else Icons.Default.ExpandMore,
-                            contentDescription = if (expanded) stringResource(R.string.update_changelog_collapse) else stringResource(R.string.update_changelog_expand),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                info.channelTag,
+                                style = MaterialTheme.typography.bodySmall.copy(textDecoration = TextDecoration.Underline),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Icon(Icons.Default.OpenInNew, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(13.dp))
+                        }
+                    }
+                } else {
+                    info.entries?.forEach { entry ->
+                        Row(verticalAlignment = Alignment.Top) { // Исправлено на verticalAlignment
+                            Text("•", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black, modifier = Modifier.padding(end = 6.dp))
+                            Text(
+                                entry.removePrefix("•").removePrefix("-").trim(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     }
                 }
             }
+        }
+    }
 
-            // Контент
-            AnimatedVisibility(
-                // tooOld — всегда раскрыт, иначе управляется expanded
-                visible = expanded || info.tooOld,
-                enter = expandVertically() + fadeIn(tween(200)),
-                exit = shrinkVertically() + fadeOut(tween(150))
-            ) {
-                Column(
-                    modifier = Modifier.padding(
-                        start = 12.dp, end = 12.dp, bottom = 12.dp
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (info.tooOld) {
-                        // Несколько версий позади
-                        Text(
-                            stringResource(R.string.update_changelog_too_old),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+// ─── Download progress block ──────────────────────────────────────────────────
+
+@Composable
+private fun BiolumeDownloadProgress(
+    progress: Float,
+    animatedProgress: Float,
+    speedBps: Long,
+    downloadError: Boolean,
+    isDark: Boolean
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
+        ) {
+            Column {
+                Text(
+                    when {
+                        downloadError -> stringResource(R.string.update_dl_error)
+                        progress >= 1f -> stringResource(R.string.update_dl_complete)
+                        progress > 0f -> stringResource(R.string.update_dl_progress)
+                        else -> stringResource(R.string.update_dl_starting)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (downloadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (progress > 0f && progress < 1f && !downloadError) {
+                    Text(
+                        formatSpeed(speedBps),
+                        style = TextStyle(
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(Modifier.height(6.dp))
-                        // Кнопка-чип для открытия канала
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(
-                                    horizontal = 10.dp, vertical = 6.dp
-                                ),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    info.channelTag,
-                                    style = MaterialTheme.typography.bodySmall.copy(
-                                        textDecoration = TextDecoration.Underline
-                                    ),
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Icon(
-                                    Icons.Default.OpenInNew,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                            }
-                        }
-                    } else {
-                        // Один шаг — список изменений
-                        info.entries?.forEach { entry ->
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                Text(
-                                    "•",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    entry.removePrefix("•").removePrefix("–")
-                                        .removePrefix("-").trim(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
+                    )
                 }
+            }
+
+            if (progress > 0f && progress < 1f && !downloadError) {
+                Text(
+                    "${(progress * 100).toInt()}%",
+                    style = TextStyle(
+                        fontFamily = FontFamily.SansSerif,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+        }
+
+        // ── Неоморфный трек ──
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .nmInsetShadow(isDark, cornerRadius = 7.dp, darkAlpha = if (isDark) 0.6f else 0.3f)
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(7.dp))
+        ) {
+            if (!downloadError && progress > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .exthruSmallRaisedShadow(isDark)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                    MaterialTheme.colorScheme.primary
+                                )
+                            ),
+                            RoundedCornerShape(7.dp)
+                        )
+                )
             }
         }
     }
 }
 
-// ─── Download progress block ──────────────────────────────────────────────────
+// ─── Неоморфная кнопка ────────────────────────────────────────────────────────
 
 @Composable
-private fun DownloadProgressBlock(
-    progress: Float,
-    animatedProgress: Float,
-    downloadError: Boolean
+private fun NmButton(
+    text: String,
+    isPrimary: Boolean,
+    isDark: Boolean,
+    enabled: Boolean = true,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                when {
-                    downloadError -> stringResource(R.string.update_dl_error)
-                    progress >= 1f -> stringResource(R.string.update_dl_complete)
-                    progress > 0f -> stringResource(R.string.update_dl_progress)
-                    else -> stringResource(R.string.update_dl_starting)
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = when {
-                    downloadError -> MaterialTheme.colorScheme.error
-                    progress >= 1f -> MaterialTheme.colorScheme.tertiary
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
-            )
-            if (progress > 0f && progress < 1f && !downloadError) {
-                Text(
-                    stringResource(R.string.update_dl_percent, (progress * 100).toInt()),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 12.sp
-                )
-            }
-        }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (isPressed && enabled) 0.95f else 1f, spring(dampingRatio = 0.5f), label = "btn_scale")
 
-        if (!downloadError) {
-            if (progress <= 0f) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            } else {
-                LinearProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier.fillMaxWidth().height(6.dp),
-                    color = if (progress >= 1f) MaterialTheme.colorScheme.tertiary
-                    else MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            }
-        }
+    val bgColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val textColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+
+    val shadowMod = if (isPressed && enabled) {
+        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp)
+    } else if (enabled) {
+        Modifier.exthruSmallRaisedShadow(isDark)
+    } else Modifier
+
+    Box(
+        modifier = modifier
+            .scale(scale)
+            .then(shadowMod)
+            .background(if (enabled) bgColor else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
+            .border(
+                1.dp,
+                if (isPressed || !enabled) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f),
+                RoundedCornerShape(16.dp)
+            )
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick)
+            .padding(vertical = 14.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Black, fontSize = 14.sp),
+            color = if (enabled) textColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
     }
+}
+
+private fun formatSpeed(bytesPerSec: Long): String {
+    if (bytesPerSec <= 0) return "0 KB/s"
+    val kb = bytesPerSec / 1024f
+    if (kb < 1024f) return String.format(Locale.US, "%.1f KB/s", kb)
+    val mb = kb / 1024f
+    return String.format(Locale.US, "%.1f MB/s", mb)
 }

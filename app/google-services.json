@@ -41,6 +41,42 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:18511020064:android:fa476334205d7791b97c45",
+        "android_client_info": {
+          "package_name": "by.iposdev.visorlink.canary"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAy5ZY8tWAyWuJnwtDCMQA05HUAr4vf-b0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "18511020064-0kq4085ug8rsbkpc9qgotocngi885vr1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "by.iposdev.visorlink"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

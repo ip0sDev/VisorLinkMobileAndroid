@@ -1,145 +1,145 @@
 package by.iposdev.visorlink.ui.update
 
+import android.app.Application
+import android.content.Context
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.BuildConfig
-import com.google.firebase.Firebase
-import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
-import com.google.firebase.remoteconfig.remoteConfig
+import by.iposdev.visorlink.utils.UpdateApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.tasks.await
+import java.util.UUID
+import kotlin.time.Duration.Companion.milliseconds
+
+enum class UpdateChannel(val id: String, val title: String, val fileName: String) {
+    RELEASE("release", "Release", "app-release.apk"),
+    BETA("beta", "Beta", "app-beta.apk"),
+    NIGHTLY("nightly", "Nightly", "app-nightly.apk"),
+    CANARY("canary", "Canary (Requires Admin)", "app-canary.apk")
+}
 
 sealed class UpdateState {
     object Loading : UpdateState()
     object None : UpdateState()
-    data class Recommended(val url: String, val changelog: ChangelogInfo) : UpdateState()
-    data class Required(val url: String, val changelog: ChangelogInfo) : UpdateState()
+    data class Recommended(
+        val url: String,
+        val changelog: ChangelogInfo,
+        val versionName: String,
+        val expectedSha256: String
+    ) : UpdateState()
+
+    data class Required(
+        val url: String,
+        val changelog: ChangelogInfo,
+        val versionName: String,
+        val expectedSha256: String
+    ) : UpdateState()
 }
 
-/**
- * @param entries  список строк чейнджлога (null = не показывать)
- * @param tooOld   true = версия старше чем N-1, показываем ссылку на канал
- */
 data class ChangelogInfo(
     val entries: List<String>? = null,
     val tooOld: Boolean = false,
     val channelTag: String = "@VisorLink"
 )
 
-class AppUpdateViewModel : ViewModel() {
+class AppUpdateViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val prefs = application.getSharedPreferences("visorlink_update_prefs", Context.MODE_PRIVATE)
+
+    private val installId: String
+        get() {
+            var id = prefs.getString("install_id", null)
+            if (id == null) {
+                id = UUID.randomUUID().toString()
+                prefs.edit().putString("install_id", id).apply()
+            }
+            return id
+        }
 
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Loading)
     val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
 
-    init { checkForUpdates() }
+    private val _currentChannel = MutableStateFlow(
+        UpdateChannel.entries.find {
+            it.name == prefs.getString("selected_channel", UpdateChannel.RELEASE.name)
+        } ?: UpdateChannel.RELEASE
+    )
+    val currentChannel: StateFlow<UpdateChannel> = _currentChannel.asStateFlow()
 
-    fun checkForUpdates() {
-        _updateState.value = UpdateState.Loading
+    init {
+        // При старте приложения регистрируем устройство и проверяем обновления
+        viewModelScope.launch {
+            UpdateApiClient.register(installId, _currentChannel.value.id)
+            checkForUpdates(isManual = false)
+
+            // Запускаем периодическую проверку каждые 2 часа, пока ViewModel жива
+            while(true) {
+                kotlinx.coroutines.delay((2 * 60 * 1000L).milliseconds)
+                checkForUpdates(isManual = false)
+            }
+        }
+    }
+
+    fun setChannel(channel: UpdateChannel, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = UpdateApiClient.setChannel(installId, channel.id)
+            if (success) {
+                _currentChannel.value = channel
+                prefs.edit().putString("selected_channel", channel.name).apply()
+                // После смены канала сразу принудительно проверяем обновления
+                checkForUpdates(isManual = true)
+            }
+            onResult(success)
+        }
+    }
+
+    fun checkForUpdates(isManual: Boolean = false, onResult: ((Boolean) -> Unit)? = null) {
+        if (isManual) {
+            _updateState.value = UpdateState.Loading
+        }
         viewModelScope.launch {
             try {
-                val rc = Firebase.remoteConfig
+                val packageName = getApplication<Application>().packageName
+                val versionCode = BuildConfig.VERSION_CODE
+                val updateInfo = UpdateApiClient.checkUpdate(installId, packageName, versionCode)
 
-                rc.setConfigSettingsAsync(
-                    FirebaseRemoteConfigSettings.Builder()
-                        .setMinimumFetchIntervalInSeconds(
-                            if (BuildConfig.DEBUG) 0L else 3600L
-                        )
-                        .build()
-                ).await()
+                if (updateInfo != null && updateInfo.isAvailable) {
+                    val entries = updateInfo.changelog.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+                    val changelog = ChangelogInfo(entries = entries.ifEmpty { null })
 
-                rc.setDefaultsAsync(
-                    mapOf(
-                        "min_version_code"    to 1L,
-                        "latest_version_code" to 1L,
-                        "update_apk_url"      to "",
-                        // JSON-массив строк: ["• Fixed crash", "• New dark theme"]
-                        // Если пустая строка — чейнджлог не показываем
-                        "changelog"           to ""
+                    val url = if (updateInfo.downloadUrl.startsWith("http")) {
+                        updateInfo.downloadUrl
+                    } else {
+                        "https://update-android.visorlink.org" + updateInfo.downloadUrl
+                    }
+
+                    _updateState.value = UpdateState.Recommended(
+                        url = url,
+                        changelog = changelog,
+                        versionName = updateInfo.versionName,
+                        expectedSha256 = updateInfo.sha256
                     )
-                ).await()
-
-                val activated = rc.fetchAndActivate().await()
-                Log.d("AppUpdate", "fetched, activated=$activated")
-
-                val minVersion    = rc.getLong("min_version_code").toInt()
-                val latestVersion = rc.getLong("latest_version_code").toInt()
-                val url           = rc.getString("update_apk_url")
-                val changelogRaw  = rc.getString("changelog")
-                val current       = BuildConfig.VERSION_CODE
-
-                Log.d("AppUpdate",
-                    "current=$current min=$minVersion latest=$latestVersion url=$url")
-
-                val changelog = buildChangelog(
-                    current = current,
-                    latest = latestVersion,
-                    raw = changelogRaw
-                )
-
-                _updateState.value = when {
-                    current < minVersion && url.isNotBlank() ->
-                        UpdateState.Required(url, changelog)
-                    current < latestVersion && url.isNotBlank() ->
-                        UpdateState.Recommended(url, changelog)
-                    else ->
-                        UpdateState.None
+                    onResult?.invoke(true)
+                } else {
+                    if (isManual || _updateState.value is UpdateState.Loading) {
+                        _updateState.value = UpdateState.None
+                    }
+                    onResult?.invoke(false)
                 }
             } catch (e: Exception) {
-                Log.e("AppUpdate", "fetch failed: ${e.message}")
-                _updateState.value = UpdateState.None
+                Log.e("AppUpdate", "Check update failed", e)
+                if (isManual || _updateState.value is UpdateState.Loading) {
+                    _updateState.value = UpdateState.None
+                }
+                onResult?.invoke(false)
             }
         }
     }
 
     fun dismissRecommendedUpdate() {
         _updateState.value = UpdateState.None
-    }
-
-    // ── Changelog logic ───────────────────────────────────────────────────────
-
-    /**
-     * Если current == latest - 1  → парсим JSON и показываем список
-     * Если current <  latest - 1  → пишем что нужно смотреть канал
-     * Иначе                       → не показываем ничего
-     */
-    private fun buildChangelog(current: Int, latest: Int, raw: String): ChangelogInfo {
-        if (latest <= current) return ChangelogInfo()
-
-        val gap = latest - current
-        return if (gap == 1) {
-            // Одна версия — парсим чейнджлог из Remote Config
-            val entries = parseChangelog(raw)
-            ChangelogInfo(entries = entries.ifEmpty { null })
-        } else {
-            // Несколько версий — отправляем в канал
-            ChangelogInfo(tooOld = true)
-        }
-    }
-
-    /**
-     * Парсим JSON-массив строк из Remote Config.
-     * Формат: ["• Fixed crash on startup", "• Added voice messages"]
-     * Fallback: просто сплит по \n если не JSON.
-     */
-    private fun parseChangelog(raw: String): List<String> {
-        if (raw.isBlank()) return emptyList()
-        return try {
-            val trimmed = raw.trim()
-            if (trimmed.startsWith("[")) {
-                // JSON array
-                val org = org.json.JSONArray(trimmed)
-                (0 until org.length()).map { org.getString(it) }.filter { it.isNotBlank() }
-            } else {
-                // Plain text, split by newlines
-                raw.split("\n").map { it.trim() }.filter { it.isNotBlank() }
-            }
-        } catch (e: Exception) {
-            Log.w("AppUpdate", "Failed to parse changelog: ${e.message}")
-            emptyList()
-        }
     }
 }

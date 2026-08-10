@@ -1,8 +1,10 @@
 package by.iposdev.visorlink.ui.theme
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.lifecycle.ViewModel
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.LocaleHelper
@@ -13,18 +15,29 @@ import kotlinx.coroutines.flow.asStateFlow
 private const val PREFS_NAME      = "visorlink_settings"
 private const val KEY_THEME       = "app_theme"
 private const val KEY_THEME_MODE  = "theme_mode"
+private const val KEY_COLOR_PRESET = "color_preset"
 private const val KEY_HAPTIC      = "haptic_feedback"
 private const val KEY_NOTIF       = "notifications_enabled"
 private const val KEY_LANGUAGE    = "app_language"
+private const val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
+private const val KEY_COMPACT_LIST  = "compact_chat_list"
+private const val KEY_DISCOVER_ENABLED = "discover_enabled"
+private const val KEY_ONBOARDING_VER   = "onboarding_version"
 
-class ThemeViewModel(private val context: Context) : ViewModel() {
+private const val CURRENT_ONBOARDING_VERSION = 1
+
+class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     // ── Theme ──────────────────────────────────────────────────────────────────
 
     private val _appTheme = MutableStateFlow(
-        AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+        try {
+            AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+        } catch (e: Exception) {
+            AppTheme.MATERIAL3_EXPRESSIVE
+        }
     )
     val appTheme: StateFlow<AppTheme> = _appTheme.asStateFlow()
 
@@ -33,11 +46,31 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
     )
     val themeMode: StateFlow<ThemeMode> = _themeMode.asStateFlow()
 
+    private val _colorPreset = MutableStateFlow(
+        ColorPreset.valueOf(prefs.getString(KEY_COLOR_PRESET, ColorPreset.DEFAULT.name)!!)
+    )
+    val colorPreset: StateFlow<ColorPreset> = _colorPreset.asStateFlow()
+
     private val _hapticEnabled = MutableStateFlow(prefs.getBoolean(KEY_HAPTIC, true))
     val hapticEnabled: StateFlow<Boolean> = _hapticEnabled.asStateFlow()
 
     private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean(KEY_NOTIF, true))
     val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    private val _dynamicChatInput = MutableStateFlow(prefs.getBoolean(KEY_DYNAMIC_INPUT, true))
+    val dynamicChatInput: StateFlow<Boolean> = _dynamicChatInput.asStateFlow()
+
+    // Компактный режим теперь включен по умолчанию
+    private val _compactChatList = MutableStateFlow(prefs.getBoolean(KEY_COMPACT_LIST, true))
+    val compactChatList: StateFlow<Boolean> = _compactChatList.asStateFlow()
+
+    private val _discoverEnabled = MutableStateFlow(prefs.getBoolean(KEY_DISCOVER_ENABLED, true))
+    val discoverEnabled: StateFlow<Boolean> = _discoverEnabled.asStateFlow()
+
+    private val _showOnboarding = MutableStateFlow(
+        prefs.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION
+    )
+    val showOnboarding: StateFlow<Boolean> = _showOnboarding.asStateFlow()
 
     // ── Language ───────────────────────────────────────────────────────────────
 
@@ -50,42 +83,90 @@ class ThemeViewModel(private val context: Context) : ViewModel() {
     val language: StateFlow<AppLanguage> = _language.asStateFlow()
 
     init {
+        // Подписываемся на изменения в настройках, чтобы мгновенно обновлять StateFlow
+        // во ВСЕХ инстансах ThemeViewModel, на любых экранах.
+        prefs.registerOnSharedPreferenceChangeListener(this)
+
         // Применяем сохраненный язык сразу при создании ViewModel
         LocaleHelper.applyLanguage(_language.value)
+    }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        if (sharedPreferences == null || key == null) return
+        when (key) {
+            KEY_THEME -> {
+                val themeStr = sharedPreferences.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)
+                _appTheme.value = try {
+                    AppTheme.valueOf(themeStr!!)
+                } catch (e: Exception) {
+                    AppTheme.MATERIAL3_EXPRESSIVE
+                }
+            }
+            KEY_THEME_MODE -> _themeMode.value = ThemeMode.valueOf(sharedPreferences.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)!!)
+            KEY_COLOR_PRESET -> _colorPreset.value = ColorPreset.valueOf(sharedPreferences.getString(KEY_COLOR_PRESET, ColorPreset.DEFAULT.name)!!)
+            KEY_HAPTIC -> _hapticEnabled.value = sharedPreferences.getBoolean(KEY_HAPTIC, true)
+            KEY_NOTIF -> _notificationsEnabled.value = sharedPreferences.getBoolean(KEY_NOTIF, true)
+            KEY_DYNAMIC_INPUT -> _dynamicChatInput.value = sharedPreferences.getBoolean(KEY_DYNAMIC_INPUT, true)
+            KEY_COMPACT_LIST -> _compactChatList.value = sharedPreferences.getBoolean(KEY_COMPACT_LIST, true)
+            KEY_DISCOVER_ENABLED -> _discoverEnabled.value = sharedPreferences.getBoolean(KEY_DISCOVER_ENABLED, true)
+            KEY_ONBOARDING_VER -> {
+                _showOnboarding.value = sharedPreferences.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION
+            }
+            KEY_LANGUAGE -> {
+                val langStr = sharedPreferences.getString(KEY_LANGUAGE, null)
+                if (langStr != null) {
+                    _language.value = AppLanguage.fromCode(langStr)
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        prefs.unregisterOnSharedPreferenceChangeListener(this)
+        super.onCleared()
     }
 
     // ── Setters ────────────────────────────────────────────────────────────────
 
     fun setTheme(theme: AppTheme) {
-        _appTheme.value = theme
         prefs.edit().putString(KEY_THEME, theme.name).apply()
     }
 
     fun setThemeMode(mode: ThemeMode) {
-        _themeMode.value = mode
         prefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
     }
 
+    fun setColorPreset(preset: ColorPreset) {
+        prefs.edit().putString(KEY_COLOR_PRESET, preset.name).apply()
+    }
+
     fun setHaptic(enabled: Boolean) {
-        _hapticEnabled.value = enabled
         prefs.edit().putBoolean(KEY_HAPTIC, enabled).apply()
     }
 
     fun setNotifications(enabled: Boolean) {
-        _notificationsEnabled.value = enabled
         prefs.edit().putBoolean(KEY_NOTIF, enabled).apply()
     }
 
+    fun setDynamicChatInput(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DYNAMIC_INPUT, enabled).apply()
+    }
+
+    fun setCompactChatList(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_COMPACT_LIST, enabled).apply()
+    }
+
+    fun setDiscoverEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DISCOVER_ENABLED, enabled).apply()
+    }
+
+    fun completeOnboarding() {
+        prefs.edit().putInt(KEY_ONBOARDING_VER, CURRENT_ONBOARDING_VERSION).apply()
+    }
+
     fun setLanguage(language: AppLanguage) {
-        // 1. Обновляем StateFlow (для галочек в UI)
-        _language.value = language
-
-        // 2. Сохраняем в настройки (чтобы восстановить при следующем запуске)
         prefs.edit().putString(KEY_LANGUAGE, language.code).apply()
-
-        // 3. Даем команду системе сменить язык приложения.
-        // Это заставит Activity автоматически пересоздаться (на старых Android)
-        // или обновить конфигурацию (на Android 13+), и Compose мгновенно перерисует все stringResource().
+        // Даем команду системе сменить язык приложения (Android 13+ сам обновит конфиг)
         LocaleHelper.applyLanguage(language)
     }
 }

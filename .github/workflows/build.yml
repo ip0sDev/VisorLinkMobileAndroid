@@ -1,0 +1,226 @@
+name: App Build
+
+on:
+  push:
+    branches:
+      - canary
+      - nightly
+      - beta
+    tags:
+      - 'canary-*'
+      - 'nightly-*'
+      - 'beta-*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Test & Build Signed APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 20
+
+      - name: Extract Channel from BuildConfig
+        id: get_channel
+        run: |
+          RAW_CHANNEL=$(grep 'buildConfigField("String", "CHANNEL"' app/build.gradle.kts | head -n 1 | cut -d'"' -f7 | tr -d '\\')
+          CHANNEL=$(echo "$RAW_CHANNEL" | tr '[:upper:]' '[:lower:]')
+
+          if [ -z "$CHANNEL" ]; then
+            echo "❌ ОШИБКА: Не удалось найти CHANNEL в build.gradle.kts"
+            exit 1
+          fi
+
+          echo "CHANNEL=$CHANNEL" >> $GITHUB_ENV
+
+          CHANNEL_CAP="$(tr '[:lower:]' '[:upper:]' <<< ${CHANNEL:0:1})${CHANNEL:1}"
+          echo "CHANNEL_CAP=$CHANNEL_CAP" >> $GITHUB_ENV
+
+          if [ "$CHANNEL" = "nightly" ]; then
+            echo "CHAT_ID=${{ secrets.TELEGRAM_NIGHTLY_CHAT_ID }}" >> $GITHUB_ENV
+          elif [ "$CHANNEL" = "beta" ]; then
+            echo "CHAT_ID=${{ secrets.TELEGRAM_BETA_CHAT_ID }}" >> $GITHUB_ENV
+          else
+            echo "CHAT_ID=${{ secrets.TELEGRAM_CANARY_CHAT_ID }}" >> $GITHUB_ENV
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android Build Tools 29.0.3
+        run: echo "y" | sdkmanager "build-tools;29.0.3"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Get commit info
+        id: commit
+        run: |
+          COMMIT_ID=$(git rev-parse --short HEAD)
+          echo "commit_id=$COMMIT_ID" >> $GITHUB_OUTPUT
+
+          CHANGELOG=$(git log -1 --pretty=format:"%s" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+
+          {
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Run Tests and Build Release APK
+        # Убрали --no-daemon и добавили --configuration-cache
+        # Используем '\' для удобного переноса строк
+        run: |
+          ./gradlew testDebugUnitTest assembleRelease \
+            -PcommitId=${{ steps.commit.outputs.commit_id }} \
+            --parallel \
+            --build-cache \
+            --configuration-cache \
+            -Dorg.gradle.jvmargs="-Xmx5g -XX:+UseParallelGC -Dkotlin.daemon.jvm.options=-Xmx2g"
+
+      - name: Sign APK
+        id: sign_app
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Rename Signed APK
+        run: |
+          APK_SRC="${{ steps.sign_app.outputs.signedReleaseFile }}"
+          APK_NAME="visorlink-${{ env.CHANNEL }}-${{ steps.commit.outputs.commit_id }}.apk"
+          APK_DEST="app/build/outputs/apk/release/$APK_NAME"
+          mv "$APK_SRC" "$APK_DEST"
+
+          echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV
+          echo "APK_NAME=$APK_NAME" >> $GITHUB_ENV
+
+      # ФИНАЛЬНЫЙ ШАГ: ЗАГРУЗКА В КАСТОМНЫЙ UPDATER ЧЕРЕЗ CLOUDFLARE ZERO TRUST
+      - name: Upload APK to Custom Updater API
+        env:
+          SERVER_URL: ${{ secrets.UPDATER_SERVER_URL }}
+          API_KEY: ${{ secrets.UPDATER_API_KEY }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+          CHANGELOG_TEXT: ${{ steps.commit.outputs.changelog }}
+        run: |
+          echo "Uploading $APK_PATH to $SERVER_URL/api/upload (Channel: $CHANNEL)..."
+          
+          # Отправляем cURL запрос с токенами Cloudflare Access
+          HTTP_STATUS=$(curl -sS -o /tmp/response.json -w "%{http_code}" \
+            -A "VisorLink-CI-Bot/1.0" \
+            -X POST "$SERVER_URL/api/upload" \
+            -H "X-API-Key: $API_KEY" \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            -F "file=@${APK_PATH}" \
+            -F "channel=${CHANNEL}" \
+            -F "changelog=${CHANGELOG_TEXT}" || echo "000")
+            
+          echo "Server HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" = "200" ] || [ "$HTTP_STATUS" = "201" ]; then
+            echo "✅ Успешно загружено на сервер обновлений!"
+            cat /tmp/response.json
+          else
+            echo "❌ Ошибка загрузки (HTTP Status: $HTTP_STATUS)"
+            if [ -f /tmp/response.json ]; then
+              cat /tmp/response.json
+            fi
+            exit 1
+          fi
+
+      - name: Send Info to Telegram
+        env:
+          CHANNEL_NAME: ${{ env.CHANNEL_CAP }}
+          APK_NAME: ${{ env.APK_NAME }}
+          COMMIT_ID: ${{ steps.commit.outputs.commit_id }}
+          CHANGELOG: ${{ steps.commit.outputs.changelog }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHANNEL: ${{ env.CHANNEL }}
+          BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          CHAT_ID: ${{ env.CHAT_ID }}
+          ACTOR: ${{ github.actor }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          LINK="📲 Доступно внутри приложения (через Updater)
+          📥 <a href=\"${RUN_URL}\">Бэкап в GitHub Artifacts</a>"
+
+          printf '🚀 <b>VisorLink %s Build</b>\n\n📦 <code>%s</code>\n🔖 <code>%s</code> | 🌿 <code>%s</code>\n👤 <code>%s</code>\n✅ <b>Tests passed &amp; APK Signed</b>\n\n%s\n\n📋 <b>Latest Commit:</b>\n• %s' \
+            "$CHANNEL_NAME" "$APK_NAME" "$COMMIT_ID" "$REF_NAME" "$ACTOR" "$LINK" "$CHANGELOG" \
+            > /tmp/tg_message.txt
+
+          curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            --data-urlencode "text@/tmp/tg_message.txt"
+
+      - name: Send Info to VisorLink Channel
+        env:
+          CHANNEL_NAME: ${{ env.CHANNEL_CAP }}
+          APK_NAME: ${{ env.APK_NAME }}
+          COMMIT_ID: ${{ steps.commit.outputs.commit_id }}
+          CHANGELOG: ${{ steps.commit.outputs.changelog }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CHANNEL: ${{ env.CHANNEL }}
+          ACTOR: ${{ github.actor }}
+          REF_NAME: ${{ github.ref_name }}
+          
+          CHAT_NIGHTLY: ${{ secrets.VL_NIGHTLY_CHAT_ID }}
+          KEY_NIGHTLY: ${{ secrets.VL_NIGHTLY_BOT_KEY }}
+          
+          CHAT_BETA: ${{ secrets.VL_BETA_CHAT_ID }}
+          KEY_BETA: ${{ secrets.VL_BETA_BOT_KEY }}
+          
+          CHAT_CANARY: ${{ secrets.VL_CANARY_CHAT_ID }}
+          KEY_CANARY: ${{ secrets.VL_CANARY_BOT_KEY }}
+        run: |
+          if [ "$CHANNEL" = "nightly" ]; then
+            VL_CHAT_ID="${CHAT_NIGHTLY}"
+            VL_BOT_KEY="${KEY_NIGHTLY}"
+          elif [ "$CHANNEL" = "beta" ]; then
+            VL_CHAT_ID="${CHAT_BETA}"
+            VL_BOT_KEY="${KEY_BETA}"
+          else
+            VL_CHAT_ID="${CHAT_CANARY}"
+            VL_BOT_KEY="${KEY_CANARY}"
+          fi
+
+          if [ -z "$VL_BOT_KEY" ] || [ -z "$VL_CHAT_ID" ]; then
+            echo "⚠️ ВНИМАНИЕ: Не найден API ключ или ID чата для канала $CHANNEL"
+            exit 0
+          fi
+
+          # Формируем сообщение без ссылок на Firebase
+          printf '🚀 VisorLink %s Build\n\n📦 %s\n🔖 %s | 🌿 %s\n👤 %s\n✅ Обновление доступно внутри приложения!\n\n📋 Latest Commit:\n• %s' \
+            "$CHANNEL_NAME" "$APK_NAME" "$COMMIT_ID" "$REF_NAME" "$ACTOR" "$CHANGELOG" \
+            > /tmp/vl_message.txt
+
+          jq -n --arg chat "$VL_CHAT_ID" --arg text "$(cat /tmp/vl_message.txt)" '{chatId: $chat, text: $text}' > /tmp/payload.json
+
+          curl -s -X POST "https://europe-west1-visorlink-f9484.cloudfunctions.net/channelBotWebhook" \
+            -H "Authorization: Bearer ${VL_BOT_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/payload.json
+
+      - name: Upload APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: visorlink-${{ env.CHANNEL }}-${{ steps.commit.outputs.commit_id }}
+          path: ${{ env.APK_PATH }}
+          retention-days: 7

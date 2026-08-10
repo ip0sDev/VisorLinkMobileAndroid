@@ -6,6 +6,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -17,7 +18,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import by.iposdev.visorlink.data.model.AppTheme
+import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
+import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.utils.CustomizationHelper
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import org.koin.compose.viewmodel.koinViewModel
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
 
@@ -78,10 +85,9 @@ private val DarkM3 = darkColorScheme(
 )
 
 // ── OneUI 8.5 ─────────────────────────────────────────────────────────────────
-// Точные цвета реального One UI 8.5 (Galaxy S25 series)
 
 private val LightOneUI = lightColorScheme(
-    primary = Color(0xFF006FFD),          // Samsung синий
+    primary = Color(0xFF006FFD),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFD6E4FF),
     onPrimaryContainer = Color(0xFF001C45),
@@ -97,11 +103,11 @@ private val LightOneUI = lightColorScheme(
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFFDAD6),
     onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFF4F4F4),       // OneUI серый фон
+    background = Color(0xFFF4F4F4),
     onBackground = Color(0xFF1A1A1A),
     surface = Color(0xFFFFFFFF),
     onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFEEEEEE),   // карточки OneUI
+    surfaceVariant = Color(0xFFEEEEEE),
     onSurfaceVariant = Color(0xFF49454F),
     outline = Color(0xFFE0E0E0),
     outlineVariant = Color(0xFFCAC4D0),
@@ -113,7 +119,7 @@ private val LightOneUI = lightColorScheme(
 )
 
 private val DarkOneUI = darkColorScheme(
-    primary = Color(0xFF5B9BFF),          // OneUI dark primary
+    primary = Color(0xFF5B9BFF),
     onPrimary = Color(0xFF00285C),
     primaryContainer = Color(0xFF003E8D),
     onPrimaryContainer = Color(0xFFD6E4FF),
@@ -129,11 +135,11 @@ private val DarkOneUI = darkColorScheme(
     onError = Color(0xFF690005),
     errorContainer = Color(0xFF93000A),
     onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF161616),       // OneUI тёмный фон
+    background = Color(0xFF161616),
     onBackground = Color(0xFFE8E8E8),
-    surface = Color(0xFF1E1E1E),          // поверхность OneUI dark
+    surface = Color(0xFF1E1E1E),
     onSurface = Color(0xFFE8E8E8),
-    surfaceVariant = Color(0xFF2A2A2A),   // карточки dark
+    surfaceVariant = Color(0xFF2A2A2A),
     onSurfaceVariant = Color(0xFFCAC4D0),
     outline = Color(0xFF3A3A3A),
     outlineVariant = Color(0xFF49454F),
@@ -154,14 +160,29 @@ val ShapesM3 = Shapes(
     extraLarge = RoundedCornerShape(36.dp)
 )
 
-// OneUI 8.5 использует очень большие скруглённые углы для карточек
-// и почти прямоугольные — для мелких элементов
 val ShapesOneUI = Shapes(
     extraSmall = RoundedCornerShape(6.dp),
     small = RoundedCornerShape(10.dp),
     medium = RoundedCornerShape(20.dp),
     large = RoundedCornerShape(26.dp),
     extraLarge = RoundedCornerShape(32.dp)
+)
+
+val ShapesExthru = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(32.dp)
+)
+
+// Forge — neo-brutalist, острые углы везде (радиус = 0 во Flutter-версии)
+val ShapesForge = Shapes(
+    extraSmall = RoundedCornerShape(0.dp),
+    small = RoundedCornerShape(0.dp),
+    medium = RoundedCornerShape(0.dp),
+    large = RoundedCornerShape(0.dp),
+    extraLarge = RoundedCornerShape(0.dp)
 )
 
 // ── Typography ────────────────────────────────────────────────────────────────
@@ -182,8 +203,6 @@ val TypographyM3 = Typography(
     labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp),
 )
 
-// OneUI 8.5: Samsung использует SamsungOne / SamsungSharpSans шрифт,
-// мы имитируем через FontWeight и spacing
 val TypographyOneUI = Typography(
     displayLarge = TextStyle(fontWeight = FontWeight.Light, fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-0.25).sp),
     headlineLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = 0.sp),
@@ -200,32 +219,89 @@ val TypographyOneUI = Typography(
     labelSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
 )
 
-// ── Entry point ───────────────────────────────────────────────────────────────
+// ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
 @Composable
+fun UserProfileTheme(
+    profile: UserProfile?,
+    currentUser: UserProfile?,
+    content: @Composable () -> Unit
+) {
+    val themeVm: ThemeViewModel = koinViewModel()
+    val globalAppTheme by themeVm.appTheme.collectAsState()
+    val globalPreset by themeVm.colorPreset.collectAsState()
+    val currentThemeMode by themeVm.themeMode.collectAsState()
+
+    val applyCust = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
+    val cust = if (applyCust) profile?.customization ?: emptyMap() else emptyMap()
+
+    val customAppTheme = if (cust["style"] != null && cust["style"] != "default") {
+        CustomizationHelper.parseStyle(cust["style"] as String)
+    } else globalAppTheme
+
+    val customPreset = if (cust["accent"] != null && cust["accent"] != "default") {
+        CustomizationHelper.parseAccent(cust["accent"] as String)
+    } else globalPreset
+
+    val fontStr = cust["font"] as? String ?: "default"
+
+    VisorLinkTheme(
+        appTheme = customAppTheme,
+        themeMode = currentThemeMode,
+        colorPreset = customPreset
+    ) {
+        val currentTypography = MaterialTheme.typography
+        val customizedTypography = if (fontStr != "default") {
+            CustomizationHelper.getTypography(fontStr, currentTypography)
+        } else currentTypography
+
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme,
+            shapes = MaterialTheme.shapes,
+            typography = customizedTypography,
+            content = content
+        )
+    }
+}
+
+// ── VisorLink Theme Composable ────────────────────────────────────────────────
+
+@Composable
+@Suppress("DEPRECATION")
 fun VisorLinkTheme(
-    appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
+    appTheme: AppTheme = AppTheme.BIOLUME,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
+    colorPreset: ColorPreset = ColorPreset.DEFAULT,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
     val darkTheme = when (themeMode) {
-        ThemeMode.DARK -> true
-        ThemeMode.LIGHT -> false
+        ThemeMode.DARK   -> true
+        ThemeMode.LIGHT  -> false
         ThemeMode.SYSTEM -> systemDark
     }
 
-    val colorScheme = when (appTheme) {
+    // EXTHRU оставлен как алиас BIOLUME для экранов, которые ещё не мигрировали на новое имя.
+    val resolvedTheme = if (appTheme == AppTheme.EXTHRU) AppTheme.BIOLUME else appTheme
+
+    val baseColorScheme = when (resolvedTheme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT -> {
                 val ctx = LocalContext.current
                 if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
             }
             darkTheme -> DarkM3
-            else -> LightM3
+            else      -> LightM3
         }
         AppTheme.ONE_UI -> if (darkTheme) DarkOneUI else LightOneUI
+        AppTheme.BIOLUME -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
+        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> if (darkTheme) ForgeDarkColorScheme else ForgeLightColorScheme
+        AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme // недостижимо, resolvedTheme выше уже разрешил
     }
+
+    // Кастомный акцентный цвет (пресет) перекрашивает схему поверх любой из 3 тем.
+    // Для M3 с включённым Material You (preset == DEFAULT) пресет не применяется — используется системный динамический цвет.
+    val colorScheme = baseColorScheme.withColorPreset(resolvedTheme, darkTheme, colorPreset)
 
     val view = LocalView.current
     if (!view.isInEditMode) {
@@ -238,8 +314,22 @@ fun VisorLinkTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        shapes = if (appTheme == AppTheme.ONE_UI) ShapesOneUI else ShapesM3,
-        typography = if (appTheme == AppTheme.ONE_UI) TypographyOneUI else TypographyM3,
-        content = content
+        shapes = when (resolvedTheme) {
+            AppTheme.ONE_UI  -> ShapesOneUI
+            AppTheme.BIOLUME -> ShapesExthru
+            AppTheme.FORGE   -> ShapesForge
+            else             -> ShapesM3
+        },
+        typography = when (resolvedTheme) {
+            AppTheme.ONE_UI  -> TypographyOneUI
+            AppTheme.BIOLUME -> ExthruTypography
+            AppTheme.FORGE   -> ForgeTypography
+            else             -> TypographyM3
+        },
+        content = {
+            CompositionLocalProvider(LocalAppThemeOverride provides resolvedTheme) {
+                content()
+            }
+        }
     )
 }

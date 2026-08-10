@@ -110,7 +110,7 @@
     <string name="stickers_empty_subtitle">Добавьте стикеры в профиле</string>
 
     <!-- Message Action Sheet -->
-    <string name="action_copy_text">Копировать текст</string>
+    <string name="action_copy_text">Копировать</string>
     <string name="action_view_image">Открыть изображение</string>
     <string name="action_save_gallery">Сохранить в галерею</string>
     <string name="action_save_voice">Сохранить голосовое</string>
@@ -401,4 +401,190 @@
     <string name="some_features_may_be_unavailable_or_behave_unexpectedly">"Некоторые функции могут быть отключены или ограничены "</string>
     <string name="until_you_switch_to_the_official_app">пока вы не перейдете на оффициальный клиент.</string>
     <string name="i_understand">Я принимаю этот риск</string>
+    <string name="saved_messages">Избранное</string>
+    <string name="saved_pin_prompt">Введите PIN-код</string>
+    <string name="saved_pin_wrong">Неверный PIN</string>
+    <string name="saved_pin_set">Установить PIN</string>
+    <string name="saved_pin_disable">Отключить PIN</string>
+    <string name="saved_enc_title">Шифрование текстов</string>
+    <string name="saved_enc_description">Текстовые сообщения зашифрованы на устройстве. Сервер не может их прочитать.</string>
+    <string name="saved_enc_media_warning">Фото и голосовые НЕ шифруются — они хранятся в облаке как обычно.</string>
+    <string name="saved_enc_active">Шифрование включено</string>
+    <string name="saved_enc_active_short">🔐 Тексты зашифрованы</string>
+    <string name="saved_enc_image_warning_confirm">Это фото не будет зашифровано. Продолжить?</string>
+    <string name="saved_enc_wrong_key">Не удалось расшифровать</string>
+    <string name="forward_from">Переслано от @%1$s</string>
+    <string name="forward_from_saved">Переслано из Избранного</string>
+    <string name="forward_not_allowed">Пересылка запрещена</string>
+    <string name="forward_picker_title">Переслать в…</string>
+    <string name="settings_no_forwards">Запретить пересылку</string>
+    <string name="saved_messages_title">Избранное</string>
+
+    <!-- Discover Feed -->
+    <string name="feed_title">Discover</string>
+    <string name="feed_empty">Постов не найдено</string>
+    <string name="feed_view_channel">перейти в канал</string>
+    <string name="feed_unknown_channel">Неизвестный канал</string>
+    <string name="feed_just_now">Только что</string>
+    <string name="feed_scroll_to_top">Наверх</string>
+
+    <!-- Storage Manager -->
+    <string name="storage_title">Облако</string>
+    <string name="storage_section_files">Ваши файлы</string>
+    <string name="storage_usage_title">Использование облака</string>
+    <string name="storage_usage_of">%1$s из %2$s занято</string>
+    <string name="storage_usage_files_count">Всего файлов в облаке: %1$d</string>
+    <string name="storage_subtitle">Управление файлами в облаке</string>
+    <string name="storage_empty">Файлов в облаке не найдено</string>
+    <string name="storage_zone_vault">🔒 Сейф</string>
+    <string name="storage_zone_public">🌐 Общий чат</string>
+    <string name="storage_delete_title">Удалить файл?</string>
+    <string name="storage_delete_confirm">Вы уверены, что хотите навсегда удалить «%1$s»?</string>
+
+    <!-- Gift Messages -->
+    <string name="gift_pro_title">VisorLink PRO</string>
+    <string name="gift_redeemed_by">Открыто @%1$s</string>
+    <string name="gift_hint">Подарок для самого быстрого!</string>
+    <string name="gift_action_open">ОТКРЫТЬ</string>
+    <string name="gift_action_opening">ОТКРЫВАЕМ…</string>
+    <string name="gift_success_title">ВЫ ПОЛУЧИЛИ PRO!</string>
+    <string name="gift_error_taken">Кто-то оказался быстрее!</string>
+
+    <!-- Settings — Bots & Admin -->
+    <string name="settings_bots_title">Мои боты</string>
+    <string name="settings_bots_subtitle">Управление API-ботами</string>
+    <string name="settings_bots_manager_title">Управление ботами</string>
+    <string name="settings_bots_create_title">Создать нового Webhook бота</string>
+    <string name="settings_bots_field_name">Имя бота</string>
+    <string name="settings_bots_field_username">Username (без @)</string>
+    <string name="settings_bots_empty">У вас пока нет ботов</string>
+    <string name="settings_bots_token_regenerate">Перевыпустить токен</string>
+    <string name="settings_bots_token_copied">Новый токен скопирован</string>
+    <string name="settings_admin_panel">Админ-панель</string>
+    <string name="settings_tg_binding_title">Привязка Telegram</string>
+    <string name="settings_tg_binding_subtitle">Получать сообщения через бота</string>
+    <string name="settings_tg_linked">Telegram: @%1$s</string>
+    <string name="settings_tg_linked_sub">Привязан. Нажмите, чтобы отвязать.</string>
+    <string name="settings_tg_code_instruction">Отправьте нашему боту в Telegram команду:</string>
+    <string name="settings_tg_code_expire">Срок действия кода — 5 минут.</string>
+    <string name="settings_tg_unlinked_toast">Telegram отвязан</string>
+
+    <!-- Saved Messages (more) -->
+    <string name="saved_empty_title">Здесь будут ваши сохранённые сообщения</string>
+    <string name="saved_empty_footer">Тексты зашифрованы на устройстве</string>
+    <string name="saved_action_delete">Удалить из Избранного</string>
+    <string name="saved_pin_hint">PIN-код (4-8 цифр)</string>
+    <string name="saved_pin_error">Неверный PIN-код</string>
+    <string name="saved_biometric_enable">Разрешить вход по биометрии</string>
+    <string name="saved_biometric_title">Избранное</string>
+    <string name="saved_biometric_subtitle">Войдите с помощью биометрии</string>
+    <string name="saved_action_unlock">Разблокировать</string>
+
+    <!-- Diary -->
+    <string name="diary_title">Дневник</string>
+    <string name="diary_empty_date">Нет записей на эту дату</string>
+    <string name="diary_stats_total">Всего</string>
+    <string name="diary_stats_month">За месяц</string>
+    <string name="diary_stats_streak">Стрик</string>
+    <string name="diary_action_add">Новая запись</string>
+    <string name="diary_action_export">Экспорт</string>
+    <string name="diary_action_export_title">Экспорт дневника в XML</string>
+    <string name="diary_locked">Дневник заблокирован</string>
+    <string name="diary_pin_prompt">Введите PIN-код</string>
+    <string name="diary_bio_unlock">Вход по биометрии</string>
+    <string name="diary_new_entry">Новая запись</string>
+    <string name="diary_edit_entry">Редактировать</string>
+    <string name="diary_placeholder">Запишите ваши мысли здесь…</string>
+    <string name="diary_toggle_preview">Предпросмотр</string>
+    <string name="diary_reminder_title">Время дневника</string>
+    <string name="diary_reminder_text">Не забудьте записать свои мысли за сегодня!</string>
+    <string name="diary_enable_title">Включить дневник</string>
+    <string name="diary_enable_sub">Отдельный интерфейс для ежедневных записей</string>
+    <string name="diary_reminders_title">Напоминания</string>
+    <string name="diary_reminders_sub">Напоминать о записи в %1$s</string>
+    <string name="diary_format_bold">Жирный</string>
+    <string name="diary_format_italic">Курсив</string>
+    <string name="diary_format_list">Список</string>
+    <string name="diary_format_link">Ссылка</string>
+    <string name="diary_format_check">Чекбокс</string>
+    <string name="diary_format_image">Картинка</string>
+
+    <!-- Intro / Onboarding -->
+    <string name="action_next">Далее</string>
+    <string name="intro_welcome_title">Добро пожаловать в VisorLink</string>
+    <string name="intro_welcome_desc">Давайте настроим приложение под вас. Эти параметры можно изменить позже.</string>
+    <string name="intro_features_title">Выберите функции</string>
+    <string name="intro_features_section">Доступные модули</string>
+    <string name="intro_final_title">Всё готово!</string>
+    <string name="intro_final_desc">Ваше личное пространство настроено. Приятного использования.</string>
+    <string name="intro_start_btn">Начать работу</string>
+    <string name="diary_format_draw">Рисовать</string>
+    <string name="diary_format_color">Цвет</string>
+    <string name="diary_stats_total_entries">Всего записей</string>
+    <string name="diary_stats_monthly">В этом месяце</string>
+    <string name="diary_stats_streak_days">Стрик: %1$d дней</string>
+    <string name="diary_export_chooser">Поделиться дневником (XML)</string>
+    <string name="diary_delete_confirm">Удалить запись?</string>
+
+    <!-- Settings — Customization -->
+    <string name="settings_custom_title">Моя Кастомизация</string>
+    <string name="settings_custom_design_title">Дизайн профиля и чатов</string>
+    <string name="settings_custom_design_sub">Фон, шрифты, баннер, стиль</string>
+    <string name="settings_custom_hide_title">Скрывать чужой дизайн</string>
+    <string name="settings_custom_hide_sub">Отображать профили в системном стиле</string>
+    <string name="settings_custom_pro_only">Доступно только с подпиской PRO!</string>
+    <string name="settings_custom_in_development">В разработке</string>
+    <string name="settings_section_accent">Цветовой акцент</string>
+
+    <!-- Settings — Common -->
+    <string name="settings_section_management">Управление</string>
+    <string name="settings_section_privacy">Приватность</string>
+    <string name="settings_section_updates">Обновления</string>
+    <string name="settings_section_account">Аккаунт</string>
+
+    <!-- Settings — Stealth Mode -->
+    <string name="settings_stealth_title">Режим скрытия</string>
+    <string name="settings_stealth_sub_off">Маскирует мессенджер под другое приложение</string>
+    <string name="settings_stealth_sub_on">Включён — при запуске откроется маскировочный экран</string>
+    <string name="settings_stealth_change_pin">Сменить PIN-код скрытия</string>
+    <string name="settings_stealth_change_pin_sub">Обновить код доступа для разблокировки</string>
+
+    <!-- Settings — Updates -->
+    <string name="settings_update_channel">Канал обновлений</string>
+    <string name="settings_update_channel_current">Текущий: %1$s</string>
+
+    <!-- Settings — Account -->
+    <string name="settings_tg_link">Привязать Telegram</string>
+    <string name="settings_password_change">Изменить пароль</string>
+    <string name="settings_logout">Выйти из аккаунта</string>
+
+    <!-- PRO Banner -->
+    <string name="pro_title">VisorLink PRO</string>
+    <string name="pro_status_active">Статус: Активен</string>
+    <string name="pro_status_inactive">Статус: Неактивен</string>
+    <string name="pro_eternal">♾️ Бесконечный PRO</string>
+    <string name="pro_until">До %1$s</string>
+    <string name="pro_unlock_hint">Разблокируйте золотой бейдж</string>
+    <string name="pro_bits">Ваши Биты</string>
+    <string name="pro_streak">Стрик: %1$d дней</string>
+    <string name="pro_streak_sub">Показывать бейдж в чатах</string>
+    <string name="pro_description">Золотой бейдж PRO, 10 ГБ в облаке и полная кастомизация профиля: ставьте свои фоны, GIF, меняйте шрифты, темы и эмодзи-статусы!</string>
+    <string name="pro_action_buy">Купить PRO (%1$d Бит)</string>
+    <string name="pro_action_trial">Активировать Триал (1 день)</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_stealth_setup_title">Настройка режима скрытия</string>
+    <string name="dialog_stealth_setup_text">Придумайте PIN-код (от 4 цифр). Он потребуется, чтобы открыть настоящий мессенджер из режима скрытия.</string>
+    <string name="dialog_stealth_setup_pin">PIN-код</string>
+    <string name="dialog_stealth_setup_confirm">Повторите PIN-код</string>
+    <string name="dialog_stealth_error_short">Минимум 4 цифры</string>
+    <string name="dialog_stealth_error_mismatch">PIN-коды не совпадают</string>
+
+    <string name="dialog_tg_binding_title">Привязка Telegram</string>
+    <string name="dialog_password_change_title">Смена пароля</string>
+    <string name="dialog_password_current">Текущий пароль</string>
+    <string name="dialog_password_new">Новый пароль</string>
+    <string name="dialog_password_confirm">Подтвердите пароль</string>
+    <string name="dialog_password_error_short">Минимум 6 символов</string>
+    <string name="dialog_password_success">Пароль изменён</string>
 </resources>
