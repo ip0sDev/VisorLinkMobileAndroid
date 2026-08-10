@@ -61,6 +61,7 @@ import by.iposdev.visorlink.ui.theme.exthruRaisedShadow
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
 import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
+import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -349,7 +350,7 @@ internal fun TextBubble(
                         )
                     }
                     if (isMine && !message.deleted) {
-                        if (chatType == ChatType.DIRECT) {
+                        if (chatType == ChatType.DIRECT && message.status != SendStatus.QUEUED) {
                             AnimatedContent(
                                 targetState = isReadByOther,
                                 transitionSpec = { scaleIn(initialScale = 0.5f, animationSpec = spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(targetScale = 0.5f) + fadeOut() },
@@ -459,11 +460,12 @@ internal fun VideoBubble(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
                     if (isMine) {
-                        if (chatType == ChatType.DIRECT) {
+                        if (chatType == ChatType.DIRECT && message.status != SendStatus.QUEUED) {
                             Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
                         } else {
                             val icon = when (message.status) {
                                 SendStatus.SENDING -> Icons.Default.Schedule
+                                SendStatus.QUEUED  -> Icons.Default.Schedule
                                 SendStatus.ERROR   -> Icons.Default.ErrorOutline
                                 else               -> Icons.Default.Done
                             }
@@ -555,11 +557,11 @@ internal fun StickerBubble(
                         }
                     }
                 } else {
-                    AsyncImage(
+                    CachedImage(
                         model = resolvedUrl,
                         contentDescription = null,
                         modifier = Modifier.size(130.dp),
-                        onError = { isError = true }
+                        error = { isError = true }
                     )
                 }
 
@@ -644,7 +646,7 @@ internal fun ImageBubble(
                     modifier = imgModifier
                 )
             } else {
-                AsyncImage(
+                CachedImage(
                     model = resolvedUrl, contentDescription = null, contentScale = ContentScale.Crop,
                     modifier = imgModifier
                 )
@@ -694,11 +696,12 @@ internal fun ImageBubble(
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "", style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp)
                     if (isMine) {
-                        if (chatType == ChatType.DIRECT) {
+                        if (chatType == ChatType.DIRECT && message.status != SendStatus.QUEUED) {
                             Icon(imageVector = if (isReadByOther) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(13.dp), tint = if (isReadByOther) Color(0xFF7DD3FC) else Color.White.copy(alpha = 0.8f))
                         } else {
                             val icon = when (message.status) {
                                 SendStatus.SENDING -> Icons.Default.Schedule
+                                SendStatus.QUEUED  -> Icons.Default.Schedule
                                 SendStatus.ERROR   -> Icons.Default.ErrorOutline
                                 else               -> Icons.Default.Done
                             }
@@ -899,7 +902,7 @@ private fun AlbumCell(image: AlbumImage, revealed: Boolean, modifier: Modifier, 
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = { if (isSpoiler) onReveal() else onTap() })
     ) {
-        AsyncImage(
+        CachedImage(
             model = resolvedUrl,
             contentDescription = null,
             contentScale = ContentScale.Crop,
@@ -1120,11 +1123,12 @@ internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Bo
 internal fun MessageStatusIcon(status: String, isExthru: Boolean = false, isDark: Boolean = false) {
     val icon = when (status) {
         SendStatus.SENDING -> Icons.Default.Schedule
+        SendStatus.QUEUED  -> Icons.Default.Schedule
         SendStatus.ERROR   -> Icons.Default.ErrorOutline
         else               -> Icons.Default.Done
     }
     val tint = when (status) {
-        SendStatus.SENDING -> if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        SendStatus.SENDING, SendStatus.QUEUED -> if (isExthru) ExthruChat.textHint(isDark) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         SendStatus.ERROR   -> MaterialTheme.colorScheme.error
         else               -> if (isExthru) ExthruChat.Accent else MaterialTheme.colorScheme.primary
     }

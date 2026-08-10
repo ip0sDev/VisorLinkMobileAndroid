@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage
 
 @Composable
 fun AvatarWithPresence(
@@ -33,7 +32,7 @@ fun AvatarWithPresence(
 
     Box(modifier = modifier.size(size)) {
         if (!avatarUrl.isNullOrEmpty()) {
-            AsyncImage(
+            CachedImage(
                 model = avatarUrl,
                 contentDescription = "$displayName avatar",
                 modifier = Modifier

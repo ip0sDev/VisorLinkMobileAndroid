@@ -22,10 +22,10 @@ class SavedMessagesRepository(
     private val context: Context
 ) {
 
-    suspend fun loadSettings(uid: String): SavedMessagesSettings? {
+    suspend fun loadSettings(uid: String): SavedMessagesSettings? = try {
         val snap = db.collection("savedMessagesSettings").document(uid).get().await()
-        return if (snap.exists()) snap.toObject(SavedMessagesSettings::class.java) else null
-    }
+        if (snap.exists()) snap.toObject(SavedMessagesSettings::class.java) else null
+    } catch (e: Exception) { null }
 
     fun settingsFlow(uid: String): Flow<SavedMessagesSettings?> = callbackFlow {
         val reg = db.collection("savedMessagesSettings").document(uid)
@@ -42,11 +42,11 @@ class SavedMessagesRepository(
             .set(mapOf("pinEnabled" to true, "pinHash" to hash, "lockTimeout" to 5, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
     }
 
-    suspend fun verifyPin(uid: String, enteredPin: String): Boolean {
+    suspend fun verifyPin(uid: String, enteredPin: String): Boolean = try {
         val snap = db.collection("savedMessagesSettings").document(uid).get().await()
-        val storedHash = snap.getString("pinHash") ?: return false
-        return hashPin(enteredPin, uid) == storedHash
-    }
+        val storedHash = snap.getString("pinHash") ?: ""
+        hashPin(enteredPin, uid) == storedHash
+    } catch (e: Exception) { false }
 
     suspend fun disablePin(uid: String) {
         db.collection("savedMessagesSettings").document(uid).update(mapOf("pinEnabled" to false, "pinHash" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()

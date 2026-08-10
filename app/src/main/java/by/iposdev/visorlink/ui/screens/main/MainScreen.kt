@@ -1,6 +1,6 @@
 package by.iposdev.visorlink.ui.screens.main
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.*
@@ -71,13 +72,13 @@ fun MainScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val appTheme by themeViewModel.appTheme.collectAsState()
     val isM3E = appTheme == AppTheme.MATERIAL3_EXPRESSIVE
-    val isForge = appTheme.name == "FORGE"
     
     val userProfile by mainViewModel.userProfile.collectAsState()
     val diaryEnabled = userProfile?.diaryEnabled ?: false
     val discoverEnabled by themeViewModel.discoverEnabled.collectAsState()
 
     val showNavbar = diaryEnabled || discoverEnabled
+    val isOnline by mainViewModel.isOnline.collectAsState()
 
     val hazeState = remember { HazeState() }
     val scaffoldBg = if (isM3E) MaterialTheme.colorScheme.surface 
@@ -90,68 +91,102 @@ fun MainScreen(
             containerColor = scaffoldBg,
             contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { innerPadding ->
-            Box(modifier = Modifier.fillMaxSize()) {
-                // Основная область контента - ПОЛНЫЙ ЭКРАН
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .hazeSource(state = hazeState)
+            Column(modifier = Modifier.fillMaxSize()) {
+                AnimatedVisibility(
+                    visible = !isOnline,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
                 ) {
-                    when (selectedTab) {
-                        0 -> ChatListScreen(
-                            onOpenChat = onOpenChat,
-                            onOpenSearch = onOpenSearch,
-                            onOpenProfile = onOpenProfile,
-                            onOpenSettings = onOpenSettings,
-                            onCreateChat = onCreateChat,
-                            onFindChannel = onFindChannel,
-                            onOpenNotifications = onOpenNotifications,
-                            onOpenFeed = { if (discoverEnabled) selectedTab = 1 }
-                        )
-                        1 -> if (discoverEnabled) {
-                            FeedScreen(
-                                onNavigateBack = { selectedTab = 0 },
-                                onOpenChannel = onOpenChannel,
-                                onOpenComments = onOpenComments
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .windowInsetsPadding(WindowInsets.statusBars),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.WifiOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
                             )
-                        } else {
-                            selectedTab = 0
-                        }
-                        2 -> if (diaryEnabled) {
-                            val chatListEntry = LocalViewModelStoreOwner.current
-                            val diaryVm: DiaryViewModel = if (chatListEntry != null) {
-                                koinViewModel(viewModelStoreOwner = chatListEntry)
-                            } else {
-                                koinViewModel()
-                            }
-                            DiaryScreen(
-                                onNavigateBack = { selectedTab = 0 },
-                                onAddEntry = onAddDiaryEntry,
-                                onEditEntry = onEditDiaryEntry,
-                                viewModel = diaryVm
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Offline Mode",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
                             )
-                        } else {
-                            selectedTab = 0
                         }
                     }
                 }
 
-                // Сама панель навигации
-                if (showNavbar) {
+                Box(modifier = Modifier.weight(1f)) {
+                    // Основная область контента
                     Box(
                         modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = innerPadding.calculateBottomPadding())
+                            .fillMaxSize()
+                            .hazeSource(state = hazeState)
                     ) {
-                        CustomVlNavigationBar(
-                            selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it },
-                            appTheme = appTheme,
-                            hazeState = hazeState,
-                            diaryEnabled = diaryEnabled,
-                            discoverEnabled = discoverEnabled,
-                            onOpenDiary = { selectedTab = 2 }
-                        )
+                        when (selectedTab) {
+                            0 -> ChatListScreen(
+                                onOpenChat = onOpenChat,
+                                onOpenSearch = onOpenSearch,
+                                onOpenProfile = onOpenProfile,
+                                onOpenSettings = onOpenSettings,
+                                onCreateChat = onCreateChat,
+                                onFindChannel = onFindChannel,
+                                onOpenNotifications = onOpenNotifications,
+                                onOpenFeed = { if (discoverEnabled) selectedTab = 1 }
+                            )
+                            1 -> if (discoverEnabled) {
+                                FeedScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    onOpenChannel = onOpenChannel,
+                                    onOpenComments = onOpenComments
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
+                            2 -> if (diaryEnabled) {
+                                val chatListEntry = LocalViewModelStoreOwner.current
+                                val diaryVm: DiaryViewModel = if (chatListEntry != null) {
+                                    koinViewModel(viewModelStoreOwner = chatListEntry)
+                                } else {
+                                    koinViewModel()
+                                }
+                                DiaryScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    onAddEntry = onAddDiaryEntry,
+                                    onEditEntry = onEditDiaryEntry,
+                                    viewModel = diaryVm
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
+                        }
+                    }
+
+                    // Сама панель навигации
+                    if (showNavbar) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = innerPadding.calculateBottomPadding())
+                        ) {
+                            CustomVlNavigationBar(
+                                selectedTab = selectedTab,
+                                onTabSelected = { selectedTab = it },
+                                appTheme = appTheme,
+                                hazeState = hazeState,
+                                diaryEnabled = diaryEnabled,
+                                discoverEnabled = discoverEnabled,
+                                onOpenDiary = { selectedTab = 2 }
+                            )
+                        }
                     }
                 }
             }
@@ -169,7 +204,7 @@ fun CustomVlNavigationBar(
     discoverEnabled: Boolean,
     onOpenDiary: () -> Unit
 ) {
-    val isForge = appTheme.name == "FORGE"
+    val isForge = appTheme.name.startsWith("FORGE")
     val isM3E = appTheme == AppTheme.MATERIAL3_EXPRESSIVE
 
     val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU

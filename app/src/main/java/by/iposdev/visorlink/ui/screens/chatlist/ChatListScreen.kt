@@ -44,6 +44,7 @@ import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -1017,7 +1018,7 @@ private fun AvatarChip(
         contentAlignment = Alignment.Center
     ) {
         if (!avatarUrl.isNullOrEmpty()) {
-            AsyncImage(
+            CachedImage(
                 model = avatarUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
@@ -1075,7 +1076,7 @@ fun GroupChannelAvatar(
         contentAlignment = Alignment.Center
     ) {
         if (!avatarUrl.isNullOrEmpty()) {
-            AsyncImage(
+            CachedImage(
                 model = avatarUrl,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),

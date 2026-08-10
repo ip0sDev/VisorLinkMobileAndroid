@@ -32,6 +32,8 @@ import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.CacheManager
 import by.iposdev.visorlink.utils.DiaryReminderManager
 import by.iposdev.visorlink.utils.DraftManager
+import by.iposdev.visorlink.utils.NetworkMonitor
+import by.iposdev.visorlink.utils.OutboxManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
@@ -58,13 +60,15 @@ val appModule = module {
     single { Firebase.functions("europe-west1") }
 
     single { AuthRepository(get(), get()) }
-    single { ChatRepository(get(), get(), get(), androidContext()) }
+    single { ChatRepository(get(), get(), get(), androidContext(), get()) }
     single { UserRepository(get(), get(), get(), androidContext()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
 
     single { CacheManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
+    single { NetworkMonitor(androidContext()) }
+    single { OutboxManager(androidContext(), get(), get(), get(), get(), get()) }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
 
@@ -72,7 +76,7 @@ val appModule = module {
 
     viewModel { AuthViewModel(get()) }
     viewModel { ThemeViewModel(androidContext()) }
-    viewModel { MainViewModel(get()) }
+    viewModel { MainViewModel(get(), get()) }
     viewModel { ChatListViewModel(get(), get(), get(), get()) }
 
     viewModel { parameters ->
@@ -121,7 +125,7 @@ val appModule = module {
 
     // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }
-    single { FeedRepository(get(), get()) }
+    single { FeedRepository(get(), get(), androidContext(), get()) }
     single { ForwardRepository(get()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }

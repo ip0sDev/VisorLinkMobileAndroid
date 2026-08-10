@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.screens.chatlist
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
@@ -51,8 +52,12 @@ class ChatListViewModel(
                     .distinct()
                     .forEach { uid ->
                         launch {
-                            userRepository.getUserProfile(uid)?.let { profile ->
-                                _profileCache.value = _profileCache.value + (uid to profile)
+                            try {
+                                userRepository.getUserProfile(uid)?.let { profile ->
+                                    _profileCache.value = _profileCache.value + (uid to profile)
+                                }
+                            } catch (e: Exception) {
+                                Log.e("ChatListVM", "Failed to fetch profile for $uid: ${e.message}")
                             }
                         }
                     }

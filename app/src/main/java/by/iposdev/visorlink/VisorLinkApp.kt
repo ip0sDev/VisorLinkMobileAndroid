@@ -8,6 +8,7 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import by.iposdev.visorlink.di.appModule
 import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.NotificationHelper
+import by.iposdev.visorlink.utils.OutboxManager
 import by.iposdev.visorlink.utils.PresenceManager
 import io.sentry.android.core.SentryAndroid
 import coil.ImageLoader
@@ -21,6 +22,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.messaging.FirebaseMessaging
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.component.KoinComponent
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 
 class VisorLinkApp : Application(), ImageLoaderFactory {
@@ -69,6 +72,9 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             androidContext(this@VisorLinkApp)
             modules(appModule)
         }
+
+        // Initialize OutboxManager to start background processing
+        GlobalContext.get().get<OutboxManager>()
 
         // Регистрируем наблюдатель за жизненным циклом (свернуто/развернуто)
         // через анонимный объект, чтобы не было конфликтов с методами Application

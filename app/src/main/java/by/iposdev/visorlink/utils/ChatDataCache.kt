@@ -6,12 +6,15 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import by.iposdev.visorlink.data.model.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.*
 import org.json.JSONArray
 import org.json.JSONObject
 
 private const val DB_NAME = "visorlink_cache.db"
-private const val DB_VERSION = 1
+private const val DB_VERSION = 3
 private const val TAG = "ChatDataCache"
 
 class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
@@ -21,19 +24,42 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
         db.execSQL("CREATE TABLE messages (chat_id TEXT, msg_id TEXT, ts INTEGER, data TEXT, PRIMARY KEY(chat_id, msg_id))")
         db.execSQL("CREATE TABLE profiles (uid TEXT PRIMARY KEY, data TEXT)")
         db.execSQL("CREATE TABLE stickers (uid TEXT, pack_id TEXT, data TEXT, PRIMARY KEY(uid, pack_id))")
+        db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
+        db.execSQL("CREATE TABLE likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS chats")
-        db.execSQL("DROP TABLE IF EXISTS messages")
-        db.execSQL("DROP TABLE IF EXISTS profiles")
-        db.execSQL("DROP TABLE IF EXISTS stickers")
-        onCreate(db)
+        if (oldVersion < 2) {
+            db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
+            db.execSQL("CREATE TABLE likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
+        }
+        if (oldVersion == 2) {
+            db.execSQL("ALTER TABLE outbox ADD COLUMN status INTEGER DEFAULT 0")
+        }
     }
 }
 
 object ChatDataCache {
     private var dbHelper: LocalCacheDB? = null
+
+    private val _outboxSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val outboxSignal: SharedFlow<Unit> = _outboxSignal.asSharedFlow()
+
+    fun outboxFlow(context: Context, chatId: String): Flow<List<QueuedAction>> = callbackFlow {
+        fun reload() {
+            launch(Dispatchers.IO) {
+                try {
+                    val outbox = loadOutbox(context).filter { it.chatId == chatId }
+                    trySend(outbox)
+                } catch (_: Exception) {}
+            }
+        }
+        reload()
+        val collector = launch {
+            outboxSignal.collect { reload() }
+        }
+        awaitClose { collector.cancel() }
+    }
 
     private fun getDb(context: Context): LocalCacheDB {
         if (dbHelper == null) {
@@ -48,8 +74,113 @@ object ChatDataCache {
             execSQL("DELETE FROM messages")
             execSQL("DELETE FROM profiles")
             execSQL("DELETE FROM stickers")
+            execSQL("DELETE FROM outbox")
+            execSQL("DELETE FROM likes")
         }
     }
+
+    // ── Outbox ───────────────────────────────────────────────────────────────
+
+    suspend fun addToOutbox(context: Context, chatId: String, type: String, data: JSONObject): String =
+        withContext(Dispatchers.IO) {
+            val id = "queued_${System.currentTimeMillis()}"
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("INSERT INTO outbox (id, chat_id, type, data, ts, status) VALUES (?, ?, ?, ?, ?, 0)")
+                stmt.bindString(1, id)
+                stmt.bindString(2, chatId)
+                stmt.bindString(3, type)
+                stmt.bindString(4, data.toString())
+                stmt.bindLong(5, System.currentTimeMillis())
+                stmt.executeInsert()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to add to outbox", e) }
+            id
+        }
+
+    suspend fun loadOutbox(context: Context): List<QueuedAction> =
+        withContext(Dispatchers.IO) {
+            val list = mutableListOf<QueuedAction>()
+            try {
+                val db = getDb(context).readableDatabase
+                db.rawQuery("SELECT id, chat_id, type, data, ts, status FROM outbox ORDER BY ts ASC", null).use { cursor ->
+                    while (cursor.moveToNext()) {
+                        list.add(QueuedAction(
+                            id = cursor.getString(0),
+                            chatId = cursor.getString(1),
+                            type = cursor.getString(2),
+                            data = JSONObject(cursor.getString(3)),
+                            ts = cursor.getLong(4),
+                            status = cursor.getInt(5)
+                        ))
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "Failed to load outbox", e) }
+            list
+        }
+
+    suspend fun updateOutboxStatus(context: Context, id: String, status: Int) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("UPDATE outbox SET status=? WHERE id=?")
+                stmt.bindLong(1, status.toLong())
+                stmt.bindString(2, id)
+                stmt.executeUpdateDelete()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to update outbox status", e) }
+        }
+
+    suspend fun cleanupOutbox(context: Context, confirmedIds: List<String>) =
+        withContext(Dispatchers.IO) {
+            if (confirmedIds.isEmpty()) return@withContext
+            try {
+                val db = getDb(context).writableDatabase
+                db.beginTransaction()
+                try {
+                    val stmt = db.compileStatement("DELETE FROM outbox WHERE id=?")
+                    confirmedIds.forEach { id ->
+                        stmt.bindString(1, id)
+                        stmt.executeUpdateDelete()
+                    }
+                    db.setTransactionSuccessful()
+                } finally {
+                    db.endTransaction()
+                }
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to cleanup outbox", e) }
+        }
+
+    // Action types: "text", "image", "sticker", "like"
+    data class QueuedAction(val id: String, val chatId: String, val type: String, val data: JSONObject, val ts: Long, val status: Int = 0)
+
+    // ── Likes ────────────────────────────────────────────────────────────────
+
+    suspend fun saveLike(context: Context, uid: String, itemId: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("INSERT OR IGNORE INTO likes (uid, item_id) VALUES (?, ?)")
+                stmt.bindString(1, uid)
+                stmt.bindString(2, itemId)
+                stmt.executeInsert()
+            } catch (e: Exception) { Log.e(TAG, "Failed to save like", e) }
+        }
+
+    suspend fun removeLike(context: Context, uid: String, itemId: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                getDb(context).writableDatabase.delete("likes", "uid=? AND item_id=?", arrayOf(uid, itemId))
+            } catch (e: Exception) { Log.e(TAG, "Failed to remove like", e) }
+        }
+
+    suspend fun isLiked(context: Context, uid: String, itemId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).readableDatabase
+                db.rawQuery("SELECT 1 FROM likes WHERE uid=? AND item_id=?", arrayOf(uid, itemId)).use { it.moveToFirst() }
+            } catch (e: Exception) { false }
+        }
 
     // ── Списки чатов ─────────────────────────────────────────────────────────
 
@@ -97,15 +228,13 @@ object ChatDataCache {
                 db.beginTransaction()
                 try {
                     val stmt = db.compileStatement("INSERT OR REPLACE INTO messages (chat_id, msg_id, ts, data) VALUES (?, ?, ?, ?)")
-                    messages.takeLast(60).forEach { msg ->
+                    messages.forEach { msg ->
                         stmt.bindString(1, chatId)
                         stmt.bindString(2, msg.id)
                         stmt.bindLong(3, msg.createdAt?.seconds ?: 0L)
                         stmt.bindString(4, msg.toJson().toString())
                         stmt.executeInsert()
                     }
-                    // Очистка старых сообщений (лимит 60 на чат)
-                    db.execSQL("DELETE FROM messages WHERE chat_id = ? AND msg_id NOT IN (SELECT msg_id FROM messages WHERE chat_id = ? ORDER BY ts DESC LIMIT 60)", arrayOf(chatId, chatId))
                     db.setTransactionSuccessful()
                 } finally {
                     db.endTransaction()
@@ -118,8 +247,8 @@ object ChatDataCache {
             val list = mutableListOf<Message>()
             try {
                 val db = getDb(context).readableDatabase
-                // Выбираем 60 последних сообщений
-                db.rawQuery("SELECT data FROM messages WHERE chat_id=? ORDER BY ts DESC LIMIT 60", arrayOf(chatId)).use { cursor ->
+                // Выбираем все сообщения для оффлайн-режима
+                db.rawQuery("SELECT data FROM messages WHERE chat_id=? ORDER BY ts DESC", arrayOf(chatId)).use { cursor ->
                     while (cursor.moveToNext()) {
                         try { list.add(JSONObject(cursor.getString(0)).toMessage()) } catch(_: Exception) {}
                     }
@@ -432,9 +561,17 @@ object ChatDataCache {
         put("avatarUrl", avatarUrl ?: JSONObject.NULL)
         put("online", online)
         put("isAdmin", isAdmin)
+        put("diaryEnabled", diaryEnabled)
+        val custom = JSONObject()
+        customization.forEach { (k, v) -> custom.put(k, v) }
+        put("customization", custom)
     }
 
     private fun JSONObject.toUserProfile(): UserProfile? = try {
+        val customObj = optJSONObject("customization") ?: JSONObject()
+        val customMap = mutableMapOf<String, Any?>()
+        customObj.keys().forEach { k -> customMap[k] = customObj.get(k) }
+
         UserProfile(
             uid         = getString("uid"),
             username    = optString("username"),
@@ -442,7 +579,9 @@ object ChatDataCache {
             bio         = optString("bio"),
             avatarUrl   = if (isNull("avatarUrl")) null else optString("avatarUrl"),
             online      = optBoolean("online", false),
-            isAdmin     = optBoolean("isAdmin", false)
+            isAdmin     = optBoolean("isAdmin", false),
+            diaryEnabled = optBoolean("diaryEnabled", false),
+            customization = customMap
         )
     } catch (e: Exception) { null }
 }

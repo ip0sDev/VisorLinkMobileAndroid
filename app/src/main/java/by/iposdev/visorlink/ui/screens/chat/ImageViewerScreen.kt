@@ -44,6 +44,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import by.iposdev.visorlink.utils.ImageCache
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
@@ -289,6 +290,20 @@ private fun FullscreenImageViewer(url: String, onNavigateBack: () -> Unit) {
     var lastTapTime by remember { mutableLongStateOf(0L) }
 
     var retryHash by remember { mutableIntStateOf(0) }
+    var modelSource by remember(url, retryHash) { mutableStateOf<Any?>(url) }
+
+    LaunchedEffect(url, retryHash) {
+        val cached = ImageCache.getCachedPath(context, url)
+        if (cached != null) {
+            modelSource = cached
+        } else {
+            try {
+                modelSource = ImageCache.getOrDownload(context, url)
+            } catch (e: Exception) {
+                modelSource = url
+            }
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black),
@@ -296,7 +311,7 @@ private fun FullscreenImageViewer(url: String, onNavigateBack: () -> Unit) {
     ) {
         val painter = rememberAsyncImagePainter(
             model = ImageRequest.Builder(context)
-                .data(url)
+                .data(modelSource)
                 .setParameter("retry_hash", retryHash)
                 .crossfade(true)
                 .build()
@@ -401,8 +416,10 @@ private fun FullscreenImageViewer(url: String, onNavigateBack: () -> Unit) {
 suspend fun saveImageToGallery(context: Context, url: String): Boolean =
     withContext(Dispatchers.IO) {
         try {
+            val cached = ImageCache.getCachedPath(context, url)
+            val model = cached ?: url
             val loader = ImageLoader(context)
-            val request = ImageRequest.Builder(context).data(url).allowHardware(false).build()
+            val request = ImageRequest.Builder(context).data(model).allowHardware(false).build()
             val result = loader.execute(request)
             val bitmap = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap } ?: return@withContext false
 

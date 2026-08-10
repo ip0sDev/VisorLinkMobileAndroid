@@ -295,7 +295,7 @@ fun VisorLinkTheme(
         }
         AppTheme.ONE_UI -> if (darkTheme) DarkOneUI else LightOneUI
         AppTheme.BIOLUME -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
-        AppTheme.FORGE -> if (darkTheme) ForgeDarkColorScheme else ForgeLightColorScheme
+        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> if (darkTheme) ForgeDarkColorScheme else ForgeLightColorScheme
         AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme // недостижимо, resolvedTheme выше уже разрешил
     }
 

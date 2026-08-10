@@ -25,6 +25,8 @@ import com.google.firebase.database.ValueEventListener
 import com.google.firebase.database.database
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 
 class UserRepository(
     private val auth: FirebaseAuth,
@@ -33,6 +35,7 @@ class UserRepository(
     private val context: Context
 ) {
     private val currentUid get() = auth.currentUser!!.uid
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun currentUserFlow(): Flow<UserProfile?> = userProfileFlow(auth.currentUser?.uid ?: "")
 
@@ -64,18 +67,24 @@ class UserRepository(
             }
             return@withContext cached
         }
-        val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
-        if (net != null) ChatDataCache.saveProfile(context, net)
-        return@withContext net
+        try {
+            val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+            if (net != null) ChatDataCache.saveProfile(context, net)
+            return@withContext net
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    suspend fun findUserByUsername(username: String): UserProfile? {
+    suspend fun findUserByUsername(username: String): UserProfile? = try {
         val clean = username.lowercase().removePrefix("@").trim()
         val doc = db.collection("usernames").document(clean).get().await()
-        if (!doc.exists()) return null
-        val uid = doc.getString("uid") ?: return null
-        return getUserProfile(uid)
-    }
+        if (!doc.exists()) null
+        else {
+            val uid = doc.getString("uid") ?: return null
+            getUserProfile(uid)
+        }
+    } catch (e: Exception) { null }
 
     suspend fun uploadAvatar(uri: Uri): String = withContext(Dispatchers.IO) {
         val url = uploadFile(uri)
@@ -114,9 +123,20 @@ class UserRepository(
     suspend fun updateProfile(displayName: String, bio: String) {
         functions.getHttpsCallable("updateProfile")
             .call(mapOf("displayName" to displayName, "bio" to bio)).await()
+        scope.launch {
+            val profile = ChatDataCache.loadProfile(context, currentUid)
+            if (profile != null) {
+                ChatDataCache.saveProfile(context, profile.copy(displayName = displayName, bio = bio))
+            }
+        }
     }
 
     fun stickersFlow(uid: String): Flow<List<Sticker>> = callbackFlow {
+        launch(Dispatchers.IO) {
+            // Stickers are currently part of packs in ChatDataCache, 
+            // but we can also cache them here if needed.
+        }
+
         val reg = db.collection("users").document(uid).collection("stickers")
             .addSnapshotListener { snap, _ ->
                 val stickers = snap?.documents?.mapNotNull { doc ->
@@ -183,6 +203,12 @@ class UserRepository(
     suspend fun updateCustomization(customization: Map<String, Any?>) {
         db.collection("users").document(currentUid)
             .update("customization", customization).await()
+        scope.launch {
+            val profile = ChatDataCache.loadProfile(context, currentUid)
+            if (profile != null) {
+                ChatDataCache.saveProfile(context, profile.copy(customization = customization))
+            }
+        }
     }
 
     suspend fun updateIgnoreCustomizations(ignore: Boolean) {

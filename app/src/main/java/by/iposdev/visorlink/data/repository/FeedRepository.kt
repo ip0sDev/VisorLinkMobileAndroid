@@ -1,26 +1,31 @@
 package by.iposdev.visorlink.data.repository
 
+import by.iposdev.visorlink.data.model.FeedItem
+import by.iposdev.visorlink.utils.ChatDataCache
+import by.iposdev.visorlink.utils.NetworkMonitor
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import by.iposdev.visorlink.data.model.FeedItem
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.functions.FirebaseFunctions
+import android.content.Context
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class FeedRepository(
     private val db: FirebaseFirestore,
-    private val functions: FirebaseFunctions
+    private val functions: FirebaseFunctions,
+    private val context: Context,
+    private val networkMonitor: NetworkMonitor
 ) {
 
     fun getFeedFlow(interestWeights: Map<String, Double>): Flow<List<FeedItem>> = callbackFlow {
-        // Простая реализация: берем последние посты.
-        // В вебе используется более сложная логика ранжирования на основе interestWeights.
-        // Здесь мы можем отфильтровать или отсортировать на стороне клиента для начала.
         val reg = db.collection("discover_feed")
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(50)
@@ -29,20 +34,30 @@ class FeedRepository(
                     doc.toObject(FeedItem::class.java)?.copy(id = doc.id)
                 } ?: emptyList()
 
-                // Ранжирование по интересам
-                val ranked = if (interestWeights.isNotEmpty()) {
-                    items.sortedByDescending { item ->
-                        var score = 1.0
-                        item.tags.forEach { tag ->
-                            score += interestWeights[tag] ?: 0.0
-                        }
-                        score
+                launch(Dispatchers.IO) {
+                    val uid = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+                    val updatedItems = items.map { item ->
+                        val localLiked = ChatDataCache.isLiked(context, uid, item.messageId ?: item.id)
+                        if (localLiked && !item.displayLikedUids.contains(uid)) {
+                            item.copy(likers = item.likers + uid)
+                        } else item
                     }
-                } else {
-                    items
-                }
 
-                trySend(ranked)
+                    // Ранжирование по интересам
+                    val ranked = if (interestWeights.isNotEmpty()) {
+                        updatedItems.sortedByDescending { item ->
+                            var score = 1.0
+                            item.tags.forEach { tag ->
+                                score += interestWeights[tag] ?: 0.0
+                            }
+                            score
+                        }
+                    } else {
+                        updatedItems
+                    }
+
+                    trySend(ranked)
+                }
             }
         awaitClose { reg.remove() }
     }
@@ -55,17 +70,16 @@ class FeedRepository(
     }
 
     suspend fun toggleLike(chatId: String, messageId: String, isLiked: Boolean) = withContext(Dispatchers.IO) {
-        try {
-            // В вебе используется вызов Cloud Function 'toggleLike'
-            // exports.toggleLike = onCall(...) { const { messageId, isLiked } = request.data; ... }
-            functions.getHttpsCallable("toggleLike")
-                .call(mapOf(
-                    "chatId" to chatId,
-                    "messageId" to messageId,
-                    "isLiked" to !isLiked // isNowLiked в вебе передается как результат действия
-                )).await()
-        } catch (_: Exception) {
-            // Если функция упала, лайк не засчитается на бэкенде
+        val data = JSONObject().apply {
+            put("messageId", messageId)
+            put("isLiked", !isLiked)
+        }
+        ChatDataCache.addToOutbox(context, chatId, "like", data)
+        // Local state update for immediate feedback
+        if (!isLiked) {
+            ChatDataCache.saveLike(context, "me", messageId) // "me" should be real UID
+        } else {
+            ChatDataCache.removeLike(context, "me", messageId)
         }
     }
 }

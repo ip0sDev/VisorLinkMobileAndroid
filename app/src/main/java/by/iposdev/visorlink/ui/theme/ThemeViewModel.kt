@@ -33,7 +33,11 @@ class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferen
     // ── Theme ──────────────────────────────────────────────────────────────────
 
     private val _appTheme = MutableStateFlow(
-        AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+        try {
+            AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+        } catch (e: Exception) {
+            AppTheme.MATERIAL3_EXPRESSIVE
+        }
     )
     val appTheme: StateFlow<AppTheme> = _appTheme.asStateFlow()
 
@@ -90,7 +94,14 @@ class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferen
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
         if (sharedPreferences == null || key == null) return
         when (key) {
-            KEY_THEME -> _appTheme.value = AppTheme.valueOf(sharedPreferences.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!)
+            KEY_THEME -> {
+                val themeStr = sharedPreferences.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)
+                _appTheme.value = try {
+                    AppTheme.valueOf(themeStr!!)
+                } catch (e: Exception) {
+                    AppTheme.MATERIAL3_EXPRESSIVE
+                }
+            }
             KEY_THEME_MODE -> _themeMode.value = ThemeMode.valueOf(sharedPreferences.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)!!)
             KEY_COLOR_PRESET -> _colorPreset.value = ColorPreset.valueOf(sharedPreferences.getString(KEY_COLOR_PRESET, ColorPreset.DEFAULT.name)!!)
             KEY_HAPTIC -> _hapticEnabled.value = sharedPreferences.getBoolean(KEY_HAPTIC, true)

@@ -44,13 +44,13 @@ import by.iposdev.visorlink.data.model.FeedItem
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlSurface
+import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.exthruRaisedShadow
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
-import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
@@ -226,7 +226,7 @@ fun FeedCard(
                     contentAlignment = Alignment.Center
                 ) {
                     if (item.displayAuthorAvatarUrl != null) {
-                        AsyncImage(
+                        CachedImage(
                             model = item.displayAuthorAvatarUrl,
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize(),
@@ -264,7 +264,7 @@ fun FeedCard(
             // Media (if any)
             if (item.url != null) {
                 Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
-                    AsyncImage(
+                    CachedImage(
                         model = item.url,
                         contentDescription = null,
                         modifier = Modifier

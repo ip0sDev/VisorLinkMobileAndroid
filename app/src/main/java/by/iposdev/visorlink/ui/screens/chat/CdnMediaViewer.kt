@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.utils.CdnService
+import by.iposdev.visorlink.utils.ImageCache
 import coil.compose.AsyncImage
 import coil.decode.VideoFrameDecoder
 import coil.request.ImageRequest
@@ -40,9 +41,22 @@ fun CdnMediaViewer(
 
     // Резолвим URL для получения превью
     LaunchedEffect(mediaId) {
-        if (mediaId != null && (type == MessageType.VIDEO || type == MessageType.GIF)) {
+        if (mediaId != null) {
             try {
-                resolvedUrl = CdnService.getFileUrl(mediaId)
+                val url = CdnService.getFileUrl(mediaId)
+                val cached = ImageCache.getCachedPath(context, url)
+                if (cached != null) {
+                    resolvedUrl = cached.absolutePath
+                } else if (type == MessageType.VIDEO || type == MessageType.GIF || type == MessageType.IMAGE) {
+                    // Для всех медиа пытаемся подтянуть через наш кэш
+                    resolvedUrl = try {
+                        ImageCache.getOrDownload(context, url).absolutePath
+                    } catch (e: Exception) {
+                        url
+                    }
+                } else {
+                    resolvedUrl = url
+                }
             } catch (e: Exception) {
                 // Ошибка резолва
             }

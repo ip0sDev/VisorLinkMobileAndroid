@@ -24,7 +24,7 @@ fun ColorScheme.withColorPreset(appTheme: AppTheme, isDark: Boolean, preset: Col
     // Повышенный уровень "вмешивания" (tint) акцентного цвета в фон.
     // Для темных тем Biolume нужно больше акцента, чтобы перебить родной темно-зеленый.
     val bgTintAlpha = when (appTheme) {
-        AppTheme.FORGE -> 0.12f
+        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> 0.12f
         AppTheme.BIOLUME, AppTheme.EXTHRU -> if (isDark) 0.28f else 0.18f
         else -> 0.08f
     }

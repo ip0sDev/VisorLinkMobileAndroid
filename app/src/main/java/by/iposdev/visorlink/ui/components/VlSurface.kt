@@ -100,7 +100,7 @@ fun VlSurface(
             ) { content() }
         }
 
-        AppTheme.FORGE -> {
+        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> {
             val style = rememberExthruStyle(appTheme)
             val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg
 

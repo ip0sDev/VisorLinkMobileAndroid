@@ -13,18 +13,25 @@ import com.google.firebase.functions.FirebaseFunctions
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.utils.ChatDataCache
 import by.iposdev.visorlink.utils.CdnService
+import by.iposdev.visorlink.utils.ImageCache
+import by.iposdev.visorlink.utils.VoiceCache
+import by.iposdev.visorlink.utils.NetworkMonitor
+import com.google.firebase.Timestamp
+import com.google.firebase.firestore.MetadataChanges
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Date
 
 private const val PAGE_SIZE = 20L
 
@@ -32,7 +39,8 @@ class ChatRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     private val functions: FirebaseFunctions,
-    private val context: Context
+    private val context: Context,
+    private val networkMonitor: NetworkMonitor
 ) {
     private val currentUid get() = auth.currentUser!!.uid
 
@@ -41,7 +49,11 @@ class ChatRepository(
 
     suspend fun chatExists(chatId: String): Boolean = try {
         db.collection("chats").document(chatId).get().await().exists()
-    } catch (e: Exception) { false }
+    } catch (e: Exception) {
+        // Если оффлайн, проверяем наличие чата в нашем локальном кэше (SQLite)
+        val cachedChats = ChatDataCache.loadChatList(context, currentUid)
+        cachedChats.any { it.id == chatId }
+    }
 
     fun allChatsFlow(uid: String): Flow<List<Chat>> = callbackFlow {
         launch(Dispatchers.IO) {
@@ -85,34 +97,108 @@ class ChatRepository(
 
     fun chatsFlow(uid: String) = allChatsFlow(uid)
 
-    fun latestMessagesFlow(chatId: String, onUpdate: (List<Message>, DocumentSnapshot?) -> Unit): Flow<Unit> = callbackFlow {
-        launch(Dispatchers.IO) {
-            val cached = ChatDataCache.loadMessages(context, chatId)
-            if (cached.isNotEmpty()) onUpdate(cached, null)
+    fun latestMessagesFlow(chatId: String, onUpdate: (List<Message>, DocumentSnapshot?) -> Unit): Flow<Unit> = channelFlow {
+        var currentFirestore = emptyList<Message>()
+        var currentOutbox = emptyList<ChatDataCache.QueuedAction>()
+        var currentLastDoc: DocumentSnapshot? = null
+
+        fun rebuild() {
+            val firestoreIds = currentFirestore.map { it.id }.toSet()
+            val outboxMsgs = currentOutbox.map { action ->
+                val type = action.data.optString("type", action.type)
+                Message(
+                    id = action.id,
+                    senderId = currentUid,
+                    type = type,
+                    text = action.data.optString("text"),
+                    localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
+                    createdAt = Timestamp(Date(action.ts)),
+                    status = if (action.status == 1) SendStatus.SENT else SendStatus.QUEUED
+                )
+            }
+            
+            val outboxMap = outboxMsgs.associateBy { it.id }
+            val firestoreMap = currentFirestore.associateBy { it.id }
+            
+            val combinedMap = outboxMap.toMutableMap()
+            firestoreMap.forEach { (id, fsMsg) ->
+                val obMsg = outboxMap[id]
+                combinedMap[id] = if (obMsg != null) {
+                    fsMsg.copy(
+                        localFile = obMsg.localFile ?: fsMsg.localFile,
+                        status = SendStatus.SENT
+                    )
+                } else {
+                    fsMsg
+                }
+            }
+            
+            val combined = combinedMap.values.toList()
+            onUpdate(combined.sortedBy { it.createdAt?.seconds ?: 0L }, currentLastDoc)
+            
+            // Clean up outbox items that are now present in the Firestore snapshot
+            val confirmedIds = currentOutbox.map { it.id }.filter { it in firestoreIds }
+            if (confirmedIds.isNotEmpty()) {
+                launch(Dispatchers.IO) { ChatDataCache.cleanupOutbox(context, confirmedIds) }
+            }
         }
 
+        // 1. Initial Outbox load and listener
+        launch {
+            ChatDataCache.outboxFlow(context, chatId).collect {
+                currentOutbox = it
+                rebuild()
+            }
+        }
+
+        // 2. Initial Cache load
+        launch(Dispatchers.IO) {
+            val cached = ChatDataCache.loadMessages(context, chatId)
+            currentFirestore = cached
+            rebuild()
+        }
+
+        // 3. Firestore Snapshot Listener
         val reg = db.collection("chats").document(chatId).collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
-            .addSnapshotListener { snap, error ->
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
                 if (error != null || snap == null) return@addSnapshotListener
                 val messages = snap.documents.mapNotNull { doc ->
-                    try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
+                    try { doc.toObject(Message::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = doc.id) } catch (_: Exception) { null }
                 }.reversed()
-                val lastDoc = snap.documents.lastOrNull()
-                onUpdate(messages, lastDoc)
-                trySend(Unit)
-                launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, messages) }
+                
+                currentFirestore = messages
+                currentLastDoc = snap.documents.lastOrNull()
+                rebuild()
+
+                launch(Dispatchers.IO) {
+                    ChatDataCache.saveMessages(context, chatId, messages)
+                    // Prefetch media
+                    messages.forEach { msg ->
+                        try {
+                            val url = if (msg.cdnMediaId != null) CdnService.getFileUrl(msg.cdnMediaId) else msg.url
+                            if (!url.isNullOrEmpty()) {
+                                if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
+                                else ImageCache.getOrDownload(context, url)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
             }
+
         awaitClose { reg.remove() }
+        send(Unit)
     }
 
-    suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> {
+    suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> = try {
         val snap = db.collection("chats").document(chatId).collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING).startAfter(startAfterDoc).limit(PAGE_SIZE).get().await()
         val messages = snap.documents.mapNotNull { doc ->
             try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
         }.reversed()
-        return Pair(messages, if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
+        Pair(messages, if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
+    } catch (e: Exception) {
+        Pair(emptyList(), null)
     }
 
     fun membersFlow(chatId: String): Flow<List<Member>> = callbackFlow {
@@ -126,10 +212,10 @@ class ChatRepository(
         awaitClose { reg.remove() }
     }
 
-    suspend fun getMyMemberData(chatId: String): Member? {
+    suspend fun getMyMemberData(chatId: String): Member? = try {
         val snap = db.collection("chats").document(chatId).collection("members").document(currentUid).get().await()
-        return snap.toObject(Member::class.java)?.copy(uid = snap.id)
-    }
+        snap.toObject(Member::class.java)?.copy(uid = snap.id)
+    } catch (e: Exception) { null }
 
     fun pendingInvitesFlow(uid: String): Flow<List<GroupInvite>> = callbackFlow {
         val reg = db.collection("invites").whereEqualTo("invitedUid", uid).whereEqualTo("status", "pending")
@@ -153,7 +239,7 @@ class ChatRepository(
         awaitClose { reg.remove() }
     }
 
-    suspend fun findOrCreateChat(currentUserProfile: UserProfile, targetUid: String): String {
+    suspend fun findOrCreateChat(currentUserProfile: UserProfile, targetUid: String): String = try {
         val targetDoc = db.collection("users").document(targetUid).get().await()
         val targetUser = targetDoc.toObject(UserProfile::class.java) ?: throw Exception("User not found")
         val chatId = getChatId(currentUserProfile.uid, targetUid)
@@ -171,7 +257,12 @@ class ChatRepository(
                 "lastMessage"    to null
             )).await()
         }
-        return chatId
+        chatId
+    } catch (e: Exception) {
+        // Fallback for offline: if we already have this chat in cache, return it
+        val chatId = getChatId(currentUserProfile.uid, targetUid)
+        val cached = ChatDataCache.loadChatList(context, currentUid)
+        if (cached.any { it.id == chatId }) chatId else throw e
     }
 
     suspend fun createChat(type: String, name: String, tag: String, description: String = ""): Pair<String, String> {
@@ -239,7 +330,16 @@ class ChatRepository(
     }
 
     suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
-        val msgRef = db.collection("chats").document(chatId).collection("messages").document()
+        val data = JSONObject().apply {
+            put("text", text)
+            put("senderUsername", senderUsername)
+            replyTo?.let { put("replyTo", it.toMap()) }
+        }
+        ChatDataCache.addToOutbox(context, chatId, "text", data)
+    }
+
+    suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
+        val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
         val batch  = db.batch()
@@ -268,8 +368,19 @@ class ChatRepository(
         context.contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(tempFile).use { output -> input.copyTo(output) }
         }
-        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg")
-        tempFile.delete()
+        
+        val data = JSONObject().apply {
+            put("localPath", tempFile.absolutePath)
+            put("senderUsername", senderUsername)
+            put("isSpoiler", isSpoiler)
+            replyTo?.let { put("replyTo", it.toMap()) }
+        }
+        ChatDataCache.addToOutbox(context, chatId, "image", data)
+    }
+
+    suspend fun sendImageNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean) {
+        val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
+        val userRef = db.collection("users").document(currentUid)
 
         val extra = mutableMapOf<String, Any?>(
             "type"       to MessageType.IMAGE,
@@ -277,27 +388,105 @@ class ChatRepository(
             "fileName"   to fileName
         )
         if (isSpoiler) extra["spoiler"] = true
-        sendExtra(chatId, extra, "📷 Image", senderUsername, replyTo)
+
+        val msg = mutableMapOf<String, Any?>(
+            "senderId"       to currentUid,
+            "senderUsername" to senderUsername,
+            "createdAt"      to FieldValue.serverTimestamp(),
+            "deleted"        to false,
+            "reactions"      to emptyList<Any>(),
+            "readBy"         to listOf(currentUid),
+            "replyTo"        to replyTo?.toMap()
+        )
+        msg.putAll(extra)
+
+        val batch = db.batch()
+        batch.set(msgRef, msg)
+        batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "📷 Image", "lastMessageAt" to FieldValue.serverTimestamp()))
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
     }
 
     suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?) = withContext(Dispatchers.IO) {
-        val mediaId = CdnService.uploadFile(file, "audio/webm")
-        sendExtra(chatId, mapOf(
+        val data = JSONObject().apply {
+            put("localPath", file.absolutePath)
+            put("duration", durationSec)
+            put("senderUsername", senderUsername)
+            replyTo?.let { put("replyTo", it.toMap()) }
+        }
+        ChatDataCache.addToOutbox(context, chatId, "voice", data)
+    }
+
+    suspend fun sendVoiceNow(id: String, chatId: String, mediaId: String, durationSec: Int, senderUsername: String, replyTo: ReplyData?) {
+        val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
+        val userRef = db.collection("users").document(currentUid)
+
+        val extra = mapOf(
             "type"       to MessageType.VOICE,
             "cdnMediaId" to mediaId,
             "duration"   to durationSec
-        ), "🎤 Voice message", senderUsername, replyTo)
+        )
+
+        val msg = mutableMapOf<String, Any?>(
+            "senderId"       to currentUid,
+            "senderUsername" to senderUsername,
+            "createdAt"      to FieldValue.serverTimestamp(),
+            "deleted"        to false,
+            "reactions"      to emptyList<Any>(),
+            "readBy"         to listOf(currentUid),
+            "replyTo"        to replyTo?.toMap()
+        )
+        msg.putAll(extra)
+
+        val batch = db.batch()
+        batch.set(msgRef, msg)
+        batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "🎤 Voice message", "lastMessageAt" to FieldValue.serverTimestamp()))
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
     }
 
     suspend fun sendSticker(chatId: String, sticker: StickerItem, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
-        sendExtra(chatId, mapOf(
+        val data = JSONObject().apply {
+            put("stickerId", sticker.id)
+            put("url", sticker.url)
+            put("packId", packId)
+            put("packName", packName)
+            put("packEmoji", packEmoji)
+            put("senderUsername", senderUsername)
+            replyTo?.let { put("replyTo", it.toMap()) }
+        }
+        ChatDataCache.addToOutbox(context, chatId, "sticker", data)
+    }
+
+    suspend fun sendStickerNow(id: String, chatId: String, stickerId: String, url: String, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
+        val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
+        val userRef = db.collection("users").document(currentUid)
+
+        val extra = mapOf(
             "type"      to MessageType.STICKER,
-            "url"       to sticker.url,
-            "stickerId" to sticker.id,
+            "url"       to url,
+            "stickerId" to stickerId,
             "packId"    to packId,
             "packName"  to packName,
             "packEmoji" to packEmoji
-        ), "$packEmoji Sticker", senderUsername, replyTo)
+        )
+
+        val msg = mutableMapOf<String, Any?>(
+            "senderId"       to currentUid,
+            "senderUsername" to senderUsername,
+            "createdAt"      to FieldValue.serverTimestamp(),
+            "deleted"        to false,
+            "reactions"      to emptyList<Any>(),
+            "readBy"         to listOf(currentUid),
+            "replyTo"        to replyTo?.toMap()
+        )
+        msg.putAll(extra)
+
+        val batch = db.batch()
+        batch.set(msgRef, msg)
+        batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "$packEmoji Sticker", "lastMessageAt" to FieldValue.serverTimestamp()))
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
     }
 
     suspend fun uploadAlbumImages(chatId: String, items: List<AlbumImageLocal>): List<AlbumImage> = coroutineScope {

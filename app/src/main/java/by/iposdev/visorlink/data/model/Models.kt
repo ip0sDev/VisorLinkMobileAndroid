@@ -345,6 +345,7 @@ object MessageType {
 
 object SendStatus {
     const val SENDING = "sending"
+    const val QUEUED  = "queued"
     const val SENT    = "sent"
     const val ERROR   = "error"
 }
@@ -527,11 +528,12 @@ enum class AppTheme {
     EXTHRU,
     BIOLUME,
     FORGE,
+    FORGE_TERMINAL,
 }
 
 val AppTheme.isExthruFamily: Boolean
     @Suppress("DEPRECATION")
-    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE || this == AppTheme.EXTHRU
+    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE || this == AppTheme.FORGE_TERMINAL || this == AppTheme.EXTHRU
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

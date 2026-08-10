@@ -68,7 +68,7 @@ object AppImageLoader {
             .addNetworkInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 response.newBuilder()
-                    .header("Cache-Control", "public, max-age=86400") // 24ч
+                    .header("Cache-Control", "public, max-age=2592000") // 30 дней
                     .build()
             }
             .build()
