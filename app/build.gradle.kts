@@ -27,11 +27,11 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 100
-        versionName = "3.0.00"
+        versionCode = 101
+        versionName = "3.0.01"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
+        buildConfigField("String", "CHANNEL", "\"CANARY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -137,6 +137,9 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer) // или 1.3.0+
     implementation(libs.androidx.media3.ui)
     implementation(libs.coil.video)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.jwt.decode)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

@@ -9,12 +9,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.VisorLinkNavGraph
 import by.iposdev.visorlink.ui.appcheck.AppCheckGuard
+import by.iposdev.visorlink.ui.components.FlagsOverlay
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.VisorLinkTheme
@@ -66,11 +68,14 @@ class MainActivity : AppCompatActivity() {
             VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
                 AppCheckGuard {
                     AppUpdateWrapper(viewModel = updateViewModel) {
-                        VisorLinkNavGraph(
-                            authViewModel      = authViewModel,
-                            themeViewModel     = themeViewModel,
-                            appUpdateViewModel = updateViewModel
-                        )
+                        Box {
+                            VisorLinkNavGraph(
+                                authViewModel = authViewModel,
+                                themeViewModel = themeViewModel,
+                                appUpdateViewModel = updateViewModel
+                            )
+                            FlagsOverlay()
+                        }
                     }
                 }
             }

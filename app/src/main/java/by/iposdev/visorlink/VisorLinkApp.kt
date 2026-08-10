@@ -10,6 +10,7 @@ import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.OutboxManager
 import by.iposdev.visorlink.utils.PresenceManager
+import by.iposdev.visorlink.data.repository.FlagsRepository
 import io.sentry.android.core.SentryAndroid
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -21,6 +22,8 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.context.GlobalContext
@@ -75,6 +78,17 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
 
         // Initialize OutboxManager to start background processing
         GlobalContext.get().get<OutboxManager>()
+
+        // ─── Feature Flags ───
+        MainScope().launch {
+            try {
+                Log.d("VisorLinkApp", "Starting flags fetch from Application.onCreate")
+                GlobalContext.get().get<FlagsRepository>().fetchFlags()
+                Log.d("VisorLinkApp", "Flags fetch call completed")
+            } catch (e: Exception) {
+                Log.e("VisorLinkApp", "Failed to fetch flags", e)
+            }
+        }
 
         // Регистрируем наблюдатель за жизненным циклом (свернуто/развернуто)
         // через анонимный объект, чтобы не было конфликтов с методами Application

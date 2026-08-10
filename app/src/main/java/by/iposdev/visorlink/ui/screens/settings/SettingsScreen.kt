@@ -61,6 +61,7 @@ import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.BotRepository
 import by.iposdev.visorlink.data.repository.DmBot
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.data.repository.FlagsRepository
 import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
@@ -100,6 +101,7 @@ fun SettingsScreen(
     appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
     authRepository: AuthRepository = koinInject(),
+    flagsRepository: FlagsRepository = koinInject(),
     proViewModel: ProViewModel = koinViewModel()
 ) {
     val currentTheme by themeViewModel.appTheme.collectAsState()
@@ -152,6 +154,7 @@ fun SettingsScreen(
     }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
+    val deviceId = remember { flagsRepository.getDeviceId() ?: "Not paired" }
 
     // Семантические цвета для иконок
     val colorNotif = Color(0xFFF59E0B)
@@ -642,9 +645,17 @@ fun SettingsScreen(
                             iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             icon = Icons.Default.Info,
                             title = "VisorLink",
-                            subtitle = "Версия $versionString",
+                            subtitle = "Версия $versionString\nDevice ID: $deviceId",
                             index = 0, total = 1,
-                            onClick = null // Отключаем клик, шеврона не будет
+                            onClick = {
+                                if (deviceId != "Not paired") {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clip = ClipData.newPlainText("Device ID", deviceId)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "Device ID скопирован", Toast.LENGTH_SHORT).show()
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                }
+                            }
                         )
                     }
 

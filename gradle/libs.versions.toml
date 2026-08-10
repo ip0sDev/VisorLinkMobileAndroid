@@ -27,6 +27,8 @@ koin = "4.2.2"
 coil = "2.7.0"
 datastore = "1.2.1"
 accompanist = "0.37.3"
+retrofit = "3.0.0"
+jwtDecode = "2.1.0"
 
 # Оставляем только одну версию Firebase BoM
 firebaseBom = "34.17.0"
@@ -95,6 +97,9 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coil" }
 accompanist-permissions = { group = "com.google.accompanist", name = "accompanist-permissions", version.ref = "accompanist" }
 sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "sentry-sdk" }
+retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
+retrofit-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
+jwt-decode = { group = "com.auth0.android", name = "jwtdecode", version.ref = "jwtDecode" }
 
 # --- Test ---
 junit = { group = "junit", name = "junit", version.ref = "junit" }

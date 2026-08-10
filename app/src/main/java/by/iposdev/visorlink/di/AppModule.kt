@@ -9,6 +9,9 @@ import by.iposdev.visorlink.data.repository.ForwardRepository
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.data.repository.StickerPackRepository
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.data.repository.FlagsRepository
+import by.iposdev.visorlink.data.remote.flags.AegisKeyManager
+import by.iposdev.visorlink.data.remote.flags.FlagsApi
 import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
@@ -45,6 +48,8 @@ import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 val appModule = module {
 
@@ -58,6 +63,16 @@ val appModule = module {
     }
     single { Firebase.auth }
     single { Firebase.functions("europe-west1") }
+
+    single {
+        Retrofit.Builder()
+            .baseUrl("https://flags.visorlink.org/")
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(FlagsApi::class.java)
+    }
+    single { AegisKeyManager() }
+    single { FlagsRepository(androidContext(), get(), get()) }
 
     single { AuthRepository(get(), get()) }
     single { ChatRepository(get(), get(), get(), androidContext(), get()) }
