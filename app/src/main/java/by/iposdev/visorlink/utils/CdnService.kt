@@ -21,6 +21,8 @@ object CdnService {
         try {
             val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No token")
             val connection = URL("$BASE_URL/user_stats").openConnection() as HttpURLConnection
+            connection.connectTimeout = 15000
+            connection.readTimeout = 15000
             connection.setRequestProperty("Authorization", "Bearer $token")
 
             if (connection.responseCode == 200) {
@@ -42,6 +44,8 @@ object CdnService {
         try {
             val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: return@withContext emptyList()
             val connection = URL("$BASE_URL/user_media").openConnection() as HttpURLConnection
+            connection.connectTimeout = 15000
+            connection.readTimeout = 20000
             connection.setRequestProperty("Authorization", "Bearer $token")
 
             if (connection.responseCode == 200) {
@@ -68,6 +72,7 @@ object CdnService {
         try {
             val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: return@withContext false
             val connection = URL("$BASE_URL/f/$mediaId").openConnection() as HttpURLConnection
+            connection.connectTimeout = 10000
             connection.requestMethod = "DELETE"
             connection.setRequestProperty("Authorization", "Bearer $token")
             connection.responseCode == 200
@@ -104,6 +109,8 @@ object CdnService {
         // 2. Формируем Multipart-запрос
         val boundary = "----VisorLinkBoundary${System.currentTimeMillis()}"
         val connection = URL("$BASE_URL/upload").openConnection() as HttpURLConnection
+        connection.connectTimeout = 30000 // 30s for connect
+        connection.readTimeout = 90000    // 90s for large uploads
         connection.requestMethod = "POST"
         connection.doOutput = true
         connection.setRequestProperty("Authorization", "Bearer $token")

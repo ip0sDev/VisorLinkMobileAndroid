@@ -576,6 +576,10 @@ fun ChatScreen(
                         showDeleteConfirm = menuData.message.id
                         contextMenuData = null
                     },
+                    onCancelSending = {
+                        viewModel.cancelSending(menuData.message.id)
+                        contextMenuData = null
+                    },
                     onSaveImage = {
                         scope.launch {
                             val success = saveImageToGallery(context, menuData.message.url ?: "")

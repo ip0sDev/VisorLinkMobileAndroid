@@ -113,7 +113,11 @@ class ChatRepository(
                     text = action.data.optString("text"),
                     localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
                     createdAt = Timestamp(Date(action.ts)),
-                    status = if (action.status == 1) SendStatus.SENT else SendStatus.QUEUED
+                    status = when (action.status) {
+                        1 -> SendStatus.SENT
+                        2 -> SendStatus.ERROR
+                        else -> SendStatus.QUEUED
+                    }
                 )
             }
             
@@ -536,6 +540,12 @@ class ChatRepository(
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to preview, "lastMessageAt" to FieldValue.serverTimestamp()))
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
+    }
+
+    suspend fun cancelSending(id: String) {
+        withContext(Dispatchers.IO) {
+            ChatDataCache.cleanupOutbox(context, listOf(id))
+        }
     }
 
     suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {

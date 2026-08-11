@@ -662,6 +662,16 @@ class ChatViewModel(
         _uiState.update { it.copy(isRecording = false) }
     }
 
+    fun cancelSending(messageId: String) {
+        viewModelScope.launch {
+            try {
+                chatRepository.cancelSending(messageId)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
     fun deleteMessage(messageId: String) {
         viewModelScope.launch {
             try {

@@ -45,6 +45,7 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.Message
 import by.iposdev.visorlink.data.model.MessageType
+import by.iposdev.visorlink.data.model.SendStatus
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
@@ -78,6 +79,7 @@ fun MessageActionOverlay(
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onDelete: () -> Unit,
+    onCancelSending: () -> Unit,
     onSaveImage: () -> Unit,
     onSaveVoice: () -> Unit,
     onOpenImage: () -> Unit,
@@ -113,6 +115,7 @@ fun MessageActionOverlay(
                         "reply" -> onReply()
                         "copy" -> { /* Логика копирования выполняется внутри DisposableEffect */ }
                         "delete" -> onDelete()
+                        "cancel_sending" -> onCancelSending()
                         "forward" -> onForward?.invoke()
                         "react" -> emoji?.let { onReact(it) }
                     }
@@ -128,6 +131,7 @@ fun MessageActionOverlay(
                 onDismiss = onDismiss,
                 onReply = onReply,
                 onDelete = onDelete,
+                onCancelSending = onCancelSending,
                 onSaveImage = onSaveImage,
                 onSaveVoice = onSaveVoice,
                 onOpenImage = onOpenImage,
@@ -150,6 +154,7 @@ private fun NormalMessageMenu(
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onDelete: () -> Unit,
+    onCancelSending: () -> Unit,
     onSaveImage: () -> Unit,
     onSaveVoice: () -> Unit,
     onOpenImage: () -> Unit,
@@ -165,6 +170,8 @@ private fun NormalMessageMenu(
     val density = LocalDensity.current
     val screenWidth = LocalConfiguration.current.screenWidthDp.dp
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+
+    val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
 
     // Центрирование по X: Свое сообщение прижимаем вправо, чужое - влево
     val expectedWidthPx = with(density) { 260.dp.toPx() }
@@ -218,69 +225,84 @@ private fun NormalMessageMenu(
             .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), shape)
     ) {
         Column(Modifier.fillMaxWidth()) {
-            if (canReact && !data.message.deleted) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 8.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    QUICK_REACTIONS.forEach { emoji ->
-                        val alreadyReacted = data.message.parsedReactions.find { it.emoji == emoji }?.uids?.contains(currentUid) == true
-                        EmojiReactionButton(
-                            emoji = emoji, isSelected = alreadyReacted,
-                            onClick = {
-                                haptic.perform(HapticType.REACTION, true)
-                                onReact(emoji)
+            if (isSending) {
+                ActionItem(Icons.Default.Close, "Отменить отправку", destructive = true) {
+                    haptic.perform(HapticType.CLICK, true); onDismiss(); onCancelSending()
+                }
+                if (data.message.type == MessageType.TEXT) {
+                    ActionItem(Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
+                        haptic.perform(HapticType.CLICK, true)
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("message", data.message.text ?: ""))
+                        Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
+                        onDismiss()
+                    }
+                }
+            } else {
+                if (canReact && !data.message.deleted) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 8.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        QUICK_REACTIONS.forEach { emoji ->
+                            val alreadyReacted = data.message.parsedReactions.find { it.emoji == emoji }?.uids?.contains(currentUid) == true
+                            EmojiReactionButton(
+                                emoji = emoji, isSelected = alreadyReacted,
+                                onClick = {
+                                    haptic.perform(HapticType.REACTION, true)
+                                    onReact(emoji)
+                                    onDismiss()
+                                }
+                            )
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.2f))
+                }
+
+                if (!data.message.deleted) {
+                    ActionItem(Icons.Default.Reply, stringResource(R.string.action_reply)) {
+                        haptic.perform(HapticType.CLICK, true); onDismiss(); onReply()
+                    }
+
+                    when (data.message.type) {
+                        MessageType.TEXT -> {
+                            ActionItem(Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
+                                haptic.perform(HapticType.CLICK, true)
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("message", data.message.text ?: ""))
+                                Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
                                 onDismiss()
                             }
-                        )
+                        }
+                        MessageType.IMAGE -> {
+                            ActionItem(Icons.Default.ZoomIn, stringResource(R.string.action_view_image)) {
+                                haptic.perform(HapticType.CLICK, true); onDismiss(); onOpenImage()
+                            }
+                            ActionItem(Icons.Default.Download, stringResource(R.string.action_save_gallery)) {
+                                haptic.perform(HapticType.CLICK, true); onDismiss(); onSaveImage()
+                            }
+                        }
+                        MessageType.VOICE -> {
+                            ActionItem(Icons.Default.Download, stringResource(R.string.action_save_voice)) {
+                                haptic.perform(HapticType.CLICK, true); onDismiss(); onSaveVoice()
+                            }
+                        }
                     }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.2f))
-            }
 
-            if (!data.message.deleted) {
-                ActionItem(Icons.Default.Reply, stringResource(R.string.action_reply)) {
-                    haptic.perform(HapticType.CLICK, true); onDismiss(); onReply()
-                }
-
-                when (data.message.type) {
-                    MessageType.TEXT -> {
-                        ActionItem(Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
-                            haptic.perform(HapticType.CLICK, true)
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("message", data.message.text ?: ""))
-                            Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
-                            onDismiss()
-                        }
-                    }
-                    MessageType.IMAGE -> {
-                        ActionItem(Icons.Default.ZoomIn, stringResource(R.string.action_view_image)) {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onOpenImage()
-                        }
-                        ActionItem(Icons.Default.Download, stringResource(R.string.action_save_gallery)) {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onSaveImage()
-                        }
-                    }
-                    MessageType.VOICE -> {
-                        ActionItem(Icons.Default.Download, stringResource(R.string.action_save_voice)) {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onSaveVoice()
+                    if (onForward != null) {
+                        ActionItem(Icons.Default.Forward, "Переслать") {
+                            haptic.perform(HapticType.CLICK, true); onDismiss(); onForward()
                         }
                     }
                 }
 
-                if (onForward != null) {
-                    ActionItem(Icons.Default.Forward, "Переслать") {
-                        haptic.perform(HapticType.CLICK, true); onDismiss(); onForward()
+                if (data.isMine && !data.message.deleted) {
+                    ActionItem(Icons.Default.Delete, stringResource(R.string.action_delete_message), destructive = true) {
+                        haptic.perform(HapticType.LONG_PRESS, true); onDismiss(); onDelete()
                     }
-                }
-            }
-
-            if (data.isMine && !data.message.deleted) {
-                ActionItem(Icons.Default.Delete, stringResource(R.string.action_delete_message), destructive = true) {
-                    haptic.perform(HapticType.LONG_PRESS, true); onDismiss(); onDelete()
                 }
             }
         }
@@ -308,12 +330,19 @@ private fun GestureMessageMenu(
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
     val density = LocalDensity.current
 
+    val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
+
     val actions = mutableListOf<String>()
-    if (canReact) actions.add("react")
-    actions.add("reply")
-    if (data.message.type == MessageType.TEXT) actions.add("copy")
-    actions.add("forward")
-    if (data.isMine) actions.add("delete")
+    if (isSending) {
+        actions.add("cancel_sending")
+        if (data.message.type == MessageType.TEXT) actions.add("copy")
+    } else {
+        if (canReact) actions.add("react")
+        actions.add("reply")
+        if (data.message.type == MessageType.TEXT) actions.add("copy")
+        actions.add("forward")
+        if (data.isMine) actions.add("delete")
+    }
 
     // 1. Точные размеры компонентов
     val btnHalfW = with(density) { 75.dp.toPx() } // Половина ширины кнопки действий
@@ -491,6 +520,7 @@ private fun GestureMessageMenu(
                 "copy" -> Icons.Default.ContentCopy
                 "forward" -> Icons.Default.Forward
                 "delete" -> Icons.Default.Delete
+                "cancel_sending" -> Icons.Default.Close
                 else -> Icons.Default.Warning
             }
             val text = when(action) {
@@ -499,11 +529,12 @@ private fun GestureMessageMenu(
                 "copy" -> stringResource(R.string.action_copy_text)
                 "forward" -> "Переслать"
                 "delete" -> stringResource(R.string.action_delete_message)
+                "cancel_sending" -> "Отменить"
                 else -> ""
             }
-            val color = if (action == "delete") style.destructive else cs.onSurface
+            val color = if (action == "delete" || action == "cancel_sending") style.destructive else cs.onSurface
             val bgColor = if (isSelected) {
-                if (action == "delete") style.destructive else style.accent
+                if (action == "delete" || action == "cancel_sending") style.destructive else style.accent
             } else generalBgColor
 
             val contentColor = if (isSelected) Color.White else color
