@@ -13,6 +13,7 @@ sealed class Screen(val route: String) {
     object Notifications : Screen("notifications")
     object CacheSettings : Screen("cache_settings")
     object Customization : Screen("customization")
+    object AegisDebug : Screen("aegis_debug")
 
     object Search : Screen("search?query={query}") {
         fun createRoute(query: String? = null) =

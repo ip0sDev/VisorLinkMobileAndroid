@@ -11,6 +11,7 @@ import by.iposdev.visorlink.data.repository.AuthState
 import by.iposdev.visorlink.ui.screens.diary.DiaryScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryEntryScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
+import by.iposdev.visorlink.ui.aegis.AegisDebugScreen
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
@@ -301,9 +302,14 @@ fun VisorLinkNavGraph(
                 onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
                 onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
                 onOpenCustomization = { navController.navigate(Screen.Customization.route) },
+                onOpenAegisDebug    = { navController.navigate(Screen.AegisDebug.route) },
                 themeViewModel      = themeViewModel,
                 appUpdateViewModel  = appUpdateViewModel
             )
+        }
+
+        composable(Screen.AegisDebug.route) {
+            AegisDebugScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Customization.route) {

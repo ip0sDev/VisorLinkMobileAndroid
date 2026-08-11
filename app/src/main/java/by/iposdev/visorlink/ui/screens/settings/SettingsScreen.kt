@@ -97,6 +97,7 @@ fun SettingsScreen(
     onOpenCacheSettings: () -> Unit = {},
     onOpenStorageManager: () -> Unit = {},
     onOpenCustomization: () -> Unit = {},
+    onOpenAegisDebug: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
@@ -116,6 +117,7 @@ fun SettingsScreen(
 
     val profile by userRepository.currentUserFlow().collectAsState(initial = null)
     val proState by proViewModel.uiState.collectAsState()
+    val flags by flagsRepository.flags.collectAsState()
 
     val context = LocalContext.current
     val haptic = rememberHaptic()
@@ -640,13 +642,29 @@ fun SettingsScreen(
 
                     // ── About ──
                     VlSettingsSection(appTheme = currentTheme, title = "О приложении") {
+                        if (flags.isAegisDebugMode && flags.testFlag) {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                iconColor = Color(0xFFF43F5E),
+                                icon = Icons.Default.Terminal,
+                                title = "Aegis Project Debug",
+                                subtitle = "Доступ к внутренним тестам эвристики Линка",
+                                index = 0, total = 2,
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    onOpenAegisDebug()
+                                }
+                            )
+                        }
+
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             icon = Icons.Default.Info,
                             title = "VisorLink",
                             subtitle = "Версия $versionString\nDevice ID: $deviceId",
-                            index = 0, total = 1,
+                            index = if (flags.isAegisDebugMode && flags.testFlag) 1 else 0,
+                            total = if (flags.isAegisDebugMode && flags.testFlag) 2 else 1,
                             onClick = {
                                 if (deviceId != "Not paired") {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager

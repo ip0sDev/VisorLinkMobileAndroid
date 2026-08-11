@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.sentry.android)
 }
@@ -27,8 +28,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 102
-        versionName = "3.0.02"
+        versionCode = 103
+        versionName = "3.0.03"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
@@ -140,6 +141,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.jwt.decode)
+    implementation(libs.kotlinx.serialization.json)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

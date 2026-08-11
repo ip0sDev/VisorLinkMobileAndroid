@@ -97,7 +97,9 @@ class FlagsRepository(
                 }
             }
 
-            val isDebug = jwt.getClaim("is_aegis_debug_mode").asBoolean() ?: false
+            val isDebug = jwt.getClaim("is_aegis_debug_mode").asBoolean() 
+                ?: jwt.getClaim("aegis_debug_mode_enabled").asBoolean() 
+                ?: false
             val dictUrl = jwt.getClaim("heuristic_dict_url").asString()
             val isTest = jwt.getClaim("test_flag").asBoolean() ?: false
 
