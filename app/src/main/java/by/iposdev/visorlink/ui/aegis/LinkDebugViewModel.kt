@@ -27,7 +27,7 @@ class LinkDebugViewModel(
     }
 
     val isAegisDebugMode: StateFlow<Boolean> = flagsRepository.flags
-        .map { it.isAegisDebugMode && it.testFlag }
+        .map { it.isEnabled("is_aegis_debug_mode") && it.isEnabled("test_flag") }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun updateContext(newContext: SimulatedContext) {

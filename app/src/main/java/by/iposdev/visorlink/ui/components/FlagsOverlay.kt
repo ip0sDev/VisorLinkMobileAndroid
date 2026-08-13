@@ -25,7 +25,7 @@ fun FlagsOverlay(
     val flagsState by flagsRepository.flags.collectAsState()
     var showDetails by remember { mutableStateOf(false) }
 
-    if (flagsState.testFlag) {
+    if (flagsState.isEnabled("test_flag")) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -67,7 +67,7 @@ fun FlagsOverlay(
                         )
 
                         LazyColumn(modifier = Modifier.weight(1f)) {
-                            items(flagsState.allClaims.toList()) { (key, value) ->
+                            items(flagsState.serverClaims.toList()) { (key, value) ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()

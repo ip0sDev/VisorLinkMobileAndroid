@@ -24,5 +24,24 @@ data class AppFlags(
     val isAegisDebugMode: Boolean = false,
     val heuristicDictUrl: String? = null,
     val testFlag: Boolean = false,
-    val allClaims: Map<String, Any?> = emptyMap()
-)
+    val isFlipperEnabled: Boolean = false,
+    val serverClaims: Map<String, Any?> = emptyMap(),
+    val localOverrides: Map<String, Boolean> = emptyMap()
+) {
+    fun isEnabled(key: String): Boolean {
+        // Special handling for Aegis aliases
+        if (key == "is_aegis_debug_mode" || key == "aegis_debug_mode_enabled") {
+            val aegisOverride = localOverrides["aegis_debug_mode_enabled"] ?: localOverrides["is_aegis_debug_mode"]
+            if (aegisOverride != null) return aegisOverride
+            return isAegisDebugMode
+        }
+
+        val override = localOverrides[key]
+        if (override != null) return override
+        
+        return when (key) {
+            "test_flag" -> testFlag
+            else -> serverClaims[key] as? Boolean ?: false
+        }
+    }
+}

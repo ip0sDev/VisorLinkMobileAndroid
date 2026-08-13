@@ -98,6 +98,7 @@ fun SettingsScreen(
     onOpenStorageManager: () -> Unit = {},
     onOpenCustomization: () -> Unit = {},
     onOpenAegisDebug: () -> Unit = {},
+    onOpenFlagFlipper: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
@@ -642,17 +643,37 @@ fun SettingsScreen(
 
                     // ── About ──
                     VlSettingsSection(appTheme = currentTheme, title = "О приложении") {
-                        if (flags.isAegisDebugMode && flags.testFlag) {
+                        val isAegisAllowed = flags.isEnabled("aegis_debug_mode_enabled")
+                        if (isAegisAllowed) {
                             VlSettingsItem(
                                 appTheme = currentTheme,
                                 iconColor = Color(0xFFF43F5E),
                                 icon = Icons.Default.Terminal,
                                 title = "Aegis Project Debug",
                                 subtitle = "Доступ к внутренним тестам эвристики Линка",
-                                index = 0, total = 2,
+                                index = 0, total = if (flags.isFlipperEnabled) 3 else 2,
                                 onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
-                                    onOpenAegisDebug()
+                                    if (flags.isEnabled("test_flag")) {
+                                        onOpenAegisDebug()
+                                    } else {
+                                        Toast.makeText(context, "test_mode required!", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+                        }
+
+                        if (flags.isFlipperEnabled) {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.ToggleOn,
+                                title = "Flag Flipper",
+                                subtitle = "Управление экспериментальными флагами",
+                                index = if (flags.isAegisDebugMode) 1 else 0,
+                                total = if (flags.isAegisDebugMode) 3 else 2,
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    onOpenFlagFlipper()
                                 }
                             )
                         }
@@ -663,8 +684,11 @@ fun SettingsScreen(
                             icon = Icons.Default.Info,
                             title = "VisorLink",
                             subtitle = "Версия $versionString\nDevice ID: $deviceId",
-                            index = if (flags.isAegisDebugMode && flags.testFlag) 1 else 0,
-                            total = if (flags.isAegisDebugMode && flags.testFlag) 2 else 1,
+                            index = if (isAegisAllowed && flags.isFlipperEnabled) 2 
+                                    else if (isAegisAllowed || flags.isFlipperEnabled) 1 
+                                    else 0,
+                            total = (if (isAegisAllowed) 1 else 0) + 
+                                    (if (flags.isFlipperEnabled) 1 else 0) + 1,
                             onClick = {
                                 if (deviceId != "Not paired") {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -675,6 +699,15 @@ fun SettingsScreen(
                                 }
                             }
                         )
+
+                        if (flags.isEnabled("test_flag")) {
+                            Text(
+                                text = "test_mode",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally)
+                            )
+                        }
                     }
 
                     Spacer(Modifier.height(padding.calculateBottomPadding() + 32.dp))

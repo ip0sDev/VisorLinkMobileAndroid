@@ -14,6 +14,7 @@ sealed class Screen(val route: String) {
     object CacheSettings : Screen("cache_settings")
     object Customization : Screen("customization")
     object AegisDebug : Screen("aegis_debug")
+    object FlagFlipper : Screen("flag_flipper")
 
     object Search : Screen("search?query={query}") {
         fun createRoute(query: String? = null) =

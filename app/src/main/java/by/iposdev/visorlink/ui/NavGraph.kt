@@ -16,6 +16,7 @@ import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
 import by.iposdev.visorlink.ui.screens.settings.CustomizationScreen
+import by.iposdev.visorlink.ui.screens.settings.FlagFlipperScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
@@ -303,6 +304,7 @@ fun VisorLinkNavGraph(
                 onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
                 onOpenCustomization = { navController.navigate(Screen.Customization.route) },
                 onOpenAegisDebug    = { navController.navigate(Screen.AegisDebug.route) },
+                onOpenFlagFlipper   = { navController.navigate(Screen.FlagFlipper.route) },
                 themeViewModel      = themeViewModel,
                 appUpdateViewModel  = appUpdateViewModel
             )
@@ -310,6 +312,10 @@ fun VisorLinkNavGraph(
 
         composable(Screen.AegisDebug.route) {
             AegisDebugScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.FlagFlipper.route) {
+            FlagFlipperScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Customization.route) {

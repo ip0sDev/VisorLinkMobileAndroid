@@ -12,6 +12,7 @@ import com.auth0.android.jwt.JWT
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONObject
 import retrofit2.HttpException
 import java.util.UUID
 
@@ -24,6 +25,31 @@ class FlagsRepository(
 
     private val _flags = MutableStateFlow(AppFlags())
     val flags: StateFlow<AppFlags> = _flags.asStateFlow()
+
+    init {
+        loadInitialFlags()
+    }
+
+    private fun loadInitialFlags() {
+        val isFlipperEnabled = prefs.getBoolean("is_flipper_enabled", false)
+        val overridesJson = prefs.getString("local_overrides", null)
+        val overrides = try {
+            if (overridesJson != null) {
+                val map = mutableMapOf<String, Boolean>()
+                val json = JSONObject(overridesJson)
+                json.keys().forEach { key ->
+                    map[key] = json.getBoolean(key)
+                }
+                map
+            } else emptyMap()
+        } catch (e: Exception) {
+            emptyMap<String, Boolean>()
+        }
+        _flags.value = _flags.value.copy(
+            isFlipperEnabled = isFlipperEnabled,
+            localOverrides = overrides
+        )
+    }
 
     fun getDeviceId(): String? {
         return prefs.getString("device_id", null)
@@ -118,15 +144,33 @@ class FlagsRepository(
             
             if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Applying flags: test_flag=$isTest, is_aegis_debug_mode=$isDebug")
             
-            _flags.value = AppFlags(
+            val wasFlipperEnabled = _flags.value.isFlipperEnabled
+            val newFlipperEnabled = wasFlipperEnabled || isTest
+            if (newFlipperEnabled != wasFlipperEnabled) {
+                prefs.edit().putBoolean("is_flipper_enabled", true).apply()
+            }
+
+            _flags.value = _flags.value.copy(
                 isAegisDebugMode = isDebug,
                 heuristicDictUrl = dictUrl,
                 testFlag = isTest,
-                allClaims = allClaimsMap
+                isFlipperEnabled = newFlipperEnabled,
+                serverClaims = allClaimsMap
             )
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("FlagsRepo", "Error parsing flags JWT", e)
             e.printStackTrace()
         }
+    }
+
+    fun toggleFlag(key: String, enabled: Boolean) {
+        val currentOverrides = _flags.value.localOverrides.toMutableMap()
+        currentOverrides[key] = enabled
+        
+        val json = JSONObject()
+        currentOverrides.forEach { (k, v) -> json.put(k, v) }
+        prefs.edit().putString("local_overrides", json.toString()).apply()
+
+        _flags.value = _flags.value.copy(localOverrides = currentOverrides)
     }
 }
