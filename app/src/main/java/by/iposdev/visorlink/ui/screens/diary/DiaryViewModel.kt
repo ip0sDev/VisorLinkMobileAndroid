@@ -70,11 +70,6 @@ class DiaryViewModel(
         viewModelScope.launch {
             userRepository.currentUserFlow().collect { profile ->
                 _uiState.update { it.copy(userProfile = profile) }
-                if (profile?.diaryEnabled == true && profile.diaryRemindersEnabled) {
-                    reminderManager.scheduleReminder(profile.diaryReminderTime)
-                } else {
-                    reminderManager.cancelReminder()
-                }
             }
         }
 

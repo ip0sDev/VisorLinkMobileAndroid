@@ -353,4 +353,5 @@ private fun VisorIcon.toVisual(): String = when(this) {
     VisorIcon.ZZZ -> "ZZZ"
     VisorIcon.QUESTION -> "??"
     VisorIcon.SMILE -> "^_^"
+    VisorIcon.ANGRY -> ">:<"
 }

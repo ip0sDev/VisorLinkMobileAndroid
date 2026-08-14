@@ -11,6 +11,8 @@ import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.OutboxManager
 import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.data.repository.FlagsRepository
+import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.DiaryReminderManager
 import io.sentry.android.core.SentryAndroid
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -87,6 +89,23 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                 Log.d("VisorLinkApp", "Flags fetch call completed")
             } catch (e: Exception) {
                 Log.e("VisorLinkApp", "Failed to fetch flags", e)
+            }
+        }
+
+        // ─── Diary Reminders Observer ───
+        MainScope().launch {
+            try {
+                val userRepository: UserRepository = GlobalContext.get().get()
+                val reminderManager: DiaryReminderManager = GlobalContext.get().get()
+                userRepository.currentUserFlow().collect { profile ->
+                    if (profile?.diaryEnabled == true && profile.diaryRemindersEnabled) {
+                        reminderManager.scheduleReminder(profile.diaryReminderTime)
+                    } else {
+                        reminderManager.cancelReminder()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VisorLinkApp", "Diary reminder observer failed", e)
             }
         }
 

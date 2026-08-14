@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.screens.main
 
+import android.app.Activity
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +72,16 @@ fun MainScreen(
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        val activity = context as? Activity
+        if (activity?.intent?.getBooleanExtra("openDiary", false) == true) {
+            selectedTab = 2
+            // Clear the intent so it doesn't open diary again on rotation or similar
+            activity.intent.removeExtra("openDiary")
+        }
+    }
     val appTheme by themeViewModel.appTheme.collectAsState()
     val isM3E = appTheme == AppTheme.MATERIAL3_EXPRESSIVE
     

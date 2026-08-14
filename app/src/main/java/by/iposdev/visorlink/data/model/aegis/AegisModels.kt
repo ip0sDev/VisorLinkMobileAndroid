@@ -1,10 +1,10 @@
 package by.iposdev.visorlink.data.model.aegis
 
-enum class LinkEmotion { HAPPY, SAD, CONCERNED, SLEEPY, CONFUSED, CURIOUS, PARTY, IDLE }
+enum class LinkEmotion { HAPPY, SAD, CONCERNED, SLEEPY, CONFUSED, CURIOUS, PARTY, IDLE, OFFENDED }
 
-enum class LinkAction { IDLE, WAVE, HUG_EDGE, HEAD_TILT, EAT_CACHE, YAWN, TOUCH_GLASS }
+enum class LinkAction { IDLE, WAVE, HUG_EDGE, HEAD_TILT, EAT_CACHE, YAWN, TOUCH_GLASS, PEEK, SIT }
 
-enum class VisorIcon { HEART, EXCLAMATION, DOTS, CROSS, CHECKMARK, ZZZ, QUESTION, SMILE }
+enum class VisorIcon { HEART, EXCLAMATION, DOTS, CROSS, CHECKMARK, ZZZ, QUESTION, SMILE, ANGRY }
 
 data class LinkResponse(
     val emotion: LinkEmotion,

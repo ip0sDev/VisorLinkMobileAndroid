@@ -70,7 +70,10 @@ internal fun ExthruChatTopBar(
     onOpenOtherProfile: (String) -> Unit,
     onOpenChatSettings: (String) -> Unit,
     onLeaveClick: () -> Unit,
+    onAegisClick: () -> Unit = {},
+    isAegisEnabled: Boolean = false,
 ) {
+    val haptic = rememberHaptic()
     val hazeState = LocalHazeState.current
     val topBarBg = if (isForge) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
 
@@ -170,6 +173,18 @@ internal fun ExthruChatTopBar(
             }
         },
         actions = {
+            if (isAegisEnabled) {
+                InteractiveTopBarIcon(
+                    icon = Icons.Default.SmartToy,
+                    isDark = isDark,
+                    isForge = isForge,
+                    hapticEnabled = hapticEnabled,
+                    onClick = { 
+                        haptic.perform(HapticType.REACTION, hapticEnabled)
+                        onAegisClick() 
+                    }
+                )
+            }
             if (canSetWallpaper) {
                 InteractiveTopBarIcon(
                     icon = Icons.Default.Wallpaper,
@@ -280,11 +295,13 @@ internal fun OneUiChatTopBar(
     onOpenOtherProfile: (String) -> Unit,
     onOpenChatSettings: (String) -> Unit,
     onLeaveClick: () -> Unit,
+    onAegisClick: () -> Unit = {},
+    isAegisEnabled: Boolean = false,
 ) {
+    val haptic = rememberHaptic()
     val bgColor      = if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar
     val textPrimary  = if (isDark) OneUiChat.TextPrimaryDark else OneUiChat.TextPrimary
     val textSecondary = if (isDark) OneUiChat.TextSecondaryDark else OneUiChat.TextSecondary
-    val haptic = rememberHaptic()
 
     TopAppBar(
         navigationIcon = {
@@ -368,6 +385,14 @@ internal fun OneUiChatTopBar(
             }
         },
         actions = {
+            if (isAegisEnabled) {
+                IconButton(onClick = { 
+                    haptic.perform(HapticType.REACTION, hapticEnabled)
+                    onAegisClick() 
+                }) {
+                    Icon(Icons.Default.SmartToy, null, tint = if (isDark) Color.White else Color.Black)
+                }
+            }
             if (canSetWallpaper) {
                 IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onWallpaperClick() }) {
                     Icon(Icons.Default.Wallpaper, contentDescription = stringResource(R.string.wallpaper),
@@ -406,6 +431,8 @@ internal fun DefaultChatTopBar(
     onOpenOtherProfile: (String) -> Unit,
     onOpenChatSettings: (String) -> Unit,
     onLeaveClick: () -> Unit,
+    onAegisClick: () -> Unit = {},
+    isAegisEnabled: Boolean = false,
 ) {
     val haptic = rememberHaptic()
 
@@ -488,6 +515,14 @@ internal fun DefaultChatTopBar(
             }
         },
         actions = {
+            if (isAegisEnabled) {
+                IconButton(onClick = { 
+                    haptic.perform(HapticType.REACTION, hapticEnabled)
+                    onAegisClick() 
+                }) {
+                    Icon(Icons.Default.SmartToy, null)
+                }
+            }
             if (canSetWallpaper) {
                 IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onWallpaperClick() }) {
                     Icon(Icons.Default.Wallpaper, contentDescription = stringResource(R.string.wallpaper),

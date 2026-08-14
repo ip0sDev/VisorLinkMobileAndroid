@@ -56,6 +56,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.ui.aegis.AegisAura
+import by.iposdev.visorlink.ui.aegis.AegisLifeViewModel
 import by.iposdev.visorlink.ui.components.LocalHazeState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.screens.stickers.StickerPickerBottomSheet
@@ -99,6 +101,19 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
+
+    val aegisViewModel: AegisLifeViewModel = koinViewModel()
+    val aegisUiState by aegisViewModel.uiState.collectAsState()
+    val isAegisEnabled by aegisViewModel.isAegisEnabled.collectAsState()
+
+    // Анализ сообщений для Aegis
+    LaunchedEffect(uiState.messageListItems, isAegisEnabled) {
+        if (!isAegisEnabled) return@LaunchedEffect
+        val messages = uiState.messageListItems
+            .filterIsInstance<MessageListItem.MessageItem>()
+            .map { it.message }
+        aegisViewModel.analyzeMessages(messages)
+    }
 
     LaunchedEffect(uiState.initialDraft) {
         if (uiState.initialDraft.isNotEmpty() && inputText.isEmpty()) {
@@ -249,7 +264,9 @@ fun ChatScreen(
                                 onNavigateBack = onNavigateBack,
                                 onOpenOtherProfile = onOpenOtherProfile,
                                 onOpenChatSettings = onOpenChatSettings,
-                                onLeaveClick = { showLeaveDialog = true }
+                                onLeaveClick = { showLeaveDialog = true },
+                                onAegisClick = { aegisViewModel.onInteract() },
+                                isAegisEnabled = isAegisEnabled
                             )
                         } else if (isOneUiEff) {
                             OneUiChatTopBar(
@@ -258,7 +275,9 @@ fun ChatScreen(
                                 hapticEnabled = hapticEnabled,
                                 onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
                                 onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
-                                onLeaveClick = { showLeaveDialog = true }
+                                onLeaveClick = { showLeaveDialog = true },
+                                onAegisClick = { aegisViewModel.onInteract() },
+                                isAegisEnabled = isAegisEnabled
                             )
                         } else {
                             DefaultChatTopBar(
@@ -267,7 +286,9 @@ fun ChatScreen(
                                 hapticEnabled = hapticEnabled,
                                 onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
                                 onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
-                                onLeaveClick = { showLeaveDialog = true }
+                                onLeaveClick = { showLeaveDialog = true },
+                                onAegisClick = { aegisViewModel.onInteract() },
+                                isAegisEnabled = isAegisEnabled
                             )
                         }
                     },
@@ -691,6 +712,19 @@ fun ChatScreen(
             uri            = uri,
             onNavigateBack = { editorUri = null },
             onSend         = { editedUri, isSpoiler -> editorUri = null; viewModel.sendImage(editedUri, isSpoiler) },
+        )
+    }
+
+    // Aegis Project Overlay
+    if (aegisUiState.isVisible) {
+        AegisAura(
+            action = aegisUiState.action,
+            emotion = aegisUiState.emotion,
+            visorIcon = aegisUiState.visorIcon,
+            message = aegisUiState.message,
+            onDismiss = { wasOffended -> aegisViewModel.onDismiss(wasOffended) },
+            onBoop = { aegisViewModel.onBoop() },
+            onPet = { aegisViewModel.onPet() }
         )
     }
 }

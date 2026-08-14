@@ -5,6 +5,7 @@ import by.iposdev.visorlink.data.aegis.*
 import by.iposdev.visorlink.data.remote.flags.AegisKeyManager
 import by.iposdev.visorlink.data.remote.flags.FlagsApi
 import by.iposdev.visorlink.data.repository.*
+import by.iposdev.visorlink.ui.aegis.AegisLifeViewModel
 import by.iposdev.visorlink.ui.aegis.LinkDebugViewModel
 import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
@@ -151,4 +152,5 @@ val appModule = module {
     single { DictionaryHeuristicEngine(get()) }
     single { MediaPipeLlmEngine() }
     viewModel { LinkDebugViewModel(get(), get(), get()) }
+    viewModel { AegisLifeViewModel(get(), get()) }
 }
