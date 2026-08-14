@@ -723,8 +723,8 @@ fun ChatScreen(
             visorIcon = aegisUiState.visorIcon,
             message = aegisUiState.message,
             onDismiss = { wasOffended -> aegisViewModel.onDismiss(wasOffended) },
-            onBoop = { aegisViewModel.onBoop() },
-            onPet = { aegisViewModel.onPet() }
+            onBoop = { aegisViewModel.processIntent(by.iposdev.visorlink.data.model.aegis.LinkIntent.Boop) },
+            onPet = { aegisViewModel.processIntent(by.iposdev.visorlink.data.model.aegis.LinkIntent.Pet) }
         )
     }
 }

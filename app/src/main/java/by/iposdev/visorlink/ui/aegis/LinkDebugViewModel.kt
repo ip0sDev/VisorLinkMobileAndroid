@@ -1,3 +1,4 @@
+// ui/aegis/LinkDebugViewModel.kt
 package by.iposdev.visorlink.ui.aegis
 
 import androidx.lifecycle.ViewModel
@@ -22,6 +23,8 @@ class LinkDebugViewModel(
     private val _uiState = MutableStateFlow(LinkUiState())
     val uiState: StateFlow<LinkUiState> = _uiState.asStateFlow()
 
+    private var debugMemory = LinkMemoryState()
+
     fun setEngine(useLlm: Boolean) {
         _currentEngine.value = if (useLlm) llmEngine else dictionaryEngine
     }
@@ -36,13 +39,13 @@ class LinkDebugViewModel(
 
     fun analyzeText(text: String) {
         if (text.isBlank()) return
-        
+
         viewModelScope.launch {
             _uiState.update { it.copy(isProcessing = true) }
-            // Simulate processing delay
             delay(300)
-            val response = _currentEngine.value.processInput(text, _uiState.value.simulatedContext)
-            _uiState.update { 
+            val (response, newMemory) = _currentEngine.value.evaluate(text, _uiState.value.simulatedContext, debugMemory)
+            debugMemory = newMemory
+            _uiState.update {
                 it.copy(
                     lastResponse = response,
                     isProcessing = false
@@ -55,16 +58,17 @@ class LinkDebugViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isProcessing = true) }
             delay(1000)
-            val idleResponse = LinkResponse(
-                emotion = LinkEmotion.SLEEPY,
-                action = LinkAction.YAWN,
-                visorIcon = VisorIcon.ZZZ,
-                requiresUserReply = false,
-                message = "Вип... Кажется, мы долго ничего не делали. Я вздремну?"
-            )
-            _uiState.update { 
+            val (response, newMemory) = _currentEngine.value.evaluate(null, _uiState.value.simulatedContext, debugMemory.copy(lastInteractionTime = 0L))
+            debugMemory = newMemory
+            _uiState.update {
                 it.copy(
-                    lastResponse = idleResponse,
+                    lastResponse = response ?: LinkResponse(
+                        emotion = LinkEmotion.SLEEPY,
+                        action = LinkAction.YAWN,
+                        visorIcon = VisorIcon.ZZZ,
+                        requiresUserReply = false,
+                        message = "Вип... Кажется, мы долго ничего не делали. Я вздремну?"
+                    ),
                     isProcessing = false
                 )
             }
@@ -73,9 +77,11 @@ class LinkDebugViewModel(
 
     fun resetState() {
         _uiState.value = LinkUiState()
+        debugMemory = LinkMemoryState()
     }
 
     fun toggleSafeMode(enabled: Boolean) {
         _uiState.update { it.copy(isSafeMode = enabled) }
+        debugMemory = debugMemory.copy(isCrisisMode = enabled) // Эмуляция CrisisMode через SafeMode
     }
 }

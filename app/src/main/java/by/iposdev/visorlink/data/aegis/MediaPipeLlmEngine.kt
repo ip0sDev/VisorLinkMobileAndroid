@@ -1,9 +1,21 @@
+// data/aegis/MediaPipeLlmEngine.kt
 package by.iposdev.visorlink.data.aegis
 
 import by.iposdev.visorlink.data.model.aegis.*
 
 class MediaPipeLlmEngine : AegisBrainEngine {
     override val engineName: String = "MediaPipe Gemma 4 E4B"
+
+    override suspend fun evaluate(
+        text: String?,
+        context: SimulatedContext,
+        memory: LinkMemoryState
+    ): Pair<LinkResponse?, LinkMemoryState> {
+        if (text == null) return Pair(null, memory) // LLM пока не умеет в проактивность
+
+        val response = processInput(text, context)
+        return Pair(response, memory.copy(lastInteractionTime = System.currentTimeMillis()))
+    }
 
     override suspend fun processInput(text: String, context: SimulatedContext): LinkResponse {
         val startTime = System.currentTimeMillis()

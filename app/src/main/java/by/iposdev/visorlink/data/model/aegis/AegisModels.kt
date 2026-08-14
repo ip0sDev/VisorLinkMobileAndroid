@@ -1,8 +1,9 @@
+// data/model/aegis/AegisModels.kt
 package by.iposdev.visorlink.data.model.aegis
 
 enum class LinkEmotion { HAPPY, SAD, CONCERNED, SLEEPY, CONFUSED, CURIOUS, PARTY, IDLE, OFFENDED }
 
-enum class LinkAction { IDLE, WAVE, HUG_EDGE, HEAD_TILT, EAT_CACHE, YAWN, TOUCH_GLASS, PEEK, SIT }
+enum class LinkAction { IDLE, WAVE, HUG_EDGE, HEAD_TILT, EAT_CACHE, YAWN, TOUCH_GLASS, PEEK, SIT, POINT }
 
 enum class VisorIcon { HEART, EXCLAMATION, DOTS, CROSS, CHECKMARK, ZZZ, QUESTION, SMILE, ANGRY }
 
@@ -29,3 +30,19 @@ data class LinkUiState(
     val isSafeMode: Boolean = false,
     val simulatedContext: SimulatedContext = SimulatedContext()
 )
+
+// ─── НОВЫЕ КЛАССЫ (MVI & Memory) ───
+
+data class LinkMemoryState(
+    val isCrisisMode: Boolean = false,
+    val recoveryProgress: Int = 100, // 0..100. 100 = полностью восстановлен
+    val lastInteractionTime: Long = System.currentTimeMillis(),
+    val isSleeping: Boolean = false
+)
+
+sealed class LinkIntent {
+    data class ProcessText(val text: String) : LinkIntent()
+    object Tick : LinkIntent()
+    object Boop : LinkIntent()
+    object Pet : LinkIntent()
+}
