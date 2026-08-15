@@ -597,6 +597,20 @@ class ChatViewModel(
         }
     }
 
+    fun sendVideo(uri: Uri) {
+        if (!_uiState.value.canSendMedia) return
+        if (!startCooldown()) return
+
+        val reply = _uiState.value.replyingTo?.toReplyData()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploading = true) }
+            clearReply()
+            try { chatRepository.sendVideo(chatId, uri, currentUsername, reply) }
+            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
+            finally { _uiState.update { it.copy(isUploading = false) } }
+        }
+    }
+
     fun sendSticker(sticker: StickerItem, packId: String, packName: String, packEmoji: String) {
         if (!_uiState.value.canSendMessage) return
         if (!startCooldown()) return

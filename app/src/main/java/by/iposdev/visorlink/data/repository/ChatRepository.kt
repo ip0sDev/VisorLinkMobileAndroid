@@ -449,6 +449,49 @@ class ChatRepository(
         batch.commit().await()
     }
 
+    suspend fun sendVideo(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?) = withContext(Dispatchers.IO) {
+        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "video.mp4"}"
+        val tempFile = File(context.cacheDir, fileName)
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+        }
+
+        val data = JSONObject().apply {
+            put("localPath", tempFile.absolutePath)
+            put("senderUsername", senderUsername)
+            replyTo?.let { put("replyTo", it.toMap()) }
+        }
+        ChatDataCache.addToOutbox(context, chatId, "video", data)
+    }
+
+    suspend fun sendVideoNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?) {
+        val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
+        val userRef = db.collection("users").document(currentUid)
+
+        val extra = mapOf(
+            "type"       to MessageType.VIDEO,
+            "cdnMediaId" to mediaId,
+            "fileName"   to fileName
+        )
+
+        val msg = mutableMapOf<String, Any?>(
+            "senderId"       to currentUid,
+            "senderUsername" to senderUsername,
+            "createdAt"      to FieldValue.serverTimestamp(),
+            "deleted"        to false,
+            "reactions"      to emptyList<Any>(),
+            "readBy"         to listOf(currentUid),
+            "replyTo"        to replyTo?.toMap()
+        )
+        msg.putAll(extra)
+
+        val batch = db.batch()
+        batch.set(msgRef, msg)
+        batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "🎥 Video", "lastMessageAt" to FieldValue.serverTimestamp()))
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
+    }
+
     suspend fun sendSticker(chatId: String, sticker: StickerItem, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
         val data = JSONObject().apply {
             put("stickerId", sticker.id)

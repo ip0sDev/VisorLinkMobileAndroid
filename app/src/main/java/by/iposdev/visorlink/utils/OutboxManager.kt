@@ -103,7 +103,7 @@ class OutboxManager(
                     launch {
                         try {
                             withTimeout(120_000) { 
-                                if (action.type == "image" || action.type == "voice") {
+                                if (action.type == "image" || action.type == "voice" || action.type == "video") {
                                     mediaSemaphore.withPermit { processAction(action) }
                                 } else {
                                     processAction(action)
@@ -187,6 +187,22 @@ class OutboxManager(
                         chatId = action.chatId,
                         mediaId = mediaId,
                         durationSec = duration,
+                        senderUsername = data.getString("senderUsername"),
+                        replyTo = replyTo
+                    )
+                    file.delete()
+                }
+            }
+            "video" -> {
+                val localPath = data.getString("localPath")
+                val file = File(localPath)
+                if (file.exists()) {
+                    val mediaId = cdnUploader.uploadFile(file, "video/mp4")
+                    chatRepository.sendVideoNow(
+                        id = action.id,
+                        chatId = action.chatId,
+                        mediaId = mediaId,
+                        fileName = file.name,
                         senderUsername = data.getString("senderUsername"),
                         replyTo = replyTo
                     )

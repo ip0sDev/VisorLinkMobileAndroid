@@ -4,6 +4,7 @@ import android.Manifest
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -143,11 +144,29 @@ fun ChatScreen(
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
 
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
-        when {
-            uris.isEmpty() -> Unit
-            uris.size == 1 -> editorUri = uris.first()
-            else           -> viewModel.onImagesPicked(uris)
+    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        
+        val firstUri = uris.first()
+        val mimeType = context.contentResolver.getType(firstUri) ?: ""
+        
+        if (uris.size == 1) {
+            if (mimeType.startsWith("video/")) {
+                viewModel.sendVideo(firstUri)
+            } else {
+                editorUri = firstUri
+            }
+        } else {
+            // Фильтруем фото для альбомов
+            val photosOnly = uris.filter { 
+                context.contentResolver.getType(it)?.startsWith("image/") == true 
+            }
+            if (photosOnly.isNotEmpty()) {
+                viewModel.onImagesPicked(photosOnly)
+            } else {
+                val firstVideo = uris.find { context.contentResolver.getType(it)?.startsWith("video/") == true }
+                firstVideo?.let { viewModel.sendVideo(it) }
+            }
         }
     }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -300,7 +319,7 @@ fun ChatScreen(
                                 hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                                 audioPermission = audioPermission, focusRequester = focusRequester,
                                 onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                                onAttach = { imagePicker.launch("image/*") },
+                                onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                                 onStickerClick = { showStickerSheet = true },
                                 onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
                                 onStartRecord = { viewModel.startRecording() },
@@ -318,7 +337,7 @@ fun ChatScreen(
                                     hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                                     audioPermission = audioPermission, focusRequester = focusRequester,
                                     onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                                    onAttach = { imagePicker.launch("image/*") },
+                                    onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                                     onStickerClick = { showStickerSheet = true },
                                     onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
                                     onStartRecord = { viewModel.startRecording() },
@@ -335,7 +354,7 @@ fun ChatScreen(
                                     hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                                     audioPermission = audioPermission, focusRequester = focusRequester,
                                     onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                                    onAttach = { imagePicker.launch("image/*") },
+                                    onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                                     onStickerClick = { showStickerSheet = true },
                                     onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
                                     onStartRecord = { viewModel.startRecording() },
@@ -352,7 +371,7 @@ fun ChatScreen(
                                     hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                                     audioPermission = audioPermission, focusRequester = focusRequester,
                                     onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                                    onAttach = { imagePicker.launch("image/*") },
+                                    onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                                     onStickerClick = { showStickerSheet = true },
                                     onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
                                     onStartRecord = { viewModel.startRecording() },
