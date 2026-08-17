@@ -5,6 +5,7 @@ import android.util.Log
 import coil.Coil
 import coil.ImageLoader
 import coil.decode.VideoFrameDecoder
+import coil.decode.ImageDecoderDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
@@ -50,8 +51,8 @@ object AppImageLoader {
         Log.d(TAG, "Memory cache cleared")
     }
 
-    fun get(context: Context): ImageLoader =
-        instance ?: buildLoader(context).also {
+    fun get(context: Context, config: CacheConfig = CacheConfig()): ImageLoader =
+        instance ?: buildLoader(context, config).also {
             instance = it
             Coil.setImageLoader(it)
         }
@@ -75,15 +76,17 @@ object AppImageLoader {
 
         return ImageLoader.Builder(context)
             .components {
-                // Добавляем декодер для поддержки превью видео
+                // Добавляем декодер для поддержки превью видео и GIF
                 add(VideoFrameDecoder.Factory())
+                add(ImageDecoderDecoder.Factory())
             }
             .okHttpClient(okhttp)
             // Disk cache — для картинок (аватарки, фото из чатов)
             .diskCache {
+                val size = if (config.isUnlimited) Long.MAX_VALUE else config.maxImageMb.toLong() * 1024 * 1024
                 DiskCache.Builder()
                     .directory(diskCacheDir)
-                    .maxSizeBytes(config.maxImageMb.toLong() * 1024 * 1024)
+                    .maxSizeBytes(size)
                     .build()
             }
             // Memory cache — быстрый показ уже открытых картинок

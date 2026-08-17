@@ -398,7 +398,7 @@ private fun FullscreenImageViewer(url: String, onNavigateBack: () -> Unit) {
                         IconButton(onClick = {
                             scope.launch {
                                 isSaving = true
-                                val success = saveImageToGallery(context, url)
+                                val success = ImageCache.saveImageToGallery(context, url)
                                 isSaving = false
                                 Toast.makeText(context, if (success) "Saved to gallery" else "Failed to save", Toast.LENGTH_SHORT).show()
                             }
@@ -412,39 +412,3 @@ private fun FullscreenImageViewer(url: String, onNavigateBack: () -> Unit) {
         }
     }
 }
-
-suspend fun saveImageToGallery(context: Context, url: String): Boolean =
-    withContext(Dispatchers.IO) {
-        try {
-            val cached = ImageCache.getCachedPath(context, url)
-            val model = cached ?: url
-            val loader = ImageLoader(context)
-            val request = ImageRequest.Builder(context).data(model).allowHardware(false).build()
-            val result = loader.execute(request)
-            val bitmap = (result as? SuccessResult)?.drawable?.let { (it as? BitmapDrawable)?.bitmap } ?: return@withContext false
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val values = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, "visorlink_${System.currentTimeMillis()}.jpg")
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/VisorLink")
-                    put(MediaStore.Images.Media.IS_PENDING, 1)
-                }
-                val uri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return@withContext false
-                context.contentResolver.openOutputStream(uri)?.use { stream -> bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream) }
-                values.clear()
-                values.put(MediaStore.Images.Media.IS_PENDING, 0)
-                context.contentResolver.update(uri, values, null, null)
-            } else {
-                @Suppress("DEPRECATION")
-                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                if (!dir.exists()) dir.mkdirs()
-                val file = java.io.File(dir, "visorlink_${System.currentTimeMillis()}.jpg")
-                file.outputStream().use { stream -> bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream) }
-                android.media.MediaScannerConnection.scanFile(context, arrayOf(file.absolutePath), null, null)
-            }
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }

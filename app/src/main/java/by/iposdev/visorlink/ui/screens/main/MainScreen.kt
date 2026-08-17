@@ -66,6 +66,7 @@ fun MainScreen(
     onOpenNotifications: () -> Unit,
     onOpenChannel: (String) -> Unit,
     onOpenComments: (String, String) -> Unit,
+    onOpenImageViewer: (String, String) -> Unit,
     onAddDiaryEntry: () -> Unit,
     onEditDiaryEntry: (String) -> Unit,
     mainViewModel: MainViewModel = koinViewModel(),
@@ -158,7 +159,8 @@ fun MainScreen(
                                 FeedScreen(
                                     onNavigateBack = { selectedTab = 0 },
                                     onOpenChannel = onOpenChannel,
-                                    onOpenComments = onOpenComments
+                                    onOpenComments = onOpenComments,
+                                    onOpenImageViewer = onOpenImageViewer
                                 )
                             } else {
                                 selectedTab = 0

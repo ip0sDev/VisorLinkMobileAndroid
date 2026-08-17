@@ -1,10 +1,12 @@
 package by.iposdev.visorlink.ui.screens.feed
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -26,12 +28,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +55,7 @@ import by.iposdev.visorlink.ui.theme.exthruRaisedShadow
 import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.ImageCache
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -62,6 +68,7 @@ fun FeedScreen(
     onNavigateBack: () -> Unit,
     onOpenChannel: (String) -> Unit,
     onOpenComments: (String, String) -> Unit = { _, _ -> },
+    onOpenImageViewer: (String, String) -> Unit = { _, _ -> },
     viewModel: FeedViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -142,6 +149,7 @@ fun FeedScreen(
                                 onComments = {
                                     item.displayChatId?.let { cid -> onOpenComments(cid, item.id) }
                                 },
+                                onOpenImageViewer = onOpenImageViewer,
                                 onClick = { viewModel.onItemClick(item) },
                                 onChannelClick = { item.displayChatId?.let { onOpenChannel(it) } }
                             )
@@ -194,13 +202,19 @@ fun FeedCard(
     hapticEnabled: Boolean,
     onLike: () -> Unit,
     onComments: () -> Unit,
+    onOpenImageViewer: (String, String) -> Unit,
     onClick: () -> Unit,
     onChannelClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
     val isLiked = item.displayLikedUids.contains(currentUid)
     val isExthru = appTheme.isExthruFamily
     val isForge = appTheme.name == "FORGE"
+
+    var showMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(Offset.Zero) }
 
     VlSurface(
         appTheme = appTheme,
@@ -264,15 +278,51 @@ fun FeedCard(
             // Media (if any)
             val imageUrl = item.displayImageUrl
             if (imageUrl != null) {
-                Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { onOpenImageViewer(imageUrl, "image") },
+                                onLongPress = { offset ->
+                                    haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                                    menuOffset = offset
+                                    showMenu = true
+                                }
+                            )
+                        }
+                ) {
                     CachedImage(
                         model = imageUrl,
                         contentDescription = null,
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxWidth()
+                            .heightIn(max = 500.dp)
                             .clip(if (isForge) RectangleShape else RoundedCornerShape(12.dp)),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.FillWidth
                     )
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.image_viewer_save)) },
+                            leadingIcon = { Icon(Icons.Default.Download, null) },
+                            onClick = {
+                                showMenu = false
+                                scope.launch {
+                                    val success = ImageCache.saveImageToGallery(context, imageUrl)
+                                    Toast.makeText(
+                                        context,
+                                        if (success) "Saved to gallery" else "Failed to save",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        )
+                    }
                 }
             }
 

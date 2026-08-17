@@ -58,6 +58,19 @@ class CacheViewModel(
         manager.saveConfig(newConfig)
     }
 
+    fun setUnlimited(enabled: Boolean) {
+        val newConfig = _state.value.config.copy(isUnlimited = enabled)
+        _state.update { it.copy(config = newConfig) }
+        manager.saveConfig(newConfig)
+        // If we switched to limited, we might need to evict right now
+        if (!enabled) {
+            viewModelScope.launch {
+                manager.evictIfNeeded()
+                refreshSizes()
+            }
+        }
+    }
+
     fun clearImages() = clearWith(by.iposdev.visorlink.R.string.cache_toast_images_cleared) { manager.clearImages() }
     fun clearVoice()  = clearWith(by.iposdev.visorlink.R.string.cache_toast_voice_cleared)  { manager.clearVoice() }
     fun clearAll()    = clearWith(by.iposdev.visorlink.R.string.cache_toast_all_cleared)   { manager.clearAll() }

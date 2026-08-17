@@ -13,6 +13,7 @@ private const val KEY_MAX_IMAGE_MB = "max_image_mb"
 private const val KEY_MAX_VOICE_MB = "max_voice_mb"
 private const val KEY_MAX_WAVEFORM_MB = "max_waveform_mb"
 private const val KEY_CHAT_CACHE_DAYS = "chat_cache_days"
+private const val KEY_IS_UNLIMITED = "is_unlimited"
 
 // Имена папок в cacheDir
 const val CACHE_DIR_IMAGES   = "coil_cache"        // Coil пишет сюда сам
@@ -22,10 +23,11 @@ const val CACHE_DIR_WAVEFORM = "waveform_cache"
 const val CACHE_DIR_CHAT     = "chat_data_cache"
 
 data class CacheConfig(
-    val maxImageMb: Int    = 1024,
-    val maxVoiceMb: Int    = 512,
-    val maxWaveformMb: Int = 50,
-    val chatCacheDays: Int = 365
+    val maxImageMb: Int    = 2048,
+    val maxVoiceMb: Int    = 1024,
+    val maxWaveformMb: Int = 100,
+    val chatCacheDays: Int = 365,
+    val isUnlimited: Boolean = false
 )
 
 data class CacheSizeInfo(
@@ -44,10 +46,11 @@ class CacheManager(private val context: Context) {
     // ── Конфигурация ──────────────────────────────────────────────────────────
 
     fun loadConfig(): CacheConfig = CacheConfig(
-        maxImageMb    = prefs.getInt(KEY_MAX_IMAGE_MB, 1024),
-        maxVoiceMb    = prefs.getInt(KEY_MAX_VOICE_MB, 512),
-        maxWaveformMb = prefs.getInt(KEY_MAX_WAVEFORM_MB, 50),
-        chatCacheDays = prefs.getInt(KEY_CHAT_CACHE_DAYS, 365)
+        maxImageMb    = prefs.getInt(KEY_MAX_IMAGE_MB, 2048),
+        maxVoiceMb    = prefs.getInt(KEY_MAX_VOICE_MB, 1024),
+        maxWaveformMb = prefs.getInt(KEY_MAX_WAVEFORM_MB, 100),
+        chatCacheDays = prefs.getInt(KEY_CHAT_CACHE_DAYS, 365),
+        isUnlimited   = prefs.getBoolean(KEY_IS_UNLIMITED, false)
     )
 
     fun saveConfig(config: CacheConfig) {
@@ -56,6 +59,7 @@ class CacheManager(private val context: Context) {
             .putInt(KEY_MAX_VOICE_MB, config.maxVoiceMb)
             .putInt(KEY_MAX_WAVEFORM_MB, config.maxWaveformMb)
             .putInt(KEY_CHAT_CACHE_DAYS, config.chatCacheDays)
+            .putBoolean(KEY_IS_UNLIMITED, config.isUnlimited)
             .apply()
     }
 
@@ -115,10 +119,18 @@ class CacheManager(private val context: Context) {
 
     suspend fun evictIfNeeded() = withContext(Dispatchers.IO) {
         val config = loadConfig()
+        if (config.isUnlimited) {
+            Log.d(TAG, "Unlimited cache enabled, skipping eviction")
+            return@withContext
+        }
+
         evictDir(File(context.cacheDir, CACHE_DIR_CUSTOM_IMAGES), config.maxImageMb.toLong())
         evictDir(File(context.cacheDir, CACHE_DIR_VOICE), config.maxVoiceMb.toLong())
         evictDir(File(context.cacheDir, CACHE_DIR_WAVEFORM), config.maxWaveformMb.toLong())
-        evictDir(File(context.cacheDir, CACHE_DIR_CHAT), 50L)
+        evictDir(File(context.cacheDir, CACHE_DIR_CHAT), 100L)
+
+        // Очистка старых сообщений из БД
+        ChatDataCache.pruneOldData(context, config.chatCacheDays)
     }
 
     private fun evictDir(dir: File, maxMb: Long) {

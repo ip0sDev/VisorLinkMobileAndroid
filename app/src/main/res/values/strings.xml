@@ -317,6 +317,8 @@
     <string name="cache_limit_images">Image cache limit</string>
     <string name="cache_limit_voice">Voice cache limit</string>
     <string name="cache_limit_history">Keep chat history</string>
+    <string name="cache_limit_unlimited">Unlimited cache</string>
+    <string name="cache_limit_unlimited_sub">Do not auto-delete old files</string>
     <string name="cache_limit_mb">%1$d MB</string>
     <string name="cache_limit_days">%1$d days</string>
     <string name="cache_toast_images_cleared">Image cache cleared</string>

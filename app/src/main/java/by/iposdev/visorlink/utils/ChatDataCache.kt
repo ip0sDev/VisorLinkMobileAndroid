@@ -89,6 +89,16 @@ object ChatDataCache {
         }
     }
 
+    suspend fun pruneOldData(context: Context, days: Int) = withContext(Dispatchers.IO) {
+        if (days <= 0) return@withContext
+        try {
+            val db = getDb(context).writableDatabase
+            val threshold = System.currentTimeMillis() / 1000L - (days * 24 * 60 * 60)
+            db.execSQL("DELETE FROM messages WHERE ts < ?", arrayOf(threshold.toString()))
+            Log.d(TAG, "Pruned messages older than $days days (threshold: $threshold)")
+        } catch (e: Exception) { Log.e(TAG, "Failed to prune old data", e) }
+    }
+
     // ── Outbox ───────────────────────────────────────────────────────────────
 
     suspend fun addToOutbox(context: Context, chatId: String, type: String, data: JSONObject): String =

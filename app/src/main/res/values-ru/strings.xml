@@ -317,6 +317,8 @@
     <string name="cache_limit_images">Лимит кэша картинок</string>
     <string name="cache_limit_voice">Лимит кэша голосовых</string>
     <string name="cache_limit_history">Хранить историю чатов</string>
+    <string name="cache_limit_unlimited">Безлимитный кэш</string>
+    <string name="cache_limit_unlimited_sub">Не удалять старые файлы автоматически</string>
     <string name="cache_limit_mb">%1$d МБ</string>
     <string name="cache_limit_days">%1$d дней</string>
     <string name="cache_toast_images_cleared">Кэш картинок очищен</string>

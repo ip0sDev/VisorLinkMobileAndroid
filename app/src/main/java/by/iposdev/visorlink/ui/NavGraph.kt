@@ -198,6 +198,9 @@ fun VisorLinkNavGraph(
                 onOpenComments      = { chatId, messageId ->
                     navController.navigate(Screen.Comments.createRoute(chatId, messageId))
                 },
+                onOpenImageViewer = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
+                },
                 onAddDiaryEntry = {
                     navController.navigate(Screen.DiaryEntry.createRoute(null))
                 },

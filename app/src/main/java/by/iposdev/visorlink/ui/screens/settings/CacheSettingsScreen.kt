@@ -267,11 +267,13 @@ fun CacheSettingsScreen(
                     SectionHeader(stringResource(R.string.cache_section_limits), currentTheme)
 
                     LimitsCard(
+                        isUnlimited   = state.config.isUnlimited,
                         imageLimitMb  = state.config.maxImageMb,
                         voiceLimitMb  = state.config.maxVoiceMb,
                         cacheDays     = state.config.chatCacheDays,
                         appTheme      = currentTheme,
                         isDark        = isDark,
+                        onUnlimited   = { viewModel.setUnlimited(it) },
                         onImageLimit  = { viewModel.setMaxImageMb(it) },
                         onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
                         onCacheDays   = { viewModel.setChatCacheDays(it) }
@@ -583,61 +585,140 @@ private fun ClearButton(
 
 @Composable
 private fun LimitsCard(
+    isUnlimited: Boolean,
     imageLimitMb: Int,
     voiceLimitMb: Int,
     cacheDays: Int,
     appTheme: AppTheme,
     isDark: Boolean,
+    onUnlimited: (Boolean) -> Unit,
     onImageLimit: (Int) -> Unit,
     onVoiceLimit: (Int) -> Unit,
     onCacheDays:  (Int) -> Unit
 ) {
     val isExthru = appTheme.isExthruFamily
     SettingsCard(appTheme = appTheme, isDark = isDark) {
-        SliderRow(
-            icon     = Icons.Default.Image,
-            label    = stringResource(R.string.cache_limit_images),
-            value    = imageLimitMb.toFloat(),
-            min      = 50f, max = 500f, steps = 8,
-            appTheme = appTheme, isDark = isDark,
-            format   = { "${it.toInt()} MB" },
-            onChange = { onImageLimit(it.toInt()) }
+        SwitchRow(
+            icon     = Icons.Default.AllInclusive,
+            label    = stringResource(R.string.cache_limit_unlimited),
+            sublabel = stringResource(R.string.cache_limit_unlimited_sub),
+            checked  = isUnlimited,
+            appTheme = appTheme,
+            isDark   = isDark,
+            onCheckedChange = onUnlimited
         )
 
-        if (!isExthru) {
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
-            Spacer(Modifier.height(8.dp))
+        AnimatedVisibility(!isUnlimited) {
+            Column {
+                if (!isExthru) {
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                SliderRow(
+                    icon     = Icons.Default.Image,
+                    label    = stringResource(R.string.cache_limit_images),
+                    value    = imageLimitMb.toFloat(),
+                    min      = 50f, max = 2048f, steps = 31,
+                    appTheme = appTheme, isDark = isDark,
+                    format   = { "${it.toInt()} MB" },
+                    onChange = { onImageLimit(it.toInt()) }
+                )
+
+                if (!isExthru) {
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                SliderRow(
+                    icon     = Icons.Default.Mic,
+                    label    = stringResource(R.string.cache_limit_voice),
+                    value    = voiceLimitMb.toFloat(),
+                    min      = 50f, max = 1024f, steps = 19,
+                    appTheme = appTheme, isDark = isDark,
+                    format   = { "${it.toInt()} MB" },
+                    onChange = { onVoiceLimit(it.toInt()) }
+                )
+
+                if (!isExthru) {
+                    Spacer(Modifier.height(8.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
+                    Spacer(Modifier.height(8.dp))
+                } else {
+                    Spacer(Modifier.height(24.dp))
+                }
+
+                SliderRow(
+                    icon     = Icons.Default.History,
+                    label    = stringResource(R.string.cache_limit_history),
+                    value    = cacheDays.toFloat(),
+                    min      = 1f, max = 365f, steps = 364,
+                    appTheme = appTheme, isDark = isDark,
+                    format   = { if (it >= 365f) "Forever" else "${it.toInt()} days" },
+                    onChange = { onCacheDays(it.toInt()) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SwitchRow(
+    icon: ImageVector,
+    label: String,
+    sublabel: String,
+    checked: Boolean,
+    appTheme: AppTheme,
+    isDark: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val style = rememberExthruStyle(appTheme)
+    val isForge = style.isForge
+    val isExthru = appTheme.isExthruFamily
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = if (isExthru) 8.dp else 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (isExthru) {
+            ExthruIconTray(appTheme = appTheme, icon = icon)
         } else {
-            Spacer(Modifier.height(24.dp))
+            Icon(icon, null, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
         }
 
-        SliderRow(
-            icon     = Icons.Default.Mic,
-            label    = stringResource(R.string.cache_limit_voice),
-            value    = voiceLimitMb.toFloat(),
-            min      = 50f, max = 500f, steps = 8,
-            appTheme = appTheme, isDark = isDark,
-            format   = { "${it.toInt()} MB" },
-            onChange = { onVoiceLimit(it.toInt()) }
-        )
-
-        if (!isExthru) {
-            Spacer(Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.2f))
-            Spacer(Modifier.height(8.dp))
-        } else {
-            Spacer(Modifier.height(24.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = if (isForge) FontFamily.Monospace else null
+            )
+            Text(
+                sublabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontFamily = if (isForge) FontFamily.Monospace else null
+            )
         }
 
-        SliderRow(
-            icon     = Icons.Default.History,
-            label    = stringResource(R.string.cache_limit_history),
-            value    = cacheDays.toFloat(),
-            min      = 1f, max = 30f, steps = 28,
-            appTheme = appTheme, isDark = isDark,
-            format   = { "${it.toInt()} days" },
-            onChange = { onCacheDays(it.toInt()) }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
+            )
         )
     }
 }

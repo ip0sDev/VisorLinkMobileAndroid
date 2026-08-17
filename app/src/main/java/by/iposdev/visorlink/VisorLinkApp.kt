@@ -13,6 +13,8 @@ import by.iposdev.visorlink.utils.PresenceManager
 import by.iposdev.visorlink.data.repository.FlagsRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.DiaryReminderManager
+import by.iposdev.visorlink.utils.CacheManager
+import by.iposdev.visorlink.utils.AppImageLoader
 import io.sentry.android.core.SentryAndroid
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -36,11 +38,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
     private var presenceManager: PresenceManager? = null
 
     override fun newImageLoader(): ImageLoader {
-        return ImageLoader.Builder(this)
-            .components {
-                add(ImageDecoderDecoder.Factory())
-            }
-            .build()
+        return AppImageLoader.get(this)
     }
 
     override fun onCreate() {
@@ -76,6 +74,13 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         startKoin {
             androidContext(this@VisorLinkApp)
             modules(appModule)
+        }
+
+        // Initialize Cache
+        val cacheManager: CacheManager = GlobalContext.get().get()
+        AppImageLoader.init(this, cacheManager.loadConfig())
+        MainScope().launch {
+            cacheManager.evictIfNeeded()
         }
 
         // Initialize OutboxManager to start background processing
