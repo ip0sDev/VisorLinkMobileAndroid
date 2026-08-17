@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 private const val DB_NAME = "visorlink_cache.db"
 private const val DB_VERSION = 4
@@ -92,7 +93,8 @@ object ChatDataCache {
 
     suspend fun addToOutbox(context: Context, chatId: String, type: String, data: JSONObject): String =
         withContext(Dispatchers.IO) {
-            val id = "queued_${System.currentTimeMillis()}"
+            val uuid = UUID.randomUUID().toString().take(8)
+            val id = "queued_${System.currentTimeMillis()}_$uuid"
             try {
                 val db = getDb(context).writableDatabase
                 val stmt = db.compileStatement("INSERT INTO outbox (id, chat_id, type, data, ts, status) VALUES (?, ?, ?, ?, ?, 0)")
@@ -103,7 +105,7 @@ object ChatDataCache {
                 stmt.bindLong(5, System.currentTimeMillis())
                 stmt.executeInsert()
                 _outboxSignal.emit(Unit)
-            } catch (e: Exception) { Log.e(TAG, "Failed to add to outbox", e) }
+            } catch (e: Exception) { Log.e(TAG, "Failed to add to outbox (id=$id)", e) }
             id
         }
 

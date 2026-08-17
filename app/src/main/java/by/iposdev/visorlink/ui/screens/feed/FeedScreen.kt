@@ -262,10 +262,11 @@ fun FeedCard(
             }
 
             // Media (if any)
-            if (item.url != null) {
+            val imageUrl = item.displayImageUrl
+            if (imageUrl != null) {
                 Box(modifier = Modifier.fillMaxWidth().height(260.dp)) {
                     CachedImage(
-                        model = item.url,
+                        model = imageUrl,
                         contentDescription = null,
                         modifier = Modifier
                             .fillMaxSize()
@@ -286,9 +287,10 @@ fun FeedCard(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
-                if (!item.text.isNullOrEmpty()) {
+                val displayText = item.text?.takeIf { it.isNotBlank() } ?: item.caption
+                if (!displayText.isNullOrEmpty()) {
                     Text(
-                        item.text!!,
+                        displayText,
                         fontSize = 15.sp,
                         lineHeight = 20.sp,
                         color = MaterialTheme.colorScheme.onSurface,

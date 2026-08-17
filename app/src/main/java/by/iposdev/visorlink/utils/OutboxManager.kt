@@ -82,47 +82,60 @@ class OutboxManager(
 
     private fun startProcessing() {
         if (processingJob?.isActive == true) return
+        Log.d(TAG, "Starting outbox processing...")
         processingJob = scope.launch {
             while (isActive) {
                 val now = System.currentTimeMillis()
                 val queued = outboxDataSource.loadOutbox(context)
                     .filter { action ->
-                        action.status == 0 && 
-                        !inFlightIds.contains(action.id) &&
-                        action.retryCount < MAX_RETRIES &&
-                        (now - action.lastAttempt) > (action.retryCount * 10000L)
+                        action.status == 0 &&
+                                !inFlightIds.contains(action.id) &&
+                                action.retryCount < MAX_RETRIES &&
+                                (now - action.lastAttempt) > (action.retryCount * 10000L)
                     }
 
-                if (queued.isEmpty()) break // Останавливаем цикл, если очередь пуста. 
-                                            // Он перезапустится по сигналу outboxSignal или при смене сети.
-                
-                for (action in queued) {
-                    if (!networkMonitor.isOnline.value) break
-                    
-                    inFlightIds.add(action.id)
+                if (queued.isEmpty()) {
+                    Log.d(TAG, "Outbox is empty, stopping loop.")
+                    break
+                }
+
+                // Группируем по чатам для последовательной отправки внутри каждого чата
+                val groups = queued.groupBy { it.chatId }
+
+                for ((chatId, actions) in groups) {
                     launch {
-                        try {
-                            withTimeout(120_000) { 
-                                if (action.type == "image" || action.type == "voice" || action.type == "video") {
-                                    mediaSemaphore.withPermit { processAction(action) }
-                                } else {
-                                    processAction(action)
+                        for (action in actions) {
+                            if (!networkMonitor.isOnline.value || !isActive) break
+                            if (inFlightIds.contains(action.id)) continue
+
+                            inFlightIds.add(action.id)
+                            try {
+                                Log.d(TAG, "Processing action ${action.id} (type=${action.type}) for chat $chatId")
+                                withTimeout(120_000) {
+                                    if (action.type == "image" || action.type == "voice" || action.type == "video") {
+                                        mediaSemaphore.withPermit { processAction(action) }
+                                    } else {
+                                        processAction(action)
+                                    }
                                 }
+                                outboxDataSource.updateStatus(context, action.id, 1)
+                                Log.d(TAG, "Successfully processed action ${action.id}")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Failed to process outbox action ${action.id}", e)
+                                val nextRetry = action.retryCount + 1
+                                outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
+                                if (nextRetry >= MAX_RETRIES) {
+                                    outboxDataSource.updateStatus(context, action.id, 2)
+                                }
+                                // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить порядок сообщений
+                                break
+                            } finally {
+                                inFlightIds.remove(action.id)
                             }
-                            outboxDataSource.updateStatus(context, action.id, 1)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Failed to process outbox action ${action.id}", e)
-                            val nextRetry = action.retryCount + 1
-                            outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
-                            if (nextRetry >= MAX_RETRIES) {
-                                outboxDataSource.updateStatus(context, action.id, 2)
-                            }
-                        } finally {
-                            inFlightIds.remove(action.id)
                         }
                     }
                 }
-                delay(2000) 
+                delay(2000)
             }
         }
     }

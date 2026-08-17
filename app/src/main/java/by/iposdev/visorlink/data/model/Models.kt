@@ -444,6 +444,8 @@ data class FeedChannelData(
     var name: String? = null,
     var avatarUrl: String? = null,
     var avatar_url: String? = null,
+    var cdnMediaId: String? = null,
+    var cdn_media_id: String? = null,
     var tag: String? = null
 )
 
@@ -467,7 +469,11 @@ data class FeedItem(
     var text: String? = null,
     var caption: String? = null,
     var url: String? = null,
+    var media_url: String? = null,
+    var mediaUrl: String? = null,
+    var image_url: String? = null,
     var cdnMediaId: String? = null,
+    var cdn_media_id: String? = null,
     var images: List<AlbumImage>? = null,
     var duration: Int? = null,
     var tags: List<String> = emptyList(),
@@ -484,11 +490,44 @@ data class FeedItem(
 
     var createdAt: Timestamp? = null
 ) {
+    val displayImageUrl: String?
+        get() {
+            val bestUrl = url ?: media_url ?: mediaUrl ?: image_url
+            if (!bestUrl.isNullOrEmpty()) return bestUrl
+
+            val bestCdnId = cdnMediaId ?: cdn_media_id
+            if (!bestCdnId.isNullOrEmpty()) return "https://api.visorlink.org/p/$bestCdnId"
+
+            val firstAlbum = images?.firstOrNull()
+            if (firstAlbum != null) {
+                if (!firstAlbum.url.isNullOrEmpty()) return firstAlbum.url
+                if (!firstAlbum.cdnMediaId.isNullOrEmpty()) return "https://api.visorlink.org/p/${firstAlbum.cdnMediaId}"
+            }
+            return null
+        }
+
     val displayAuthorName: String
         get() = (channelData?.name ?: channel_data?.name ?: authorData?.name ?: author_name ?: authorName ?: "Unknown Channel").ifEmpty { "Unknown Channel" }
 
     val displayAuthorAvatarUrl: String?
-        get() = channelData?.avatarUrl ?: channelData?.avatar_url ?: channel_data?.avatarUrl ?: channel_data?.avatar_url ?: authorData?.avatarUrl ?: author_avatar_url ?: authorAvatarUrl
+        get() {
+            val url = channelData?.avatarUrl ?: channelData?.avatar_url ?:
+            channel_data?.avatarUrl ?: channel_data?.avatar_url ?:
+            authorData?.avatarUrl ?: authorData?.avatar_url ?:
+            author_avatar_url ?: authorAvatarUrl
+
+            if (!url.isNullOrEmpty()) return url
+
+            val cdnId = channelData?.cdnMediaId ?: channelData?.cdn_media_id ?:
+            channel_data?.cdnMediaId ?: channel_data?.cdn_media_id ?:
+            authorData?.cdnMediaId ?: authorData?.cdn_media_id ?:
+            author_avatar_url // sometimes the ID is in the avatar_url field if it's just the ID
+
+            if (!cdnId.isNullOrEmpty() && !cdnId.startsWith("http")) {
+                return "https://api.visorlink.org/p/$cdnId"
+            }
+            return null
+        }
 
     val displayChatId: String?
         get() = chatId

@@ -377,7 +377,7 @@ class ChatViewModel(
         if (!startCooldown()) return
 
         val type = if (isGif) MessageType.GIF else MessageType.VIDEO
-        val tempId = "temp_${System.currentTimeMillis()}"
+        val tempId = "temp_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
         val reply = _uiState.value.replyingTo?.toReplyData()
 
         val tempMsg = Message(
