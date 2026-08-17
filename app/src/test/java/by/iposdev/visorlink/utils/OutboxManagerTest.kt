@@ -40,11 +40,11 @@ class OutboxManagerTest {
     }
 
     @Test
-    fun `text messages should be processed in parallel`() = runTest {
+    fun `text messages should be processed in parallel across chats`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         
-        val action1 = createQueuedAction("1", "text")
-        val action2 = createQueuedAction("2", "text")
+        val action1 = createQueuedAction("1", "text", chatId = "chat1")
+        val action2 = createQueuedAction("2", "text", chatId = "chat2")
         
         whenever(outboxDataSource.loadOutbox(any()))
             .thenReturn(listOf(action1, action2))
@@ -63,16 +63,16 @@ class OutboxManagerTest {
     }
 
     @Test
-    fun `media messages should respect concurrency limit`() = runTest {
+    fun `media messages should respect concurrency limit across chats`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
         
         val file1 = tempFolder.newFile("f1.jpg")
         val file2 = tempFolder.newFile("f2.jpg")
         val file3 = tempFolder.newFile("f3.jpg")
 
-        val media1 = createQueuedAction("m1", "image", file1.absolutePath)
-        val media2 = createQueuedAction("m2", "image", file2.absolutePath)
-        val media3 = createQueuedAction("m3", "image", file3.absolutePath)
+        val media1 = createQueuedAction("m1", "image", file1.absolutePath, chatId = "chat1")
+        val media2 = createQueuedAction("m2", "image", file2.absolutePath, chatId = "chat2")
+        val media3 = createQueuedAction("m3", "image", file3.absolutePath, chatId = "chat3")
         
         whenever(outboxDataSource.loadOutbox(any()))
             .thenReturn(listOf(media1, media2, media3))
@@ -86,6 +86,8 @@ class OutboxManagerTest {
             if (current > maxConcurrent.get()) {
                 maxConcurrent.set(current)
             }
+            // Имитируем работу
+            Thread.sleep(10) 
             concurrentCount.decrementAndGet()
             "mediaId"
         }
@@ -102,7 +104,7 @@ class OutboxManagerTest {
         outboxManager.stopProcessing()
     }
 
-    private fun createQueuedAction(id: String, type: String, path: String = "some_path"): ChatDataCache.QueuedAction {
+    private fun createQueuedAction(id: String, type: String, path: String = "some_path", chatId: String = "chat1"): ChatDataCache.QueuedAction {
         val data = mock<JSONObject>()
         whenever(data.getString(any())).thenAnswer { inv ->
             val key = inv.getArgument<String>(0)
@@ -111,6 +113,6 @@ class OutboxManagerTest {
         whenever(data.has(any())).thenReturn(false)
         whenever(data.optBoolean(any(), any())).thenReturn(false)
         
-        return ChatDataCache.QueuedAction(id, "chat1", type, data, System.currentTimeMillis())
+        return ChatDataCache.QueuedAction(id, chatId, type, data, System.currentTimeMillis())
     }
 }
