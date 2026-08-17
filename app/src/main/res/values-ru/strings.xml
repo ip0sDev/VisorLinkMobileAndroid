@@ -29,6 +29,14 @@
     <string name="login_no_account">Нет аккаунта?\u0020</string>
     <string name="login_register_link">Регистрация</string>
 
+    <!-- Auth — 2FA -->
+    <string name="tfa_title">Двухфакторная защита</string>
+    <string name="tfa_code_hint">Введите 6-значный код</string>
+    <string name="tfa_instruction">Проверьте бота VisorLink или вашу почту</string>
+    <string name="tfa_field_label">Код подтверждения</string>
+    <string name="tfa_action_confirm">Подтвердить</string>
+    <string name="tfa_action_resend_email">Отправить на Email</string>
+
     <!-- Auth — Register -->
     <string name="register_title">Создать аккаунт</string>
     <string name="register_field_username">Имя пользователя</string>
@@ -556,6 +564,9 @@
     <!-- Settings — Account -->
     <string name="settings_tg_link">Привязать Telegram</string>
     <string name="settings_password_change">Изменить пароль</string>
+    <string name="settings_tfa_title">Двухфакторная защита (2FA)</string>
+    <string name="settings_tfa_sub_on">Ваш аккаунт защищён</string>
+    <string name="settings_tfa_sub_off">Дополнительный уровень безопасности</string>
     <string name="settings_logout">Выйти из аккаунта</string>
 
     <!-- PRO Banner -->

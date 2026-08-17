@@ -21,6 +21,7 @@ import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
 import by.iposdev.visorlink.ui.screens.auth.VerifyEmailScreen
+import by.iposdev.visorlink.ui.screens.auth.TfaScreen
 import by.iposdev.visorlink.ui.screens.chat.ChatScreen
 import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
@@ -72,15 +73,23 @@ fun VisorLinkNavGraph(
 
     val authState by authViewModel.authState.collectAsState()
     val showOnboarding by themeViewModel.showOnboarding.collectAsState()
+    val isTfaRequired by authViewModel.isTfaRequired.collectAsState()
 
-    // ── Three-state auth guard + Onboarding ──────────────────────────────────
-    LaunchedEffect(authState, isStealthUnlocked, showOnboarding) {
+    // ── Three-state auth guard + Onboarding + 2FA ─────────────────────────────
+    LaunchedEffect(authState, isStealthUnlocked, showOnboarding, isTfaRequired) {
         if (stealthManager.isEnabled() && !isStealthUnlocked) {
             return@LaunchedEffect
         }
 
         if (showOnboarding) {
             navController.navigate(Screen.Onboarding.route) {
+                popUpTo(0) { inclusive = true }
+            }
+            return@LaunchedEffect
+        }
+
+        if (isTfaRequired) {
+            navController.navigate(Screen.Tfa.route) {
                 popUpTo(0) { inclusive = true }
             }
             return@LaunchedEffect
@@ -103,6 +112,7 @@ fun VisorLinkNavGraph(
     val start = when {
         stealthManager.isEnabled() && !isStealthUnlocked -> "decoy"
         showOnboarding                    -> Screen.Onboarding.route
+        isTfaRequired                     -> Screen.Tfa.route
         authState is AuthState.Verified   -> Screen.ChatList.route
         authState is AuthState.Unverified -> Screen.VerifyEmail.route
         else                              -> Screen.Login.route
@@ -156,6 +166,13 @@ fun VisorLinkNavGraph(
                 onVerified = { /* handled by authState guard */ },
                 onLogout   = { authViewModel.logout() },
                 viewModel  = authViewModel
+            )
+        }
+
+        composable(Screen.Tfa.route) {
+            TfaScreen(
+                onTfaPassed = { /* handled by authState/tfa guard */ },
+                viewModel = authViewModel
             )
         }
 

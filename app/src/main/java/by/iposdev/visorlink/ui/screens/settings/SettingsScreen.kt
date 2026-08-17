@@ -595,14 +595,41 @@ fun SettingsScreen(
 
                     // ── Аккаунт ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_account)) {
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorEmail, icon = Icons.Default.Email, title = "Email", subtitle = profile?.email ?: "", index = 0, total = 4)
+                        VlSettingsItem(appTheme = currentTheme, iconColor = colorEmail, icon = Icons.Default.Email, title = "Email", subtitle = profile?.email ?: "", index = 0, total = if (flags.isEnabled("2fa_enabled")) 5 else 4)
+                        
+                        if (flags.isEnabled("2fa_enabled")) {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                iconColor = Color(0xFF10B981),
+                                icon = Icons.Default.Security,
+                                title = stringResource(R.string.settings_tfa_title),
+                                subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off),
+                                index = 1, total = 5,
+                                trailing = {
+                                    VlSwitch(
+                                        appTheme = currentTheme,
+                                        checked = profile?.tfaEnabled ?: false,
+                                        onCheckedChange = { v ->
+                                            haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                            scope.launch {
+                                                val uid = profile?.uid ?: return@launch
+                                                Firebase.firestore.collection("users").document(uid)
+                                                    .update("tfaEnabled", v)
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+                        }
+
                         VlSettingsItem(
                             appTheme = currentTheme,
                             iconColor = Color(0xFF2AABEE),
                             icon = Icons.Default.Send,
                             title = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked, profile?.tg_username ?: "") else stringResource(R.string.settings_tg_link),
                             subtitle = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
-                            index = 1, total = 4,
+                            index = if (flags.isEnabled("2fa_enabled")) 2 else 1, 
+                            total = if (flags.isEnabled("2fa_enabled")) 5 else 4,
                             onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 if (profile?.tg_username != null) {
@@ -637,8 +664,25 @@ fun SettingsScreen(
                                 }
                             }
                         )
-                        VlSettingsItem(appTheme = currentTheme, iconColor = colorPassword, icon = Icons.Default.Password, title = stringResource(R.string.settings_password_change), onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showPasswordDialog = true }, index = 2, total = 4)
-                        VlSettingsItem(appTheme = currentTheme, iconColor = MaterialTheme.colorScheme.error, icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); showLogoutDialog = true }, index = 3, total = 4)
+                        VlSettingsItem(
+                            appTheme = currentTheme, 
+                            iconColor = colorPassword, 
+                            icon = Icons.Default.Password, 
+                            title = stringResource(R.string.settings_password_change), 
+                            onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); showPasswordDialog = true }, 
+                            index = if (flags.isEnabled("2fa_enabled")) 3 else 2, 
+                            total = if (flags.isEnabled("2fa_enabled")) 5 else 4
+                        )
+                        VlSettingsItem(
+                            appTheme = currentTheme, 
+                            iconColor = MaterialTheme.colorScheme.error, 
+                            icon = Icons.AutoMirrored.Filled.Logout, 
+                            title = stringResource(R.string.settings_logout), 
+                            isDestructive = true, 
+                            onClick = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); showLogoutDialog = true }, 
+                            index = if (flags.isEnabled("2fa_enabled")) 4 else 3, 
+                            total = if (flags.isEnabled("2fa_enabled")) 5 else 4
+                        )
                     }
 
                     // ── About ──

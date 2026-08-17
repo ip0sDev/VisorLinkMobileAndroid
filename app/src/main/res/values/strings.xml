@@ -29,6 +29,14 @@
     <string name="login_no_account">Don\'t have an account?\u0020</string>
     <string name="login_register_link">Register</string>
 
+    <!-- Auth — 2FA -->
+    <string name="tfa_title">Two-Factor Protection</string>
+    <string name="tfa_code_hint">Enter 6-digit code</string>
+    <string name="tfa_instruction">Check your VisorLink bot or your email</string>
+    <string name="tfa_field_label">Verification Code</string>
+    <string name="tfa_action_confirm">Confirm</string>
+    <string name="tfa_action_resend_email">Resend to Email</string>
+
     <!-- Auth — Register -->
     <string name="register_title">Create Account</string>
     <string name="register_field_username">Username</string>
@@ -556,6 +564,9 @@
     <!-- Settings — Account -->
     <string name="settings_tg_link">Bind Telegram</string>
     <string name="settings_password_change">Change Password</string>
+    <string name="settings_tfa_title">Two-Factor Auth</string>
+    <string name="settings_tfa_sub_on">Your account is protected</string>
+    <string name="settings_tfa_sub_off">Add an extra layer of security</string>
     <string name="settings_logout">Sign Out</string>
 
     <!-- PRO Banner -->

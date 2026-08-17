@@ -29,6 +29,7 @@ import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.CacheManager
+import by.iposdev.visorlink.utils.TfaManager
 import by.iposdev.visorlink.utils.DiaryReminderManager
 import by.iposdev.visorlink.utils.DraftManager
 import by.iposdev.visorlink.utils.NetworkMonitor
@@ -77,6 +78,7 @@ val appModule = module {
     single { BotRepository(get()) }
 
     single { CacheManager(androidContext()) }
+    single { TfaManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
     single { NetworkMonitor(androidContext()) }
     single { OutboxManager(androidContext(), get(), get(), get(), get(), get()) }
@@ -85,7 +87,7 @@ val appModule = module {
 
     viewModel { AppCheckViewModel() }
 
-    viewModel { AuthViewModel(get()) }
+    viewModel { AuthViewModel(get(), get(), get()) }
     viewModel { ThemeViewModel(androidContext()) }
     viewModel { MainViewModel(get(), get()) }
     viewModel { ChatListViewModel(get(), get(), get(), get()) }

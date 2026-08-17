@@ -22,6 +22,7 @@ foundationLayout = "1.11.4"
 materialIconsExtended = "1.7.8"
 sentry-sdk = "8.52.0"
 sentry-plugin = "6.18.0"
+securityCrypto = "1.1.0"
 
 koin = "4.2.2"
 coil = "2.7.0"
@@ -43,6 +44,7 @@ foundation = "1.11.4"
 
 [libraries]
 # --- AndroidX ---
+androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-media = { group = "androidx.media", name = "media", version.ref = "mediaVersion" }

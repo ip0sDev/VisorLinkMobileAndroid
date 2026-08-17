@@ -2,8 +2,12 @@ package by.iposdev.visorlink.ui.screens.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.AuthState
+import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.TfaManager
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -25,15 +29,95 @@ data class VerifyEmailUiState(
     val verified: Boolean = false
 )
 
+data class TfaUiState(
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val tfaPassed: Boolean = false
+)
+
 // ─── ViewModel ────────────────────────────────────────────────────────────────
 
 class AuthViewModel(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val userRepository: UserRepository,
+    private val tfaManager: TfaManager
 ) : ViewModel() {
 
     // Three-state auth stream — consumed by the root nav guard
     val authState: StateFlow<AuthState> = authRepository.authState
         .stateIn(viewModelScope, SharingStarted.Eagerly, AuthState.NoSession)
+
+    // Reactive user profile that updates when auth state changes
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val currentUserProfile: Flow<UserProfile?> = authRepository.authState.flatMapLatest { state ->
+        val uid = when (state) {
+            is AuthState.Verified -> state.user.uid
+            is AuthState.Unverified -> state.user.uid
+            else -> null
+        }
+        if (uid != null) userRepository.userProfileFlow(uid) else flowOf(null)
+    }
+
+    // ── 2FA state ─────────────────────────────────────────────────────────────
+
+    private val _tfaPassed = MutableStateFlow(false)
+    val tfaPassed: StateFlow<Boolean> = _tfaPassed.asStateFlow()
+
+    private val _tfaUiState = MutableStateFlow(TfaUiState())
+    val tfaUiState: StateFlow<TfaUiState> = _tfaUiState.asStateFlow()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val isTfaRequired: StateFlow<Boolean> = combine(
+        authState,
+        currentUserProfile,
+        _tfaPassed
+    ) { state, profile, passed ->
+        Triple(state, profile, passed)
+    }.flatMapLatest { (state, profile, passed) ->
+        flow {
+            if (state is AuthState.Verified && profile?.tfaEnabled == true && !passed) {
+                // Check cache
+                val authTime = authRepository.getAuthTime()
+                if (authTime != null && tfaManager.isTfaPassed(authTime)) {
+                    _tfaPassed.value = true
+                    emit(false)
+                } else {
+                    emit(true)
+                }
+            } else {
+                emit(false)
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    fun request2FA(method: String) {
+        viewModelScope.launch {
+            _tfaUiState.value = TfaUiState(isLoading = true)
+            runCatching { authRepository.request2FA(method) }
+                .onSuccess { _tfaUiState.value = TfaUiState(isLoading = false) }
+                .onFailure { _tfaUiState.value = TfaUiState(error = friendlyMessage(it)) }
+        }
+    }
+
+    fun verify2FA(code: String) {
+        viewModelScope.launch {
+            _tfaUiState.value = TfaUiState(isLoading = true)
+            runCatching { authRepository.verify2FA(code) }
+                .onSuccess {
+                    val authTime = authRepository.getAuthTime()
+                    if (authTime != null) {
+                        tfaManager.setTfaPassed(authTime)
+                    }
+                    _tfaPassed.value = true
+                    _tfaUiState.value = TfaUiState(tfaPassed = true)
+                }
+                .onFailure { _tfaUiState.value = TfaUiState(error = "Invalid code or expired") }
+        }
+    }
+
+    fun clearTfaError() {
+        _tfaUiState.value = _tfaUiState.value.copy(error = null)
+    }
 
     // ── Auth (login / register) ───────────────────────────────────────────────
 
@@ -147,6 +231,8 @@ class AuthViewModel(
 
     fun logout() {
         stopVerificationPolling()
+        tfaManager.clearCache()
+        _tfaPassed.value = false
         authRepository.logout()
     }
 

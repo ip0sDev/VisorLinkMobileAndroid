@@ -28,6 +28,7 @@ data class UserProfile(
     val showStreak: Boolean = true,
     val proUntil: Timestamp? = null,
     val trialUsed: Boolean = false,
+    val tfaEnabled: Boolean = false,
     val registeredViaOfficialClient: Boolean = true,
 
     // ДОБАВЛЕНО:
