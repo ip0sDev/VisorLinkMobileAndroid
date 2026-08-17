@@ -65,6 +65,7 @@ import by.iposdev.visorlink.ui.screens.stickers.StickerPickerBottomSheet
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.ImageCache
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
@@ -622,7 +623,7 @@ fun ChatScreen(
                     },
                     onSaveImage = {
                         scope.launch {
-                            val success = saveImageToGallery(context, menuData.message.url ?: "")
+                            val success = ImageCache.saveImageToGallery(context, menuData.message.url ?: "")
                             Toast.makeText(context, if (success) "Saved" else "Failed", Toast.LENGTH_SHORT).show()
                         }
                     },
