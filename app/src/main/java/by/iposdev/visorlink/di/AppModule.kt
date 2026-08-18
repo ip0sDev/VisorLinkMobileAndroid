@@ -4,6 +4,10 @@ package by.iposdev.visorlink.di
 import by.iposdev.visorlink.data.aegis.*
 import by.iposdev.visorlink.data.remote.flags.AegisKeyManager
 import by.iposdev.visorlink.data.remote.flags.FlagsApi
+import by.iposdev.visorlink.data.remote.chat.ChatWebSocketClient
+import by.iposdev.visorlink.data.remote.chat.DynamicBaseUrlInterceptor
+import by.iposdev.visorlink.data.remote.chat.FirebaseAuthInterceptor
+import by.iposdev.visorlink.data.remote.chat.VisorLinkApi
 import by.iposdev.visorlink.data.repository.*
 import by.iposdev.visorlink.ui.aegis.AegisLifeViewModel
 import by.iposdev.visorlink.ui.aegis.LinkDebugViewModel
@@ -41,9 +45,11 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
+import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -71,8 +77,25 @@ val appModule = module {
     single { AegisKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
 
+    // --- Chat Backend ---
+    single(named("chatOkHttp")) {
+        OkHttpClient.Builder()
+            .addInterceptor(DynamicBaseUrlInterceptor(androidContext()))
+            .addInterceptor(FirebaseAuthInterceptor())
+            .build()
+    }
+    single {
+        Retrofit.Builder()
+            .baseUrl("http://10.0.2.2:8080") // Default for emulator, should be configurable
+            .client(get(named("chatOkHttp")))
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(VisorLinkApi::class.java)
+    }
+    single { ChatWebSocketClient(get(named("chatOkHttp"))) }
+
     single { AuthRepository(get(), get()) }
-    single { ChatRepository(get(), get(), get(), androidContext(), get()) }
+    single { ChatRepository(get(), get(), get(), androidContext(), get(), get(), get(), get()) }
     single { UserRepository(get(), get(), get(), androidContext()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }

@@ -147,6 +147,12 @@ fun SettingsScreen(
     var showAdminPanel by remember { mutableStateOf(false) }
     var showBotsManager by remember { mutableStateOf(false) }
 
+    // ── Тестирование ──
+    val backendPrefs = remember { context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE) }
+    var useBackend by remember { mutableStateOf(backendPrefs.getBoolean("use_custom_backend", false)) }
+    var customBackendUrl by remember { mutableStateOf(backendPrefs.getString("custom_backend_url", "10.0.2.2:8080") ?: "10.0.2.2:8080") }
+    var showUrlDialog by remember { mutableStateOf(false) }
+
     // ── Диалоги ──
     var showChannelDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
@@ -593,6 +599,50 @@ fun SettingsScreen(
                         )
                     }
 
+                    // ── Тестирование ──
+                    if (flags.isEnabled("test_backend_enabled")) {
+                        VlSettingsSection(appTheme = currentTheme, title = "Тестирование") {
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.BugReport,
+                                iconColor = MaterialTheme.colorScheme.tertiary,
+                                title = "Тестовый бэкенд",
+                                subtitle = "Использовать Ktor + Redis вместо Firestore",
+                                trailing = {
+                                    VlSwitch(
+                                        checked = useBackend,
+                                        onCheckedChange = {
+                                            useBackend = it
+                                            backendPrefs.edit().putBoolean("use_custom_backend", it).apply()
+                                            haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                        },
+                                        appTheme = currentTheme
+                                    )
+                                },
+                                onClick = {
+                                    useBackend = !useBackend
+                                    backendPrefs.edit().putBoolean("use_custom_backend", useBackend).apply()
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                },
+                                index = 0,
+                                total = 2
+                            )
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.Dns,
+                                iconColor = MaterialTheme.colorScheme.secondary,
+                                title = "Адрес бэкенда",
+                                subtitle = customBackendUrl,
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    showUrlDialog = true
+                                },
+                                index = 1,
+                                total = 2
+                            )
+                        }
+                    }
+
                     // ── Аккаунт ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_account)) {
                         VlSettingsItem(appTheme = currentTheme, iconColor = colorEmail, icon = Icons.Default.Email, title = "Email", subtitle = profile?.email ?: "", index = 0, total = if (flags.isEnabled("2fa_enabled")) 5 else 4)
@@ -862,7 +912,47 @@ fun SettingsScreen(
         )
     }
 
-    // ── ДРУГИЕ ДИАЛОГИ ──
+    // ── Другие диалоги ──
+    if (showUrlDialog) {
+        var tempUrl by remember { mutableStateOf(customBackendUrl) }
+        VlAlertDialog(
+            appTheme = currentTheme,
+            onDismissRequest = { showUrlDialog = false },
+            title = { Text("Настройка бэкенда") },
+            text = {
+                Column(modifier = Modifier.padding(top = 16.dp)) {
+                    Text(
+                        "Введите IP и порт вашего сервера (например, 192.168.1.50:8080)",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = tempUrl,
+                        onValueChange = { tempUrl = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        placeholder = { Text("10.0.2.2:8080") }
+                    )
+                }
+            },
+            actions = {
+                VlDialogButton(onClick = { showUrlDialog = false }, appTheme = currentTheme) {
+                    Text("Отмена", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                VlDialogButton(
+                    onClick = {
+                        customBackendUrl = tempUrl
+                        backendPrefs.edit().putString("custom_backend_url", tempUrl).apply()
+                        showUrlDialog = false
+                        haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                    },
+                    appTheme = currentTheme
+                ) {
+                    Text("Сохранить", color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        )
+    }
     if (showAdminPanel) { AdminPanelSheet { showAdminPanel = false } }
     if (showBotsManager) { BotsManagerSheet { showBotsManager = false } }
 

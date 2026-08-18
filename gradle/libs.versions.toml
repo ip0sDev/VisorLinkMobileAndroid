@@ -29,6 +29,7 @@ coil = "2.7.0"
 datastore = "1.2.1"
 accompanist = "0.37.3"
 retrofit = "3.0.0"
+okhttp = "4.12.0"
 jwtDecode = "2.1.0"
 serializationJson = "1.7.3"
 
@@ -103,6 +104,8 @@ sentry-android = { group = "io.sentry", name = "sentry-android", version.ref = "
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }
 retrofit-gson = { group = "com.squareup.retrofit2", name = "converter-gson", version.ref = "retrofit" }
 jwt-decode = { group = "com.auth0.android", name = "jwtdecode", version.ref = "jwtDecode" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 
 # --- Test ---

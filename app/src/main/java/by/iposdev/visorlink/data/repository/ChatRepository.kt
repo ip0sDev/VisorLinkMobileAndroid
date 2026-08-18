@@ -2,6 +2,7 @@ package by.iposdev.visorlink.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.core.net.toUri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
@@ -11,6 +12,7 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.data.remote.chat.*
 import by.iposdev.visorlink.utils.ChatDataCache
 import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.ImageCache
@@ -40,9 +42,53 @@ class ChatRepository(
     private val db: FirebaseFirestore,
     private val functions: FirebaseFunctions,
     private val context: Context,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val api: VisorLinkApi,
+    private val wsClient: ChatWebSocketClient,
+    private val flagsRepository: FlagsRepository
 ) {
     private val currentUid get() = auth.currentUser!!.uid
+    private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
+
+    fun isBackendEnabled(): Boolean {
+        val serverFlag = flagsRepository.flags.value.isEnabled("test_backend_enabled")
+        val userSetting = backendPrefs.getBoolean("use_custom_backend", false)
+        return serverFlag && userSetting
+    }
+
+    private fun MessageDto.toDomain() = Message(
+        id = id,
+        senderId = senderId,
+        senderUsername = senderUsername,
+        type = type,
+        text = text,
+        url = url,
+        fileName = fileName,
+        duration = duration,
+        stickerId = stickerId,
+        packId = packId,
+        packName = packName,
+        packEmoji = packEmoji,
+        createdAt = Timestamp(Date(createdAt)),
+        deleted = deleted,
+        replyTo = replyTo?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
+        reactions = reactions.map { mapOf("emoji" to it.emoji, "uids" to it.uids, "count" to it.count) },
+        readBy = readBy,
+        spoiler = spoiler,
+        caption = caption,
+        images = images.map { AlbumImage(url = it.url, cdnMediaId = it.cdnMediaId, fileName = it.fileName, spoiler = it.spoiler) }
+    )
+
+    private fun ChatDto.toDomain() = Chat(
+        id = id,
+        type = type,
+        participants = participants,
+        participantData = participantData.mapValues { (_, v) -> mapOf("username" to v.username, "displayName" to v.displayName) },
+        name = name,
+        createdAt = Timestamp(Date(createdAt)),
+        lastMessage = lastMessage,
+        lastMessageAt = lastMessageAt?.let { Timestamp(Date(it)) }
+    )
 
     fun getChatId(uid1: String, uid2: String) =
         listOf(uid1, uid2).sorted().joinToString("_")
@@ -55,7 +101,22 @@ class ChatRepository(
         cachedChats.any { it.id == chatId }
     }
 
-    fun allChatsFlow(uid: String): Flow<List<Chat>> = callbackFlow {
+    fun allChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
+        if (isBackendEnabled()) {
+            val cached = ChatDataCache.loadChatList(context, uid)
+            if (cached.isNotEmpty()) send(cached)
+
+            try {
+                val chats = api.getChats().map { it.toDomain() }
+                    .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+                send(chats)
+                withContext(Dispatchers.IO) { ChatDataCache.saveChatList(context, uid, chats) }
+            } catch (e: Exception) {
+                if (cached.isEmpty()) send(emptyList())
+            }
+            return@channelFlow
+        }
+
         launch(Dispatchers.IO) {
             val cached = ChatDataCache.loadChatList(context, uid)
             if (cached.isNotEmpty()) trySend(cached)
@@ -98,6 +159,57 @@ class ChatRepository(
     fun chatsFlow(uid: String) = allChatsFlow(uid)
 
     fun latestMessagesFlow(chatId: String, onUpdate: (List<Message>, DocumentSnapshot?) -> Unit): Flow<Unit> = channelFlow {
+        if (isBackendEnabled()) {
+            var currentMessages = emptyList<Message>()
+
+            // 1. Initial Cache load
+            launch(Dispatchers.IO) {
+                currentMessages = ChatDataCache.loadMessages(context, chatId)
+                onUpdate(currentMessages, null)
+            }
+
+            // 2. Load from API
+            launch {
+                try {
+                    val messages = api.getMessages(chatId).map { it.toDomain() }
+                    currentMessages = messages
+                    onUpdate(currentMessages, null)
+                    withContext(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, messages) }
+                } catch (e: Exception) {
+                    Log.e("ChatRepo", "Error loading messages from API", e)
+                }
+            }
+
+            // 3. Listen to WebSocket
+            launch {
+                try {
+                    val customUrl = backendPrefs.getString("custom_backend_url", "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080"
+                    wsClient.connect(customUrl)
+                    wsClient.incomingMessages.collect { msgDto ->
+                        // Filter messages for this chat
+                        val domainMsg = msgDto.toDomain()
+                        // Use either msgDto.chatId or some other logic to match current chat
+                        // For simplicity, we assume the backend sends messages for all active chats
+                        // but we only care about this one.
+                        // In direct chats, chatId might be the sorted UIDs.
+                        
+                        // If chatId matches, update
+                        if (msgDto.chatId == chatId) {
+                            currentMessages = (currentMessages.filter { it.id != domainMsg.id } + domainMsg)
+                                .sortedBy { it.createdAt?.seconds ?: 0L }
+                            onUpdate(currentMessages, null)
+                            launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, currentMessages) }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("ChatRepo", "WS Error", e)
+                }
+            }
+
+            awaitClose { wsClient.disconnect() }
+            return@channelFlow
+        }
+
         var currentFirestore = emptyList<Message>()
         var currentOutbox = emptyList<ChatDataCache.QueuedAction>()
         var currentLastDoc: DocumentSnapshot? = null
@@ -243,7 +355,19 @@ class ChatRepository(
         awaitClose { reg.remove() }
     }
 
-    suspend fun findOrCreateChat(currentUserProfile: UserProfile, targetUid: String): String = try {
+    suspend fun findOrCreateChat(currentUserProfile: UserProfile, targetUid: String): String = if (isBackendEnabled()) {
+        try {
+            val response = api.createChat(CreateChatRequest(
+                type = "direct",
+                targetUid = targetUid
+            ))
+            response.id
+        } catch (e: Exception) {
+            val chatId = getChatId(currentUserProfile.uid, targetUid)
+            val cached = ChatDataCache.loadChatList(context, currentUid)
+            if (cached.any { it.id == chatId }) chatId else throw e
+        }
+    } else try {
         val targetDoc = db.collection("users").document(targetUid).get().await()
         val targetUser = targetDoc.toObject(UserProfile::class.java) ?: throw Exception("User not found")
         val chatId = getChatId(currentUserProfile.uid, targetUid)
@@ -334,6 +458,15 @@ class ChatRepository(
     }
 
     suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.TEXT,
+                text = text,
+                replyToId = replyTo?.id
+            ))
+            return
+        }
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
@@ -343,6 +476,15 @@ class ChatRepository(
     }
 
     suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.TEXT,
+                text = text,
+                replyToId = replyTo?.id
+            ))
+            return
+        }
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
@@ -383,6 +525,16 @@ class ChatRepository(
     }
 
     suspend fun sendImageNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.IMAGE,
+                cdnMediaId = mediaId,
+                fileName = fileName,
+                replyToId = replyTo?.id
+            ))
+            return
+        }
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
@@ -422,6 +574,16 @@ class ChatRepository(
     }
 
     suspend fun sendVoiceNow(id: String, chatId: String, mediaId: String, durationSec: Int, senderUsername: String, replyTo: ReplyData?) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.VOICE,
+                cdnMediaId = mediaId,
+                duration = durationSec,
+                replyToId = replyTo?.id
+            ))
+            return
+        }
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
@@ -465,6 +627,16 @@ class ChatRepository(
     }
 
     suspend fun sendVideoNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.VIDEO,
+                cdnMediaId = mediaId,
+                fileName = fileName,
+                replyToId = replyTo?.id
+            ))
+            return
+        }
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
@@ -506,6 +678,18 @@ class ChatRepository(
     }
 
     suspend fun sendStickerNow(id: String, chatId: String, stickerId: String, url: String, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.STICKER,
+                stickerId = stickerId,
+                packId = packId,
+                packName = packName,
+                packEmoji = packEmoji,
+                replyToId = replyTo?.id
+            ))
+            return
+        }
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
