@@ -20,11 +20,11 @@ data class MessageDto(
     @SerializedName("createdAt") val createdAt: Long, // Unix ms
     @SerializedName("deleted") val deleted: Boolean = false,
     @SerializedName("replyTo") val replyTo: ReplyDto? = null,
-    @SerializedName("reactions") val reactions: List<ReactionDto> = emptyList(),
-    @SerializedName("readBy") val readBy: List<String> = emptyList(),
+    @SerializedName("reactions") val reactions: List<ReactionDto>? = null,
+    @SerializedName("readBy") val readBy: List<String>? = null,
     @SerializedName("spoiler") val spoiler: Boolean = false,
     @SerializedName("caption") val caption: String? = null,
-    @SerializedName("images") val images: List<AlbumImageDto> = emptyList(),
+    @SerializedName("images") val images: List<AlbumImageDto>? = null,
     @SerializedName("chatId") val chatId: String? = null
 )
 
@@ -52,9 +52,9 @@ data class AlbumImageDto(
 data class ChatDto(
     @SerializedName("id") val id: String,
     @SerializedName("type") val type: String,
-    @SerializedName("name") val name: String = "",
-    @SerializedName("participants") val participants: List<String>,
-    @SerializedName("participantData") val participantData: Map<String, ParticipantDataDto>,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("participants") val participants: List<String>? = null,
+    @SerializedName("participantData") val participantData: Map<String, ParticipantDataDto>? = null,
     @SerializedName("lastMessage") val lastMessage: String? = null,
     @SerializedName("lastMessageAt") val lastMessageAt: Long? = null,
     @SerializedName("createdAt") val createdAt: Long
@@ -68,8 +68,36 @@ data class ParticipantDataDto(
 data class UserDto(
     @SerializedName("id") val id: String,
     @SerializedName("username") val username: String,
-    @SerializedName("avatarUrl") val avatarUrl: String?,
-    @SerializedName("isOnline") val isOnline: Boolean
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("bio") val bio: String? = null,
+    @SerializedName("avatarUrl") val avatarUrl: String? = null,
+    @SerializedName("isOnline") val isOnline: Boolean = false,
+    @SerializedName("isAdmin") val isAdmin: Boolean = false,
+    @SerializedName("diaryEnabled") val diaryEnabled: Boolean = false,
+    @SerializedName("customization") val customization: Map<String, Any?>? = null
+)
+
+// --- Feed ---
+
+data class FeedItemDto(
+    @SerializedName("id") val id: String,
+    @SerializedName("chatId") val chatId: String? = null,
+    @SerializedName("messageId") val messageId: String? = null,
+    @SerializedName("type") val type: String = "post",
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("text") val text: String? = null,
+    @SerializedName("caption") val caption: String? = null,
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("cdnMediaId") val cdnMediaId: String? = null,
+    @SerializedName("images") val images: List<AlbumImageDto>? = null,
+    @SerializedName("authorName") val authorName: String? = null,
+    @SerializedName("authorAvatarUrl") val authorAvatarUrl: String? = null,
+    @SerializedName("likeCount") val likeCount: Int = 0,
+    @SerializedName("viewsCount") val viewsCount: Int = 0,
+    @SerializedName("commentsCount") val commentsCount: Int = 0,
+    @SerializedName("likers") val likers: List<String>? = null,
+    @SerializedName("tags") val tags: List<String> = emptyList(),
+    @SerializedName("createdAt") val createdAt: Long
 )
 
 // --- Requests ---
@@ -93,4 +121,11 @@ data class SendMessageRequest(
     @SerializedName("packId") val packId: String? = null,
     @SerializedName("packName") val packName: String? = null,
     @SerializedName("packEmoji") val packEmoji: String? = null
+)
+
+data class UpdateProfileRequest(
+    @SerializedName("displayName") val displayName: String? = null,
+    @SerializedName("bio") val bio: String? = null,
+    @SerializedName("avatarUrl") val avatarUrl: String? = null,
+    @SerializedName("customization") val customization: Map<String, Any?>? = null
 )

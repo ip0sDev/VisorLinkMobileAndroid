@@ -150,6 +150,9 @@ fun SettingsScreen(
     // ── Тестирование ──
     val backendPrefs = remember { context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE) }
     var useBackend by remember { mutableStateOf(backendPrefs.getBoolean("use_custom_backend", false)) }
+    var useBackendProfile by remember { mutableStateOf(backendPrefs.getBoolean("use_backend_profile", false)) }
+    var useBackendFeed by remember { mutableStateOf(backendPrefs.getBoolean("use_backend_feed", false)) }
+    var disableFirestore by remember { mutableStateOf(backendPrefs.getBoolean("disable_firestore_completely", false)) }
     var customBackendUrl by remember { mutableStateOf(backendPrefs.getString("custom_backend_url", "10.0.2.2:8080") ?: "10.0.2.2:8080") }
     var showUrlDialog by remember { mutableStateOf(false) }
 
@@ -606,8 +609,8 @@ fun SettingsScreen(
                                 appTheme = currentTheme,
                                 icon = Icons.Default.BugReport,
                                 iconColor = MaterialTheme.colorScheme.tertiary,
-                                title = "Тестовый бэкенд",
-                                subtitle = "Использовать Ktor + Redis вместо Firestore",
+                                title = "Бэкенд: Чаты",
+                                subtitle = "Ktor + Redis для сообщений",
                                 trailing = {
                                     VlSwitch(
                                         checked = useBackend,
@@ -625,7 +628,82 @@ fun SettingsScreen(
                                     haptic.perform(HapticType.SUCCESS, hapticEnabled)
                                 },
                                 index = 0,
-                                total = 2
+                                total = 4
+                            )
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.PersonSearch,
+                                iconColor = MaterialTheme.colorScheme.primary,
+                                title = "Бэкенд: Профили",
+                                subtitle = "Поиск и данные пользователей",
+                                trailing = {
+                                    VlSwitch(
+                                        checked = useBackendProfile,
+                                        onCheckedChange = {
+                                            useBackendProfile = it
+                                            backendPrefs.edit().putBoolean("use_backend_profile", it).apply()
+                                            haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                        },
+                                        appTheme = currentTheme
+                                    )
+                                },
+                                onClick = {
+                                    useBackendProfile = !useBackendProfile
+                                    backendPrefs.edit().putBoolean("use_backend_profile", useBackendProfile).apply()
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                },
+                                index = 1,
+                                total = 4
+                            )
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.RssFeed,
+                                iconColor = MaterialTheme.colorScheme.error,
+                                title = "Бэкенд: Лента",
+                                subtitle = "Discover Feed через API",
+                                trailing = {
+                                    VlSwitch(
+                                        checked = useBackendFeed,
+                                        onCheckedChange = {
+                                            useBackendFeed = it
+                                            backendPrefs.edit().putBoolean("use_backend_feed", it).apply()
+                                            haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                        },
+                                        appTheme = currentTheme
+                                    )
+                                },
+                                onClick = {
+                                    useBackendFeed = !useBackendFeed
+                                    backendPrefs.edit().putBoolean("use_backend_feed", useBackendFeed).apply()
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                },
+                                index = 2,
+                                total = 5
+                            )
+                            VlSettingsItem(
+                                appTheme = currentTheme,
+                                icon = Icons.Default.CloudOff,
+                                iconColor = Color.Gray,
+                                title = "Железно отключить Firestore",
+                                subtitle = "Полная блокировка Firebase БД",
+                                trailing = {
+                                    VlSwitch(
+                                        checked = disableFirestore,
+                                        onCheckedChange = {
+                                            disableFirestore = it
+                                            backendPrefs.edit().putBoolean("disable_firestore_completely", it).apply()
+                                            haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                        },
+                                        appTheme = currentTheme
+                                    )
+                                },
+                                onClick = {
+                                    disableFirestore = !disableFirestore
+                                    backendPrefs.edit().putBoolean("disable_firestore_completely", disableFirestore).apply()
+                                    haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                },
+                                index = 3,
+                                total = 5
                             )
                             VlSettingsItem(
                                 appTheme = currentTheme,
@@ -637,8 +715,8 @@ fun SettingsScreen(
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
                                     showUrlDialog = true
                                 },
-                                index = 1,
-                                total = 2
+                                index = 4,
+                                total = 5
                             )
                         }
                     }

@@ -18,7 +18,11 @@ class ChatWebSocketClient(private val client: OkHttpClient) {
 
     suspend fun connect(baseUrl: String) {
         val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
-            ?: return 
+        
+        if (token == null) {
+            Log.e("ChatWS", "❌ Cannot connect: Token is null")
+            return
+        }
 
         val wsUrl = if (baseUrl.startsWith("http")) {
             baseUrl.replace("http", "ws")
@@ -27,19 +31,21 @@ class ChatWebSocketClient(private val client: OkHttpClient) {
         }
         
         val url = "$wsUrl/ws?token=$token"
+        Log.d("ChatWS", "🚀 Connecting to WebSocket URL: $wsUrl/ws?token=REDACTED")
         val request = Request.Builder().url(url).build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d("ChatWS", "🟢 WebSocket Connected!")
+                Log.d("ChatWS", "🟢 WebSocket Connected! Status: ${response.code}")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
+                Log.d("ChatWS", "📩 Received text: $text")
                 try {
                     val message = gson.fromJson(text, MessageDto::class.java)
                     _incomingMessages.tryEmit(message)
                 } catch (e: Exception) {
-                    Log.e("ChatWS", "Ошибка парсинга сообщения: ${e.message}")
+                    Log.e("ChatWS", "❌ Ошибка парсинга сообщения: ${e.message}")
                 }
             }
 

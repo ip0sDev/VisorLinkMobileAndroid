@@ -96,7 +96,7 @@ val appModule = module {
 
     single { AuthRepository(get(), get()) }
     single { ChatRepository(get(), get(), get(), androidContext(), get(), get(), get(), get()) }
-    single { UserRepository(get(), get(), get(), androidContext()) }
+    single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
 
@@ -161,7 +161,7 @@ val appModule = module {
 
     // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }
-    single { FeedRepository(get(), get(), androidContext(), get()) }
+    single { FeedRepository(get(), get(), androidContext(), get(), get(), get()) }
     single { ForwardRepository(get()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }

@@ -56,6 +56,11 @@ class ChatRepository(
         return serverFlag && userSetting
     }
 
+    fun isFirestoreDisabled(): Boolean {
+        return flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
+                backendPrefs.getBoolean("disable_firestore_completely", false)
+    }
+
     private fun MessageDto.toDomain() = Message(
         id = id,
         senderId = senderId,
@@ -72,19 +77,19 @@ class ChatRepository(
         createdAt = Timestamp(Date(createdAt)),
         deleted = deleted,
         replyTo = replyTo?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
-        reactions = reactions.map { mapOf("emoji" to it.emoji, "uids" to it.uids, "count" to it.count) },
-        readBy = readBy,
+        reactions = reactions?.map { mapOf("emoji" to it.emoji, "uids" to it.uids, "count" to it.count) } ?: emptyList(),
+        readBy = readBy ?: emptyList(),
         spoiler = spoiler,
         caption = caption,
-        images = images.map { AlbumImage(url = it.url, cdnMediaId = it.cdnMediaId, fileName = it.fileName, spoiler = it.spoiler) }
+        images = images?.map { AlbumImage(url = it.url, cdnMediaId = it.cdnMediaId, fileName = it.fileName, spoiler = it.spoiler) } ?: emptyList()
     )
 
     private fun ChatDto.toDomain() = Chat(
         id = id,
         type = type,
-        participants = participants,
-        participantData = participantData.mapValues { (_, v) -> mapOf("username" to v.username, "displayName" to v.displayName) },
-        name = name,
+        participants = participants ?: emptyList(),
+        participantData = participantData?.mapValues { (_, v) -> mapOf("username" to v.username, "displayName" to v.displayName) } ?: emptyMap(),
+        name = name ?: "",
         createdAt = Timestamp(Date(createdAt)),
         lastMessage = lastMessage,
         lastMessageAt = lastMessageAt?.let { Timestamp(Date(it)) }
@@ -94,6 +99,7 @@ class ChatRepository(
         listOf(uid1, uid2).sorted().joinToString("_")
 
     suspend fun chatExists(chatId: String): Boolean = try {
+        if (isFirestoreDisabled() && !isBackendEnabled()) return false
         db.collection("chats").document(chatId).get().await().exists()
     } catch (e: Exception) {
         // Если оффлайн, проверяем наличие чата в нашем локальном кэше (SQLite)
@@ -102,23 +108,32 @@ class ChatRepository(
     }
 
     fun allChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
+        val cacheUid = if (isBackendEnabled()) uid + "_backend" else uid
+        
         if (isBackendEnabled()) {
-            val cached = ChatDataCache.loadChatList(context, uid)
+            val cached = ChatDataCache.loadChatList(context, cacheUid)
             if (cached.isNotEmpty()) send(cached)
 
             try {
                 val chats = api.getChats().map { it.toDomain() }
                     .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
                 send(chats)
-                withContext(Dispatchers.IO) { ChatDataCache.saveChatList(context, uid, chats) }
+                withContext(Dispatchers.IO) { ChatDataCache.saveChatList(context, cacheUid, chats) }
             } catch (e: Exception) {
                 if (cached.isEmpty()) send(emptyList())
             }
             return@channelFlow
         }
 
+        if (isFirestoreDisabled()) {
+            val cached = ChatDataCache.loadChatList(context, cacheUid)
+            if (cached.isNotEmpty()) send(cached) else send(emptyList())
+            awaitClose { }
+            return@channelFlow
+        }
+
         launch(Dispatchers.IO) {
-            val cached = ChatDataCache.loadChatList(context, uid)
+            val cached = ChatDataCache.loadChatList(context, cacheUid)
             if (cached.isNotEmpty()) trySend(cached)
         }
 
@@ -130,7 +145,7 @@ class ChatRepository(
                 .distinctBy { it.id }
                 .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
             trySend(all)
-            launch(Dispatchers.IO) { ChatDataCache.saveChatList(context, uid, all) }
+            launch(Dispatchers.IO) { ChatDataCache.saveChatList(context, cacheUid, all) }
         }
 
         val reg1 = db.collection("chats").whereArrayContains("participants", uid)
@@ -184,17 +199,13 @@ class ChatRepository(
             launch {
                 try {
                     val customUrl = backendPrefs.getString("custom_backend_url", "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080"
+                    Log.d("ChatRepo", "🔌 Connecting to WebSocket: $customUrl")
                     wsClient.connect(customUrl)
                     wsClient.incomingMessages.collect { msgDto ->
-                        // Filter messages for this chat
+                        Log.d("ChatRepo", "📩 Incoming WS message: ${msgDto.id} for chat ${msgDto.chatId}")
                         val domainMsg = msgDto.toDomain()
-                        // Use either msgDto.chatId or some other logic to match current chat
-                        // For simplicity, we assume the backend sends messages for all active chats
-                        // but we only care about this one.
-                        // In direct chats, chatId might be the sorted UIDs.
                         
-                        // If chatId matches, update
-                        if (msgDto.chatId == chatId) {
+                        if (msgDto.chatId == chatId || chatId == "all") {
                             currentMessages = (currentMessages.filter { it.id != domainMsg.id } + domainMsg)
                                 .sortedBy { it.createdAt?.seconds ?: 0L }
                             onUpdate(currentMessages, null)
@@ -202,11 +213,20 @@ class ChatRepository(
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("ChatRepo", "WS Error", e)
+                    Log.e("ChatRepo", "❌ WS Error", e)
                 }
             }
 
             awaitClose { wsClient.disconnect() }
+            return@channelFlow
+        }
+
+        if (isFirestoreDisabled()) {
+            launch(Dispatchers.IO) {
+                val cached = ChatDataCache.loadMessages(context, chatId)
+                onUpdate(cached, null)
+            }
+            awaitClose { }
             return@channelFlow
         }
 
@@ -318,6 +338,11 @@ class ChatRepository(
     }
 
     fun membersFlow(chatId: String): Flow<List<Member>> = callbackFlow {
+        if (isFirestoreDisabled()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
         val reg = db.collection("chats").document(chatId).collection("members")
             .addSnapshotListener { snap, _ ->
                 val members = snap?.documents?.mapNotNull { doc ->
@@ -329,11 +354,19 @@ class ChatRepository(
     }
 
     suspend fun getMyMemberData(chatId: String): Member? = try {
-        val snap = db.collection("chats").document(chatId).collection("members").document(currentUid).get().await()
-        snap.toObject(Member::class.java)?.copy(uid = snap.id)
+        if (isFirestoreDisabled()) null
+        else {
+            val snap = db.collection("chats").document(chatId).collection("members").document(currentUid).get().await()
+            snap.toObject(Member::class.java)?.copy(uid = snap.id)
+        }
     } catch (e: Exception) { null }
 
     fun pendingInvitesFlow(uid: String): Flow<List<GroupInvite>> = callbackFlow {
+        if (isFirestoreDisabled()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
         val reg = db.collection("invites").whereEqualTo("invitedUid", uid).whereEqualTo("status", "pending")
             .addSnapshotListener { snap, _ ->
                 val invites = snap?.documents?.mapNotNull { doc ->
@@ -345,6 +378,11 @@ class ChatRepository(
     }
 
     fun notificationsFlow(uid: String): Flow<List<AppNotification>> = callbackFlow {
+        if (isFirestoreDisabled()) {
+            trySend(emptyList())
+            awaitClose { }
+            return@callbackFlow
+        }
         val reg = db.collection("users").document(uid).collection("notifications").whereEqualTo("read", false)
             .addSnapshotListener { snap, _ ->
                 val notifs = snap?.documents?.mapNotNull { doc ->
@@ -364,7 +402,7 @@ class ChatRepository(
             response.id
         } catch (e: Exception) {
             val chatId = getChatId(currentUserProfile.uid, targetUid)
-            val cached = ChatDataCache.loadChatList(context, currentUid)
+            val cached = ChatDataCache.loadChatList(context, currentUid + "_backend")
             if (cached.any { it.id == chatId }) chatId else throw e
         }
     } else try {
@@ -394,12 +432,14 @@ class ChatRepository(
     }
 
     suspend fun createChat(type: String, name: String, tag: String, description: String = ""): Pair<String, String> {
+        if (isFirestoreDisabled()) throw Exception("Firestore is disabled")
         val result = functions.getHttpsCallable("createChat").call(mapOf("type" to type, "name" to name, "tag" to tag, "description" to description)).await()
         val data = result.data as Map<*, *>
         return Pair(data["chatId"] as String, data["inviteLink"] as String)
     }
 
     suspend fun findByTag(tag: String): TagSearchResult {
+        if (isFirestoreDisabled()) return TagSearchResult(found = false)
         val result = functions.getHttpsCallable("findByTag").call(mapOf("tag" to tag)).await()
         val data = result.data as Map<*, *>
         if (data["found"] != true) return TagSearchResult(found = false)
@@ -417,6 +457,7 @@ class ChatRepository(
     }
 
     suspend fun joinByTag(tag: String): String {
+        if (isFirestoreDisabled()) throw Exception("Firestore is disabled")
         val result = functions.getHttpsCallable("joinByTag").call(mapOf("tag" to tag)).await()
         return (result.data as Map<*, *>)["chatId"] as String
     }
@@ -457,22 +498,30 @@ class ChatRepository(
         return (result.data as Map<*, *>)["inviteLink"] as String
     }
 
-    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?): Message? {
         if (isBackendEnabled()) {
-            api.sendMessage(SendMessageRequest(
-                chatId = chatId,
-                type = MessageType.TEXT,
-                text = text,
-                replyToId = replyTo?.id
-            ))
-            return
+            return try {
+                val response = api.sendMessage(SendMessageRequest(
+                    chatId = chatId,
+                    type = MessageType.TEXT,
+                    text = text,
+                    replyToId = replyTo?.id
+                ))
+                Log.d("ChatRepo", "✅ Message sent to backend: ${response.id}")
+                response.toDomain()
+            } catch (e: Exception) {
+                Log.e("ChatRepo", "❌ Error sending message to backend", e)
+                null
+            }
         }
+        if (isFirestoreDisabled()) return null
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
             replyTo?.let { put("replyTo", it.toMap()) }
         }
         ChatDataCache.addToOutbox(context, chatId, "text", data)
+        return null
     }
 
     suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
@@ -485,6 +534,7 @@ class ChatRepository(
             ))
             return
         }
+        if (isFirestoreDisabled()) return
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
@@ -787,11 +837,13 @@ class ChatRepository(
     }
 
     suspend fun deleteMessage(chatId: String, messageId: String) {
+        if (isFirestoreDisabled()) return
         db.collection("chats").document(chatId).collection("messages").document(messageId)
             .update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
     }
 
     suspend fun toggleReaction(chatId: String, messageId: String, emoji: String, currentReactions: List<Reaction>) {
+        if (isFirestoreDisabled()) return
         val ref = db.collection("chats").document(chatId).collection("messages").document(messageId)
         val existing = currentReactions.find { it.emoji == emoji }
         val updated  = if (existing != null) {

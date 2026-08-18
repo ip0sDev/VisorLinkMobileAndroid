@@ -578,7 +578,20 @@ class ChatViewModel(
             typingManager?.stopTyping()
             clearReply()
             draftManager.clearDraft(chatId)
-            try { chatRepository.sendText(chatId, trimmed, currentUsername, reply) }
+            try { 
+                val sentMessage = chatRepository.sendText(chatId, trimmed, currentUsername, reply)
+                if (sentMessage != null) {
+                    // Optimistic UI update for custom backend
+                    _uiState.update { state ->
+                        val newMessages = (state.messages.filter { it.id != sentMessage.id } + sentMessage)
+                            .sortedBy { it.createdAt?.seconds ?: 0L }
+                        state.copy(
+                            messages = newMessages,
+                            messageListItems = buildMessageList(newMessages + state.tempMessages)
+                        )
+                    }
+                }
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
