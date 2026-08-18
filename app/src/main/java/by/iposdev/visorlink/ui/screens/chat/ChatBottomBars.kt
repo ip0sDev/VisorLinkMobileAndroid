@@ -388,15 +388,6 @@ fun DynamicChatInputBar(
                             }
                         }
                     }
-                } else {
-                    RecordingBar(
-                        isExthru      = true,
-                        isForge       = isForge,
-                        isDark        = isDark,
-                        hapticEnabled = hapticEnabled,
-                        onCancel      = onCancelRecord,
-                        onSend        = onSendRecord,
-                    )
                 }
             }
         }
