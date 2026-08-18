@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -29,11 +30,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.data.model.AppTheme
-import by.iposdev.visorlink.ui.theme.accentGlowShadow
-import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
-import by.iposdev.visorlink.ui.theme.nmInsetShadow
-import by.iposdev.visorlink.ui.theme.nmRaisedShadow
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
+import by.iposdev.visorlink.ui.theme.*
 
 @Composable
 fun VlSurface(
@@ -107,14 +104,28 @@ fun VlSurface(
             val shadowMod = Modifier.forgeNeuBrutalism(
                 isPressed = isPressed,
                 isDark = isDark,
-                offsetDp = if (isButton) 3.dp else 4.dp
+                offsetDp = if (isButton) 3.dp else 8.dp // Increased volume for cards
             )
+            
+            val industrialMod = if (!isInput) {
+                Modifier.industrialPanel(
+                    cornerRadius = 2.dp,
+                    isDark = isDark,
+                    accentGlow = isPressed,
+                    accentColor = style.accent,
+                    thickness = if (isButton) 1.5.dp else 4.dp // Even more volume for cards
+                )
+            } else {
+                Modifier
+                    .background(bg, RectangleShape)
+                    .border(1.dp, if (isDark) Color(0xFF333333) else Color.Black, RectangleShape)
+            }
 
             Box(
                 modifier = modifier
-                    // Не рисуем тень для полей ввода (чтобы они не выпирали, а были плоскими)
-                    .then(if (!isInput) shadowMod else Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape))
-                    .background(bg, shape)
+                    .then(if (!isInput) shadowMod else Modifier)
+                    .then(industrialMod)
+                    .then(if (appTheme == AppTheme.FORGE_TERMINAL) Modifier.terminalScanlines() else Modifier)
                     .then(clickModifier)
                     .padding(contentPadding),
                 contentAlignment = Alignment.Center,
@@ -123,10 +134,23 @@ fun VlSurface(
 
         else -> {
             val style = rememberExthruStyle(appTheme)
-            // Фон делаем немного прозрачным, чтобы Haze и Glow красиво просвечивали
-            val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f)
-
             val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU
+            
+            // "Liquid Glass" background with vertical depth - SUBTLE REFINEMENT
+            val biolumeBg = if (isBiolume && overrideColor == null && !isInput) {
+                Brush.verticalGradient(
+                    colors = if (isDark)
+                        listOf(style.cardBg.copy(alpha = 0.45f), style.cardBg.copy(alpha = 0.65f))
+                    else
+                        listOf(Color.White.copy(alpha = 0.90f), Color.White.copy(alpha = 0.70f))
+                )
+            } else null
+
+            val bgModifier = when {
+                biolumeBg != null -> Modifier.background(biolumeBg, shape)
+                else -> Modifier.background(overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f), shape)
+            }
+
             val shadowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (!showInset) {
                 Modifier.nmRaisedShadow(
                     isDark = isDark,
@@ -148,46 +172,33 @@ fun VlSurface(
                 Modifier.accentGlowShadow(accent = style.accent, isPressed = isPressed, cornerRadius = baseRadius)
             } else Modifier
 
-            val borderColor = if (overrideColor == Color.Transparent && !isBiolume) {
-                Color.Transparent
-            } else if (isDark) {
-                Color.White.copy(alpha = 0.05f)
-            } else {
-                // Светлая тема Biolume: почти незаметный акцент по краям
-                style.accent.copy(alpha = 0.12f)
-            }
-
             Box(
                 modifier = modifier
                     .scale(scale)
                     .then(shadowModifier)
                     .then(glowModifier)
-                    .background(bg, shape)
+                    .then(bgModifier)
                     .clip(shape)
-                    .then(if (borderColor == Color.Transparent) Modifier else Modifier.border(
-                        width = 1.dp,
-                        color = borderColor,
-                        shape = shape
-                    ))
-                    .then(if (isBiolume && !showInset) Modifier.border(
-                        width = 0.5.dp,
-                        brush = Brush.verticalGradient(listOf(Color.White.copy(0.4f), Color.Transparent)),
-                        shape = shape
-                    ) else Modifier)
+                    .then(
+                        if (isBiolume && !showInset) 
+                            Modifier.biolumeGlassBorder(shape, isDark, isPressed)
+                        else if (overrideColor != Color.Transparent)
+                            Modifier.border(1.dp, if (isDark) Color.White.copy(0.05f) else style.accent.copy(0.12f), shape)
+                        else Modifier
+                    )
                     .then(clickModifier),
                 contentAlignment = Alignment.Center,
             ) {
-                // Внутренний блик
-                if (!showInset && (overrideColor != Color.Transparent || isBiolume)) {
+                // Internal Specular (Reflection inside the glass)
+                if (isBiolume && !showInset && overrideColor == null) {
                     Box(
                         Modifier
                             .matchParentSize()
                             .background(
-                                brush = Brush.linearGradient(
-                                    colors = if (isDark)
-                                        listOf(Color.White.copy(0.04f), Color.Transparent)
-                                    else
-                                        listOf(Color.White.copy(0.2f), Color.Transparent)
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color.White.copy(alpha = if (isDark) 0.04f else 0.15f), Color.Transparent),
+                                    center = Offset(0f, 0f),
+                                    radius = 120.dp.value // Subtle large glow from top-left
                                 ),
                                 shape = shape
                             )

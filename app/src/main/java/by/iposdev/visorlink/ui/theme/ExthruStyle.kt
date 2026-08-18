@@ -51,16 +51,16 @@ fun rememberExthruStyle(appTheme: AppTheme): ExthruStyle {
     return if (effectiveTheme == AppTheme.FORGE) {
         val otherFg = if (isDark) Color.White else Color.Black
         ExthruStyle(
-            isForge = true, radius = 0.dp,
-            darkShadow = if (isDark) Color(0xFF000000) else Color(0xFF6B7280),
-            lightShadow = Color.Transparent,
+            isForge = true, radius = 2.dp,
+            darkShadow = if (isDark) Color(0xFF000000) else Color(0xFF404040),
+            lightShadow = if (isDark) Color.White.copy(0.05f) else Color.White.copy(0.3f),
             cardBg = cs.surface,
-            inputBg = if (isDark) Color(0xFF0B0C10) else Color(0xFFD0D0D0),
+            inputBg = cs.surfaceVariant,
             accent = primary,
             destructive = Color(0xFFE50027),
             myBubbleBg = primary,
             myBubbleFg = Color.White,
-            otherBubbleBg = if (isDark) Color(0xFF16181D) else Color(0xFFE4E4E7),
+            otherBubbleBg = cs.surfaceContainerHighest,
             otherBubbleFg = otherFg,
         )
     } else {

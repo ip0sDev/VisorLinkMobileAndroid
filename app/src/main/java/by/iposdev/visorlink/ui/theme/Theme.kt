@@ -176,13 +176,13 @@ val ShapesExthru = Shapes(
     extraLarge = RoundedCornerShape(32.dp)
 )
 
-// Forge — neo-brutalist, острые углы везде (радиус = 0 во Flutter-версии)
+// Forge — industrial hardware style, subtle rounding to mimic machined parts
 val ShapesForge = Shapes(
-    extraSmall = RoundedCornerShape(0.dp),
-    small = RoundedCornerShape(0.dp),
-    medium = RoundedCornerShape(0.dp),
-    large = RoundedCornerShape(0.dp),
-    extraLarge = RoundedCornerShape(0.dp)
+    extraSmall = RoundedCornerShape(2.dp),
+    small = RoundedCornerShape(2.dp),
+    medium = RoundedCornerShape(3.dp),
+    large = RoundedCornerShape(4.dp),
+    extraLarge = RoundedCornerShape(4.dp)
 )
 
 // ── Typography ────────────────────────────────────────────────────────────────

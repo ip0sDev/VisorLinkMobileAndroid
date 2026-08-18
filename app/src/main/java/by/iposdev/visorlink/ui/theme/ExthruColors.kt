@@ -44,12 +44,16 @@ object Biolume {
     val DarkBubbleMine    = Color(0xFF1C403E)
     val DarkBubbleOther   = Color(0xFF15302F)
 
-    // ── УНИВЕРСАЛЬНЫЕ АКЦЕНТЫ ──
-    val CyanGlow      = Color(0xFF2DA89A)
-    val TealLight     = Color(0xFF3DBFB0)
-    val TealPulse     = Color(0xFF1D8B7E)
-    val MangoGlow     = Color(0xFF27AE60)
-    val PinkFlash     = Color(0xFFC0392B)
+    // ── УНИВЕРСАЛЬНЫЕ АКЦЕНТЫ (Premium Biolume) ──
+    val CyanGlow      = Color(0xFF4FD1C5) // Soft Mint/Cyan
+    val TealLight     = Color(0xFF63B3ED) // Soft Azure
+    val TealPulse     = Color(0xFF3182CE) // Muted Navy
+    val MangoGlow     = Color(0xFFF687B3) // Soft Rose
+    val PinkFlash     = Color(0xFFB794F4) // Soft Lavender
+    
+    val IridescentStart = Color(0xFF4FD1C5).copy(alpha = 0.4f)
+    val IridescentMid   = Color(0xFF63B3ED).copy(alpha = 0.2f)
+    val IridescentEnd   = Color(0xFFB794F4).copy(alpha = 0.4f)
 }
 
 val ExthruLightColorScheme = lightColorScheme(
@@ -101,39 +105,39 @@ val ExthruLightColorScheme = lightColorScheme(
 // ── Forge — Neo-Brutalist Red — Surface Levels ────────────────────────────────
 
 object Forge {
-    // ── LIGHT ──
-    val Background    = Color(0xFFDCDFE5)
-    val Surface       = Color(0xFFF0F0F0)
-    val InputBg       = Color(0xFFD0D0D0)
-    val TextPrimary   = Color(0xFF0A0B0D)
-    val TextSecondary = Color(0xFF6B7280)
+    // ── LIGHT (Industrial Silver) ──
+    val Background    = Color(0xFF8A8D91) // Battleship Gray
+    val Surface       = Color(0xFFC0C0C0) // Classic 90s Silver
+    val InputBg       = Color(0xFFA0A4A8)
+    val TextPrimary   = Color(0xFF0F1115)
+    val TextSecondary = Color(0xFF4A4D52)
 
-    val BubbleOther   = Color(0xFFE4E4E7)
+    val BubbleOther   = Color(0xFFD1D5DB)
 
-    // ── DARK ──
-    val DarkBackground    = Color(0xFF0D0E12)
-    val DarkSurface       = Color(0xFF1A1B22)
-    val DarkInputBg       = Color(0xFF0B0C10)
-    val DarkTextPrimary   = Color(0xFFF2F2F2)
-    val DarkTextSecondary = Color(0xFFA3A7B0)
+    // ── DARK (Gunmetal Terminal) ──
+    val DarkBackground    = Color(0xFF0A0A0C) // Deepest charcoal
+    val DarkSurface       = Color(0xFF16161B) // Gunmetal steel
+    val DarkInputBg       = Color(0xFF0F0F12)
+    val DarkTextPrimary   = Color(0xFFE0E0E5) // Slightly cool white
+    val DarkTextSecondary = Color(0xFF8E9299)
 
-    val DarkBubbleOther   = Color(0xFF16181D)
+    val DarkBubbleOther   = Color(0xFF1C1C24)
 
-    // ── УНИВЕРСАЛЬНЫЙ АКЦЕНТ ──
-    val RedLight = Color(0xFFD90025)
-    val RedDark  = Color(0xFFE50027)
-    val Destructive = Color(0xFF99001A)
+    // ── УНИВЕРСАЛЬНЫЙ АКЦЕНТ (Industrial Red) ──
+    val RedLight = Color(0xFFCC0000) // Solid warning red
+    val RedDark  = Color(0xFFFF1A1A) // Glowing CRT red
+    val Destructive = Color(0xFF8B0000)
 }
 
 val ForgeLightColorScheme = lightColorScheme(
     primary              = Forge.RedLight,
     onPrimary            = Color.White,
     primaryContainer     = Forge.Surface,
-    onPrimaryContainer   = Forge.TextPrimary,
+    onPrimaryContainer   = Forge.RedLight,
 
-    secondary            = Forge.RedLight,
+    secondary            = Forge.TextSecondary,
     onSecondary          = Color.White,
-    secondaryContainer   = Forge.Surface,
+    secondaryContainer   = Forge.InputBg,
     onSecondaryContainer = Forge.TextPrimary,
 
     tertiary             = Forge.RedLight,
@@ -143,8 +147,8 @@ val ForgeLightColorScheme = lightColorScheme(
 
     error                = Forge.Destructive,
     onError              = Color.White,
-    errorContainer       = Color(0xFFFFDDD8),
-    onErrorContainer     = Color(0xFF3A0A06),
+    errorContainer       = Color(0xFFFFDAD6),
+    onErrorContainer     = Color(0xFF410002),
 
     background           = Forge.Background,
     onBackground         = Forge.TextPrimary,
@@ -155,14 +159,14 @@ val ForgeLightColorScheme = lightColorScheme(
     surfaceVariant       = Forge.InputBg,
     onSurfaceVariant     = Forge.TextSecondary,
 
-    outline              = Color.Black.copy(alpha = 0.38f),
-    outlineVariant       = Color.Black.copy(alpha = 0.18f),
+    outline              = Forge.TextSecondary.copy(alpha = 0.5f),
+    outlineVariant       = Forge.TextSecondary.copy(alpha = 0.2f),
 
-    surfaceContainerLowest  = Color.White,
+    surfaceContainerLowest  = Color(0xFFE5E7EB),
     surfaceContainerLow     = Forge.Background,
     surfaceContainer        = Forge.Surface,
-    surfaceContainerHigh    = Forge.InputBg,
-    surfaceContainerHighest = Color(0xFFC4C4C4),
+    surfaceContainerHigh    = Color(0xFFA1A1AA),
+    surfaceContainerHighest = Color(0xFF71717A),
 
     inverseSurface         = Forge.TextPrimary,
     inverseOnSurface       = Forge.Surface,
@@ -173,24 +177,24 @@ val ForgeLightColorScheme = lightColorScheme(
 
 val ForgeDarkColorScheme = darkColorScheme(
     primary              = Forge.RedDark,
-    onPrimary            = Color.White,
-    primaryContainer     = Forge.DarkSurface,
-    onPrimaryContainer   = Forge.DarkTextPrimary,
+    onPrimary            = Color.Black,
+    primaryContainer     = Color(0xFF400000),
+    onPrimaryContainer   = Forge.RedDark,
 
-    secondary            = Forge.RedDark,
-    onSecondary          = Color.White,
-    secondaryContainer   = Forge.DarkSurface,
+    secondary            = Forge.DarkTextSecondary,
+    onSecondary          = Color.Black,
+    secondaryContainer   = Forge.DarkInputBg,
     onSecondaryContainer = Forge.DarkTextPrimary,
 
     tertiary             = Forge.RedDark,
-    onTertiary           = Color.White,
+    onTertiary           = Color.Black,
     tertiaryContainer    = Forge.DarkSurface,
     onTertiaryContainer  = Forge.DarkTextPrimary,
 
     error                = Forge.RedDark,
     onError              = Color.White,
-    errorContainer       = Color(0xFF521510),
-    onErrorContainer     = Color(0xFFFFDDD8),
+    errorContainer       = Color(0xFF93000A),
+    onErrorContainer     = Color(0xFFFFDAD6),
 
     background           = Forge.DarkBackground,
     onBackground         = Forge.DarkTextPrimary,
@@ -201,20 +205,20 @@ val ForgeDarkColorScheme = darkColorScheme(
     surfaceVariant       = Forge.DarkInputBg,
     onSurfaceVariant     = Forge.DarkTextSecondary,
 
-    outline              = Color.White.copy(alpha = 0.24f),
-    outlineVariant       = Color.White.copy(alpha = 0.12f),
+    outline              = Color(0xFF404040),
+    outlineVariant       = Color(0xFF303030),
 
     surfaceContainerLowest  = Color(0xFF000000),
     surfaceContainerLow     = Forge.DarkBackground,
     surfaceContainer        = Forge.DarkSurface,
-    surfaceContainerHigh    = Forge.DarkInputBg,
-    surfaceContainerHighest = Color(0xFF26272E),
+    surfaceContainerHigh    = Color(0xFF1E1E24),
+    surfaceContainerHighest = Color(0xFF2D2D35),
 
     inverseSurface         = Forge.DarkTextPrimary,
     inverseOnSurface       = Forge.DarkSurface,
     inversePrimary         = Forge.RedLight,
 
-    scrim                  = Color.Black.copy(alpha = 0.55f),
+    scrim                  = Color.Black.copy(alpha = 0.7f),
 )
 
 val ExthruDarkColorScheme = darkColorScheme(

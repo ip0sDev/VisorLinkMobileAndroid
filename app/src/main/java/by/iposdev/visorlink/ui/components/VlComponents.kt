@@ -41,13 +41,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.data.model.ColorPreset
-import by.iposdev.visorlink.ui.theme.ExthruStyle
-import by.iposdev.visorlink.ui.theme.accentGlowShadow
-import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
-import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
-import by.iposdev.visorlink.ui.theme.nmInsetShadow
-import by.iposdev.visorlink.ui.theme.nmRaisedShadow
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
+import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import androidx.compose.ui.layout.ContentScale
@@ -284,7 +278,6 @@ fun VlGlassPanel(
 ) {
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
-    val style = rememberExthruStyle(appTheme)
 
     if (!appTheme.isExthruFamily || appTheme == AppTheme.FORGE) {
         val style = rememberExthruStyle(appTheme)
@@ -321,17 +314,7 @@ fun VlGlassPanel(
             .scale(1f) // Just to trigger recomposition if needed
             .then(if (simplifiedGraphics) Modifier else Modifier.nmRaisedShadow(isDark, cornerRadius = radius, shadowRadius = 12.dp))
             .then(glassModifier)
-            .border(
-                width = 1.2.dp,
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = if (isDark) 0.15f else 0.6f),
-                        Color.Transparent,
-                        if (isDark) Color.Black.copy(alpha = 0.4f) else style.accent.copy(alpha = 0.2f)
-                    )
-                ),
-                shape = shape
-            )
+            .biolumeGlassBorder(shape, isDark)
     ) {
         content()
     }
@@ -390,12 +373,17 @@ fun VlButton(
         Modifier.exthruSmallRaisedShadow(isDark)
     }
 
+    val forgeMod = if (isForge) {
+        Modifier.industrialPanel(cornerRadius = 2.dp, isDark = isDark, accentGlow = isPressed)
+    } else Modifier
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
             .scale(if (isForge) 1f else scale)
             .then(shadowMod)
+            .then(forgeMod)
             .background(bgColor, shape)
             .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), shape))
             .clip(shape)
@@ -436,38 +424,93 @@ fun VlSwitch(
 
     val style = rememberExthruStyle(appTheme)
     val isForge = style.isForge
-    val thumbOffset by animateDpAsState(if (checked) 24.dp else 4.dp, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), label = "vlswitch_thumb")
+    val thumbOffset by animateDpAsState(
+        if (checked) (if (isForge) 40.dp else 24.dp) else 4.dp, // Increased travel for Forge
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), 
+        label = "vlswitch_thumb"
+    )
     val dotColor by animateColorAsState(if (checked) style.accent else cs.onSurfaceVariant.copy(alpha = 0.5f), tween(200), label = "vlswitch_dot")
 
     if (isForge) {
-        val trackBorder = if (isDark) Color(0xFF333333) else Color.Black
+        val interactionSource = remember { MutableInteractionSource() }
+        val isPressed by interactionSource.collectIsPressedAsState()
+        
+        // Heavy Industrial Switch
         Box(
             modifier = modifier
-                .width(52.dp)
-                .height(28.dp)
-                .forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 2.dp)
-                .background(if (checked) style.accent.copy(alpha = 0.2f) else cs.surfaceVariant, RectangleShape)
-                .clickable { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) }
+                .width(68.dp) // Wider track for full travel
+                .height(32.dp)
+                .industrialPanel(cornerRadius = 2.dp, isDark = isDark)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null
+                ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) },
+            contentAlignment = Alignment.CenterStart
         ) {
+            // Recessed Track
             Box(
                 Modifier
-                    .offset(x = thumbOffset, y = 2.dp)
-                    .size(24.dp)
-                    .background(style.cardBg)
-                    .border(2.dp, trackBorder)
+                    .padding(horizontal = 6.dp)
+                    .fillMaxWidth()
+                    .height(12.dp)
+                    .recessedTrack(cornerRadius = 1.dp, isDark = isDark)
             )
+            
+            // LED Status Indicator
+            Box(
+                Modifier
+                    .padding(start = 10.dp)
+                    .size(6.dp)
+                    .glowingIndicator(active = checked, color = style.accent)
+                    .align(Alignment.CenterStart)
+                    .offset(y = (-10).dp)
+            )
+
+            // Mechanical Toggle Lever
+            Box(
+                Modifier
+                    .offset(x = thumbOffset - 2.dp)
+                    .size(24.dp, 24.dp)
+                    .hardwareButton(isPressed = isPressed, cornerRadius = 1.dp)
+                    .border(1.dp, Color.White.copy(alpha = 0.05f))
+            ) {
+                // Notch marker on the lever
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .width(2.dp)
+                        .height(12.dp)
+                        .background(Color.Black.copy(alpha = 0.4f))
+                )
+            }
         }
         return
     }
 
-    // Трек свитча - вдавленный (Biolume)
+    // Трек свитча - вдавленный (Biolume) - REFINED
+    val trackShape = RoundedCornerShape(14.dp)
+    val activeTrackBrush = Brush.linearGradient(
+        colors = listOf(Biolume.IridescentStart.copy(alpha = 0.5f), Biolume.IridescentMid.copy(alpha = 0.5f))
+    )
+    
     Box(
         modifier = modifier
             .width(52.dp)
             .height(28.dp)
             .nmInsetShadow(isDark, cornerRadius = 14.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-            .background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
+            .then(
+                if (checked) 
+                    Modifier.background(activeTrackBrush, trackShape, alpha = 0.15f)
+                else 
+                    Modifier.background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), trackShape)
+            )
+            .clip(trackShape)
+            .then(
+                if (checked)
+                    Modifier.border(0.8.dp, activeTrackBrush, trackShape)
+                else
+                    Modifier.border(0.8.dp, Color.White.copy(alpha = if (isDark) 0.03f else 0.15f), trackShape)
+            )
             .clickable { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) }
     ) {
         Box(
@@ -478,7 +521,12 @@ fun VlSwitch(
                 .background(style.cardBg, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Box(Modifier.size(8.dp).background(dotColor, CircleShape))
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .background(dotColor, CircleShape)
+                    .then(if (checked) Modifier.accentGlowShadow(dotColor, true, 5.dp) else Modifier)
+            )
         }
     }
 }
@@ -674,17 +722,27 @@ fun VlSettingsSection(
         if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
             Column(Modifier.padding(horizontal = 16.dp)) { content() }
         } else if (isForge) {
-            // Терминальный квадратный контейнер
-            Column(
+            // Industrial volumetric container for Forge sections
+            VlSurface(
+                appTheme = appTheme,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .forgeNeuBrutalism(isPressed = false, isDark = isDark, offsetDp = 4.dp)
-                    .background(style.cardBg)
-            ) { content() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(2.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp)
+                ) {
+                    content()
+                }
+            }
         } else {
-            // Glassmorphism Container (Biolume)
+            // Glassmorphism Container (Biolume) - REFINED
             val hazeState = LocalHazeState.current
+            val radius = 20.dp
+            val shape = RoundedCornerShape(radius)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -694,19 +752,17 @@ fun VlSettingsSection(
                         state = hazeState,
                         style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
                     )
-                    .background((if (isDark) cs.surface else Color.White).copy(alpha = if (isDark) 0.4f else 0.75f), RoundedCornerShape(20.dp))
-                    .clip(RoundedCornerShape(20.dp))
-                    .border(
-                        1.5.dp,
-                        Brush.linearGradient(
-                            listOf(
-                                Color.White.copy(alpha = if (isDark) 0.15f else 0.5f),
-                                if (isDark) Color.Transparent else style.accent.copy(alpha = 0.06f),
-                                Color.Black.copy(alpha = if (isDark) 0.4f else 0.05f)
-                            )
+                    .background(
+                        Brush.verticalGradient(
+                            colors = if (isDark)
+                                listOf(cs.surface.copy(alpha = 0.2f), cs.surface.copy(alpha = 0.45f))
+                            else
+                                listOf(Color.White.copy(alpha = 0.8f), Color.White.copy(alpha = 0.5f))
                         ),
-                        RoundedCornerShape(20.dp)
-                    ),
+                        shape
+                    )
+                    .clip(shape)
+                    .biolumeGlassBorder(shape, isDark),
             ) { content() }
         }
     }
