@@ -1,8 +1,6 @@
 package by.iposdev.visorlink.ui.components
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -68,7 +66,6 @@ fun VlSurface(
         }
     }
 
-    // 🔥 Плавная "прыгучая" анимация а-ля Flutter easeOutBack / Spring
     val pressedScale = if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) 0.96f else 0.93f
     val scale by animateFloatAsState(
         targetValue = if (isPressed && !isInput) pressedScale else 1f,
@@ -104,16 +101,16 @@ fun VlSurface(
             val shadowMod = Modifier.forgeNeuBrutalism(
                 isPressed = isPressed,
                 isDark = isDark,
-                offsetDp = if (isButton) 3.dp else 8.dp // Increased volume for cards
+                offsetDp = if (isButton) 3.dp else 8.dp
             )
-            
+
             val industrialMod = if (!isInput) {
                 Modifier.industrialPanel(
                     cornerRadius = 2.dp,
                     isDark = isDark,
                     accentGlow = isPressed,
                     accentColor = style.accent,
-                    thickness = if (isButton) 1.5.dp else 4.dp // Even more volume for cards
+                    thickness = if (isButton) 1.5.dp else 4.dp
                 )
             } else {
                 Modifier
@@ -135,36 +132,57 @@ fun VlSurface(
         else -> {
             val style = rememberExthruStyle(appTheme)
             val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU
-            
-            // "Liquid Glass" background with vertical depth - SUBTLE REFINEMENT
+
+            // Анимация градиента для эффекта переливания
+            val infiniteTransition = rememberInfiniteTransition(label = "surface_shimmer")
+            val shimmerX by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 800f,
+                animationSpec = infiniteRepeatable(tween(12000, easing = LinearEasing), RepeatMode.Reverse),
+                label = "shimmerX"
+            )
+            val shimmerY by infiniteTransition.animateFloat(
+                initialValue = 0f, targetValue = 800f,
+                animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse),
+                label = "shimmerY"
+            )
+
+            // Чуть затемняем фон при нажатии
+            val pressAlpha by animateFloatAsState(if (isPressed) 0.85f else 1f, label = "press_alpha")
+
             val biolumeBg = if (isBiolume && overrideColor == null && !isInput) {
-                Brush.verticalGradient(
+                Brush.linearGradient(
                     colors = if (isDark)
-                        listOf(style.cardBg.copy(alpha = 0.45f), style.cardBg.copy(alpha = 0.65f))
+                        listOf(
+                            style.cardBg.copy(alpha = 0.5f * pressAlpha),
+                            style.accent.copy(alpha = 0.08f * pressAlpha),
+                            style.cardBg.copy(alpha = 0.25f * pressAlpha)
+                        )
                     else
-                        listOf(Color.White.copy(alpha = 0.90f), Color.White.copy(alpha = 0.70f))
+                        listOf(
+                            Color.White.copy(alpha = 0.95f * pressAlpha),
+                            style.accent.copy(alpha = 0.05f * pressAlpha),
+                            Color.White.copy(alpha = 0.65f * pressAlpha)
+                        ),
+                    start = Offset(shimmerX, shimmerY),
+                    end = Offset(shimmerX + 600f, shimmerY + 600f)
                 )
             } else null
-
-            val bgModifier = when {
-                biolumeBg != null -> Modifier.background(biolumeBg, shape)
-                else -> Modifier.background(overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f), shape)
-            }
 
             val shadowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (!showInset) {
                 Modifier.nmRaisedShadow(
                     isDark = isDark,
-                    shadowRadius = if (isBiolume) 20.dp else if (isButton) 8.dp else 16.dp, 
+                    shadowRadius = if (isBiolume) 20.dp else if (isButton) 12.dp else 16.dp,
                     offsetDp = if (isBiolume) 8.dp else if (isButton) 4.dp else 6.dp,
                     cornerRadius = baseRadius,
-                    darkAlpha = if (isDark) 0.6f else 0.25f,
-                    lightAlpha = if (isDark) 0.05f else 0.75f
+                    darkAlpha = if (isDark) 0.35f else 0.12f,
+                    lightAlpha = if (isDark) 0.01f else 0.60f
                 )
             } else {
                 Modifier.nmInsetShadow(
                     isDark = isDark,
                     cornerRadius = baseRadius,
                     lineWidthDp = if (isButton) 2.dp else 1.5.dp,
+                    blurRadiusDp = 8.dp
                 )
             }
 
@@ -177,11 +195,14 @@ fun VlSurface(
                     .scale(scale)
                     .then(shadowModifier)
                     .then(glowModifier)
-                    .then(bgModifier)
-                    .clip(shape)
+                    .clip(shape) // Clip ПЕРЕД ФОНОМ И ГРАНИЦЕЙ
                     .then(
-                        if (isBiolume && !showInset) 
-                            Modifier.biolumeGlassBorder(shape, isDark, isPressed)
+                        if (biolumeBg != null) Modifier.background(biolumeBg)
+                        else Modifier.background(overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f))
+                    )
+                    .then(
+                        if (isBiolume && !showInset)
+                            Modifier.biolumeGlassBorder(shape, isDark, style.accent, isPressed)
                         else if (overrideColor != Color.Transparent)
                             Modifier.border(1.dp, if (isDark) Color.White.copy(0.05f) else style.accent.copy(0.12f), shape)
                         else Modifier
@@ -189,22 +210,6 @@ fun VlSurface(
                     .then(clickModifier),
                 contentAlignment = Alignment.Center,
             ) {
-                // Internal Specular (Reflection inside the glass)
-                if (isBiolume && !showInset && overrideColor == null) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .background(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(Color.White.copy(alpha = if (isDark) 0.04f else 0.15f), Color.Transparent),
-                                    center = Offset(0f, 0f),
-                                    radius = 120.dp.value // Subtle large glow from top-left
-                                ),
-                                shape = shape
-                            )
-                    )
-                }
-                
                 Box(Modifier.padding(contentPadding), contentAlignment = Alignment.Center) {
                     content()
                 }

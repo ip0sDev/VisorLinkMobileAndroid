@@ -8,7 +8,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -16,10 +18,11 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,7 +34,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 fun Modifier.forgeNeuBrutalism(
     isPressed: Boolean,
     isDark: Boolean,
-    offsetDp: Dp = 6.dp, // Deeper by default
+    offsetDp: Dp = 6.dp,
     borderWidth: Dp = 1.dp,
     borderColor: Color = if (isDark) Color(0xFF404040) else Color(0xFF808080),
     shadowColor: Color = Color.Black
@@ -44,27 +47,22 @@ fun Modifier.forgeNeuBrutalism(
     this
         .drawBehind {
             val offPx = offsetDp.toPx()
-            
-            // 1. "Extrusion" shadow - рисуем ступенчатую тень для эффекта объема
             if (!isPressed) {
-                // Основная глубокая тень
                 drawRect(
                     color = shadowColor.copy(alpha = 0.9f),
                     topLeft = Offset(offPx, offPx),
                     size = size
                 )
-                
-                // Рисуем "грань" экструзии с металлическим градиентом
+
                 val edgeGradient = Brush.linearGradient(
-                    colors = if (isDark) 
-                        listOf(Color(0xFF25252B), Color(0xFF0D0D0F)) 
-                    else 
+                    colors = if (isDark)
+                        listOf(Color(0xFF25252B), Color(0xFF0D0D0F))
+                    else
                         listOf(Color(0xFFDCDFE5), Color(0xFFA1A1AA)),
                     start = Offset(size.width, 0f),
                     end = Offset(size.width + offPx, offPx)
                 )
-                
-                // Рисуем правое и нижнее ребро экструзии
+
                 val path = Path().apply {
                     moveTo(size.width, 0f)
                     lineTo(size.width + offPx, offPx)
@@ -85,41 +83,24 @@ fun Modifier.forgeNeuBrutalism(
         .border(borderWidth, borderColor, RectangleShape)
 }
 
-// ── Raised shadow — угло-осознанный вариант ──────────────────────────────────
+// ── Объемные внешние тени (Raised) - ИСПОЛЬЗУЕМ МЯГКОЕ РАССЕИВАНИЕ ───────────
 
 fun Modifier.nmRaisedShadow(
     isDark: Boolean = false,
-    shadowRadius: Dp = 12.dp, // Slightly larger blur
-    offsetDp: Dp = 6.dp,
-    cornerRadius: Dp = 0.dp,
-    darkAlpha: Float = if (isDark) 0.35f else 0.18f, // Lower alpha
-    lightAlpha: Float = if (isDark) 0.04f else 0.55f, // Lower alpha
+    shadowRadius: Dp = 20.dp, // Увеличен радиус для мягкости
+    offsetDp: Dp = 8.dp,
+    cornerRadius: Dp = 20.dp,
+    darkAlpha: Float = if (isDark) 0.35f else 0.12f, // Снижена прозрачность
+    lightAlpha: Float = if (isDark) 0.01f else 0.60f,
 ): Modifier = this.drawBehind {
     val radiusPx  = shadowRadius.toPx()
     val offsetPx  = offsetDp.toPx()
     val cornerPx  = cornerRadius.toPx()
 
-    val darkShadowColor = if (isDark) Biolume.DarkShadowDark else Biolume.ShadowDark
-    val lightShadowColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
+    val darkShadowColor = if (isDark) Color.Black else Color(0xFFA3B1C6)
+    val lightShadowColor = Color.White
 
     drawIntoCanvas { canvas ->
-        val darkPaint = Paint().apply {
-            asFrameworkPaint().apply {
-                isAntiAlias = true
-                color = android.graphics.Color.TRANSPARENT
-                setShadowLayer(
-                    radiusPx, offsetPx, offsetPx,
-                    darkShadowColor.copy(alpha = darkAlpha).toArgb()
-                )
-            }
-        }
-        canvas.drawRoundRect(
-            left = 0f, top = 0f,
-            right = size.width, bottom = size.height,
-            radiusX = cornerPx, radiusY = cornerPx,
-            paint = darkPaint
-        )
-
         val lightPaint = Paint().apply {
             asFrameworkPaint().apply {
                 isAntiAlias = true
@@ -136,51 +117,84 @@ fun Modifier.nmRaisedShadow(
             radiusX = cornerPx, radiusY = cornerPx,
             paint = lightPaint
         )
-    }
-}
 
-// ── Inset shadow — для поля ввода и вдавленных кнопок ────────────────────────
-
-fun Modifier.nmInsetShadow(
-    isDark: Boolean = false,
-    cornerRadius: Dp = 22.dp,
-    darkAlpha: Float = if (isDark) 0.45f else 0.25f,
-    lightAlpha: Float = if (isDark) 0.05f else 0.60f,
-    lineWidthDp: Dp = 1.5.dp,
-): Modifier = this.drawBehind {
-    val lw = lineWidthDp.toPx()
-    val cr = cornerRadius.toPx()
-
-    val darkColor = if (isDark) Biolume.DarkShadowDark else Biolume.ShadowDark
-    val lightColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
-
-    val dark = darkColor.copy(alpha = darkAlpha)
-    val light = lightColor.copy(alpha = lightAlpha)
-
-    drawIntoCanvas { canvas ->
         val darkPaint = Paint().apply {
             asFrameworkPaint().apply {
                 isAntiAlias = true
                 color = android.graphics.Color.TRANSPARENT
-                setShadowLayer(lw * 2f, lw, lw, dark.toArgb())
+                setShadowLayer(
+                    radiusPx, offsetPx, offsetPx,
+                    darkShadowColor.copy(alpha = darkAlpha).toArgb()
+                )
             }
         }
         canvas.drawRoundRect(
-            left = lw, top = lw, right = size.width - lw, bottom = size.height - lw,
-            radiusX = cr, radiusY = cr, paint = darkPaint
+            left = 0f, top = 0f,
+            right = size.width, bottom = size.height,
+            radiusX = cornerPx, radiusY = cornerPx,
+            paint = darkPaint
         )
+    }
+}
 
-        val lightPaint = Paint().apply {
-            asFrameworkPaint().apply {
-                isAntiAlias = true
-                color = android.graphics.Color.TRANSPARENT
-                setShadowLayer(lw * 2f, -lw, -lw, light.toArgb())
-            }
+// ── Вдавленные внутренние тени (Inset) ───────────────────────────────────────
+
+fun Modifier.nmInsetShadow(
+    isDark: Boolean = false,
+    cornerRadius: Dp = 22.dp,
+    darkAlpha: Float = if (isDark) 0.5f else 0.25f,
+    lightAlpha: Float = if (isDark) 0.02f else 0.6f,
+    lineWidthDp: Dp = 2.dp,
+    blurRadiusDp: Dp = 8.dp
+): Modifier = this.drawWithCache {
+    val lw = lineWidthDp.toPx()
+    val blur = blurRadiusDp.toPx()
+    val cr = cornerRadius.toPx()
+
+    val darkShadowColor = if (isDark) Color.Black else Color(0xFFA3B1C6)
+    val lightShadowColor = Color.White
+
+    onDrawWithContent {
+        drawContent()
+
+        val clipPath = Path().apply {
+            addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(cr)))
         }
-        canvas.drawRoundRect(
-            left = lw, top = lw, right = size.width - lw, bottom = size.height - lw,
-            radiusX = cr, radiusY = cr, paint = lightPaint
-        )
+
+        drawIntoCanvas { canvas ->
+            canvas.save()
+            canvas.clipPath(clipPath)
+
+            val darkPaint = Paint().apply {
+                asFrameworkPaint().apply {
+                    isAntiAlias = true
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeWidth = lw * 2
+                    color = darkShadowColor.copy(alpha = darkAlpha).toArgb()
+                    setShadowLayer(blur, lw, lw, darkShadowColor.copy(alpha = darkAlpha).toArgb())
+                }
+            }
+            canvas.nativeCanvas.drawRoundRect(
+                -lw, -lw, size.width + lw, size.height + lw,
+                cr + lw, cr + lw, darkPaint.asFrameworkPaint()
+            )
+
+            val lightPaint = Paint().apply {
+                asFrameworkPaint().apply {
+                    isAntiAlias = true
+                    style = android.graphics.Paint.Style.STROKE
+                    strokeWidth = lw * 2
+                    color = lightShadowColor.copy(alpha = lightAlpha).toArgb()
+                    setShadowLayer(blur, -lw, -lw, lightShadowColor.copy(alpha = lightAlpha).toArgb())
+                }
+            }
+            canvas.nativeCanvas.drawRoundRect(
+                -lw, -lw, size.width + lw, size.height + lw,
+                cr + lw, cr + lw, lightPaint.asFrameworkPaint()
+            )
+
+            canvas.restore()
+        }
     }
 }
 
@@ -188,24 +202,24 @@ fun Modifier.nmInsetShadow(
 
 fun Modifier.exthruRaisedShadow(
     isDark: Boolean = false,
-    darkAlpha: Float = if (isDark) 0.45f else 0.22f,
-    lightAlpha: Float = if (isDark) 0.05f else 0.65f,
+    darkAlpha: Float = if (isDark) 0.35f else 0.12f,
+    lightAlpha: Float = if (isDark) 0.01f else 0.60f,
 ) = nmRaisedShadow(
     isDark = isDark,
-    shadowRadius = 12.dp,
-    offsetDp = 6.dp,
-    cornerRadius = 18.dp,
+    shadowRadius = 20.dp,
+    offsetDp = 8.dp,
+    cornerRadius = 20.dp,
     darkAlpha = darkAlpha,
     lightAlpha = lightAlpha,
 )
 
 fun Modifier.exthruSmallRaisedShadow(
     isDark: Boolean = false,
-    darkAlpha: Float = if (isDark) 0.40f else 0.20f,
-    lightAlpha: Float = if (isDark) 0.05f else 0.60f,
+    darkAlpha: Float = if (isDark) 0.30f else 0.10f,
+    lightAlpha: Float = if (isDark) 0.01f else 0.50f,
 ) = nmRaisedShadow(
     isDark = isDark,
-    shadowRadius = 8.dp,
+    shadowRadius = 10.dp,
     offsetDp = 4.dp,
     cornerRadius = 50.dp,
     darkAlpha = darkAlpha,
@@ -218,11 +232,11 @@ fun Modifier.nmDividerBottom(isDark: Boolean = false): Modifier = this.drawBehin
     val dColor = if (isDark) Biolume.DarkShadowDark else Biolume.ShadowDark
     val lColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
 
-    val darkColor  = dColor.copy(alpha = if (isDark) 0.4f else 0.2f)
-    val lightColor = lColor.copy(alpha = if (isDark) 0.05f else 0.5f)
+    val darkColor  = dColor.copy(alpha = if (isDark) 0.4f else 0.15f)
+    val lightColor = lColor.copy(alpha = if (isDark) 0.02f else 0.5f)
 
-    val darkPx  = 1.2.dp.toPx()
-    val lightPx = 0.8.dp.toPx()
+    val darkPx  = 1.dp.toPx()
+    val lightPx = 1.dp.toPx()
 
     drawRect(
         color = darkColor,
@@ -231,7 +245,7 @@ fun Modifier.nmDividerBottom(isDark: Boolean = false): Modifier = this.drawBehin
     )
     drawRect(
         color = lightColor,
-        topLeft = Offset(0f, size.height - darkPx - lightPx - 0.5.dp.toPx()),
+        topLeft = Offset(0f, size.height - darkPx - lightPx),
         size = Size(size.width, lightPx)
     )
 }
@@ -240,11 +254,11 @@ fun Modifier.nmDividerTop(isDark: Boolean = false): Modifier = this.drawBehind {
     val dColor = if (isDark) Biolume.DarkShadowDark else Biolume.ShadowDark
     val lColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
 
-    val darkColor  = dColor.copy(alpha = if (isDark) 0.4f else 0.2f)
-    val lightColor = lColor.copy(alpha = if (isDark) 0.05f else 0.5f)
+    val darkColor  = dColor.copy(alpha = if (isDark) 0.4f else 0.15f)
+    val lightColor = lColor.copy(alpha = if (isDark) 0.02f else 0.5f)
 
-    val lightPx = 1.2.dp.toPx()
-    val darkPx  = 0.8.dp.toPx()
+    val lightPx = 1.dp.toPx()
+    val darkPx  = 1.dp.toPx()
 
     drawRect(
         color = lightColor,
@@ -253,7 +267,7 @@ fun Modifier.nmDividerTop(isDark: Boolean = false): Modifier = this.drawBehind {
     )
     drawRect(
         color = darkColor,
-        topLeft = Offset(0f, lightPx + 0.5.dp.toPx()),
+        topLeft = Offset(0f, lightPx),
         size = Size(size.width, darkPx)
     )
 }
@@ -268,8 +282,8 @@ fun Modifier.bubbleInnerHighlight(
     val path = Path().apply { addOutline(outline) }
 
     val lColor = if (isDark) Biolume.DarkShadowLight else Biolume.ShadowLight
-    val highlightAlpha = if (isDark) 0.06f else 0.55f
-    val lineHeight = 1.2.dp.toPx()
+    val highlightAlpha = if (isDark) 0.04f else 0.4f
+    val lineHeight = 1.5.dp.toPx()
 
     onDrawWithContent {
         drawContent()
@@ -283,19 +297,6 @@ fun Modifier.bubbleInnerHighlight(
     }
 }
 
-// ── Старая реализация Forge оставлена для обратной совместимости ──────────────
-
-fun Modifier.forgeHardShadow(
-    color: Color,
-    offset: Dp = 4.dp,
-): Modifier = this.drawBehind {
-    val offPx = offset.toPx()
-    drawRect(
-        color = color,
-        topLeft = Offset(offPx, offPx),
-        size = Size(size.width, size.height)
-    )
-}
 // ── Accent glow ───────────────────────────────────────────────────────────────
 
 fun Modifier.accentGlowShadow(
@@ -303,8 +304,8 @@ fun Modifier.accentGlowShadow(
     isPressed: Boolean,
     cornerRadius: Dp,
 ): Modifier = this.drawBehind {
-    val alpha = if (isPressed) 0.25f else 0.08f
-    val blur = if (isPressed) 18.dp.toPx() else 8.dp.toPx()
+    val alpha = if (isPressed) 0.20f else 0.08f
+    val blur = if (isPressed) 24.dp.toPx() else 12.dp.toPx()
     val cr = cornerRadius.toPx()
 
     drawIntoCanvas { canvas ->
@@ -322,64 +323,46 @@ fun Modifier.accentGlowShadow(
     }
 }
 
-/**
- * Острая переливчатая граница для Biolume.
- * Исправляет "размытость" за счет инсетной отрисовки (внутри границ).
- */
+// ── Иридисцентная фаска (ОБНОВЛЕННАЯ БЕЗ ЧЕРНОГО КОНТУРА) ────────────────────
+
 fun Modifier.biolumeGlassBorder(
     shape: Shape,
     isDark: Boolean,
-    isPressed: Boolean = false
+    accent: Color,
+    isPressed: Boolean = false,
+    borderWidth: Dp = 1.dp
 ): Modifier = this.drawWithCache {
     val outline = shape.createOutline(size, layoutDirection, this)
     val path = Path().apply { addOutline(outline) }
-    
-    // Переливчатый градиент (Иризация) - делаем более сдержанным
-    val iridescentBrush = Brush.linearGradient(
-        colors = listOf(
-            Biolume.IridescentStart.copy(alpha = if (isDark) 0.15f else 0.35f),
-            Biolume.IridescentMid.copy(alpha = if (isDark) 0.05f else 0.20f),
-            Biolume.IridescentEnd.copy(alpha = if (isDark) 0.20f else 0.45f)
-        ),
+
+    // Мягкий диагональный градиент: Белый/Светлый акцент -> Прозрачный -> Легкий акцент
+    val borderBrush = Brush.linearGradient(
+        colors = if (isDark) {
+            listOf(
+                accent.copy(alpha = 0.25f),
+                Color.Transparent,
+                Color.White.copy(alpha = 0.03f)
+            )
+        } else {
+            listOf(
+                Color.White.copy(alpha = 0.8f),
+                Color.Transparent,
+                accent.copy(alpha = 0.15f)
+            )
+        },
         start = Offset(0f, 0f),
         end = Offset(size.width, size.height)
-    )
-    
-    // Блик на ребре (белый сверху, черный снизу)
-    val highlightBrush = Brush.verticalGradient(
-        colors = listOf(
-            Color.White.copy(alpha = if (isDark) 0.10f else 0.45f),
-            Color.Transparent,
-            Color.Black.copy(alpha = if (isDark) 0.25f else 0.03f)
-        )
     )
 
     onDrawWithContent {
         drawContent()
-        
-        // Рисуем с клипом, чтобы граница была строго по контуру или чуть внутри
+
+        // Рисуем рамку СТРОГО внутри маски клипа
         clipPath(path) {
-            // 1. Основная иридисцентная рамка (рисуем чуть толще, т.к. клип съест половину)
             drawPath(
                 path = path,
-                brush = iridescentBrush,
-                style = Stroke(width = 2.dp.toPx())
-            )
-            
-            // 2. Внутренний блик для четкости
-            drawPath(
-                path = path,
-                brush = highlightBrush,
-                style = Stroke(width = 1.dp.toPx())
-            )
-        }
-        
-        // 3. Дополнительный мягкий свет при нажатии (снаружи)
-        if (isPressed) {
-            drawPath(
-                path = path,
-                color = Biolume.IridescentStart.copy(alpha = 0.2f),
-                style = Stroke(width = 2.5.dp.toPx())
+                brush = borderBrush,
+                style = Stroke(width = (borderWidth * 2).toPx()) // *2 т.к. clipPath срезает половину толщины
             )
         }
     }

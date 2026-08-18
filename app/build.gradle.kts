@@ -28,11 +28,11 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 113
-        versionName = "3.1.03"
+        versionCode = 114
+        versionName = "3.1.04"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"CANARY\"")
+        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -90,6 +90,8 @@ sentry {
 dependencies {
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui.geometry)
+    implementation(libs.androidx.material3)
     implementation(libs.haze)
     implementation(libs.haze.materials)
     implementation(libs.androidx.compose.foundation)

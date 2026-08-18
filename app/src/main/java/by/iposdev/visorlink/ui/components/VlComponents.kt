@@ -60,12 +60,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.text.TextStyle
 
-// Провайдер состояния Haze для размытия заднего фона (определен 1 раз для всего приложения)
 val LocalHazeState = compositionLocalOf { HazeState() }
 
 @Composable
@@ -243,10 +245,9 @@ fun VlAmbientGlow(
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
 
-    // Значительно уменьшена интенсивность для светлой темы
-    val c1 = accent.copy(alpha = if (isDark) 0.20f else 0.10f)
-    val c2 = cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.06f)
-    val c3 = cs.secondary.copy(alpha = if (isDark) 0.15f else 0.06f)
+    val c1 = accent.copy(alpha = if (isDark) 0.20f else 0.25f)
+    val c2 = cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.12f)
+    val c3 = cs.secondary.copy(alpha = if (isDark) 0.15f else 0.12f)
 
     val infiniteTransition = rememberInfiniteTransition(label = "glow_mesh")
 
@@ -276,45 +277,13 @@ fun VlGlassPanel(
     simplifiedGraphics: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val cs = MaterialTheme.colorScheme
-    val isDark = cs.surface.luminance() < 0.5f
+    val style = rememberExthruStyle(appTheme)
 
-    if (!appTheme.isExthruFamily || appTheme == AppTheme.FORGE) {
-        val style = rememberExthruStyle(appTheme)
-        Box(
-            modifier
-                .clip(if (appTheme == AppTheme.FORGE) RectangleShape else RoundedCornerShape(radius))
-                .background(
-                    if (appTheme == AppTheme.FORGE) style.cardBg else cs.surface,
-                    if (appTheme == AppTheme.FORGE) RectangleShape else RoundedCornerShape(radius)
-                )
-        ) { content() }
-        return
-    }
-
-    val shape = RoundedCornerShape(radius)
-    val hazeState = LocalHazeState.current
-
-    val glassModifier = if (simplifiedGraphics || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-        Modifier
-            .clip(shape)
-            .background((if (isDark) cs.surface else Color.White).copy(alpha = if (isDark) 0.8f else 0.9f))
-    } else {
-        Modifier
-            .clip(shape)
-            .hazeEffect(
-                state = hazeState,
-                style = HazeStyle(blurRadius = 32.dp, noiseFactor = 0.02f, tint = null)
-            )
-            .background((if (isDark) cs.surface else Color.White).copy(alpha = if (isDark) 0.25f else 0.35f)) // Сквозная прозрачность
-    }
-
-    Box(
-        modifier = modifier
-            .scale(1f) // Just to trigger recomposition if needed
-            .then(if (simplifiedGraphics) Modifier else Modifier.nmRaisedShadow(isDark, cornerRadius = radius, shadowRadius = 12.dp))
-            .then(glassModifier)
-            .biolumeGlassBorder(shape, isDark)
+    VlSurface(
+        appTheme = appTheme,
+        customRadius = radius,
+        modifier = modifier,
+        overrideColor = if (simplifiedGraphics || appTheme == AppTheme.FORGE || !appTheme.isExthruFamily) style.cardBg else null
     ) {
         content()
     }
@@ -333,67 +302,36 @@ fun VlButton(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
-    val isDark = cs.surface.luminance() < 0.5f
 
     if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
-        VlSurface(
-            appTheme = appTheme,
-            modifier = modifier.fillMaxWidth().height(56.dp),
-            isButton = true,
-            overrideColor = if (isDestructive) cs.error else cs.primary,
+        Button(
             onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
+            modifier = modifier.fillMaxWidth().height(56.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isDestructive) cs.error else cs.primary,
+                contentColor = if (isDestructive) cs.onError else cs.onPrimary
+            )
         ) {
-            CompositionLocalProvider(
-                LocalContentColor provides (if (isDestructive) cs.onError else cs.onPrimary)
-            ) { content() }
+            content()
         }
         return
     }
 
     val style = rememberExthruStyle(appTheme)
     val isForge = style.isForge
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
 
-    val bgColor = if (isDestructive) style.destructive.copy(alpha = 0.8f) else if (isForge) style.cardBg else style.cardBg.copy(alpha = if(isDark) 0.4f else 0.6f)
-    val textColor = if (isDestructive) Color.White else style.accent
-    val shape = if (isForge) RectangleShape else RoundedCornerShape(16.dp)
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
-        label = "vl_btn_scale"
-    )
-
-    val shadowMod = if (isForge) {
-        Modifier.forgeNeuBrutalism(isPressed, isDark, offsetDp = 4.dp)
-    } else if (isPressed) {
-        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-    } else {
-        Modifier.exthruSmallRaisedShadow(isDark)
-    }
-
-    val forgeMod = if (isForge) {
-        Modifier.industrialPanel(cornerRadius = 2.dp, isDark = isDark, accentGlow = isPressed)
-    } else Modifier
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .scale(if (isForge) 1f else scale)
-            .then(shadowMod)
-            .then(forgeMod)
-            .background(bgColor, shape)
-            .then(if (isForge) Modifier else Modifier.border(1.dp, if (isPressed) Color.Transparent else Color.White.copy(alpha = if(isDark) 0.05f else 0.3f), shape))
-            .clip(shape)
-            .clickable(
-                interactionSource = interactionSource, indication = null,
-                onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() }
-            ),
-        contentAlignment = Alignment.Center
+    VlSurface(
+        appTheme = appTheme,
+        isButton = true,
+        customRadius = if (isForge) 0.dp else 16.dp,
+        overrideColor = if (isDestructive) style.destructive else style.cardBg,
+        modifier = modifier.fillMaxWidth().height(56.dp),
+        onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() }
     ) {
-        CompositionLocalProvider(LocalContentColor provides textColor) {
+        CompositionLocalProvider(
+            LocalContentColor provides if (isDestructive) Color.White else style.accent
+        ) {
             content()
         }
     }
@@ -425,8 +363,8 @@ fun VlSwitch(
     val style = rememberExthruStyle(appTheme)
     val isForge = style.isForge
     val thumbOffset by animateDpAsState(
-        if (checked) (if (isForge) 40.dp else 24.dp) else 4.dp, // Increased travel for Forge
-        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow), 
+        if (checked) (if (isForge) 40.dp else 24.dp) else 4.dp,
+        spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
         label = "vlswitch_thumb"
     )
     val dotColor by animateColorAsState(if (checked) style.accent else cs.onSurfaceVariant.copy(alpha = 0.5f), tween(200), label = "vlswitch_dot")
@@ -434,11 +372,10 @@ fun VlSwitch(
     if (isForge) {
         val interactionSource = remember { MutableInteractionSource() }
         val isPressed by interactionSource.collectIsPressedAsState()
-        
-        // Heavy Industrial Switch
+
         Box(
             modifier = modifier
-                .width(68.dp) // Wider track for full travel
+                .width(68.dp)
                 .height(32.dp)
                 .industrialPanel(cornerRadius = 2.dp, isDark = isDark)
                 .clickable(
@@ -447,7 +384,6 @@ fun VlSwitch(
                 ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) },
             contentAlignment = Alignment.CenterStart
         ) {
-            // Recessed Track
             Box(
                 Modifier
                     .padding(horizontal = 6.dp)
@@ -455,8 +391,7 @@ fun VlSwitch(
                     .height(12.dp)
                     .recessedTrack(cornerRadius = 1.dp, isDark = isDark)
             )
-            
-            // LED Status Indicator
+
             Box(
                 Modifier
                     .padding(start = 10.dp)
@@ -466,7 +401,6 @@ fun VlSwitch(
                     .offset(y = (-10).dp)
             )
 
-            // Mechanical Toggle Lever
             Box(
                 Modifier
                     .offset(x = thumbOffset - 2.dp)
@@ -474,7 +408,6 @@ fun VlSwitch(
                     .hardwareButton(isPressed = isPressed, cornerRadius = 1.dp)
                     .border(1.dp, Color.White.copy(alpha = 0.05f))
             ) {
-                // Notch marker on the lever
                 Box(
                     Modifier
                         .align(Alignment.Center)
@@ -487,21 +420,20 @@ fun VlSwitch(
         return
     }
 
-    // Трек свитча - вдавленный (Biolume) - REFINED
     val trackShape = RoundedCornerShape(14.dp)
     val activeTrackBrush = Brush.linearGradient(
         colors = listOf(Biolume.IridescentStart.copy(alpha = 0.5f), Biolume.IridescentMid.copy(alpha = 0.5f))
     )
-    
+
     Box(
         modifier = modifier
             .width(52.dp)
             .height(28.dp)
-            .nmInsetShadow(isDark, cornerRadius = 14.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+            .nmInsetShadow(isDark, cornerRadius = 14.dp, blurRadiusDp = 4.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
             .then(
-                if (checked) 
+                if (checked)
                     Modifier.background(activeTrackBrush, trackShape, alpha = 0.15f)
-                else 
+                else
                     Modifier.background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), trackShape)
             )
             .clip(trackShape)
@@ -557,7 +489,6 @@ fun VlSegmentedControl(
         Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp)
     }
 
-    // Основной трек
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -685,7 +616,6 @@ fun VlSettingsSection(
     val isForge = appTheme == AppTheme.FORGE
     val style = rememberExthruStyle(if (appTheme.isExthruFamily) appTheme else AppTheme.BIOLUME)
     val cs = MaterialTheme.colorScheme
-    val isDark = cs.surface.luminance() < 0.5f
 
     val titleColor = when {
         isPremium -> Color(0xFFC5A059)
@@ -721,49 +651,24 @@ fun VlSettingsSection(
 
         if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
             Column(Modifier.padding(horizontal = 16.dp)) { content() }
-        } else if (isForge) {
-            // Industrial volumetric container for Forge sections
+        } else {
+            // ИСПРАВЛЕНИЕ: Используем VlSurface для единообразия теней и фонов!
             VlSurface(
                 appTheme = appTheme,
+                customRadius = 24.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                contentPadding = PaddingValues(2.dp)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(0.dp) // Внутренний контент сам разберется
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(8.dp)
+                        .padding(if (isForge) 8.dp else 0.dp)
                 ) {
                     content()
                 }
             }
-        } else {
-            // Glassmorphism Container (Biolume) - REFINED
-            val hazeState = LocalHazeState.current
-            val radius = 20.dp
-            val shape = RoundedCornerShape(radius)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .exthruSmallRaisedShadow(isDark)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tint = null)
-                    )
-                    .background(
-                        Brush.verticalGradient(
-                            colors = if (isDark)
-                                listOf(cs.surface.copy(alpha = 0.2f), cs.surface.copy(alpha = 0.45f))
-                            else
-                                listOf(Color.White.copy(alpha = 0.8f), Color.White.copy(alpha = 0.5f))
-                        ),
-                        shape
-                    )
-                    .clip(shape)
-                    .biolumeGlassBorder(shape, isDark),
-            ) { content() }
         }
     }
 }
@@ -787,19 +692,22 @@ fun VlSettingsItem(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
-    val isDark = cs.surface.luminance() < 0.5f
 
     if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
         val color = iconColor ?: if (isDestructive) cs.error else cs.primary
-        VlSurface(
-            appTheme = appTheme,
+
+        Surface(
             modifier = modifier.fillMaxWidth(),
-            onClick = onClick?.let { { haptic.perform(HapticType.CLICK, hapticEnabled); it() } },
-            index = index, total = total,
-            overrideColor = cs.surfaceContainerLow,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            onClick = { if (onClick != null) { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() } },
+            color = cs.surfaceContainerLow,
+            shape = when {
+                total <= 1 -> RoundedCornerShape(20.dp)
+                index == 0 -> RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                index == total - 1 -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+                else -> RoundedCornerShape(4.dp)
+            }
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(40.dp).background(color.copy(alpha = 0.15f), CircleShape),
                     contentAlignment = Alignment.Center,
@@ -872,15 +780,18 @@ fun VlOptionRow(
     val isDark = cs.surface.luminance() < 0.5f
 
     if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) {
-        VlSurface(
-            appTheme = appTheme,
+        Surface(
             modifier = modifier.fillMaxWidth(),
             onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
-            overrideColor = if (selected) cs.primaryContainer else cs.surfaceContainerLow,
-            index = index, total = total,
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+            color = if (selected) cs.primaryContainer else cs.surfaceContainerLow,
+            shape = when {
+                total <= 1 -> RoundedCornerShape(20.dp)
+                index == 0 -> RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                index == total - 1 -> RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+                else -> RoundedCornerShape(4.dp)
+            }
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier.size(40.dp)
                         .background(if (selected) cs.primary.copy(alpha = 0.15f) else cs.surfaceContainerHigh, CircleShape),
@@ -922,7 +833,6 @@ fun VlOptionRow(
             desc?.let { Text(it, color = cs.onSurfaceVariant, fontSize = 12.sp, fontFamily = monoFamily(style)) }
         }
 
-        // NmRadio (Чекбокс)
         if (isForge) {
             Box(
                 modifier = Modifier
@@ -932,27 +842,27 @@ fun VlOptionRow(
                 contentAlignment = Alignment.Center
             ) {
                 if (selected || dotScale > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .size((12 * dotScale).dp)
-                            .background(style.accent)
-                    )
+                    Box(modifier = Modifier.size((12 * dotScale).dp).background(style.accent))
                 }
             }
         } else {
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .nmInsetShadow(isDark, cornerRadius = 12.dp)
-                    .background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), CircleShape),
+                    .nmInsetShadow(isDark, cornerRadius = 12.dp, blurRadiusDp = 4.dp, lineWidthDp = 2.dp)
+                    .background(if (isDark) Color(0xFF0F0F0F).copy(alpha = 0.5f) else Color(0xFFE2E8F0), CircleShape)
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 if (selected || dotScale > 0f) {
                     Box(
                         modifier = Modifier
                             .size((12 * dotScale).dp)
-                            .exthruSmallRaisedShadow(isDark)
-                            .background(style.accent, CircleShape)
+                            .background(
+                                Brush.radialGradient(listOf(style.accent.copy(alpha = 0.7f), style.accent)),
+                                CircleShape
+                            )
+                            .accentGlowShadow(style.accent, false, 8.dp)
                     )
                 }
             }
