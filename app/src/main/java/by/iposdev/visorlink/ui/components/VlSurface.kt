@@ -174,8 +174,8 @@ fun VlSurface(
                     shadowRadius = if (isBiolume) 20.dp else if (isButton) 12.dp else 16.dp,
                     offsetDp = if (isBiolume) 8.dp else if (isButton) 4.dp else 6.dp,
                     cornerRadius = baseRadius,
-                    darkAlpha = if (isDark) 0.35f else 0.12f,
-                    lightAlpha = if (isDark) 0.01f else 0.60f
+                    darkAlpha = if (isDark) 0.35f else 0.20f,
+                    lightAlpha = if (isDark) 0.01f else 0.70f
                 )
             } else {
                 Modifier.nmInsetShadow(

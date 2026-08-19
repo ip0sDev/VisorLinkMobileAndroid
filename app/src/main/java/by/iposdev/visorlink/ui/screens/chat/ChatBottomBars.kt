@@ -100,14 +100,14 @@ fun DynamicChatInputBar(
     }
 
     val outerBg = when {
-        isExthru -> if (isForge) style.cardBg else cs.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.5f)
+        isExthru -> if (isForge) style.cardBg else cs.surfaceVariant.copy(alpha = if (isDark) 0.35f else 0.85f)
         isOneUi -> if (isDark) OneUiChat.TopBarDark else OneUiChat.TopBar
         isM3E -> Color.Transparent
         else -> cs.surfaceContainerHighest.copy(alpha = 0.85f)
     }
 
     val innerBg = when {
-        isExthru -> if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.35f else 0.6f)
+        isExthru -> if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.35f else 0.75f)
         isOneUi -> if (isDark) OneUiChat.InputBgDark else OneUiChat.InputBg
         isM3E -> cs.surfaceContainerHighest
         else -> cs.surface
@@ -422,8 +422,8 @@ internal fun ExthruChatBottomBar(
     val inputShape = if (isForge) RectangleShape else RoundedCornerShape(24.dp)
 
     val barBgBase     = ExthruChat.barBg(isDark)
-    val barBg         = if (isForge) barBgBase else barBgBase.copy(alpha = if (isDark) 0.4f else 0.55f)
-    val inputBg       = if (isForge) ExthruChat.inputBg(isDark) else ExthruChat.inputBg(isDark).copy(alpha = if (isDark) 0.6f else 0.3f)
+    val barBg         = if (isForge) barBgBase else barBgBase.copy(alpha = if (isDark) 0.4f else 0.85f)
+    val inputBg       = if (isForge) ExthruChat.inputBg(isDark) else ExthruChat.inputBg(isDark).copy(alpha = if (isDark) 0.6f else 0.45f)
     val textPrimary   = ExthruChat.textPrimary(isDark)
     val textHint      = ExthruChat.textHint(isDark)
 

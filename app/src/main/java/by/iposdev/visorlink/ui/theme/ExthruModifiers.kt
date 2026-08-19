@@ -90,8 +90,8 @@ fun Modifier.nmRaisedShadow(
     shadowRadius: Dp = 20.dp, // Увеличен радиус для мягкости
     offsetDp: Dp = 8.dp,
     cornerRadius: Dp = 20.dp,
-    darkAlpha: Float = if (isDark) 0.35f else 0.12f, // Снижена прозрачность
-    lightAlpha: Float = if (isDark) 0.01f else 0.60f,
+    darkAlpha: Float = if (isDark) 0.35f else 0.20f, // Усилена видимость в светлом режиме
+    lightAlpha: Float = if (isDark) 0.01f else 0.70f,
 ): Modifier = this.drawBehind {
     val radiusPx  = shadowRadius.toPx()
     val offsetPx  = offsetDp.toPx()
@@ -215,8 +215,8 @@ fun Modifier.exthruRaisedShadow(
 
 fun Modifier.exthruSmallRaisedShadow(
     isDark: Boolean = false,
-    darkAlpha: Float = if (isDark) 0.30f else 0.10f,
-    lightAlpha: Float = if (isDark) 0.01f else 0.50f,
+    darkAlpha: Float = if (isDark) 0.30f else 0.18f, // Усилена видимость
+    lightAlpha: Float = if (isDark) 0.01f else 0.60f,
 ) = nmRaisedShadow(
     isDark = isDark,
     shadowRadius = 10.dp,
@@ -345,9 +345,9 @@ fun Modifier.biolumeGlassBorder(
             )
         } else {
             listOf(
-                Color.White.copy(alpha = 0.8f),
-                Color.Transparent,
-                accent.copy(alpha = 0.15f)
+                Color.White.copy(alpha = 0.6f),
+                Biolume.ShadowDark.copy(alpha = 0.15f),
+                Biolume.ShadowDark.copy(alpha = 0.30f)
             )
         },
         start = Offset(0f, 0f),

@@ -70,8 +70,8 @@ fun rememberExthruStyle(appTheme: AppTheme): ExthruStyle {
         val dShadow = if (isDark) Color.Black.copy(alpha = 0.4f) else Color(0xFFA3B1C6).copy(alpha = 0.20f)
         val lShadow = if (isDark) Color.White.copy(alpha = 0.02f) else Color.White.copy(alpha = 0.8f)
 
-        val myBg = lerp(bg, primary, if (isDark) 0.25f else 0.12f)
-        val otherBg = if (isDark) lerp(bg, Color.White, 0.06f) else lerp(bg, Color.Black, 0.03f)
+        val myBg = lerp(bg, primary, if (isDark) 0.25f else 0.15f)
+        val otherBg = if (isDark) lerp(bg, Color.White, 0.06f) else lerp(bg, Color.Black, 0.06f)
 
         val themeFg = if (isDark) Color.White.copy(alpha = 0.95f) else Color.Black.copy(alpha = 0.87f)
 

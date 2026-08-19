@@ -253,8 +253,8 @@ fun CustomVlNavigationBar(
                         brush = if (isBiolume) {
                             Brush.radialGradient(
                                 colors = listOf(
-                                    MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.15f else 0.25f),
-                                    MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.35f else 0.5f)
+                                    MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.15f else 0.45f),
+                                    MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.35f else 0.85f)
                                 )
                             )
                         } else {
@@ -265,7 +265,7 @@ fun CustomVlNavigationBar(
                         Modifier.border(
                             width = 1.2.dp,
                             brush = Brush.verticalGradient(
-                                listOf(Color.White.copy(alpha = if (isDark) 0.2f else 0.7f), Color.Transparent, Color.White.copy(alpha = 0.05f))
+                                listOf(Color.White.copy(alpha = if (isDark) 0.2f else 0.85f), Color.Transparent, Color.White.copy(alpha = 0.2f))
                             ),
                             shape = RoundedCornerShape(32.dp)
                         ).border(

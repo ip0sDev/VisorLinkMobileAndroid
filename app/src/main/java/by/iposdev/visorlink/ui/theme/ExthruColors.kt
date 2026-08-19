@@ -8,15 +8,16 @@ import androidx.compose.ui.graphics.Color
 
 object Biolume {
     // ── LIGHT (Daylight) ──
-    // Сделано намного светлее, чтобы белый был основным цветом
-    val Abyss         = Color(0xFFE2EFED)
-    val AbyssSurface  = Color(0xFFEBF5F3)
-    val DeepWater     = Color(0xFFF2F9F8)
-    val MidWater      = Color(0xFFF7FBFB)
-    val ShallowWater  = Color(0xFFFBFEFE)
+    // Чуть больше контраста между уровнями поверхности, чтобы границы
+    // карточек и элементов были видны на светлом фоне.
+    val Abyss         = Color(0xFFD5E5E2)
+    val AbyssSurface  = Color(0xFFDCEAE8)
+    val DeepWater     = Color(0xFFE8F2F0)
+    val MidWater      = Color(0xFFEAF4F2)
+    val ShallowWater  = Color(0xFFF2F9F8)
     val LightSurface  = Color(0xFFFFFFFF)
 
-    val ShadowDark    = Color(0xFF94B1AF)
+    val ShadowDark    = Color(0xFF7B9D9A)
     val ShadowLight   = Color(0xFFFFFFFF)
 
     val TextPrimary   = Color(0xFF0F2B2B)
@@ -86,8 +87,8 @@ val ExthruLightColorScheme = lightColorScheme(
     surfaceVariant       = Biolume.ShallowWater,
     onSurfaceVariant     = Biolume.TextSecondary,
 
-    outline              = Biolume.ShadowDark.copy(alpha = 0.35f),
-    outlineVariant       = Biolume.ShadowDark.copy(alpha = 0.18f),
+    outline              = Biolume.ShadowDark.copy(alpha = 0.45f),
+    outlineVariant       = Biolume.ShadowDark.copy(alpha = 0.28f),
 
     surfaceContainerLowest  = Biolume.Abyss,
     surfaceContainerLow     = Biolume.AbyssSurface,

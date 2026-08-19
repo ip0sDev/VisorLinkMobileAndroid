@@ -429,12 +429,12 @@ fun VlSwitch(
         modifier = modifier
             .width(52.dp)
             .height(28.dp)
-            .nmInsetShadow(isDark, cornerRadius = 14.dp, blurRadiusDp = 4.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
+            .nmInsetShadow(isDark, cornerRadius = 14.dp, blurRadiusDp = 4.dp, darkAlpha = if(isDark) 0.6f else 0.45f)
             .then(
                 if (checked)
                     Modifier.background(activeTrackBrush, trackShape, alpha = 0.15f)
                 else
-                    Modifier.background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.4f), trackShape)
+                    Modifier.background(cs.surface.copy(alpha = if (isDark) 0.2f else 0.5f), trackShape)
             )
             .clip(trackShape)
             .then(
@@ -493,7 +493,7 @@ fun VlSegmentedControl(
         modifier = modifier
             .fillMaxWidth()
             .then(shadowMod)
-            .background(if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.2f else 0.4f), shape)
+            .background(if (isForge) style.inputBg else cs.surface.copy(alpha = if(isDark) 0.2f else 0.6f), shape)
             .padding(if (isForge) 2.dp else 4.dp)
     ) {
         Row(Modifier.fillMaxWidth()) {
@@ -849,8 +849,8 @@ fun VlOptionRow(
             Box(
                 modifier = Modifier
                     .size(24.dp)
-                    .nmInsetShadow(isDark, cornerRadius = 12.dp, blurRadiusDp = 4.dp, lineWidthDp = 2.dp)
-                    .background(if (isDark) Color(0xFF0F0F0F).copy(alpha = 0.5f) else Color(0xFFE2E8F0), CircleShape)
+                    .nmInsetShadow(isDark, cornerRadius = 12.dp, blurRadiusDp = 4.dp, lineWidthDp = 2.dp, darkAlpha = if(isDark) 0.5f else 0.4f)
+                    .background(if (isDark) Color(0xFF0F0F0F).copy(alpha = 0.5f) else Color(0xFFDAE2E9), CircleShape)
                     .clip(CircleShape),
                 contentAlignment = Alignment.Center
             ) {
