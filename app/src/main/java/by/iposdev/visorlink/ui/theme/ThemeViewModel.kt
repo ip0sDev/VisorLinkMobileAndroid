@@ -130,6 +130,9 @@ class ThemeViewModel(private val context: Context) : ViewModel(), SharedPreferen
 
     fun setTheme(theme: AppTheme) {
         prefs.edit().putString(KEY_THEME, theme.name).apply()
+        if (theme == AppTheme.FORGE_INDUSTRIAL) {
+            setThemeMode(ThemeMode.DARK)
+        }
     }
 
     fun setThemeMode(mode: ThemeMode) {

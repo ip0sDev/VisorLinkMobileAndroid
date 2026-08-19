@@ -249,7 +249,7 @@ fun ChatScreen(
         val effectiveTheme = LocalAppThemeOverride.current ?: appTheme
         val isExthruEff = effectiveTheme.isExthruFamily
         val isOneUiEff  = effectiveTheme == AppTheme.ONE_UI
-        val isForgeEff  = effectiveTheme == AppTheme.FORGE
+        val isForgeEff  = effectiveTheme.isForgeFamily
         
         val cs = MaterialTheme.colorScheme
         val isDarkTheme = cs.surface.luminance() < 0.5f
@@ -447,6 +447,7 @@ fun ChatScreen(
                                                     chatType = uiState.chatType, hapticEnabled = hapticEnabled,
                                                     showSenderName = uiState.chatType != ChatType.DIRECT,
                                                     voicePlayback = uiState.voicePlayback,
+                                                    appTheme = effectiveTheme,
                                                     isOneUi = isOneUiEff, isExthru = isExthruEff, isForge = isForgeEff, isDark = isDarkTheme,
                                                     hasWallpaper = (uiState.wallpaperUrl != null || applyCustom),
                                                     onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },

@@ -377,43 +377,39 @@ fun VlSwitch(
             modifier = modifier
                 .width(68.dp)
                 .height(32.dp)
-                .industrialPanel(cornerRadius = 2.dp, isDark = isDark)
+                .background(style.cardBg)
+                .win95Panel(isDark = isDark, raised = true)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = null
                 ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) },
             contentAlignment = Alignment.CenterStart
         ) {
+            // Track
             Box(
                 Modifier
                     .padding(horizontal = 6.dp)
                     .fillMaxWidth()
                     .height(12.dp)
-                    .recessedTrack(cornerRadius = 1.dp, isDark = isDark)
+                    .background(if (isDark) Color.Black else Color.Gray.copy(alpha = 0.2f))
+                    .win95Panel(isDark = isDark, raised = false, thickness = 1.dp)
             )
 
-            Box(
-                Modifier
-                    .padding(start = 10.dp)
-                    .size(6.dp)
-                    .glowingIndicator(active = checked, color = style.accent)
-                    .align(Alignment.CenterStart)
-                    .offset(y = (-10).dp)
-            )
-
+            // Thumb
             Box(
                 Modifier
                     .offset(x = thumbOffset - 2.dp)
                     .size(24.dp, 24.dp)
-                    .hardwareButton(isPressed = isPressed, cornerRadius = 1.dp)
-                    .border(1.dp, Color.White.copy(alpha = 0.05f))
+                    .background(style.cardBg)
+                    .win95Panel(isDark = isDark, raised = !isPressed)
             ) {
+                // Indicator square
                 Box(
                     Modifier
                         .align(Alignment.Center)
-                        .width(2.dp)
-                        .height(12.dp)
-                        .background(Color.Black.copy(alpha = 0.4f))
+                        .size(8.dp)
+                        .background(if (checked) style.accent else (if (isDark) Color(0xFF222222) else Color(0xFFCCCCCC)))
+                        .border(1.dp, Color.Black.copy(alpha = 0.5f))
                 )
             }
         }

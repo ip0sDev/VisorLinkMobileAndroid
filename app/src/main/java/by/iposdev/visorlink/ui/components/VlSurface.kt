@@ -49,12 +49,13 @@ fun VlSurface(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val showInset = isInput || isPressed
-
+    
     val baseRadius = customRadius ?: if (isButton) 20.dp else 24.dp
 
     val shape: Shape = when {
-        appTheme == AppTheme.FORGE -> RectangleShape
+        appTheme == AppTheme.FORGE || appTheme == AppTheme.FORGE_INDUSTRIAL || appTheme == AppTheme.FORGE_TERMINAL || appTheme == AppTheme.FORGE_COMICS -> {
+            if (appTheme == AppTheme.FORGE_COMICS) RoundedCornerShape(if (isButton) 12.dp else 8.dp) else RectangleShape
+        }
         total <= 1 -> RoundedCornerShape(baseRadius)
         else -> {
             val smallR = 4.dp
@@ -69,10 +70,7 @@ fun VlSurface(
     val pressedScale = if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) 0.96f else 0.93f
     val scale by animateFloatAsState(
         targetValue = if (isPressed && !isInput) pressedScale else 1f,
-        animationSpec = spring(
-            dampingRatio = if (isPressed) Spring.DampingRatioNoBouncy else Spring.DampingRatioMediumBouncy,
-            stiffness = if (isPressed) Spring.StiffnessHigh else Spring.StiffnessMedium
-        ),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
         label = "vlsurface_scale",
     )
 
@@ -81,6 +79,51 @@ fun VlSurface(
     } else Modifier
 
     when (appTheme) {
+        AppTheme.FORGE_INDUSTRIAL -> {
+            val style = rememberExthruStyle(appTheme)
+            val bg = overrideColor ?: if (isInput) Color(0xFF000000) else style.cardBg
+            
+            Box(
+                modifier = modifier
+                    .background(bg, shape)
+                    .border(1.dp, if (isPressed) style.accent else style.darkShadow.copy(alpha = 0.5f), shape)
+                    .cyberpunkScanlines(spacing = 4.dp)
+                    .then(clickModifier)
+                    .padding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) { content() }
+        }
+
+        AppTheme.FORGE_TERMINAL -> {
+            val style = rememberExthruStyle(appTheme)
+            val bg = overrideColor ?: style.cardBg
+            
+            Box(
+                modifier = modifier
+                    .background(bg)
+                    .win95Panel(isDark = isDark, raised = !isPressed && !isInput)
+                    .then(clickModifier)
+                    .padding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) { content() }
+        }
+
+        AppTheme.FORGE_COMICS -> {
+            val style = rememberExthruStyle(appTheme)
+            val paper = if (isDark) ForgeComics.Noir else ForgeComics.Newsprint
+            val bg = overrideColor ?: if (isInput) paper.Paper else style.cardBg
+            
+            Box(
+                modifier = modifier
+                    .scale(scale)
+                    .background(bg, shape)
+                    .then(if (!isInput) Modifier.comicPanelOutline(color = paper.Stroke, cornerRadius = if (isButton) 12.dp else 8.dp) else Modifier)
+                    .then(clickModifier)
+                    .padding(contentPadding),
+                contentAlignment = Alignment.Center,
+            ) { content() }
+        }
+
         AppTheme.MATERIAL3_EXPRESSIVE, AppTheme.ONE_UI -> {
             val bg = overrideColor ?: if (isInput) cs.surfaceContainerHighest else cs.surfaceContainerLow
             Box(
@@ -94,126 +137,43 @@ fun VlSurface(
             ) { content() }
         }
 
-        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> {
-            val style = rememberExthruStyle(appTheme)
-            val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg
-
-            val shadowMod = Modifier.forgeNeuBrutalism(
-                isPressed = isPressed,
-                isDark = isDark,
-                offsetDp = if (isButton) 3.dp else 8.dp
-            )
-
-            val industrialMod = if (!isInput) {
-                Modifier.industrialPanel(
-                    cornerRadius = 2.dp,
-                    isDark = isDark,
-                    accentGlow = isPressed,
-                    accentColor = style.accent,
-                    thickness = if (isButton) 1.5.dp else 4.dp
-                )
-            } else {
-                Modifier
-                    .background(bg, RectangleShape)
-                    .border(1.dp, if (isDark) Color(0xFF333333) else Color.Black, RectangleShape)
-            }
-
-            Box(
-                modifier = modifier
-                    .then(if (!isInput) shadowMod else Modifier)
-                    .then(industrialMod)
-                    .then(if (appTheme == AppTheme.FORGE_TERMINAL) Modifier.terminalScanlines() else Modifier)
-                    .then(clickModifier)
-                    .padding(contentPadding),
-                contentAlignment = Alignment.Center,
-            ) { content() }
-        }
-
         else -> {
+            // Biolume / Default
             val style = rememberExthruStyle(appTheme)
             val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU
+            val showInset = isInput || isPressed
 
-            // Анимация градиента для эффекта переливания
             val infiniteTransition = rememberInfiniteTransition(label = "surface_shimmer")
-            val shimmerX by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 800f,
-                animationSpec = infiniteRepeatable(tween(12000, easing = LinearEasing), RepeatMode.Reverse),
-                label = "shimmerX"
-            )
-            val shimmerY by infiniteTransition.animateFloat(
-                initialValue = 0f, targetValue = 800f,
-                animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse),
-                label = "shimmerY"
-            )
-
-            // Чуть затемняем фон при нажатии
+            val shimmerX by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 800f, animationSpec = infiniteRepeatable(tween(12000, easing = LinearEasing), RepeatMode.Reverse), label = "shimmerX")
+            val shimmerY by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 800f, animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse), label = "shimmerY")
             val pressAlpha by animateFloatAsState(if (isPressed) 0.85f else 1f, label = "press_alpha")
 
             val biolumeBg = if (isBiolume && overrideColor == null && !isInput) {
                 Brush.linearGradient(
-                    colors = if (isDark)
-                        listOf(
-                            style.cardBg.copy(alpha = 0.5f * pressAlpha),
-                            style.accent.copy(alpha = 0.08f * pressAlpha),
-                            style.cardBg.copy(alpha = 0.25f * pressAlpha)
-                        )
-                    else
-                        listOf(
-                            Color.White.copy(alpha = 0.95f * pressAlpha),
-                            style.accent.copy(alpha = 0.05f * pressAlpha),
-                            Color.White.copy(alpha = 0.65f * pressAlpha)
-                        ),
+                    colors = if (isDark) listOf(style.cardBg.copy(alpha = 0.5f * pressAlpha), style.accent.copy(alpha = 0.08f * pressAlpha), style.cardBg.copy(alpha = 0.25f * pressAlpha))
+                    else listOf(Color.White.copy(alpha = 0.95f * pressAlpha), style.accent.copy(alpha = 0.05f * pressAlpha), Color.White.copy(alpha = 0.65f * pressAlpha)),
                     start = Offset(shimmerX, shimmerY),
                     end = Offset(shimmerX + 600f, shimmerY + 600f)
                 )
             } else null
 
             val shadowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (!showInset) {
-                Modifier.nmRaisedShadow(
-                    isDark = isDark,
-                    shadowRadius = if (isBiolume) 20.dp else if (isButton) 12.dp else 16.dp,
-                    offsetDp = if (isBiolume) 8.dp else if (isButton) 4.dp else 6.dp,
-                    cornerRadius = baseRadius,
-                    darkAlpha = if (isDark) 0.35f else 0.20f,
-                    lightAlpha = if (isDark) 0.01f else 0.70f
-                )
+                Modifier.nmRaisedShadow(isDark = isDark, shadowRadius = if (isBiolume) 20.dp else if (isButton) 12.dp else 16.dp, offsetDp = if (isBiolume) 8.dp else if (isButton) 4.dp else 6.dp, cornerRadius = baseRadius)
             } else {
-                Modifier.nmInsetShadow(
-                    isDark = isDark,
-                    cornerRadius = baseRadius,
-                    lineWidthDp = if (isButton) 2.dp else 1.5.dp,
-                    blurRadiusDp = 8.dp
-                )
+                Modifier.nmInsetShadow(isDark = isDark, cornerRadius = baseRadius)
             }
-
-            val glowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (onClick != null && !isInput) {
-                Modifier.accentGlowShadow(accent = style.accent, isPressed = isPressed, cornerRadius = baseRadius)
-            } else Modifier
 
             Box(
                 modifier = modifier
                     .scale(scale)
                     .then(shadowModifier)
-                    .then(glowModifier)
-                    .clip(shape) // Clip ПЕРЕД ФОНОМ И ГРАНИЦЕЙ
-                    .then(
-                        if (biolumeBg != null) Modifier.background(biolumeBg)
-                        else Modifier.background(overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f))
-                    )
-                    .then(
-                        if (isBiolume && !showInset)
-                            Modifier.biolumeGlassBorder(shape, isDark, style.accent, isPressed)
-                        else if (overrideColor != Color.Transparent)
-                            Modifier.border(1.dp, if (isDark) Color.White.copy(0.05f) else style.accent.copy(0.12f), shape)
-                        else Modifier
-                    )
-                    .then(clickModifier),
+                    .clip(shape)
+                    .then(if (biolumeBg != null) Modifier.background(biolumeBg) else Modifier.background(overrideColor ?: if (isInput) style.inputBg else style.cardBg))
+                    .then(if (isBiolume && !showInset) Modifier.biolumeGlassBorder(shape, isDark, style.accent, isPressed) else Modifier)
+                    .then(clickModifier)
+                    .padding(contentPadding),
                 contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.padding(contentPadding), contentAlignment = Alignment.Center) {
-                    content()
-                }
-            }
+            ) { content() }
         }
     }
 }

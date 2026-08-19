@@ -21,7 +21,9 @@ object CustomizationHelper {
     fun parseStyle(style: String): AppTheme {
         return when (style.lowercase()) {
             "biolume" -> AppTheme.BIOLUME
-            "forge" -> AppTheme.FORGE
+            "forge", "forge_industrial" -> AppTheme.FORGE_INDUSTRIAL
+            "forge_terminal" -> AppTheme.FORGE_TERMINAL
+            "forge_comics" -> AppTheme.FORGE_COMICS
             "material" -> AppTheme.MATERIAL3_EXPRESSIVE
             "oneui" -> AppTheme.ONE_UI
             else -> AppTheme.BIOLUME

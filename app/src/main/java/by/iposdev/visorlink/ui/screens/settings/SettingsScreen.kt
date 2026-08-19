@@ -157,6 +157,7 @@ fun SettingsScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
 
     // ── Диалоги ──
+    var showThemeDialog by remember { mutableStateOf(false) }
     var showChannelDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -382,38 +383,59 @@ fun SettingsScreen(
                     }
 
                     // ── Акцент ──
-                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_accent)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            ColorPreset.entries.forEach { preset ->
-                                ColorPresetCircle(
-                                    preset = preset,
-                                    isSelected = currentPreset == preset,
-                                    appTheme = currentTheme,
-                                    isDark = isDark,
-                                    onClick = {
-                                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                                        themeViewModel.setColorPreset(preset)
-                                    }
-                                )
+                    if (currentTheme != AppTheme.FORGE_INDUSTRIAL && currentTheme != AppTheme.FORGE) {
+                        VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_accent)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                ColorPreset.entries.forEach { preset ->
+                                    ColorPresetCircle(
+                                        preset = preset,
+                                        isSelected = currentPreset == preset,
+                                        appTheme = currentTheme,
+                                        isDark = isDark,
+                                        onClick = {
+                                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                                            themeViewModel.setColorPreset(preset)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
 
                     // ── Внешний вид ──
                     VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_section_appearance)) {
-                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Layers, label = "Biolume", desc = "Органичный неоморфизм", selected = currentTheme == AppTheme.BIOLUME || currentTheme == AppTheme.EXTHRU, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.BIOLUME) })
-                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.AutoAwesome, label = stringResource(R.string.settings_theme_m3_name), desc = stringResource(R.string.settings_theme_m3_desc), selected = currentTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
-                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.Shield, label = "Forge", desc = "Квадратный киберпанк, Arasaka", selected = currentTheme == AppTheme.FORGE, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setTheme(AppTheme.FORGE) })
+                        val themeName = when (currentTheme) {
+                            AppTheme.BIOLUME, AppTheme.EXTHRU -> "Biolume"
+                            AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.settings_theme_m3_name)
+                            AppTheme.ONE_UI -> "One UI 8.5"
+                            AppTheme.FORGE_INDUSTRIAL -> "Forge Industrial"
+                            AppTheme.FORGE_TERMINAL -> "Forge Terminal"
+                            AppTheme.FORGE_COMICS -> "Forge Comics"
+                            AppTheme.FORGE -> "Forge"
+                        }
+                        
+                        VlSettingsItem(
+                            appTheme = currentTheme,
+                            icon = Icons.Default.Palette,
+                            title = "Стиль оформления",
+                            subtitle = themeName,
+                            onClick = { 
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                showThemeDialog = true 
+                            }
+                        )
                     }
 
                     // ── Тёмный режим ──
-                    VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_dark_title)) {
-                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
-                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.LIGHT) })
-                        VlOptionRow(appTheme = currentTheme, icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.DARK) })
+                    if (currentTheme != AppTheme.FORGE_INDUSTRIAL && currentTheme != AppTheme.FORGE) {
+                        VlSettingsSection(appTheme = currentTheme, title = stringResource(R.string.settings_dark_title)) {
+                            VlOptionRow(appTheme = currentTheme, icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
+                            VlOptionRow(appTheme = currentTheme, icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, index = 1, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.LIGHT) })
+                            VlOptionRow(appTheme = currentTheme, icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, index = 2, total = 3, onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); themeViewModel.setThemeMode(ThemeMode.DARK) })
+                        }
                     }
 
                     // ── Язык ──
@@ -1033,6 +1055,16 @@ fun SettingsScreen(
     }
     if (showAdminPanel) { AdminPanelSheet { showAdminPanel = false } }
     if (showBotsManager) { BotsManagerSheet { showBotsManager = false } }
+
+    if (showThemeDialog) {
+        SettingsThemeDialog(
+            currentTheme = currentTheme,
+            onDismiss = { showThemeDialog = false },
+            onThemeSelected = { theme ->
+                themeViewModel.setTheme(theme)
+            }
+        )
+    }
 
     if (showChannelDialog) {
         ChannelSelectionDialog(

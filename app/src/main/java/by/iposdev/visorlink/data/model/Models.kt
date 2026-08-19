@@ -567,13 +567,29 @@ enum class AppTheme {
     @Deprecated("Используй BIOLUME", ReplaceWith("BIOLUME"))
     EXTHRU,
     BIOLUME,
-    FORGE,
+    FORGE_INDUSTRIAL,
     FORGE_TERMINAL,
+    FORGE_COMICS,
+    @Deprecated("Используй FORGE_INDUSTRIAL", ReplaceWith("FORGE_INDUSTRIAL"))
+    FORGE,
 }
 
 val AppTheme.isExthruFamily: Boolean
     @Suppress("DEPRECATION")
-    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE || this == AppTheme.FORGE_TERMINAL || this == AppTheme.EXTHRU
+    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE_INDUSTRIAL || this == AppTheme.FORGE_TERMINAL || this == AppTheme.FORGE_COMICS || this == AppTheme.FORGE || this == AppTheme.EXTHRU
+
+val AppTheme.isForgeFamily: Boolean
+    @Suppress("DEPRECATION")
+    get() = this == AppTheme.FORGE_INDUSTRIAL || this == AppTheme.FORGE_TERMINAL || this == AppTheme.FORGE_COMICS || this == AppTheme.FORGE
+
+val AppTheme.isIndustrial: Boolean
+    get() = this == AppTheme.FORGE_INDUSTRIAL
+
+val AppTheme.isTerminal: Boolean
+    get() = this == AppTheme.FORGE_TERMINAL
+
+val AppTheme.isComics: Boolean
+    get() = this == AppTheme.FORGE_COMICS
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

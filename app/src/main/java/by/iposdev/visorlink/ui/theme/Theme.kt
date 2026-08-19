@@ -1,18 +1,18 @@
 package by.iposdev.visorlink.ui.theme
 
 import android.app.Activity
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,8 +22,6 @@ import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.utils.CustomizationHelper
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import org.koin.compose.viewmodel.koinViewModel
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
@@ -150,73 +148,33 @@ private val DarkOneUI = darkColorScheme(
     surfaceContainerHighest = Color(0xFF373737),
 )
 
-// ── Shapes ────────────────────────────────────────────────────────────────────
+// ── Typography ───────────────────────────────────────────────────────────────
 
-val ShapesM3 = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(36.dp)
+val ForgeIndustrialTypography = Typography(
+    displayLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 57.sp),
+    headlineLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 32.sp),
+    titleLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+    bodyLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 16.sp),
+    bodyMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+    labelLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
 )
 
-val ShapesOneUI = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(26.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+val ForgeTerminalTypography = Typography(
+    displayLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 57.sp),
+    headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp),
+    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 16.sp),
+    bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 14.sp),
 )
 
-val ShapesExthru = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp)
-)
-
-// Forge — industrial hardware style, subtle rounding to mimic machined parts
-val ShapesForge = Shapes(
-    extraSmall = RoundedCornerShape(2.dp),
-    small = RoundedCornerShape(2.dp),
-    medium = RoundedCornerShape(3.dp),
-    large = RoundedCornerShape(4.dp),
-    extraLarge = RoundedCornerShape(4.dp)
-)
-
-// ── Typography ────────────────────────────────────────────────────────────────
-
-val TypographyM3 = Typography(
-    displayLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 57.sp, lineHeight = 64.sp),
-    headlineLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 40.sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 36.sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 24.sp),
-    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp),
-)
-
-val TypographyOneUI = Typography(
-    displayLarge = TextStyle(fontWeight = FontWeight.Light, fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-0.25).sp),
-    headlineLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = 0.sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 36.sp, letterSpacing = 0.sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 32.sp, letterSpacing = 0.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = 0.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
-    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
+val ForgeComicsTypography = Typography(
+    displayLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 57.sp),
+    headlineLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 32.sp),
+    titleLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 22.sp),
+    bodyLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 16.sp),
+    bodyMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+    labelLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 14.sp),
 )
 
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
@@ -272,16 +230,19 @@ fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.BIOLUME,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
+    setStatusBarColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
-    val darkTheme = when (themeMode) {
-        ThemeMode.DARK   -> true
-        ThemeMode.LIGHT  -> false
-        ThemeMode.SYSTEM -> systemDark
+    val darkTheme = when (appTheme) {
+        AppTheme.FORGE_INDUSTRIAL -> true // Industrial is DARK ONLY
+        else -> when (themeMode) {
+            ThemeMode.DARK   -> true
+            ThemeMode.LIGHT  -> false
+            ThemeMode.SYSTEM -> systemDark
+        }
     }
 
-    // EXTHRU оставлен как алиас BIOLUME для экранов, которые ещё не мигрировали на новое имя.
     val resolvedTheme = if (appTheme == AppTheme.EXTHRU) AppTheme.BIOLUME else appTheme
 
     val baseColorScheme = when (resolvedTheme) {
@@ -295,36 +256,47 @@ fun VisorLinkTheme(
         }
         AppTheme.ONE_UI -> if (darkTheme) DarkOneUI else LightOneUI
         AppTheme.BIOLUME -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
-        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> if (darkTheme) ForgeDarkColorScheme else ForgeLightColorScheme
-        AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme // недостижимо, resolvedTheme выше уже разрешил
+        AppTheme.FORGE_INDUSTRIAL -> ForgeIndustrialDarkColorScheme
+        AppTheme.FORGE_TERMINAL -> forgeTerminalColorScheme(isDark = darkTheme)
+        AppTheme.FORGE_COMICS -> forgeComicsColorScheme(isDark = darkTheme)
+        AppTheme.FORGE -> ForgeIndustrialDarkColorScheme
+        AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
     }
 
-    // Кастомный акцентный цвет (пресет) перекрашивает схему поверх любой из 3 тем.
-    // Для M3 с включённым Material You (preset == DEFAULT) пресет не применяется — используется системный динамический цвет.
     val colorScheme = baseColorScheme.withColorPreset(resolvedTheme, darkTheme, colorPreset)
 
     val view = LocalView.current
-    if (!view.isInEditMode) {
+    if (!view.isInEditMode && setStatusBarColor) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            var context = view.context
+            while (context is ContextWrapper) {
+                if (context is Activity) break
+                context = context.baseContext
+            }
+            val activity = context as? Activity
+            val window = activity?.window
+            if (window != null) {
+                window.statusBarColor = Color.Transparent.toArgb()
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            }
         }
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
         shapes = when (resolvedTheme) {
-            AppTheme.ONE_UI  -> ShapesOneUI
-            AppTheme.BIOLUME -> ShapesExthru
-            AppTheme.FORGE   -> ShapesForge
-            else             -> ShapesM3
+            AppTheme.ONE_UI           -> Shapes(medium = RoundedCornerShape(12.dp))
+            AppTheme.BIOLUME          -> Shapes(medium = RoundedCornerShape(24.dp))
+            AppTheme.FORGE_INDUSTRIAL -> Shapes(medium = RoundedCornerShape(0.dp))
+            AppTheme.FORGE_TERMINAL   -> Shapes(medium = RoundedCornerShape(0.dp))
+            AppTheme.FORGE_COMICS     -> Shapes(medium = RoundedCornerShape(8.dp))
+            else                      -> Shapes(medium = RoundedCornerShape(16.dp))
         },
         typography = when (resolvedTheme) {
-            AppTheme.ONE_UI  -> TypographyOneUI
-            AppTheme.BIOLUME -> ExthruTypography
-            AppTheme.FORGE   -> ForgeTypography
-            else             -> TypographyM3
+            AppTheme.FORGE_INDUSTRIAL   -> ForgeIndustrialTypography
+            AppTheme.FORGE_TERMINAL     -> ForgeTerminalTypography
+            AppTheme.FORGE_COMICS       -> ForgeComicsTypography
+            else                        -> MaterialTheme.typography
         },
         content = {
             CompositionLocalProvider(LocalAppThemeOverride provides resolvedTheme) {

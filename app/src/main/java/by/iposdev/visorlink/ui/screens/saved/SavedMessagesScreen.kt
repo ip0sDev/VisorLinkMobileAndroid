@@ -283,6 +283,7 @@ fun SavedMessagesScreen(
                                             hapticEnabled  = hapticEnabled,
                                             showSenderName = false,
                                             voicePlayback  = uiState.voicePlayback,
+                                            appTheme       = appTheme,
                                             isOneUi        = isOneUi,
                                             isExthru       = isExthru,
                                             isDark         = isDark,

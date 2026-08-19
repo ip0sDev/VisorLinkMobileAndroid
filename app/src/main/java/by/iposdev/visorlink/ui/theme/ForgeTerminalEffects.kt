@@ -17,204 +17,65 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Глобальный "индустриальный" модификатор для панелей Forge.
- * УЛУЧШЕНО: Добавлен эффект толстой металлической пластины и более глубокие тени.
+ * Windows 95 Classic 3D Bevel
  */
-fun Modifier.industrialPanel(
-    cornerRadius: Dp = 4.dp,
-    isDark: Boolean = true,
-    accentGlow: Boolean = false,
-    accentColor: Color = Color(0xFFFF1A1A),
+fun Modifier.win95Panel(
+    isDark: Boolean,
+    raised: Boolean = true,
     thickness: Dp = 2.dp
 ): Modifier = this.drawBehind {
-    val cr = cornerRadius.toPx()
-    val thickPx = thickness.toPx()
+    val t = thickness.toPx()
+    val outerColor1 = if (raised) (if (isDark) Color(0xFF333333) else Color(0xFFFFFFFF)) else (if (isDark) Color(0xFF000000) else Color(0xFF808080))
+    val outerColor2 = if (raised) (if (isDark) Color(0xFF000000) else Color(0xFF808080)) else (if (isDark) Color(0xFF333333) else Color(0xFFFFFFFF))
     
-    // 1. Базовый металлический градиент (фон)
-    val baseGradient = if (isDark) {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFF25252B),
-                Color(0xFF1A1A1E),
-                Color(0xFF0D0D0F)
-            )
-        )
-    } else {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFFDCDFE5),
-                Color(0xFFC0C0C0),
-                Color(0xFFA1A1AA)
-            )
-        )
-    }
-    
-    drawRoundRect(brush = baseGradient, cornerRadius = CornerRadius(cr))
+    val innerColor1 = if (raised) (if (isDark) Color(0xFF1A1A1A) else Color(0xFFDFDFDF)) else (if (isDark) Color(0xFF0D0D0D) else Color(0xFF404040))
+    val innerColor2 = if (raised) (if (isDark) Color(0xFF0D0D0D) else Color(0xFF404040)) else (if (isDark) Color(0xFF1A1A1A) else Color(0xFFDFDFDF))
 
-    // 2. Текстура шлифовки (Brushed Metal) - более выраженная
-    val strokeColor = if (isDark) Color.White.copy(alpha = 0.04f) else Color.Black.copy(alpha = 0.03f)
-    val step = 2.5.dp.toPx()
-    var y = 0f
-    while (y < size.height) {
-        drawLine(
-            color = strokeColor,
-            start = Offset(0f, y),
-            end = Offset(size.width, y),
-            strokeWidth = 1.2.dp.toPx()
-        )
-        y += step
-    }
+    // 1. Outer bevel
+    drawLine(outerColor1, Offset(0f, 0f), Offset(size.width, 0f), t)
+    drawLine(outerColor1, Offset(0f, 0f), Offset(0f, size.height), t)
+    drawLine(outerColor2, Offset(0f, size.height), Offset(size.width, size.height), t)
+    drawLine(outerColor2, Offset(size.width, 0f), Offset(size.width, size.height), t)
 
-    // 3. Двойная Фаска (Double Bevel) для объема пластины
-    val outerHighlight = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.5f)
-    val innerShadow = if (isDark) Color.Black.copy(alpha = 0.7f) else Color.Black.copy(alpha = 0.3f)
-    
-    // Внешний контур (толщина листа)
-    drawRoundRect(
-        color = outerHighlight,
-        cornerRadius = CornerRadius(cr),
-        style = Stroke(width = 1.dp.toPx())
-    )
-    
-    // Внутренняя тень фаски (создает эффект закругления края внутрь)
-    drawRoundRect(
-        color = innerShadow,
-        topLeft = Offset(1.dp.toPx(), 1.dp.toPx()),
-        size = Size(size.width - 2.dp.toPx(), size.height - 2.dp.toPx()),
-        cornerRadius = CornerRadius(cr),
-        style = Stroke(width = 1.dp.toPx())
-    )
-
-    // 4. Акцентированные блики на гранях
-    val shinyColor = Color.White.copy(alpha = 0.2f)
-    drawLine(shinyColor, Offset(cr, thickPx), Offset(size.width - cr, thickPx), 1.5.dp.toPx()) // Верхняя грань
-    drawLine(shinyColor, Offset(thickPx, cr), Offset(thickPx, size.height - cr), 1.5.dp.toPx()) // Левая грань
-    
-    // Вторичный "спекулярный" блик в самом углу для объема
-    drawPath(
-        path = Path().apply {
-            moveTo(0f, cr * 2)
-            lineTo(0f, 0f)
-            lineTo(cr * 2, 0f)
-            close()
-        },
-        brush = Brush.linearGradient(
-            colors = listOf(Color.White.copy(alpha = 0.15f), Color.Transparent),
-            start = Offset(0f, 0f),
-            end = Offset(cr, cr)
-        )
-    )
-
-    // 5. Акцентное свечение
-    if (accentGlow) {
-        drawIntoCanvas { canvas ->
-            val paint = Paint().asFrameworkPaint().apply {
-                isAntiAlias = true
-                this.color = android.graphics.Color.TRANSPARENT
-                setShadowLayer(12.dp.toPx(), 0f, 0f, accentColor.copy(alpha = 0.5f).toArgb())
-            }
-            canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, cr, cr, paint)
-        }
+    // 2. Inner bevel
+    if (t > 1.dp.toPx()) {
+        val iT = t / 2
+        drawLine(innerColor1, Offset(t, t), Offset(size.width - t, t), iT)
+        drawLine(innerColor1, Offset(t, t), Offset(t, size.height - t), iT)
+        drawLine(innerColor2, Offset(t, size.height - t), Offset(size.width - t, size.height - t), iT)
+        drawLine(innerColor2, Offset(size.width - t, t), Offset(size.width - t, size.height - t), iT)
     }
 }
 
 /**
- * Эффект вдавленной дорожки (Recessed Track) для свитчей или инпутов.
+ * Windows 95 Title Bar Gradient
  */
-fun Modifier.recessedTrack(
-    cornerRadius: Dp = 2.dp,
-    isDark: Boolean = true
+fun Modifier.win95TitleBar(
+    isDark: Boolean,
+    isActive: Boolean = true
 ): Modifier = this.drawBehind {
-    val cr = cornerRadius.toPx()
+    val startColor = if (isActive) (if (isDark) Color(0xFF003366) else Color(0xFF000080)) else Color(0xFF808080)
+    val endColor = if (isActive) (if (isDark) Color(0xFF001A33) else Color(0xFF1084D0)) else Color(0xFFB0B0B0)
     
-    // Фон углубления
-    drawRoundRect(
-        color = if (isDark) Color(0xFF070709) else Color(0xFF8E9196),
-        cornerRadius = CornerRadius(cr)
-    )
-    
-    // Внутренняя тень сверху
-    drawIntoCanvas { canvas ->
-        val paint = Paint().asFrameworkPaint().apply {
-            isAntiAlias = true
-            this.color = android.graphics.Color.TRANSPARENT
-            setShadowLayer(6.dp.toPx(), 2.dp.toPx(), 2.dp.toPx(), Color.Black.copy(alpha = 0.8f).toArgb())
-        }
-        val path = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(cr))) }
-        canvas.save()
-        canvas.clipPath(path)
-        canvas.nativeCanvas.drawRoundRect(-10f, -10f, size.width + 10f, 10f, cr, cr, paint)
-        canvas.restore()
-    }
-    
-    // Нижний блик (грань углубления)
-    val highlightColor = if (isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.3f)
-    drawLine(
-        color = highlightColor,
-        start = Offset(0f, size.height),
-        end = Offset(size.width, size.height),
-        strokeWidth = 1.dp.toPx()
+    drawRect(
+        brush = Brush.horizontalGradient(listOf(startColor, endColor)),
+        size = size
     )
 }
 
 /**
- * Эффект индикатора LED.
- */
-fun Modifier.glowingIndicator(
-    active: Boolean,
-    color: Color = Color(0xFFFF1A1A)
-): Modifier = this.drawBehind {
-    val radius = size.minDimension / 2
-    val center = Offset(size.width / 2, size.height / 2)
-    
-    // Ободок (корпус светодиода)
-    drawCircle(
-        color = Color(0xFF1A1A1E),
-        radius = radius,
-        center = center
-    )
-    
-    // Сам светодиод
-    val ledColor = if (active) color else color.copy(alpha = 0.2f)
-    drawCircle(
-        color = ledColor,
-        radius = radius * 0.7f,
-        center = center
-    )
-    
-    if (active) {
-        // Свечение
-        drawIntoCanvas { canvas ->
-            val paint = Paint().asFrameworkPaint().apply {
-                isAntiAlias = true
-                this.color = android.graphics.Color.TRANSPARENT
-                setShadowLayer(8.dp.toPx(), 0f, 0f, color.copy(alpha = 0.8f).toArgb())
-            }
-            canvas.nativeCanvas.drawCircle(center.x, center.y, radius * 0.7f, paint)
-        }
-        
-        // Блик сверху
-        drawCircle(
-            color = Color.White.copy(alpha = 0.4f),
-            radius = radius * 0.2f,
-            center = center - Offset(radius * 0.2f, radius * 0.2f)
-        )
-    }
-}
-
-/**
- * Эффект строчной развертки (Scanlines) для терминала с легким мерцанием.
+ * Animated Scanlines (kept for premium touch, but made more subtle)
  */
 fun Modifier.terminalScanlines(
-    lineColor: Color = Color.Black.copy(alpha = 0.12f),
-    lineSpacing: Dp = 3.dp
+    lineColor: Color = Color.Black.copy(alpha = 0.03f),
+    lineSpacing: Dp = 4.dp
 ): Modifier = composed {
     val infiniteTransition = rememberInfiniteTransition(label = "scanline_flicker")
     val flicker by infiniteTransition.animateFloat(
-        initialValue = 0.8f,
+        initialValue = 0.95f,
         targetValue = 1.0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(100, easing = LinearEasing),
+            animation = tween(150, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "flicker"
@@ -231,63 +92,6 @@ fun Modifier.terminalScanlines(
                 strokeWidth = 1.dp.toPx()
             )
             y += step
-        }
-    }
-}
-
-/**
- * Hardware Button (Механические кнопки) - УЛУЧШЕНО
- */
-fun Modifier.hardwareButton(
-    isPressed: Boolean = false,
-    isActive: Boolean = false,
-    cornerRadius: Dp = 2.dp,
-): Modifier = this.drawBehind {
-    val cr = cornerRadius.toPx()
-    
-    // 1. Фон с градиентом
-    val btnGradient = if (isPressed) {
-        Brush.verticalGradient(listOf(Color(0xFF0F0F12), Color(0xFF1A1A1E)))
-    } else {
-        Brush.verticalGradient(listOf(Color(0xFF32323A), Color(0xFF1C1C22)))
-    }
-    drawRoundRect(btnGradient, cornerRadius = CornerRadius(cr))
-
-    // 2. Фаска
-    val highlight = if (isPressed) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.18f)
-    val shadow = if (isPressed) Color.White.copy(alpha = 0.05f) else Color.Black.copy(alpha = 0.6f)
-    
-    if (!isPressed) {
-        drawLine(highlight, Offset(cr, 1.dp.toPx()), Offset(size.width - cr, 1.dp.toPx()), 1.5.dp.toPx())
-        drawLine(shadow, Offset(cr, size.height - 1.dp.toPx()), Offset(size.width - cr, size.height - 1.dp.toPx()), 1.5.dp.toPx())
-    }
-
-    // 3. Свечение активной кнопки
-    if (isActive) {
-        drawIntoCanvas { canvas ->
-            val paint = Paint().asFrameworkPaint().apply {
-                isAntiAlias = true
-                this.color = android.graphics.Color.TRANSPARENT
-                setShadowLayer(10.dp.toPx(), 0f, 0f, Color(0xFFFF1A1A).copy(alpha = 0.5f).toArgb())
-            }
-            canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, cr, cr, paint)
-        }
-    }
-}
-
-// Старые алиасы для совместимости
-fun Modifier.gunmetalSteelBackground(): Modifier = this.industrialPanel(isDark = true)
-fun Modifier.hardwareOut(cornerRadius: Dp = 2.dp): Modifier = this.industrialPanel(cornerRadius = cornerRadius, isDark = true)
-fun Modifier.carbonFiberBackground(): Modifier = this.drawBehind {
-    drawRect(color = Color(0xFF050506))
-    val patternSize = 6.dp.toPx()
-    val columns = (size.width / patternSize).toInt() + 1
-    val rows = (size.height / patternSize).toInt() + 1
-    for (c in 0 until columns) {
-        for (r in 0 until rows) {
-            if ((c + r) % 2 == 0) {
-                drawRect(color = Color(0xFF0A0A0C), topLeft = Offset(c * patternSize, r * patternSize), size = Size(patternSize, patternSize))
-            }
         }
     }
 }
