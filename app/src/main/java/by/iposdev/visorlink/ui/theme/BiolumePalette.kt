@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.theme
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
@@ -217,6 +218,10 @@ val BiolumeShapes = VlShapeTokens(
         bottomEnd = 28.dp,
         bottomStart = 14.dp,
     ),
+    bar = RoundedCornerShape(percent = 50),
+    pill = RoundedCornerShape(percent = 50),
+    indicator = CircleShape,
+    avatar = CircleShape,
     cardRadius = 16.dp,
     buttonRadius = 28.dp,
 )
@@ -229,8 +234,35 @@ val Material3Shapes = VlShapeTokens(
     field = RoundedCornerShape(16.dp),
     chip = RoundedCornerShape(50),
     fab = RoundedCornerShape(16.dp),
+    bar = RoundedCornerShape(32.dp),
+    pill = RoundedCornerShape(percent = 50),
+    indicator = CircleShape,
+    avatar = CircleShape,
     cardRadius = 24.dp,
-    buttonRadius = 16.dp,
+    // 20dp — прежнее значение кнопок в M3E, сохраняем вид темы без изменений.
+    buttonRadius = 20.dp,
+)
+
+/** M3E: лёгкое сжатие пружиной — прежнее поведение. */
+internal val Material3Motion = VlMotionTokens(
+    pressStyle = VlPressStyle.SCALE,
+    pressScale = 0.97f,
+    pressOffset = 0.dp,
+    useSpring = true,
+    dampingRatio = 1f,
+    stiffness = 1500f,
+    durationMs = 200,
+)
+
+/** Biolume: нажатие сообщает рельеф, движение мягкое и «органическое». */
+internal val BiolumeMotion = VlMotionTokens(
+    pressStyle = VlPressStyle.INSET,
+    pressScale = 1f,
+    pressOffset = 0.dp,
+    useSpring = true,
+    dampingRatio = 0.75f,
+    stiffness = 400f,
+    durationMs = 220,
 )
 
 // ── Сборка токенов ───────────────────────────────────────────────────────────

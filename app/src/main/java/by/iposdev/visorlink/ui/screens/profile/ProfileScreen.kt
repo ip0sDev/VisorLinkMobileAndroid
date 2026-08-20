@@ -170,10 +170,10 @@ fun ProfileScreen(
                             Box(
                                 modifier = Modifier
                                     .size(100.dp)
-                                    .background(MaterialTheme.colorScheme.surface, CircleShape)
-                                    .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                    .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
                                     .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                    .clip(CircleShape),
+                                    .clip(VlTheme.tokens.shapes.avatar),
                                 contentAlignment = Alignment.Center
                             ) {
                                 AvatarContent(user, 100.dp)
@@ -209,10 +209,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .size(80.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow, CircleShape)
-                                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
                                 .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                .clip(CircleShape),
+                                .clip(VlTheme.tokens.shapes.avatar),
                             contentAlignment = Alignment.Center
                         ) {
                             AvatarContent(user, 80.dp)
@@ -242,10 +242,10 @@ fun ProfileScreen(
                         Box(
                             modifier = Modifier
                                 .size(140.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow, CircleShape)
-                                .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
                                 .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                .clip(CircleShape),
+                                .clip(VlTheme.tokens.shapes.avatar),
                             contentAlignment = Alignment.Center
                         ) {
                             AvatarContent(user, 140.dp)
@@ -274,7 +274,7 @@ fun ProfileScreen(
                     ) {
                         if (user.online) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(10.dp).background(Color.Green, CircleShape))
+                                Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Online", style = MaterialTheme.typography.bodyMedium, color = if (bgUrl != null) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -289,7 +289,7 @@ fun ProfileScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(120.dp)
-                                    .clip(RoundedCornerShape(16.dp)),
+                                    .clip(VlTheme.tokens.shapes.button),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(Modifier.height(32.dp))
@@ -324,31 +324,30 @@ fun ProfileScreen(
                             .padding(horizontal = 24.dp, vertical = 24.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        OutlinedTextField(
+                        VlTextField(
                             value = uiState.editDisplayName,
                             onValueChange = viewModel::onDisplayNameChange,
-                            label = { Text(stringResource(R.string.profile_field_display_name)) },
-                            leadingIcon = { Icon(Icons.Default.Person, null) },
+                            label = stringResource(R.string.profile_field_display_name),
+                            leading = { Icon(Icons.Default.Person, null) },
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp)
+                            modifier = Modifier.fillMaxWidth()
                         )
 
-                        OutlinedTextField(
+                        VlTextField(
                             value = uiState.editBio, onValueChange = viewModel::onBioChange,
-                            label = { Text(stringResource(R.string.profile_field_bio)) },
-                            leadingIcon = { Icon(Icons.Default.Info, null) },
-                            supportingText = { Text("${uiState.editBio.length}/160") },
+                            label = stringResource(R.string.profile_field_bio),
+                            leading = { Icon(Icons.Default.Info, null) },
+                            supportingText = "${uiState.editBio.length}/160",
                             maxLines = 3,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp)
+                            singleLine = false,
+                            modifier = Modifier.fillMaxWidth()
                         )
 
-                        OutlinedTextField(
+                        VlTextField(
                             value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
-                            label = { Text(stringResource(R.string.profile_field_username)) },
-                            leadingIcon = { Icon(Icons.Default.AlternateEmail, null) },
-                            trailingIcon = {
+                            label = stringResource(R.string.profile_field_username),
+                            leading = { Icon(Icons.Default.AlternateEmail, null) },
+                            trailing = {
                                 when {
                                     uiState.checkingUsername -> CircularProgressIndicator(
                                         Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary
@@ -366,8 +365,7 @@ fun ProfileScreen(
                             isError = uiState.usernameAvailable == false,
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp)
+                            modifier = Modifier.fillMaxWidth()
                         )
 
                         Spacer(Modifier.height(4.dp))

@@ -24,7 +24,9 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.ui.components.VlButton
 import by.iposdev.visorlink.ui.components.VlSegmentedControl
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.ui.theme.*
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
@@ -94,43 +96,41 @@ fun CreateChatScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            OutlinedTextField(
+            VlTextField(
                 value = name, onValueChange = { name = it },
-                label = { Text(stringResource(R.string.create_field_name)) },
+                label = stringResource(R.string.create_field_name),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
+            VlTextField(
                 value = tag,
                 onValueChange = {
                     tag = it.filter { c -> c.isLetterOrDigit() || c == '_' }.lowercase()
                 },
-                label = { Text(stringResource(R.string.create_field_tag)) },
-                prefix = { Text("@") },
-                supportingText = { Text(stringResource(R.string.create_tag_hint)) },
+                label = stringResource(R.string.create_field_tag),
+                prefix = "@",
+                supportingText = stringResource(R.string.create_tag_hint),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                modifier = Modifier.fillMaxWidth()
             )
 
-            OutlinedTextField(
+            VlTextField(
                 value = description, onValueChange = { description = it.take(160) },
-                label = { Text(stringResource(R.string.create_field_description)) },
-                supportingText = { Text("${description.length}/160") },
+                label = stringResource(R.string.create_field_description),
+                supportingText = "${description.length}/160",
                 maxLines = 3,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp)
+                singleLine = false,
+                modifier = Modifier.fillMaxWidth()
             )
 
             if (type == "channel") {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = VlTheme.tokens.shapes.chip
                 ) {
                     Text(
                         stringResource(R.string.create_channel_notice),

@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,22 +80,17 @@ fun TfaScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            OutlinedTextField(
+            VlTextField(
                 value = code,
                 onValueChange = {
                     if (it.length <= 6 && it.all { char -> char.isDigit() }) {
                         code = it
                     }
                 },
-                label = { Text(stringResource(R.string.tfa_field_label)) },
+                label = stringResource(R.string.tfa_field_label),
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                textStyle = LocalTextStyle.current.copy(
-                    textAlign = TextAlign.Center,
-                    letterSpacing = 8.sp,
-                    fontSize = 24.sp
-                )
+                singleLine = true
             )
 
             if (uiState.error != null) {

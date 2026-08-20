@@ -73,19 +73,16 @@ fun OtherProfileScreen(
         },
         floatingActionButton = {
             if (user != null) {
-                ExtendedFloatingActionButton(
-                    text = { Text(stringResource(R.string.other_profile_message), fontWeight = FontWeight.Bold) },
-                    icon = { Icon(Icons.Default.Chat, null) },
+                VlFab(
+                    text = stringResource(R.string.other_profile_message),
+                    icon = Icons.Default.Chat,
                     onClick = {
-                        haptic.perform(HapticType.CLICK, hapticEnabled)
                         scope.launch {
                             val chatId = viewModel.openOrCreateChat()
                             onOpenChat(chatId, viewModel.targetUid)
                         }
                     },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(20.dp)
+                    hapticEnabled = hapticEnabled
                 )
             }
         }
@@ -148,9 +145,9 @@ fun OtherProfileScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(100.dp)
-                                        .background(MaterialTheme.colorScheme.surface, CircleShape)
-                                        .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                                        .clip(CircleShape),
+                                        .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                        .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                        .clip(VlTheme.tokens.shapes.avatar),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     AvatarContent(targetUser, 100.dp)
@@ -186,9 +183,9 @@ fun OtherProfileScreen(
                             Box(
                                 modifier = Modifier
                                     .size(80.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow, CircleShape)
-                                    .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                                    .clip(CircleShape),
+                                    .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                    .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .clip(VlTheme.tokens.shapes.avatar),
                                 contentAlignment = Alignment.Center
                             ) {
                                 AvatarContent(targetUser, 80.dp)
@@ -218,9 +215,9 @@ fun OtherProfileScreen(
                             Box(
                                 modifier = Modifier
                                     .size(140.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow, CircleShape)
-                                    .border(4.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                                    .clip(CircleShape),
+                                    .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .clip(VlTheme.tokens.shapes.avatar),
                                 contentAlignment = Alignment.Center
                             ) {
                                 AvatarContent(targetUser, 140.dp)
@@ -248,7 +245,7 @@ fun OtherProfileScreen(
                     ) {
                         if (targetUser.online) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(10.dp).background(Color.Green, CircleShape))
+                                Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Online", style = MaterialTheme.typography.bodyMedium, color = if (bgUrl != null) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
                             }
@@ -263,7 +260,7 @@ fun OtherProfileScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(120.dp)
-                                    .clip(RoundedCornerShape(16.dp)),
+                                    .clip(VlTheme.tokens.shapes.button),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(Modifier.height(32.dp))

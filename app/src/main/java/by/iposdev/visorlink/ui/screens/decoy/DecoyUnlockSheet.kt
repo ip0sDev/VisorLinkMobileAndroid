@@ -18,6 +18,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.utils.StealthManager
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,7 +53,7 @@ fun DecoyUnlockSheet(
 
             Spacer(Modifier.height(20.dp))
 
-            TextField(
+            VlTextField(
                 value = pin,
                 onValueChange = { if (it.length <= 8) { pin = it; error = null } },
                 visualTransformation = PasswordVisualTransformation(),
@@ -64,14 +66,7 @@ fun DecoyUnlockSheet(
                     fontFamily = FontFamily.Monospace
                 ),
                 isError = error != null,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = DecoyPalette.PanelAlt,
-                    unfocusedContainerColor = DecoyPalette.PanelAlt,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    errorIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.fillMaxWidth().border(1.dp, if (error != null) DecoyPalette.Danger else Color.Transparent, RoundedCornerShape(4.dp))
+                modifier = Modifier.fillMaxWidth().border(1.dp, if (error != null) DecoyPalette.Danger else Color.Transparent, VlTheme.tokens.shapes.indicator)
             )
 
             if (error != null) {
@@ -90,7 +85,7 @@ fun DecoyUnlockSheet(
                     }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(4.dp),
+                shape = VlTheme.tokens.shapes.indicator,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = DecoyPalette.Accent,
                     contentColor = Color.Black

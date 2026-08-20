@@ -61,7 +61,7 @@ fun ChatListItem(
         label = "item_press"
     )
 
-    val shape = RoundedCornerShape(24.dp)
+    val shape = VlTheme.tokens.shapes.card
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val isDark = cs.surface.luminance() < 0.5f
@@ -79,17 +79,17 @@ fun ChatListItem(
             // вертикальных отступов нет, тени соседних строк наложились бы друг
             // на друга грязными полосами — там остаётся только грань.
             .then(
-                if (tokens.isBiolume && !isCompactList) {
+                if (tokens.structure.enabled && !isCompactList) {
                     Modifier.vlRaised(tokens.structure, shape)
                 } else {
                     Modifier
                 }
             )
             .then(
-                if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, shape) else Modifier
+                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, shape) else Modifier
             ),
         shape = shape,
-        color = if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerLow,
+        color = if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
         onClick = onClick,
         interactionSource = interactionSource
     ) {
@@ -295,7 +295,7 @@ fun GroupChannelAvatar(
 
     val textColor = if (isChannel) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
 
-    val shape = CircleShape
+    val shape = VlTheme.tokens.shapes.avatar
 
     Box(
         modifier = Modifier
@@ -340,7 +340,7 @@ fun SavedMessagesIcon(size: Dp) {
         )
     )
 
-    val shape = CircleShape
+    val shape = VlTheme.tokens.shapes.avatar
 
     Box(
         modifier = Modifier

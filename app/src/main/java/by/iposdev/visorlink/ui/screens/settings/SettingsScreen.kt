@@ -38,6 +38,7 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.data.repository.FlagsRepository
 import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.components.settings.*
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.AppLanguage
@@ -149,7 +150,7 @@ fun SettingsScreen(
                     Surface(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
                         onClick = { },
-                        shape = RoundedCornerShape(24.dp),
+                        shape = VlTheme.tokens.shapes.card,
                         color = MaterialTheme.colorScheme.surfaceContainerLow
                     ) {
                         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {

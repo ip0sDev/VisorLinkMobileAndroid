@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlBrandText
+import by.iposdev.visorlink.ui.components.VlTextField
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -76,11 +77,12 @@ fun LoginScreen(
             Spacer(Modifier.height(40.dp))
 
             // ── Email ─────────────────────────────────────────────────────────
-            OutlinedTextField(
+            VlTextField(
                 value = email,
                 onValueChange = { email = it; viewModel.clearError() },
-                label = { Text(stringResource(R.string.login_field_email)) },
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                label = stringResource(R.string.login_field_email),
+                placeholder = stringResource(R.string.login_field_email),
+                leading = { Icon(Icons.Default.Email, contentDescription = null) },
                 isError = hasError,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -91,19 +93,19 @@ fun LoginScreen(
                 keyboardActions = KeyboardActions(
                     onNext = { passwordFocusRequester.requestFocus() }
                 ),
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(Modifier.height(12.dp))
 
             // ── Password ──────────────────────────────────────────────────────
-            OutlinedTextField(
+            VlTextField(
                 value = password,
                 onValueChange = { password = it; viewModel.clearError() },
-                label = { Text(stringResource(R.string.login_field_password)) },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                trailingIcon = {
+                label = stringResource(R.string.login_field_password),
+                placeholder = stringResource(R.string.login_field_password),
+                leading = { Icon(Icons.Default.Lock, contentDescription = null) },
+                trailing = {
                     IconButton(
                         onClick = { passwordVisible = !passwordVisible },
                         modifier = Modifier.semantics {
@@ -117,10 +119,8 @@ fun LoginScreen(
                         )
                     }
                 },
-                // MD3: error feedback lives in the field via isError + supportingText,
-                // NOT in a separate Card below the form.
                 isError = hasError,
-                supportingText = uiState.error?.let { { Text(it) } },
+                supportingText = if (hasError) uiState.error else null,
                 visualTransformation = if (passwordVisible) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 singleLine = true,
@@ -136,8 +136,7 @@ fun LoginScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(passwordFocusRequester),
-                shape = MaterialTheme.shapes.medium
+                    .focusRequester(passwordFocusRequester)
             )
 
             Spacer(Modifier.height(24.dp))

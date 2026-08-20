@@ -93,6 +93,34 @@ class ThemeContrastTest {
         assertSchemeReadable("Tidepool", TidepoolColorScheme)
     }
 
+    @Test
+    fun `forge steel palette meets text contrast requirements`() {
+        assertSchemeReadable("Forge Steel", ForgeSteelColorScheme)
+    }
+
+    @Test
+    fun `forge concrete palette meets text contrast requirements`() {
+        assertSchemeReadable("Forge Concrete", ForgeConcreteColorScheme)
+    }
+
+    /**
+     * Forge вынужденно держит primary и error в одном красном семействе: тема
+     * требует красный как основной акцент. Цвет один различать их не может, но они
+     * обязаны расходиться хотя бы по светлоте — иначе «отправить» и «удалить»
+     * выглядят одинаково.
+     */
+    @Test
+    fun `forge separates primary and error by lightness`() {
+        listOf("Steel" to ForgeSteelColorScheme, "Concrete" to ForgeConcreteColorScheme)
+            .forEach { (label, cs) ->
+                val delta = kotlin.math.abs(luminance(cs.primary) - luminance(cs.error))
+                assertTrue(
+                    "$label: primary и error слишком близки по светлоте (Δ=${"%.3f".format(delta)})",
+                    delta >= 0.05,
+                )
+            }
+    }
+
     /**
      * onSurfaceVariant в Biolume несёт подписи, таймштампы и метаданные — то есть
      * мелкий текст, поэтому требуем полные 4.5:1, а не послабление для крупного.
@@ -169,6 +197,31 @@ class ThemeContrastTest {
                 }
             }
     }
+
+    @Test
+    fun `selection fill is readable in Biolume and Forge`() {
+        listOf(AppTheme.BIOLUME, AppTheme.FORGE).forEach { theme ->
+            listOf(true, false).forEach { isDark ->
+                val cs = when (theme) {
+                    AppTheme.BIOLUME -> if (isDark) AbyssColorScheme else TidepoolColorScheme
+                    AppTheme.FORGE -> if (isDark) ForgeSteelColorScheme else ForgeConcreteColorScheme
+                    else -> error("Unsupported")
+                }
+
+                val selectionFill = when (theme) {
+                    AppTheme.BIOLUME -> biolumeSelectionFill(isDark, cs.primary)
+                    AppTheme.FORGE -> forgeSelectionFill(isDark, cs.primary)
+                    else -> error("Unsupported")
+                }
+
+                val label = "${theme.id} ${if (isDark) "dark" else "light"}"
+                // Контраст текста (primary) на фоне выделения (selectionFill)
+                // Накладываем selectionFill на surfaceContainer (где обычно живут чипы/навбар)
+                val background = composite(selectionFill, cs.surfaceContainer)
+                assertReadable("$label primary/selectionFill", cs.primary, background, min = 3.0)
+            }
+        }
+    }
 }
 
 /** Персист темы: id пишется в prefs и в профиль PRO-кастомизации. */
@@ -181,6 +234,7 @@ class AppThemeIdTest {
         // Значения зафиксированы: их меняют только вместе с миграцией prefs.
         assertEquals("m3e", AppTheme.MATERIAL3_EXPRESSIVE.id)
         assertEquals("biolume", AppTheme.BIOLUME.id)
+        assertEquals("forge", AppTheme.FORGE.id)
     }
 
     @Test
@@ -199,12 +253,23 @@ class AppThemeIdTest {
     }
 
     @Test
-    fun `structure and signal layers are off for material3 and on for biolume`() {
+    fun `structure and signal layers are off for material3 and on for biolume and forge`() {
         // Инвариант, на котором держится «один код компонента на две темы»:
         // в M3E модификаторы глубины обязаны быть no-op.
         assertTrue(VlStructureTokens.Disabled.enabled.not())
         assertTrue(VlSignalTokens.Disabled.enabled.not())
         assertTrue(biolumeStructure(isDark = true).enabled)
         assertTrue(biolumeSignal(isDark = true).enabled)
+        assertTrue(forgeStructure(isDark = true).enabled)
+        assertTrue(forgeSignal(isDark = true).enabled)
+    }
+
+    @Test
+    fun `forge motion is linear and mechanical`() {
+        val motion = ForgeMotion
+        assertEquals(VlPressStyle.STAMP, motion.pressStyle)
+        assertEquals(1f, motion.pressScale)
+        assertEquals(false, motion.useSpring)
+        assertTrue("Forge должен иметь резкую механическую анимацию", motion.durationMs <= 100)
     }
 }

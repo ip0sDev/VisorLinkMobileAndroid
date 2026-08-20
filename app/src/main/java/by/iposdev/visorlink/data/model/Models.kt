@@ -573,7 +573,10 @@ enum class AppTheme(val id: String) {
     MATERIAL3_EXPRESSIVE("m3e"),
 
     /** Biolume: неоморфный рельеф + редкий сигнальный неон (Abyss / Tidepool). */
-    BIOLUME("biolume");
+    BIOLUME("biolume"),
+
+    /** Forge: прямые углы, жёсткая тень, сильный красный (Steel / Concrete). */
+    FORGE("forge");
 
     companion object {
         val Default = MATERIAL3_EXPRESSIVE
@@ -584,6 +587,7 @@ enum class AppTheme(val id: String) {
 }
 
 val AppTheme.isBiolume: Boolean get() = this == AppTheme.BIOLUME
+val AppTheme.isForge: Boolean get() = this == AppTheme.FORGE
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

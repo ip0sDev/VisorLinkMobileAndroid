@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.diary.*
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
@@ -111,7 +112,7 @@ fun DiaryEntryScreen(
             Surface(
                 tonalElevation = 4.dp,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                shape = RoundedCornerShape(topStart = VlTheme.tokens.shapes.cardRadius, topEnd = VlTheme.tokens.shapes.cardRadius)
             ) {
                 Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
                     AnimatedVisibility(
@@ -129,7 +130,7 @@ fun DiaryEntryScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(40.dp)
-                                        .clip(CircleShape)
+                                        .clip(VlTheme.tokens.shapes.indicator)
                                         .background(c)
                                         .clickable {
                                             textFieldValue = toggleMarkdownTag(textFieldValue, "{color:$hex}", "{/color}")

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.aegis.LinkAction
 import by.iposdev.visorlink.data.model.aegis.LinkEmotion
 import by.iposdev.visorlink.data.model.aegis.VisorIcon
@@ -101,7 +102,7 @@ fun AnimatedProtogen(
                 .offset(x = 16.dp, y = 16.dp)
                 .size(24.dp, 40.dp)
                 .graphicsLayer { rotationZ = -earRotation }
-                .clip(RoundedCornerShape(12.dp))
+                .clip(VlTheme.tokens.shapes.chip)
                 .background(Color(0xFF2A2A2A))
         )
         Box(
@@ -110,7 +111,7 @@ fun AnimatedProtogen(
                 .offset(x = (-16).dp, y = 16.dp)
                 .size(24.dp, 40.dp)
                 .graphicsLayer { rotationZ = earRotation }
-                .clip(RoundedCornerShape(12.dp))
+                .clip(VlTheme.tokens.shapes.chip)
                 .background(Color(0xFF2A2A2A))
         )
 
@@ -119,7 +120,7 @@ fun AnimatedProtogen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .size(76.dp, 45.dp)
-                .clip(RoundedCornerShape(topStart = 30.dp, topEnd = 30.dp))
+                .clip(RoundedCornerShape(topStart = VlTheme.tokens.shapes.cardRadius, topEnd = VlTheme.tokens.shapes.cardRadius))
                 .background(Color(0xFF1E1E1E))
         )
 
@@ -129,10 +130,10 @@ fun AnimatedProtogen(
                 .align(Alignment.Center)
                 .offset(y = (-5).dp)
                 .size(96.dp, 64.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .clip(VlTheme.tokens.shapes.card)
                 .background(Color(0xFF333333))
                 .padding(4.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .clip(VlTheme.tokens.shapes.card)
                 .background(Color(0xFF0A0A0A)),
             contentAlignment = Alignment.Center
         ) {
@@ -140,13 +141,13 @@ fun AnimatedProtogen(
                 visible = emotion == LinkEmotion.HAPPY,
                 enter = fadeIn(), exit = fadeOut(),
                 modifier = Modifier.align(Alignment.CenterStart).offset(x = 8.dp, y = 8.dp)
-            ) { Box(Modifier.size(12.dp, 6.dp).background(Color(0xFFFF4B4B).copy(alpha = 0.6f), CircleShape)) }
+            ) { Box(Modifier.size(12.dp, 6.dp).background(Color(0xFFFF4B4B).copy(alpha = 0.6f), VlTheme.tokens.shapes.indicator)) }
 
             AnimatedVisibility(
                 visible = emotion == LinkEmotion.HAPPY,
                 enter = fadeIn(), exit = fadeOut(),
                 modifier = Modifier.align(Alignment.CenterEnd).offset(x = (-8).dp, y = 8.dp)
-            ) { Box(Modifier.size(12.dp, 6.dp).background(Color(0xFFFF4B4B).copy(alpha = 0.6f), CircleShape)) }
+            ) { Box(Modifier.size(12.dp, 6.dp).background(Color(0xFFFF4B4B).copy(alpha = 0.6f), VlTheme.tokens.shapes.indicator)) }
 
             Text(
                 text = if (isBlinking) "-  -" else (visorIcon?.toVisual() ?: "^_^"),
@@ -271,7 +272,7 @@ fun AegisAura(
             ) {
                 Surface(
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp),
+                    shape = VlTheme.tokens.shapes.button,
                     shadowElevation = 4.dp,
                     modifier = Modifier.padding(bottom = 8.dp).widthIn(max = 220.dp)
                 ) {

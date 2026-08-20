@@ -15,6 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.Message
 import by.iposdev.visorlink.utils.HapticType
@@ -38,7 +39,7 @@ fun CommentsButton(
             onClick()
         },
         enabled = allowed,
-        shape = RoundedCornerShape(12.dp),
+        shape = VlTheme.tokens.shapes.chip,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (allowed) 0.6f else 0.2f),
         border = BorderStroke(
             width = 0.5.dp,

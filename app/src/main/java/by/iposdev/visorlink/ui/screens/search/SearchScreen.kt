@@ -23,8 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.ui.components.search.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
@@ -77,12 +79,12 @@ fun SearchScreen(
             Column(Modifier.fillMaxSize().padding(horizontal = 20.dp)) {
                 Spacer(Modifier.height(16.dp))
 
-                OutlinedTextField(
+                VlTextField(
                     value = uiState.query,
                     onValueChange = viewModel::onQueryChange,
-                    label = { Text("Search users or channels") },
-                    leadingIcon = { Icon(Icons.Default.Search, null) },
-                    trailingIcon = {
+                    label = "Search users or channels",
+                    leading = { Icon(Icons.Default.Search, null) },
+                    trailing = {
                         if (uiState.query.isNotEmpty())
                             IconButton(onClick = { viewModel.onQueryChange("") }) {
                                 Icon(Icons.Default.Clear, null)
@@ -93,8 +95,7 @@ fun SearchScreen(
                     keyboardActions = KeyboardActions(onSearch = {
                         focusManager.clearFocus(); viewModel.search()
                     }),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(Modifier.height(16.dp))
@@ -103,7 +104,7 @@ fun SearchScreen(
                     onClick = { focusManager.clearFocus(); viewModel.search() },
                     enabled = uiState.query.isNotEmpty() && !uiState.isLoading,
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = MaterialTheme.shapes.large
+                    shape = VlTheme.tokens.shapes.button
                 ) {
                     if (uiState.isLoading)
                         CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)

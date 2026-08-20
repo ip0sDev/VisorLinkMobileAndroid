@@ -25,6 +25,7 @@ import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.TopbarStatus
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
+import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.screens.chat.ChatUiState
 import by.iposdev.visorlink.ui.components.chatlist.GroupChannelAvatar
 import by.iposdev.visorlink.utils.HapticType
@@ -52,7 +53,7 @@ fun ChatTopBar(
 ) {
     val haptic = rememberHaptic()
 
-    TopAppBar(
+    VlTopAppBar(
         navigationIcon = {
             IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
@@ -157,7 +158,6 @@ fun ChatTopBar(
                         tint = MaterialTheme.colorScheme.error)
                 }
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+        }
     )
 }

@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlFab
+import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.components.diary.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.HapticType
@@ -75,7 +77,7 @@ fun DiaryScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(stringResource(R.string.diary_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -99,12 +101,13 @@ fun DiaryScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onAddEntry() },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
-            ) {
-                Icon(Icons.Default.Add, stringResource(R.string.diary_action_add))
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                VlFab(
+                    onClick = onAddEntry,
+                    icon = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.diary_action_add),
+                    hapticEnabled = hapticEnabled
+                )
             }
         }
     ) { padding ->

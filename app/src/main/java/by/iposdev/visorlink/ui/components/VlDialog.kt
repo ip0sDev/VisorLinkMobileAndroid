@@ -66,10 +66,12 @@ fun VlAlertDialog(
             }
         }
 
-        if (tokens.isBiolume) {
+        if (tokens.structure.enabled) {
             // §3.1: диалоги и sheet сидят на surfaceContainerHigh; рельеф raised
             // + нейтральная грань, никакого свечения (§10).
-            val shape = RoundedCornerShape(tokens.shapes.cardRadius + 8.dp)
+            // Форма берётся из токенов напрямую: прибавка к cardRadius давала бы
+            // в Forge скругление 8dp вместо прямого угла.
+            val shape = tokens.shapes.card
             Box(
                 modifier = modifier
                     .vlRaised(tokens.structure, shape)

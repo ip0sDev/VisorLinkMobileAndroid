@@ -28,6 +28,7 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.Message
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.theme.VlTheme
 import com.google.firebase.Firebase
 import com.google.firebase.functions.functions
 import kotlinx.coroutines.delay
@@ -62,7 +63,7 @@ fun GiftMessage(
             .padding(vertical = 8.dp)
             .width(260.dp)
             .heightIn(min = 180.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .clip(VlTheme.tokens.shapes.card)
             .background(
                 Brush.linearGradient(
                     colors = if (isRedeemed) listOf(Color(0xFF162523), Color(0xFF1B302E))
@@ -73,7 +74,7 @@ fun GiftMessage(
                 1.dp,
                 if (isRedeemed) Color(0xFF2DA89A).copy(alpha = 0.4f)
                 else Color(0xFFFFD700).copy(alpha = 0.3f),
-                RoundedCornerShape(24.dp)
+                VlTheme.tokens.shapes.card
             )
             .padding(horizontal = 20.dp, vertical = 24.dp)
     ) {
@@ -101,7 +102,7 @@ fun GiftMessage(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(VlTheme.tokens.shapes.card)
                         .background(Brush.horizontalGradient(listOf(Color(0xFFFFD700), Color(0xFFF39C12))))
                         .clickable(enabled = !isOpening && !isRedeemed) {
                             isOpening = true
@@ -207,7 +208,7 @@ fun FullscreenGiftOverlay(chatId: String, messageId: String, onDismiss: () -> Un
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("📦", fontSize = 140.sp)
                         Spacer(Modifier.height(32.dp))
-                        Box(modifier = Modifier.background(Color.Red.copy(alpha = 0.2f), RoundedCornerShape(20.dp)).padding(horizontal = 24.dp, vertical = 12.dp)) {
+                        Box(modifier = Modifier.background(Color.Red.copy(alpha = 0.2f), VlTheme.tokens.shapes.card).padding(horizontal = 24.dp, vertical = 12.dp)) {
                             Text(stringResource(R.string.gift_error_taken), color = Color.Red, fontSize = 24.sp, fontWeight = FontWeight.Black)
                         }
                     }
@@ -238,6 +239,6 @@ private fun Particle(spark: Spark) {
                 this.alpha = alpha
             }
             .size(14.dp)
-            .background(spark.color, if (spark.isCircle) CircleShape else RectangleShape)
+            .background(spark.color, if (spark.isCircle) VlTheme.tokens.shapes.indicator else RectangleShape)
     )
 }

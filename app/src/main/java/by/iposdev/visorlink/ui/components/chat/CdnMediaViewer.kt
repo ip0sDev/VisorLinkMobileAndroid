@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.ImageCache
@@ -68,7 +69,7 @@ fun CdnMediaViewer(
     Box(
         modifier = modifier
             .sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 400.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(VlTheme.tokens.shapes.card)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .clickable { onClick?.invoke() },
         contentAlignment = Alignment.Center
@@ -121,7 +122,7 @@ fun CdnMediaViewer(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), CircleShape),
+                    .background(Color.Black.copy(alpha = 0.5f), VlTheme.tokens.shapes.indicator),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -135,7 +136,7 @@ fun CdnMediaViewer(
             Box(
                 modifier = Modifier
                     .align(Alignment.Center)
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                    .background(Color.Black.copy(alpha = 0.5f), VlTheme.tokens.shapes.indicator)
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(

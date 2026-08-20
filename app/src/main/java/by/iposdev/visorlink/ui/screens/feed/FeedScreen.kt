@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlFab
+import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.components.feed.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.HapticType
@@ -50,7 +52,7 @@ fun FeedScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = {
                     Text(
                         stringResource(R.string.feed_title),
@@ -61,11 +63,7 @@ fun FeedScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                )
+                }
             )
         }
     ) { padding ->
@@ -127,21 +125,13 @@ fun FeedScreen(
                     .align(Alignment.BottomEnd)
                     .padding(bottom = 80.dp, end = 16.dp)
             ) {
-                FloatingActionButton(
-                    onClick = {
-                        scope.launch {
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            listState.animateScrollToItem(0)
-                        }
-                    },
-                    modifier = Modifier.size(50.dp)
-                ) {
-                    Icon(
-                        Icons.Default.KeyboardArrowUp,
-                        contentDescription = stringResource(R.string.feed_scroll_to_top),
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                VlFab(
+                    onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                    icon = Icons.Default.KeyboardArrowUp,
+                    contentDescription = stringResource(R.string.feed_scroll_to_top),
+                    size = 50.dp,
+                    hapticEnabled = hapticEnabled
+                )
             }
         }
     }

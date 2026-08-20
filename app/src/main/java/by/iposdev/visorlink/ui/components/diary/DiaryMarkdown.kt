@@ -117,7 +117,7 @@ fun DiaryInlineImage(mediaId: String) {
                 .fillMaxWidth()
                 .padding(vertical = 8.dp)
                 .heightIn(max = 240.dp)
-                .clip(RoundedCornerShape(12.dp)),
+                .clip(VlTheme.tokens.shapes.chip),
             contentScale = ContentScale.Crop
         )
     } else {
@@ -125,7 +125,7 @@ fun DiaryInlineImage(mediaId: String) {
             modifier = Modifier
                 .fillMaxWidth()
                 .height(100.dp)
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),
+                .background(MaterialTheme.colorScheme.surfaceVariant, VlTheme.tokens.shapes.chip),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp))

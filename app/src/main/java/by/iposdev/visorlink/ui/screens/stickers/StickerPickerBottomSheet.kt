@@ -37,6 +37,7 @@ import by.iposdev.visorlink.data.model.StickerPack
 import by.iposdev.visorlink.ui.components.VlAlertDialog
 import by.iposdev.visorlink.ui.components.VlButton
 import by.iposdev.visorlink.ui.components.VlDialogButton
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -137,7 +138,7 @@ private fun StickerPickerContent(
                     .height(4.dp)
                     .background(
                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        RoundedCornerShape(2.dp)
+                        VlTheme.tokens.shapes.indicator
                     )
             )
         }
@@ -289,10 +290,10 @@ private fun PackTabBar(
                 .padding(horizontal = 4.dp)
                 .size(46.dp)
                 .scale(scale)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(VlTheme.tokens.shapes.chip)
                 .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.chip)
+                .clip(VlTheme.tokens.shapes.chip)
                 .clickable {
                     haptic.perform(HapticType.SELECTION, true)
                     onSelect(index)
@@ -319,10 +320,10 @@ private fun PackTabBar(
             .padding(horizontal = 4.dp)
             .size(46.dp)
             .scale(addScale)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(VlTheme.tokens.shapes.chip)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.chip)
+            .clip(VlTheme.tokens.shapes.chip)
             .clickable {
                 haptic.perform(HapticType.SELECTION, true)
                 onSelect(-1)
@@ -389,7 +390,7 @@ private fun PackListRow(
         // Аватарка пака
         val avatarMod = Modifier
             .size(58.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(VlTheme.tokens.shapes.chip)
             .background(MaterialTheme.colorScheme.surfaceVariant)
 
         Box(modifier = avatarMod, contentAlignment = Alignment.Center) {
@@ -407,7 +408,7 @@ private fun PackListRow(
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 pack.stickers.take(4).forEach { sticker ->
-                    AsyncImage(model = sticker.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)))
+                    AsyncImage(model = sticker.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(VlTheme.tokens.shapes.indicator))
                 }
                 if (pack.stickers.isEmpty()) {
                     Text("Стикеров нет", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -519,7 +520,7 @@ private fun StickerCell(
         modifier = Modifier
             .aspectRatio(1f)
             .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(VlTheme.tokens.shapes.chip)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
             .combinedClickable(interactionSource = interactionSource, indication = null, onClick = onTap, onLongClick = { if(isOwner) onLongPress() }),
         contentAlignment = Alignment.Center
@@ -532,7 +533,7 @@ private fun StickerCell(
         val emojiMod = Modifier
             .align(Alignment.BottomEnd)
             .padding(6.dp)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f), CircleShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f), VlTheme.tokens.shapes.indicator)
             .padding(3.dp)
 
         Text(sticker.emoji, fontSize = 12.sp, modifier = emojiMod)
@@ -560,15 +561,15 @@ fun CreatePackDialog(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
+                VlTextField(
                     value = emoji, onValueChange = { if (it.length <= 2) emoji = it },
-                    label = { Text("Эмодзи") },
+                    label = "Эмодзи",
                     textStyle = LocalTextStyle.current.copy(fontSize = 28.sp, textAlign = TextAlign.Center)
                 )
-                OutlinedTextField(
+                VlTextField(
                     value = name, onValueChange = { if (it.length <= 32) name = it },
-                    label = { Text("Название пака") },
-                    supportingText = { Text("${name.length}/32", textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) }
+                    label = "Название пака",
+                    supportingText = "${name.length}/32"
                 )
             }
         },
@@ -615,7 +616,7 @@ fun AddStickerSheet(
             val previewMod = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(VlTheme.tokens.shapes.button)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable {
                     haptic.perform(HapticType.CLICK, true)
@@ -634,9 +635,9 @@ fun AddStickerSheet(
                 }
             }
 
-            OutlinedTextField(
+            VlTextField(
                 value = emojiInput, onValueChange = { if (it.length <= 2) emojiInput = it },
-                label = { Text("Эмодзи для стикера") },
+                label = "Эмодзи для стикера",
                 textStyle = LocalTextStyle.current.copy(fontSize = 24.sp)
             )
 
@@ -652,7 +653,7 @@ fun AddStickerSheet(
                             onClick = {},
                             enabled = false,
                             modifier = Modifier.fillMaxWidth().height(56.dp),
-                            shape = RoundedCornerShape(16.dp)
+                            shape = VlTheme.tokens.shapes.button
                         ) {
                             Text("Добавить")
                         }

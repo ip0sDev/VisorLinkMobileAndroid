@@ -244,6 +244,7 @@ class ChatRepository(
                     type = type,
                     text = action.data.optString("text"),
                     localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
+                    uploadProgress = action.progress.takeIf { it > 0.01f && it < 1f },
                     createdAt = Timestamp(Date(action.ts)),
                     status = when (action.status) {
                         1 -> SendStatus.SENT

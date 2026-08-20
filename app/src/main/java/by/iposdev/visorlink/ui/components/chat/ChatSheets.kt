@@ -39,8 +39,11 @@ import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AlbumImage
 import by.iposdev.visorlink.data.model.AlbumImageLocal
+import by.iposdev.visorlink.ui.components.VlTextField
+import by.iposdev.visorlink.ui.components.VlButton
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.theme.VlTheme
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 
@@ -157,30 +160,23 @@ fun AlbumPreviewSheet(
 
             Spacer(Modifier.height(12.dp))
 
-            OutlinedTextField(
+            VlTextField(
                 value = caption,
                 onValueChange = { onCaptionChange(it) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                placeholder = { Text("Добавить подпись…") },
+                placeholder = "Добавить подпись…",
                 maxLines = 3,
-                shape = RoundedCornerShape(16.dp),
-                supportingText = {
-                    Text(
-                        "${caption.length}/500",
-                        modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.End,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+                singleLine = false,
+                supportingText = "${caption.length}/500"
             )
 
             Spacer(Modifier.height(12.dp))
 
-            Button(
-                onClick = { haptic.perform(HapticType.MESSAGE_SENT, hapticEnabled); onSend() },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(56.dp),
-                shape = RoundedCornerShape(16.dp),
-                enabled = images.isNotEmpty()
+            VlButton(
+                onClick = onSend,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                enabled = images.isNotEmpty(),
+                hapticEnabled = hapticEnabled
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
@@ -194,7 +190,7 @@ fun AlbumPreviewSheet(
 @Composable
 fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, onToggleSpoiler: () -> Unit) {
     val blurRadius by animateDpAsState(targetValue = if (spoiler) 12.dp else 0.dp, animationSpec = tween(200), label = "thumb_blur")
-    Box(modifier = Modifier.size(140.dp).clip(RoundedCornerShape(12.dp))) {
+    Box(modifier = Modifier.size(140.dp).clip(VlTheme.tokens.shapes.card)) {
         AsyncImage(
             model = uri, contentDescription = null, contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
@@ -205,7 +201,7 @@ fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, onToggleSpoiler: () -> Unit) 
             }
         }
         Box(
-            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(28.dp).clip(CircleShape)
+            modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).size(28.dp).clip(VlTheme.tokens.shapes.indicator)
                 .background(if (spoiler) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.5f))
                 .clickable(onClick = onToggleSpoiler),
             contentAlignment = Alignment.Center
@@ -257,7 +253,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
 
             Box(
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 56.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.45f), VlTheme.tokens.shapes.card)
                     .padding(horizontal = 14.dp, vertical = 5.dp)
             ) {
                 Text("${pagerState.currentPage + 1} / ${images.size}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
@@ -266,7 +262,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier.align(Alignment.TopEnd).padding(top = 44.dp, end = 8.dp).size(40.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f), VlTheme.tokens.shapes.indicator)
             ) {
                 Icon(Icons.Default.Close, contentDescription = stringResource(R.string.action_close), tint = Color.White)
             }
@@ -285,8 +281,8 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                         val isActive = idx == pagerState.currentPage
                         val scope = rememberCoroutineScope()
                         Box(
-                            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(4.dp))
-                                .border(width = if (isActive) 2.dp else 0.dp, color = Color.White, shape = RoundedCornerShape(4.dp))
+                            modifier = Modifier.size(44.dp).clip(VlTheme.tokens.shapes.card)
+                                .border(width = if (isActive) 2.dp else 0.dp, color = Color.White, shape = VlTheme.tokens.shapes.card)
                                 .clickable { scope.launch { pagerState.animateScrollToPage(idx) } }
                         ) {
                             AsyncImage(model = img.url, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.ui.theme.VlTheme
@@ -55,13 +57,16 @@ fun VlTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    textStyle: TextStyle? = null,
+    supportingText: String? = null,
+    prefix: String? = null,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
 ) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
-    if (!tokens.isBiolume) {
+    if (!tokens.structure.enabled) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
@@ -75,8 +80,11 @@ fun VlTextField(
             visualTransformation = visualTransformation,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
+            textStyle = textStyle ?: LocalTextStyle.current,
             leadingIcon = leading,
             trailingIcon = trailing,
+            prefix = prefix?.let { { Text(it) } },
+            supportingText = supportingText?.let { { Text(it) } }
         )
         return
     }
@@ -86,63 +94,88 @@ fun VlTextField(
     val shape: Shape = tokens.shapes.field
     val signalColor = if (isError) cs.error else cs.primary
 
-    Box(modifier = modifier.fillMaxWidth()) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            enabled = enabled,
-            singleLine = singleLine,
-            // BasicTextField падает, если singleLine и maxLines противоречат друг другу.
-            maxLines = if (singleLine) 1 else maxLines,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions,
-            keyboardActions = keyboardActions,
-            interactionSource = interactionSource,
-            textStyle = LocalTextStyle.current.copy(color = cs.onSurface),
-            cursorBrush = SolidColor(signalColor),
-            modifier = Modifier
-                .fillMaxWidth()
-                // Сигнал рисуется снаружи формы, поэтому идёт до clip.
-                .vlSignalGlow(
-                    tokens = tokens.signal,
-                    color = signalColor,
-                    shape = shape,
-                    active = isFocused || isError,
-                )
-                .clip(shape)
-                .background(cs.surfaceContainer, shape)
-                // Inset-тень остаётся и при фокусе (§4.2).
-                .vlInset(tokens.structure, shape)
-                .vlSignalBorder(
-                    tokens = tokens.signal,
-                    color = signalColor,
-                    shape = shape,
-                    active = isFocused || isError,
-                )
-                .heightIn(min = 56.dp)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            decorationBox = { innerTextField ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (leading != null) {
-                        leading()
-                        Box(Modifier.padding(end = 12.dp))
-                    }
-                    Box(Modifier.fillMaxWidth(if (trailing != null) 0.88f else 1f)) {
-                        if (value.isEmpty() && placeholder != null) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                enabled = enabled,
+                singleLine = singleLine,
+                // BasicTextField падает, если singleLine и maxLines противоречат друг другу.
+                maxLines = if (singleLine) 1 else maxLines,
+                visualTransformation = visualTransformation,
+                keyboardOptions = keyboardOptions,
+                keyboardActions = keyboardActions,
+                interactionSource = interactionSource,
+                textStyle = (textStyle ?: LocalTextStyle.current).copy(color = cs.onSurface),
+                cursorBrush = SolidColor(signalColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // Сигнал рисуется снаружи формы, поэтому идёт до clip.
+                    .vlSignalGlow(
+                        tokens = tokens.signal,
+                        color = signalColor,
+                        shape = shape,
+                        active = isFocused || isError,
+                    )
+                    .clip(shape)
+                    .background(cs.surfaceContainer, shape)
+                    // Inset-тень остаётся и при фокусе (§4.2).
+                    .vlInset(tokens.structure, shape)
+                    .vlSignalBorder(
+                        tokens = tokens.signal,
+                        color = signalColor,
+                        shape = shape,
+                        active = isFocused || isError,
+                    )
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                decorationBox = { innerTextField ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (leading != null) {
+                            leading()
+                            Box(Modifier.padding(end = 12.dp))
+                        }
+                        if (prefix != null && value.isEmpty()) {
                             Text(
-                                text = placeholder,
+                                text = prefix,
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = cs.onSurfaceVariant,
                             )
+                        } else if (prefix != null) {
+                            Text(
+                                text = prefix,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = cs.onSurface,
+                            )
                         }
-                        innerTextField()
+                        Box(Modifier.fillMaxWidth(if (trailing != null) 0.88f else 1f)) {
+                            if (value.isEmpty() && placeholder != null) {
+                                Text(
+                                    text = placeholder,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            }
+                            innerTextField()
+                        }
+                        if (trailing != null) {
+                            Box(Modifier.padding(start = 12.dp))
+                            trailing()
+                        }
                     }
-                    if (trailing != null) {
-                        Box(Modifier.padding(start = 12.dp))
-                        trailing()
-                    }
-                }
-            },
-        )
+                },
+            )
+        }
+        if (supportingText != null) {
+            Text(
+                text = supportingText,
+                color = if (isError) cs.error else cs.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, start = 16.dp)
+            )
+        }
     }
 }

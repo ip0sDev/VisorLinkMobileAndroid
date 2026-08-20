@@ -55,6 +55,13 @@
     <string name="chatlist_fab_find_channel">Найти канал</string>
     <string name="chatlist_draft_prefix">Черновик:\u0020</string>
 
+    <plurals name="chatlist_chats_count">
+        <item quantity="one">%1$d чат</item>
+        <item quantity="few">%1$d чата</item>
+        <item quantity="many">%1$d чатов</item>
+        <item quantity="other">%1$d чатов</item>
+    </plurals>
+
     <!-- Chat Screen — Top bar -->
     <string name="chat_status_online">В сети</string>
     <string name="chat_status_last_seen">Был(а) в %1$s</string>
@@ -556,6 +563,8 @@
     <string name="theme_m3e_desc">Чистый Material You с системными цветами</string>
     <string name="theme_biolume_name">Biolume</string>
     <string name="theme_biolume_desc">Неоморфный рельеф и биолюминесцентные акценты</string>
+    <string name="theme_forge_name">Forge</string>
+    <string name="theme_forge_desc">Индустриальный: прямые углы, жёсткая тень, красный акцент</string>
 
     <!-- Settings — Common -->
     <string name="settings_section_management">Управление</string>

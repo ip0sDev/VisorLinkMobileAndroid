@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
@@ -202,7 +203,7 @@ fun StorageStatsCard(stats: Map<String, Any>) {
 
             LinearProgressIndicator(
                 progress = { fraction },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(VlTheme.tokens.shapes.indicator),
                 color = if (fraction > 0.9f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                 trackColor = MaterialTheme.colorScheme.primaryContainer
             )
@@ -247,7 +248,7 @@ fun FileItem(
             Box(
                 modifier = Modifier
                     .size(50.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(VlTheme.tokens.shapes.chip)
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                 contentAlignment = Alignment.Center
             ) {

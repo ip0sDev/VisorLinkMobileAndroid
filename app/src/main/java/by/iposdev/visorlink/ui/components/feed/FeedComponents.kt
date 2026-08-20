@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.components.VlCard
 import by.iposdev.visorlink.data.model.FeedItem
 import by.iposdev.visorlink.ui.components.CachedImage
@@ -71,7 +72,7 @@ fun FeedCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(24.dp),
+        shape = VlTheme.tokens.shapes.card,
         containerColor = cs.surfaceContainerLow,
         onClick = onClick
     ) {
@@ -86,7 +87,7 @@ fun FeedCard(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.avatar)
                         .background(cs.primary.copy(alpha = 0.1f))
                         .clickable { onChannelClick() },
                     contentAlignment = Alignment.Center
@@ -151,7 +152,7 @@ fun FeedCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 500.dp)
-                            .clip(RoundedCornerShape(12.dp)),
+                            .clip(VlTheme.tokens.shapes.button),
                         contentScale = ContentScale.FillWidth
                     )
 
@@ -211,7 +212,7 @@ fun FeedCard(
                         item.tags.forEach { tag ->
                             Surface(
                                 color = cs.primary.copy(alpha = 0.1f),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = VlTheme.tokens.shapes.indicator
                             ) {
                                 Text(
                                     "#$tag",

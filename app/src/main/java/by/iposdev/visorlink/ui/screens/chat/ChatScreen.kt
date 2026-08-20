@@ -33,6 +33,7 @@ import by.iposdev.visorlink.data.model.aegis.LinkIntent
 import by.iposdev.visorlink.ui.aegis.AegisAura
 import by.iposdev.visorlink.ui.aegis.AegisLifeViewModel
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlFab
 import by.iposdev.visorlink.ui.components.chat.*
 import by.iposdev.visorlink.ui.screens.stickers.StickerPickerBottomSheet
 import by.iposdev.visorlink.ui.theme.*
@@ -70,6 +71,8 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
     val context = LocalContext.current
+
+    val snackbarHostState = remember { SnackbarHostState() }
 
     var inputText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
@@ -172,6 +175,13 @@ fun ChatScreen(
         } else unreadCount++
     }
 
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearError()
+        }
+    }
+
     val otherUser = uiState.otherUser
     val currentUser = uiState.currentUser
     val isOtherPro = otherUser?.isProActive() == true
@@ -189,6 +199,7 @@ fun ChatScreen(
             }
             Scaffold(
                 containerColor = MaterialTheme.colorScheme.surface,
+                snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
                     ChatTopBar(
                         uiState = uiState, otherUid = otherUid, chatId = chatId,
@@ -286,12 +297,11 @@ fun ChatScreen(
 
                     if (showScrollDown) {
                         Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
-                            FloatingActionButton(
+                            VlFab(
                                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowDown, null)
-                            }
+                                icon = Icons.Default.KeyboardArrowDown,
+                                size = 44.dp
+                            )
                             if (unreadCount > 0) {
                                 Badge(modifier = Modifier.align(Alignment.TopEnd)) { Text(unreadCount.toString()) }
                             }
@@ -342,6 +352,29 @@ fun ChatScreen(
     }
 
     if (showLightbox) AlbumLightbox(images = lightboxImages, startIndex = lightboxStartIndex, onDismiss = { showLightbox = false })
+
+    editorUri?.let { uri ->
+        ImageEditorScreen(
+            uri = uri,
+            onNavigateBack = { editorUri = null },
+            onSend = { editedUri, isSpoiler ->
+                editorUri = null
+                viewModel.sendImage(editedUri, isSpoiler = isSpoiler)
+            }
+        )
+    }
+
+    val singlePickedUri = uiState.singlePickedUri
+    singlePickedUri?.let { uri ->
+        ImageEditorScreen(
+            uri = uri,
+            onNavigateBack = { viewModel.clearSinglePickedUri() },
+            onSend = { editedUri, isSpoiler ->
+                viewModel.clearSinglePickedUri()
+                viewModel.sendImage(editedUri, isSpoiler = isSpoiler)
+            }
+        )
+    }
 
     if (showStickerSheet) {
         StickerPickerBottomSheet(

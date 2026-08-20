@@ -38,7 +38,7 @@ fun FlagsOverlay(
                     .padding(16.dp)
                     .clickable { showDetails = true },
                 color = Color.Red.copy(alpha = 0.8f),
-                shape = RoundedCornerShape(8.dp),
+                shape = VlTheme.tokens.shapes.indicator,
                 shadowElevation = 4.dp
             ) {
                 Text(
@@ -57,7 +57,7 @@ fun FlagsOverlay(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(0.7f),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = VlTheme.tokens.shapes.button,
                     color = MaterialTheme.colorScheme.surface
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {

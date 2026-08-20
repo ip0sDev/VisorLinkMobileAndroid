@@ -170,3 +170,82 @@ val BiolumeDataTypography = VlDataTypography(
         lineHeight = 16.sp,
     ),
 )
+
+// ── Forge: техническая типографика ───────────────────────────────────────────
+
+private val ForgeBase = Typography()
+
+/**
+ * Заголовки — JetBrains Mono с расширенным трекингом: моноширинный шрифт в роли
+ * display читается как машинная маркировка, что и нужно индустриальной теме.
+ * Текст остаётся на Inter: моноширинный body утомляет на длинных сообщениях.
+ *
+ * Максимальный доступный вес мono — Medium: JetBrains Mono Bold в `res/font` не
+ * лежит (см. TODO.md), поэтому заголовки заданы Medium явно, а не Bold с
+ * синтетическим утолщением.
+ */
+val ForgeTypography = Typography(
+    displayLarge = ForgeBase.displayLarge.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
+    ),
+    displayMedium = ForgeBase.displayMedium.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
+    ),
+    displaySmall = ForgeBase.displaySmall.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp,
+    ),
+    headlineLarge = ForgeBase.headlineLarge.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp,
+    ),
+    headlineMedium = ForgeBase.headlineMedium.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp,
+    ),
+    headlineSmall = ForgeBase.headlineSmall.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp,
+    ),
+    titleLarge = ForgeBase.titleLarge.copy(
+        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp,
+    ),
+    titleMedium = ForgeBase.titleMedium.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
+    ),
+    titleSmall = ForgeBase.titleSmall.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
+    ),
+    bodyLarge = ForgeBase.bodyLarge.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Normal,
+    ),
+    bodyMedium = ForgeBase.bodyMedium.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Normal,
+    ),
+    bodySmall = ForgeBase.bodySmall.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Normal,
+    ),
+    // Подписи-«шильдики»: широкий трекинг имитирует трафаретную маркировку.
+    labelLarge = ForgeBase.labelLarge.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+    ),
+    labelMedium = ForgeBase.labelMedium.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+    ),
+    labelSmall = ForgeBase.labelSmall.copy(
+        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
+    ),
+)
+
+val ForgeDataTypography = VlDataTypography(
+    dataMedium = TextStyle(
+        fontFamily = DataFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.5.sp,
+    ),
+    dataSmall = TextStyle(
+        fontFamily = DataFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.5.sp,
+    ),
+)

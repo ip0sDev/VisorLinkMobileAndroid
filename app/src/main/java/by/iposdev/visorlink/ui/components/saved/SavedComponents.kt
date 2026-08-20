@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlTextField
 
@@ -64,13 +65,13 @@ fun SavedEmptyPlaceholder(modifier: Modifier, isEncrypted: Boolean) {
                     modifier = Modifier
                         .size(96.dp)
                         .scale(breathScale)
-                        .background(accentColor.copy(alpha = 0.2f), CircleShape)
+                        .background(accentColor.copy(alpha = 0.2f), VlTheme.tokens.shapes.indicator)
                 )
                 Text("⭐", fontSize = 48.sp)
             }
             Text(stringResource(R.string.saved_empty_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = textColor)
             if (isEncrypted) {
-                Surface(shape = RoundedCornerShape(16.dp), color = accentColor.copy(alpha = 0.1f), modifier = Modifier.padding(top = 8.dp, start = 32.dp, end = 32.dp)) {
+                Surface(shape = VlTheme.tokens.shapes.button, color = accentColor.copy(alpha = 0.1f), modifier = Modifier.padding(top = 8.dp, start = 32.dp, end = 32.dp)) {
                     Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Lock, null, modifier = Modifier.size(16.dp), tint = accentColor)
                         Spacer(Modifier.width(8.dp))
@@ -124,7 +125,7 @@ fun PinInputDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(VlTheme.tokens.shapes.indicator)
                             .clickable { useBiometrics = !useBiometrics }
                             .padding(vertical = 4.dp)
                     ) {

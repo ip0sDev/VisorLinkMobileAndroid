@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.aegis.LinkResponse
 import by.iposdev.visorlink.data.model.aegis.SimulatedContext
 import by.iposdev.visorlink.data.model.aegis.VisorIcon
@@ -260,7 +261,7 @@ fun LinkUiMockup(
                 Box(
                     modifier = Modifier
                         .size(120.dp)
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(VlTheme.tokens.shapes.card)
                         .background(Color.DarkGray),
                     contentAlignment = Alignment.Center
                 ) {
@@ -293,7 +294,7 @@ fun LinkUiMockup(
                 ) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp))
+                            .clip(VlTheme.tokens.shapes.button)
                             .background(MaterialTheme.colorScheme.primaryContainer)
                             .padding(12.dp)
                     ) {
@@ -319,7 +320,7 @@ fun JsonInspector(response: LinkResponse?) {
             
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(8.dp),
+                shape = VlTheme.tokens.shapes.indicator,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(

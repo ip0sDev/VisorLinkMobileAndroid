@@ -26,6 +26,7 @@ interface OutboxDataSource {
     suspend fun loadOutbox(context: Context): List<ChatDataCache.QueuedAction>
     suspend fun updateStatus(context: Context, id: String, status: Int)
     suspend fun updateRetry(context: Context, id: String, retryCount: Int, error: String?)
+    suspend fun updateProgress(context: Context, id: String, progress: Float)
 }
 
 class ChatDataOutboxSource : OutboxDataSource {
@@ -36,14 +37,18 @@ class ChatDataOutboxSource : OutboxDataSource {
     override suspend fun updateRetry(context: Context, id: String, retryCount: Int, error: String?) {
         ChatDataCache.updateOutboxRetry(context, id, retryCount, error)
     }
+    override suspend fun updateProgress(context: Context, id: String, progress: Float) {
+        ChatDataCache.updateOutboxProgress(context, id, progress)
+    }
 }
 
 interface CdnUploader {
-    suspend fun uploadFile(file: File, mimeType: String): String
+    suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String
 }
 
 class DefaultCdnUploader : CdnUploader {
-    override suspend fun uploadFile(file: File, mimeType: String): String = CdnService.uploadFile(file, mimeType)
+    override suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String =
+        CdnService.uploadFile(file, mimeType, onProgress = onProgress)
 }
 
 class OutboxManager(
@@ -179,7 +184,9 @@ class OutboxManager(
                 val isSpoiler = data.optBoolean("isSpoiler", false)
                 val file = File(localPath)
                 if (file.exists()) {
-                    val mediaId = cdnUploader.uploadFile(file, "image/jpeg")
+                    val mediaId = cdnUploader.uploadFile(file, "image/jpeg") { progress ->
+                        scope.launch { outboxDataSource.updateProgress(context, action.id, progress) }
+                    }
                     chatRepository.sendImageNow(
                         id = action.id,
                         chatId = action.chatId,
@@ -197,7 +204,9 @@ class OutboxManager(
                 val duration = data.getInt("duration")
                 val file = File(localPath)
                 if (file.exists()) {
-                    val mediaId = cdnUploader.uploadFile(file, "audio/webm")
+                    val mediaId = cdnUploader.uploadFile(file, "audio/webm") { progress ->
+                        scope.launch { outboxDataSource.updateProgress(context, action.id, progress) }
+                    }
                     chatRepository.sendVoiceNow(
                         id = action.id,
                         chatId = action.chatId,
@@ -213,7 +222,9 @@ class OutboxManager(
                 val localPath = data.getString("localPath")
                 val file = File(localPath)
                 if (file.exists()) {
-                    val mediaId = cdnUploader.uploadFile(file, "video/mp4")
+                    val mediaId = cdnUploader.uploadFile(file, "video/mp4") { progress ->
+                        scope.launch { outboxDataSource.updateProgress(context, action.id, progress) }
+                    }
                     chatRepository.sendVideoNow(
                         id = action.id,
                         chatId = action.chatId,

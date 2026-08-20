@@ -175,7 +175,7 @@ fun ColorPresetCircle(
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else if (isSelected) 1.25f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = VlTheme.tokens.motion.motionSpec<Float>(),
         label = "scale"
     )
 
@@ -228,7 +228,7 @@ fun VlGlassPanel(
     val cs = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(radius)
 
-    if (tokens.isBiolume) {
+    if (tokens.structure.enabled) {
         Box(
             modifier = modifier
                 .vlRaised(tokens.structure, shape)
@@ -280,11 +280,7 @@ fun VlButton(
     val container = if (isDestructive) cs.error else cs.primary
     val onContainer = if (isDestructive) cs.onError else cs.onPrimary
 
-    val shape: Shape = when {
-        !tokens.isBiolume -> RoundedCornerShape(16.dp)
-        isPressed -> tokens.shapes.buttonPressed
-        else -> tokens.shapes.button
-    }
+    val shape: Shape = if (isPressed) tokens.shapes.buttonPressed else tokens.shapes.button
 
     Button(
         onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
@@ -301,10 +297,11 @@ fun VlButton(
         enabled = enabled,
         shape = shape,
         interactionSource = interactionSource,
-        elevation = if (tokens.isBiolume) {
-            ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
-        } else {
-            ButtonDefaults.buttonElevation()
+        // Forge: плоская заливка без M3-elevation — объём даёт жёсткая тень.
+        elevation = when {
+            tokens.isForge -> ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+            tokens.isBiolume -> ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
+            else -> ButtonDefaults.buttonElevation()
         },
         colors = ButtonDefaults.buttonColors(
             containerColor = container,
@@ -332,7 +329,7 @@ fun VlSwitch(
     val haptic = rememberHaptic()
     val tokens = VlTheme.tokens
 
-    if (!tokens.isBiolume) {
+    if (!tokens.structure.enabled) {
         Switch(
             checked = checked,
             onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(it) },
@@ -345,16 +342,16 @@ fun VlSwitch(
     val trackWidth = 52.dp
     val trackHeight = 32.dp
     val thumbSize = 24.dp
-    val trackShape = RoundedCornerShape(percent = 50)
+    val trackShape = tokens.shapes.pill
 
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) trackWidth - thumbSize - 4.dp else 4.dp,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = VlTheme.tokens.motion.motionSpec<Dp>(),
         label = "vlswitch_thumb",
     )
     val thumbColor by animateColorAsState(
         targetValue = if (checked) cs.primary else cs.onSurfaceVariant,
-        animationSpec = tween(200),
+        animationSpec = VlTheme.tokens.motion.motionSpec<Color>(),
         label = "vlswitch_color",
     )
 
@@ -374,9 +371,9 @@ fun VlSwitch(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .size(thumbSize)
-                .vlRaised(tokens.structure, CircleShape)
-                .clip(CircleShape)
-                .background(thumbColor, CircleShape)
+                .vlRaised(tokens.structure, tokens.shapes.indicator)
+                .clip(tokens.shapes.indicator)
+                .background(thumbColor, tokens.shapes.indicator)
         )
     }
 }
@@ -400,7 +397,7 @@ fun VlSegmentedControl(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val shape = RoundedCornerShape(16.dp)
-    val itemShape: Shape = if (tokens.isBiolume) tokens.shapes.chip else RoundedCornerShape(12.dp)
+    val itemShape: Shape = if (tokens.structure.enabled) tokens.shapes.chip else RoundedCornerShape(12.dp)
 
     Box(
         modifier = modifier
@@ -417,9 +414,9 @@ fun VlSegmentedControl(
                     // не читался, выбор выглядел как его отсутствие.
                     else -> tokens.selectionFill
                 }
-                val bgColor by animateColorAsState(targetBg, tween(250), label = "seg_bg")
+                val bgColor by animateColorAsState(targetBg, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_bg")
                 val textColor by animateColorAsState(
-                    if (isSelected) cs.primary else cs.onSurfaceVariant, tween(250), label = "seg_txt"
+                    if (isSelected) cs.primary else cs.onSurfaceVariant, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_txt"
                 )
 
                 Box(
@@ -429,7 +426,7 @@ fun VlSegmentedControl(
                         .clip(itemShape)
                         .background(bgColor, itemShape)
                         .then(
-                            if (tokens.isBiolume && isSelected) {
+                            if (tokens.structure.enabled && isSelected) {
                                 Modifier.vlInset(tokens.structure, itemShape)
                             } else {
                                 Modifier
@@ -468,18 +465,18 @@ fun VlIconTray(
     val tokens = VlTheme.tokens
     val color = iconColor ?: if (isError) cs.error else if (selected) cs.primary else cs.onSurfaceVariant
     val size = 40.dp
-    val shape = CircleShape
+    val shape = tokens.shapes.indicator
 
     Box(
         modifier = modifier
             .size(size)
             .vlStructure(
                 tokens = tokens.structure,
-                depth = if (tokens.isBiolume) VlDepth.Raised else VlDepth.Flat,
+                depth = if (tokens.structure.enabled) VlDepth.Raised else VlDepth.Flat,
                 shape = shape,
             )
             .clip(shape)
-            .background(if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerHigh, shape),
+            .background(if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerHigh, shape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
@@ -499,9 +496,9 @@ fun VlTapFeedback(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val bg by animateColorAsState(
-        if (isPressed) tintColor else tintColor.copy(alpha = 0f), tween(160), label = "vltapfeedback_bg"
+        if (isPressed) tintColor else tintColor.copy(alpha = 0f), VlTheme.tokens.motion.motionSpec<Color>(), label = "vltapfeedback_bg"
     )
-    val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, spring(dampingRatio = 0.6f), label = "vltapfeedback_scale")
+    val scale by animateFloatAsState(if (isPressed) 0.98f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "vltapfeedback_scale")
 
     Box(
         modifier = modifier
@@ -563,16 +560,16 @@ fun VlSettingsSection(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp)
                 .then(
-                    if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, sectionShape)
+                    if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, sectionShape)
                     else Modifier
                 )
                 .clip(sectionShape)
                 .background(
-                    if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerLow,
+                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
                     sectionShape,
                 )
                 .then(
-                    if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, sectionShape)
+                    if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, sectionShape)
                     else Modifier
                 )
         ) {

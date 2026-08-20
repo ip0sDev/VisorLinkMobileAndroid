@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.ui.components.VlSurface
@@ -233,7 +234,7 @@ fun VlDrawingDialog(
                 LazyRow(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(colors) { c ->
                         Box(
-                            Modifier.size(40.dp).clip(CircleShape).background(c)
+                            Modifier.size(40.dp).clip(VlTheme.tokens.shapes.indicator).background(c)
                                 .clickable { color = c }
                                 .then(if (color == c) Modifier.background(Color.White.copy(0.3f)) else Modifier)
                         )
@@ -244,7 +245,7 @@ fun VlDrawingDialog(
                     Modifier
                         .fillMaxSize()
                         .padding(16.dp)
-                        .background(Color.White, RoundedCornerShape(16.dp))
+                        .background(Color.White, VlTheme.tokens.shapes.button)
                         .pointerInput(Unit) {
                             detectDragGestures(
                                 onDragStart = { offset -> currentPath = Path().apply { moveTo(offset.x, offset.y) } },

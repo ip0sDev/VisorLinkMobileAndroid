@@ -55,6 +55,11 @@
     <string name="chatlist_fab_find_channel">Find Channel</string>
     <string name="chatlist_draft_prefix">Draft:\u0020</string>
 
+    <plurals name="chatlist_chats_count">
+        <item quantity="one">%1$d chat</item>
+        <item quantity="other">%1$d chats</item>
+    </plurals>
+
     <!-- Chat Screen — Top bar -->
     <string name="chat_status_online">Online</string>
     <string name="chat_status_last_seen">Last seen %1$s</string>
@@ -556,6 +561,8 @@
     <string name="theme_m3e_desc">Clean Material You with system colors</string>
     <string name="theme_biolume_name">Biolume</string>
     <string name="theme_biolume_desc">Neumorphic relief and bioluminescent accents</string>
+    <string name="theme_forge_name">Forge</string>
+    <string name="theme_forge_desc">Industrial: square edges, hard shadow, red accent</string>
 
     <!-- Settings — Common -->
     <string name="settings_section_management">Management</string>

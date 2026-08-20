@@ -1,8 +1,7 @@
 package by.iposdev.visorlink.ui.components
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -10,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +25,9 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.ui.theme.VlDepth
+import by.iposdev.visorlink.ui.theme.VlPressStyle
 import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.motionSpec
 import by.iposdev.visorlink.ui.theme.vlHairline
 import by.iposdev.visorlink.ui.theme.vlStructure
 
@@ -61,11 +63,12 @@ fun VlSurface(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val baseRadius = customRadius ?: when {
-        tokens.isBiolume && isButton -> tokens.shapes.buttonRadius
-        tokens.isBiolume -> tokens.shapes.cardRadius
-        isButton -> 20.dp
-        else -> 24.dp
+    // Радиусы всегда из токенов: у Forge они нулевые, и «квадратность» должна
+    // распространяться в том числе на скругления элементов группы.
+    val baseRadius = customRadius ?: if (isButton) {
+        tokens.shapes.buttonRadius
+    } else {
+        tokens.shapes.cardRadius
     }
 
     // Скругления элемента группы: у крайних — большой радиус снаружи, внутренние
@@ -84,17 +87,34 @@ fun VlSurface(
     // §4.1: то, что «принимает» (поле ввода) или уже нажато — врезано;
     // остальное — приподнято. В M3 оба варианта дают no-op.
     val depth = when {
-        !tokens.isBiolume -> VlDepth.Flat
-        isInput || isPressed -> VlDepth.Inset
+        !tokens.structure.enabled -> VlDepth.Flat
+        isInput -> VlDepth.Inset
+        // Forge нажимается «штампом»: элемент уезжает в свою тень, поэтому рельеф
+        // при нажатии не врезается, а снимается — иначе тень и вдавленность спорят.
+        isPressed && tokens.motion.pressStyle == VlPressStyle.STAMP -> VlDepth.Flat
+        isPressed -> VlDepth.Inset
         else -> VlDepth.Raised
     }
 
-    // Scale оставляем только M3E: в Biolume смену рельефа raised → inset уже
-    // достаточно читаемо, а масштабирование поверх неё выглядит «желейно».
+    // Каждая тема нажимается по-своему: M3E сжимается, Biolume меняет рельеф,
+    // Forge механически садится в тень.
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && !isInput && !tokens.isBiolume) 0.97f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
+        targetValue = if (isPressed && !isInput && tokens.motion.pressStyle == VlPressStyle.SCALE) {
+            tokens.motion.pressScale
+        } else {
+            1f
+        },
+        animationSpec = tokens.motion.motionSpec(),
         label = "vlsurface_scale",
+    )
+    val stampOffset by animateDpAsState(
+        targetValue = if (isPressed && !isInput && tokens.motion.pressStyle == VlPressStyle.STAMP) {
+            tokens.motion.pressOffset
+        } else {
+            0.dp
+        },
+        animationSpec = tokens.motion.motionSpec(),
+        label = "vlsurface_stamp",
     )
 
     val clickModifier = if (onClick != null) {
@@ -105,15 +125,16 @@ fun VlSurface(
 
     val bg = overrideColor ?: when {
         // §3.1: и карточки, и поля в покое сидят на surfaceContainer — рельеф
-        // различает их роли, а не заливка.
-        tokens.isBiolume -> cs.surfaceContainer
+        // различает их роли, а не заливка. В Forge то же самое, только рельеф жёсткий.
+        tokens.structure.enabled -> cs.surfaceContainer
         isInput -> cs.surfaceContainerHighest
         else -> cs.surfaceContainerLow
     }
 
-    // Грань нужна только карточкам и только там, где рельеф может не прочитаться
-    // (§3.1). На цветной заливке (overrideColor) её не рисуем — там уже есть свой контур.
-    val hairlineModifier = if (tokens.isBiolume && !isInput && overrideColor == null) {
+    // Грань нужна там, где рельеф может не прочитаться (§3.1); в Forge она ещё и
+    // самостоятельный элемент языка — кромка металла. На цветной заливке
+    // (overrideColor) не рисуем: там уже есть свой контур.
+    val hairlineModifier = if (tokens.structure.enabled && !isInput && overrideColor == null) {
         Modifier.vlHairline(cs.outlineVariant, shape)
     } else {
         Modifier
@@ -121,6 +142,7 @@ fun VlSurface(
 
     Box(
         modifier = modifier
+            .offset(x = stampOffset, y = stampOffset)
             .scale(scale)
             .vlStructure(tokens.structure, depth, shape)
             .clip(shape)

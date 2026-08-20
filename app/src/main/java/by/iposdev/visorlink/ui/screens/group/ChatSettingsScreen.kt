@@ -34,6 +34,7 @@ import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
+import by.iposdev.visorlink.ui.components.VlTextField
 import coil.compose.AsyncImage
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -448,25 +449,24 @@ private fun InfoTab(
             }
         } else {
             item {
-                OutlinedTextField(
+                VlTextField(
                     value = uiState.editName,
                     onValueChange = onNameChange,
-                    label = { Text(stringResource(R.string.create_field_name)) },
+                    label = stringResource(R.string.create_field_name),
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             item {
-                OutlinedTextField(
+                VlTextField(
                     value = uiState.editDescription,
                     onValueChange = onDescChange,
-                    label = { Text(stringResource(R.string.create_field_description)) },
-                    supportingText = { Text("${uiState.editDescription.length}/160") },
+                    label = stringResource(R.string.create_field_description),
+                    supportingText = "${uiState.editDescription.length}/160",
                     maxLines = 4,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
+                    singleLine = false,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -603,14 +603,13 @@ private fun MembersTab(
             onDismissRequest = { showInviteDialog = false; inviteUsername = "" },
             title = { Text(stringResource(R.string.settings_dialog_invite_title)) },
             text = {
-                OutlinedTextField(
+                VlTextField(
                     value = inviteUsername,
                     onValueChange = { inviteUsername = it.lowercase().removePrefix("@").trim() },
-                    label = { Text(stringResource(R.string.settings_dialog_invite_field)) },
-                    prefix = { Text("@") },
+                    label = stringResource(R.string.settings_dialog_invite_field),
+                    prefix = "@",
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
@@ -638,13 +637,12 @@ private fun MembersTab(
             onDismissRequest = { showMuteDialog = false; actionTarget = null },
             title = { Text(stringResource(R.string.dialog_mute_title)) },
             text = {
-                OutlinedTextField(
+                VlTextField(
                     value = duration,
                     onValueChange = { duration = it.filter(Char::isDigit) },
-                    label = { Text(stringResource(R.string.dialog_mute_field)) },
+                    label = stringResource(R.string.dialog_mute_field),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
+                    modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {

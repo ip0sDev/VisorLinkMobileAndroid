@@ -62,6 +62,7 @@ import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.theme.VlTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -96,7 +97,7 @@ fun TypingDots(primaryColor: Color = Color.Unspecified) {
                 ),
                 label = "dot_$i",
             )
-            Box(Modifier.size(4.dp).background(color.copy(alpha = alpha), CircleShape))
+            Box(Modifier.size(4.dp).background(color.copy(alpha = alpha), VlTheme.tokens.shapes.indicator))
         }
     }
 }
@@ -126,7 +127,7 @@ fun VoiceBubble(
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier.size(38.dp)
-                    .background(tint.copy(alpha = 0.15f), CircleShape)
+                    .background(tint.copy(alpha = 0.15f), VlTheme.tokens.shapes.indicator)
                     .clickable { onPlay(url, durationSec) },
                 contentAlignment = Alignment.Center,
             ) {
@@ -231,7 +232,7 @@ fun SwipeableMessage(
             modifier = Modifier
                 .align(align)
                 .padding(horizontal = 16.dp).size(36.dp).scale(replyIconScale)
-                .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), CircleShape),
+                .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), VlTheme.tokens.shapes.indicator),
             contentAlignment = Alignment.Center,
         ) {
             Icon(Icons.Default.Reply, stringResource(R.string.chat_reply), tint = replyIconColor.copy(alpha = replyIconAlpha), modifier = Modifier.size(20.dp))
@@ -348,7 +349,7 @@ fun RecordingBar(
         }
 
         Row(Modifier.weight(1f).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), CircleShape))
+            Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), VlTheme.tokens.shapes.indicator))
             Spacer(Modifier.width(8.dp))
             Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = timerColor)
             Spacer(Modifier.width(6.dp))
@@ -357,7 +358,7 @@ fun RecordingBar(
 
         IconButton(
             onClick = { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSend() },
-            modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, CircleShape),
+            modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, VlTheme.tokens.shapes.fab),
         ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.action_send), tint = MaterialTheme.colorScheme.onPrimary) }
     }
 }
@@ -418,7 +419,7 @@ fun DateSeparator(label: String) {
     Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            shape = RoundedCornerShape(14.dp)
+            shape = VlTheme.tokens.shapes.chip
         ) {
             Text(
                 text     = label,

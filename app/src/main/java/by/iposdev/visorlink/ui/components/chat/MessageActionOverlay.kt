@@ -49,6 +49,8 @@ import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.data.model.SendStatus
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.motionSpec
 import kotlinx.coroutines.launch
 import kotlin.math.floor
 import kotlin.math.sqrt
@@ -190,7 +192,7 @@ private fun NormalMessageMenu(
             }
             .width(260.dp)
             .onGloballyPositioned { menuSize = it.size },
-        shape = RoundedCornerShape(20.dp),
+        shape = VlTheme.tokens.shapes.card,
         color = cs.surface,
         tonalElevation = 8.dp,
         border = borderStroke(cs)
@@ -434,7 +436,7 @@ private fun GestureMessageMenu(
     Box(Modifier.fillMaxSize()) {
         val isCancelSelected = currentSelection == "cancel"
         val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else cs.surface
-        val cancelScale by animateFloatAsState(if (isCancelSelected) 1.15f else 1f, spring(dampingRatio = 0.5f), label = "cancel_scale")
+        val cancelScale by animateFloatAsState(if (isCancelSelected) 1.15f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "cancel_scale")
 
         Box(
             Modifier.offset { IntOffset(menuOrigin.x.toInt() - cancelSize.width / 2, menuOrigin.y.toInt() - cancelSize.height / 2) }
@@ -446,7 +448,7 @@ private fun GestureMessageMenu(
                         scaleX = cancelScale * enterScale
                         scaleY = cancelScale * enterScale
                     },
-                shape = RoundedCornerShape(20.dp),
+                shape = VlTheme.tokens.shapes.card,
                 color = cancelColor,
                 tonalElevation = if (isCancelSelected) 12.dp else 4.dp,
                 border = borderStroke(cs)
@@ -487,7 +489,7 @@ private fun GestureMessageMenu(
             } else cs.surface
 
             val contentColor = if (isSelected) Color.White else color
-            val actionScale by animateFloatAsState(if (isSelected) 1.15f else 1f, spring(dampingRatio = 0.5f), label = "action_scale")
+            val actionScale by animateFloatAsState(if (isSelected) 1.15f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "action_scale")
             val currentSize = actionSizes[action] ?: IntSize.Zero
 
             Box(
@@ -500,7 +502,7 @@ private fun GestureMessageMenu(
                             scaleX = actionScale * enterScale
                             scaleY = actionScale * enterScale
                         },
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VlTheme.tokens.shapes.card,
                     color = bgColor,
                     tonalElevation = if (isSelected) 12.dp else 4.dp,
                     border = borderStroke(cs)
@@ -516,7 +518,7 @@ private fun GestureMessageMenu(
 
         if (hasGrid) {
             val showGrid = currentSelection == "react" || currentSelection.startsWith("react_")
-            val gridScale by animateFloatAsState(if (showGrid) 1f else 0f, spring(dampingRatio = 0.6f), label = "grid_scale")
+            val gridScale by animateFloatAsState(if (showGrid) 1f else 0f, VlTheme.tokens.motion.motionSpec<Float>(), label = "grid_scale")
 
             Box(
                 Modifier.offset { IntOffset(gridLeftX.toInt(), gridTopY.toInt()) }
@@ -528,7 +530,7 @@ private fun GestureMessageMenu(
                             scaleX = gridScale * enterScale
                             scaleY = gridScale * enterScale
                         },
-                    shape = RoundedCornerShape(24.dp),
+                    shape = VlTheme.tokens.shapes.card,
                     color = cs.surface,
                     tonalElevation = 6.dp,
                     border = borderStroke(cs)
@@ -538,7 +540,7 @@ private fun GestureMessageMenu(
                             Row {
                                 row.forEach { emoji ->
                                     val isSelected = currentSelection == "react_$emoji"
-                                    val emojiScale by animateFloatAsState(if (isSelected) 1.5f else 1f, label = "emoji_scale")
+                                    val emojiScale by animateFloatAsState(if (isSelected) 1.5f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "emoji_scale")
                                     Box(
                                         Modifier.size(36.dp),
                                         contentAlignment = Alignment.Center
@@ -546,7 +548,7 @@ private fun GestureMessageMenu(
                                         Box(
                                             Modifier
                                                 .scale(emojiScale)
-                                                .background(if (isSelected) cs.primary.copy(0.4f) else Color.Transparent, CircleShape)
+                                                .background(if (isSelected) cs.primary.copy(0.4f) else Color.Transparent, VlTheme.tokens.shapes.indicator)
                                                 .padding(4.dp)
                                         ) {
                                             Text(text = emoji, fontSize = 18.sp)
@@ -585,7 +587,7 @@ private fun EmojiReactionButton(emoji: String, isSelected: Boolean, onClick: () 
     Box(
         modifier = Modifier
             .size(44.dp)
-            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant, CircleShape)
+            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant, VlTheme.tokens.shapes.indicator)
             .clickable {
                 scope.launch {
                     scale.animateTo(0.75f)

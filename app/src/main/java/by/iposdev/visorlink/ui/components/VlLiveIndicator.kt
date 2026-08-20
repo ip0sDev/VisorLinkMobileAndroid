@@ -37,9 +37,9 @@ fun VlLiveDot(
     Box(
         modifier = modifier
             .size(size)
-            .vlBiopulse(tokens = tokens, color = dotColor, active = active, shape = CircleShape)
-            .clip(CircleShape)
-            .background(dotColor, CircleShape)
+            .vlBiopulse(tokens = tokens, color = dotColor, active = active, shape = tokens.shapes.indicator)
+            .clip(tokens.shapes.indicator)
+            .background(dotColor, tokens.shapes.indicator)
     )
 }
 

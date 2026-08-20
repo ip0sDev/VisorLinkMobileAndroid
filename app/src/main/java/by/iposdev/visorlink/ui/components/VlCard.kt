@@ -53,7 +53,7 @@ fun VlCard(
         Modifier
     }
 
-    if (tokens.isBiolume) {
+    if (tokens.structure.enabled) {
         Box(
             modifier = modifier
                 .vlRaised(tokens.structure, resolvedShape)

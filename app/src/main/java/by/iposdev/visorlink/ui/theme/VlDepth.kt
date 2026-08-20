@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
@@ -91,6 +92,19 @@ fun Modifier.vlRaised(
     shape: Shape,
 ): Modifier {
     if (!tokens.enabled) return this
+
+    // Forge: сплошной смещённый силуэт вместо рассеянной тени. Контр-подсветки
+    // нет — у одного жёсткого источника света её и не бывает.
+    if (tokens.hardEdge) {
+        return this.drawBehind {
+            val path = shape.toPath(size, layoutDirection, this)
+            val off = tokens.raisedOffset.toPx()
+            translate(left = off, top = off) {
+                drawPath(path, color = tokens.shadowDark)
+            }
+        }
+    }
+
     return this.drawBehind {
         val path = shape.toPath(size, layoutDirection, this)
         // Светлая контр-подсветка идёт первой, чтобы тёмная тень легла поверх неё.
@@ -123,6 +137,25 @@ fun Modifier.vlInset(
     shape: Shape,
 ): Modifier {
     if (!tokens.enabled) return this
+
+    // Forge: вместо мягкой вдавленности — резкая фаска, тёмная сверху-слева и
+    // светлая снизу-справа, как на металлической панели.
+    if (tokens.hardEdge) {
+        return this.drawWithContent {
+            drawContent()
+            val path = shape.toPath(size, layoutDirection, this)
+            val off = tokens.insetOffset.toPx()
+            clipPath(path) {
+                translate(left = off, top = off) {
+                    drawPath(path, color = tokens.shadowDark, style = Stroke(width = off * 2f))
+                }
+                translate(left = -off, top = -off) {
+                    drawPath(path, color = tokens.shadowLight, style = Stroke(width = off * 2f))
+                }
+            }
+        }
+    }
+
     return this.drawWithContent {
         drawContent()
         val path = shape.toPath(size, layoutDirection, this)

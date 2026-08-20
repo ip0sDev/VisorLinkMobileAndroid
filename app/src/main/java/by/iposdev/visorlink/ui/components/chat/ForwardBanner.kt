@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.ForwardFrom
 import by.iposdev.visorlink.data.model.Message
 
@@ -46,7 +47,7 @@ fun ForwardBanner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(VlTheme.tokens.shapes.indicator)
             .background(bgColor)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -54,7 +55,7 @@ fun ForwardBanner(
     ) {
         Box(
             Modifier.width(2.dp).height(14.dp)
-                .background(accentColor, RoundedCornerShape(1.dp))
+                .background(accentColor, VlTheme.tokens.shapes.indicator)
         )
         Spacer(Modifier.width(6.dp))
         Text(
@@ -104,7 +105,7 @@ fun TelegramForwardBanner(
                     start = Offset(0f, 0f),
                     end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                 ),
-                shape = RoundedCornerShape(6.dp)
+                shape = VlTheme.tokens.shapes.indicator
             )
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.components.chatlist.*
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
@@ -66,7 +68,7 @@ fun ChatListScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = {
                     Column {
                         Text(
@@ -82,7 +84,14 @@ fun ChatListScreen(
                             exit = shrinkVertically(tween(150)) + fadeOut(tween(100))
                         ) {
                             Text(
-                                text = if (chats.isEmpty()) "" else "${chats.size} chats",
+                                text = if (chats.isEmpty()) "" else {
+                                    val count = chats.size
+                                    pluralStringResource(
+                                        R.plurals.chatlist_chats_count,
+                                        count,
+                                        count
+                                    )
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -129,11 +138,7 @@ fun ChatListScreen(
                         onClick = { onOpenProfile() }
                     )
                     Spacer(Modifier.width(8.dp))
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                )
+                }
             )
         },
         floatingActionButton = {

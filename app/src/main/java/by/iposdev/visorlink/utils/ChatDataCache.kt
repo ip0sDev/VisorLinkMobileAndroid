@@ -15,7 +15,7 @@ import org.json.JSONObject
 import java.util.UUID
 
 private const val DB_NAME = "visorlink_cache.db"
-private const val DB_VERSION = 4
+private const val DB_VERSION = 5
 private const val TAG = "ChatDataCache"
 
 class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
@@ -25,7 +25,7 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
         db.execSQL("CREATE TABLE messages (chat_id TEXT, msg_id TEXT, ts INTEGER, data TEXT, PRIMARY KEY(chat_id, msg_id))")
         db.execSQL("CREATE TABLE profiles (uid TEXT PRIMARY KEY, data TEXT)")
         db.execSQL("CREATE TABLE stickers (uid TEXT, pack_id TEXT, data TEXT, PRIMARY KEY(uid, pack_id))")
-        db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0, retry_count INTEGER DEFAULT 0, last_attempt INTEGER DEFAULT 0, last_error TEXT)")
+        db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0, retry_count INTEGER DEFAULT 0, last_attempt INTEGER DEFAULT 0, last_error TEXT, progress REAL DEFAULT 0.0)")
         db.execSQL("CREATE TABLE likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
     }
 
@@ -44,6 +44,13 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
                 db.execSQL("ALTER TABLE outbox ADD COLUMN last_error TEXT")
             } catch (e: Exception) {
                 Log.e("ChatDataCache", "Upgrade to v4 failed", e)
+            }
+        }
+        if (oldVersion < 5) {
+            try {
+                db.execSQL("ALTER TABLE outbox ADD COLUMN progress REAL DEFAULT 0.0")
+            } catch (e: Exception) {
+                Log.e("ChatDataCache", "Upgrade to v5 failed", e)
             }
         }
     }
@@ -124,7 +131,7 @@ object ChatDataCache {
             val list = mutableListOf<QueuedAction>()
             try {
                 val db = getDb(context).readableDatabase
-                db.rawQuery("SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error FROM outbox ORDER BY ts ASC", null).use { cursor ->
+                db.rawQuery("SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC", null).use { cursor ->
                     while (cursor.moveToNext()) {
                         list.add(QueuedAction(
                             id = cursor.getString(0),
@@ -135,12 +142,25 @@ object ChatDataCache {
                             status = cursor.getInt(5),
                             retryCount = cursor.getInt(6),
                             lastAttempt = cursor.getLong(7),
-                            lastError = cursor.getString(8)
+                            lastError = cursor.getString(8),
+                            progress = cursor.getFloat(9)
                         ))
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load outbox", e) }
             list
+        }
+
+    suspend fun updateOutboxProgress(context: Context, id: String, progress: Float) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("UPDATE outbox SET progress=? WHERE id=?")
+                stmt.bindDouble(1, progress.toDouble())
+                stmt.bindString(2, id)
+                stmt.executeUpdateDelete()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to update outbox progress", e) }
         }
 
     suspend fun updateOutboxRetry(context: Context, id: String, retryCount: Int, error: String?) =
@@ -199,7 +219,8 @@ object ChatDataCache {
         val status: Int = 0,
         val retryCount: Int = 0,
         val lastAttempt: Long = 0,
-        val lastError: String? = null
+        val lastError: String? = null,
+        val progress: Float = 0f
     )
 
     // ── Likes ────────────────────────────────────────────────────────────────

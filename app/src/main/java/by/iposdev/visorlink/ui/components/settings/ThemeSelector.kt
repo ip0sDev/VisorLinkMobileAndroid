@@ -79,16 +79,18 @@ private fun ThemePreviewCard(
     val name = when (theme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
         AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
+        AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
     }
     val description = when (theme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_desc)
         AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_desc)
+        AppTheme.FORGE -> stringResource(R.string.theme_forge_desc)
     }
 
     // Рамка выбора рисуется во ВНЕШНЕЙ теме — иначе выделение прыгало бы вместе
     // с палитрой превью и перестало бы читаться как элемент настроек.
     val outerCs = MaterialTheme.colorScheme
-    val outerShape = RoundedCornerShape(20.dp)
+    val outerShape = VlTheme.tokens.shapes.card
 
     Column(
         modifier = Modifier
@@ -131,8 +133,8 @@ private fun ThemePreviewCard(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(CircleShape)
-                        .background(outerCs.primary, CircleShape),
+                        .clip(VlTheme.tokens.shapes.indicator)
+                        .background(outerCs.primary, VlTheme.tokens.shapes.indicator),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -165,7 +167,7 @@ private fun ThemePreviewCard(
 private fun ThemePreviewBody() {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val shape = RoundedCornerShape(14.dp)
+    val shape = tokens.shapes.card
 
     Column(
         modifier = Modifier
@@ -201,8 +203,8 @@ private fun ThemePreviewBody() {
                         Modifier
                             .weight(1f)
                             .height(6.dp)
-                            .clip(CircleShape)
-                            .background(cs.onSurfaceVariant.copy(alpha = 0.45f), CircleShape)
+                            .clip(VlTheme.tokens.shapes.indicator)
+                            .background(cs.onSurfaceVariant.copy(alpha = 0.45f), VlTheme.tokens.shapes.indicator)
                     )
                 }
             }
@@ -216,7 +218,7 @@ private fun ThemePreviewBody() {
                 .clip(tokens.shapes.field)
                 .background(cs.surfaceContainer, tokens.shapes.field)
                 .then(
-                    if (tokens.isBiolume) Modifier.vlInset(tokens.structure, tokens.shapes.field)
+                    if (tokens.structure.enabled) Modifier.vlInset(tokens.structure, tokens.shapes.field)
                     else Modifier
                 )
         )
@@ -241,8 +243,8 @@ private fun ThemePreviewBody() {
                 Modifier
                     .width(54.dp)
                     .height(6.dp)
-                    .clip(CircleShape)
-                    .background(cs.onPrimary.copy(alpha = 0.85f), CircleShape)
+                    .clip(VlTheme.tokens.shapes.indicator)
+                    .background(cs.onPrimary.copy(alpha = 0.85f), VlTheme.tokens.shapes.indicator)
             )
         }
 
@@ -261,7 +263,7 @@ private fun ThemePreviewBody() {
                         alphaOverride = tokens.signal.fabRestAlpha,
                     )
                     .then(
-                        if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, tokens.shapes.fab)
+                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.fab)
                         else Modifier
                     )
                     .clip(tokens.shapes.fab)
@@ -280,16 +282,16 @@ private fun PreviewChip(selected: Boolean) {
     Box(
         modifier = Modifier
             .then(
-                if (tokens.isBiolume && !selected) Modifier.vlRaised(tokens.structure, shape)
+                if (tokens.structure.enabled && !selected) Modifier.vlRaised(tokens.structure, shape)
                 else Modifier
             )
             .clip(shape)
             .background(
-                if (selected) cs.primaryContainer else cs.surfaceContainer,
+                if (selected) tokens.selectionFill else cs.surfaceContainer,
                 shape,
             )
             .then(
-                if (tokens.isBiolume && selected) Modifier.vlInset(tokens.structure, shape)
+                if (tokens.structure.enabled && selected) Modifier.vlInset(tokens.structure, shape)
                 else Modifier
             )
             .padding(horizontal = 14.dp, vertical = 7.dp),
@@ -298,10 +300,10 @@ private fun PreviewChip(selected: Boolean) {
             Modifier
                 .width(26.dp)
                 .height(5.dp)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.indicator)
                 .background(
                     if (selected) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.5f),
-                    CircleShape,
+                    VlTheme.tokens.shapes.indicator,
                 )
         )
     }

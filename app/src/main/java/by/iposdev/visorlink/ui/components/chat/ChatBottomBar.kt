@@ -89,17 +89,17 @@ fun ChatBottomBar(
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            val panelShape = RoundedCornerShape(32.dp)
+            val panelShape = tokens.shapes.bar
             Column(
                 modifier = Modifier
                     .then(
-                        if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, panelShape)
+                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                         else Modifier
                     )
                     .clip(panelShape)
                     .background(cs.surfaceContainerLow)
                     .then(
-                        if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, panelShape)
+                        if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, panelShape)
                         else Modifier
                     )
                     .padding(4.dp)
@@ -107,21 +107,21 @@ fun ChatBottomBar(
                 AnimatedVisibility(visible = uiState.replyingTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     uiState.replyingTo?.let { msg ->
                         // Цитата «принимает» контент чужого сообщения → inset (§4.1).
-                        val quoteShape = RoundedCornerShape(28.dp)
+                        val quoteShape = tokens.shapes.card
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 4.dp)
                                 .clip(quoteShape)
                                 .background(
-                                    if (tokens.isBiolume) cs.surfaceContainer
+                                    if (tokens.structure.enabled) cs.surfaceContainer
                                     else cs.surfaceContainerHighest
                                 )
                                 .vlInset(tokens.structure, quoteShape)
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.width(3.dp).height(32.dp).background(cs.primary, RoundedCornerShape(2.dp)))
+                                Box(Modifier.width(3.dp).height(32.dp).background(cs.primary, tokens.shapes.indicator))
                                 Spacer(Modifier.width(8.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text("@${msg.senderUsername}", style = MaterialTheme.typography.labelSmall, color = cs.primary, fontWeight = FontWeight.SemiBold)
@@ -136,7 +136,7 @@ fun ChatBottomBar(
                 }
 
                 AnimatedVisibility(visible = uiState.isUploading, enter = expandVertically(), exit = shrinkVertically()) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(RoundedCornerShape(4.dp)), color = cs.primary, trackColor = Color.Transparent)
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(tokens.shapes.indicator), color = cs.primary, trackColor = Color.Transparent)
                 }
 
                 if (canSendMessage) {
@@ -160,13 +160,13 @@ fun ChatBottomBar(
 
                             // §4.1: поле ввода «принимает» → в Biolume врезано.
                             // Счётчик символов — data-роль (§1.5, §5), поэтому моноширинный.
-                            val inputShape = RoundedCornerShape(28.dp)
+                            val inputShape = tokens.shapes.field
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(inputShape)
                                     .background(
-                                        if (tokens.isBiolume) cs.surfaceContainer
+                                        if (tokens.structure.enabled) cs.surfaceContainer
                                         else cs.surfaceContainerHighest
                                     )
                                     .vlInset(tokens.structure, inputShape)
@@ -222,8 +222,8 @@ fun ChatBottomBar(
                                         modifier = Modifier
                                             .size(48.dp)
                                             .scale(sendScale)
-                                            .background(cs.primary, CircleShape)
-                                            .clip(CircleShape)
+                                            .background(cs.primary, tokens.shapes.indicator)
+                                            .clip(tokens.shapes.indicator)
                                             .clickable(enabled = !uiState.isCooldown) { 
                                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                                 onSend() 
@@ -236,8 +236,8 @@ fun ChatBottomBar(
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
-                                            .background(cs.primaryContainer, CircleShape)
-                                            .clip(CircleShape)
+                                            .background(cs.primaryContainer, tokens.shapes.indicator)
+                                            .clip(tokens.shapes.indicator)
                                             .clickable(enabled = !uiState.isCooldown) {
                                                 if (audioPermission.status.isGranted) { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onStartRecord() }
                                                 else onRequestAudioPerm()

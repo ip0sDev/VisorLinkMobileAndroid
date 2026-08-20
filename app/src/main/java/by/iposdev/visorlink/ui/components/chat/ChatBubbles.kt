@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.components.chat
 
+import android.net.Uri
 import android.util.Patterns
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -141,7 +144,7 @@ internal fun ReplyPreview(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(4.dp))
+            .clip(VlTheme.tokens.shapes.indicator)
             .clickable { onClick() }
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -150,7 +153,7 @@ internal fun ReplyPreview(
             Modifier
                 .width(3.dp)
                 .height(32.dp)
-                .background(accentColor, RoundedCornerShape(2.dp))
+                .background(accentColor, VlTheme.tokens.shapes.indicator)
         )
         Spacer(Modifier.width(8.dp))
         Column {
@@ -184,7 +187,10 @@ private fun AlbumImageItem(
     val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url)
     val showBlur = image.spoiler && !isRevealed
 
-    Box(modifier.clickable { if (showBlur) onReveal() else onClick() }) {
+    Box(modifier
+        .clip(VlTheme.tokens.shapes.card)
+        .clickable { if (showBlur) onReveal() else onClick() }
+    ) {
         CachedImage(
             model = resolvedUrl,
             contentDescription = null,
@@ -242,6 +248,43 @@ private fun AlbumGrid(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun UploadProgressOverlay(
+    progress: Float,
+    onCancel: (() -> Unit)? = null
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.3f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(46.dp),
+                color = Color.White,
+                strokeWidth = 3.dp,
+                trackColor = Color.White.copy(alpha = 0.2f),
+                strokeCap = StrokeCap.Round
+            )
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Cancel",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(24.dp)
+                    .then(if (onCancel != null) Modifier.clickable { onCancel() } else Modifier)
+            )
         }
     }
 }
@@ -378,7 +421,7 @@ internal fun TextBubble(
 
         Surface(
             modifier = bubbleModifier,
-            shape = RoundedCornerShape(16.dp),
+            shape = VlTheme.tokens.shapes.card,
             color = bubbleColor
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
@@ -475,7 +518,7 @@ internal fun VideoBubble(
                 onTap = { resolvedUrl?.let { onMediaTap(it, message.type) } },
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
-            shape = RoundedCornerShape(18.dp),
+            shape = VlTheme.tokens.shapes.card,
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Box {
@@ -484,7 +527,7 @@ internal fun VideoBubble(
                     type = message.type,
                     localFile = message.localFile,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                    onClick = { resolvedUrl?.let { onMediaTap(it, message.type) } }
+                    onClick = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onMediaTap(it, message.type) } }
                 )
 
                 Column(modifier = Modifier.matchParentSize()) {
@@ -506,12 +549,7 @@ internal fun VideoBubble(
                 }
 
                 if (message.uploadProgress != null) {
-                    CircularProgressIndicator(
-                        progress = { message.uploadProgress!! },
-                        modifier = Modifier.align(Alignment.Center).size(48.dp),
-                        color = Color.White,
-                        trackColor = Color.White.copy(alpha = 0.3f),
-                    )
+                    UploadProgressOverlay(progress = message.uploadProgress!!)
                 }
             }
         }
@@ -532,6 +570,7 @@ internal fun ImageBubble(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
+    val modelSource = message.localFile ?: resolvedUrl
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -540,15 +579,15 @@ internal fun ImageBubble(
         Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = { resolvedUrl?.let { onTap(it) } },
+                onTap = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onTap(it) } },
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
-            shape = RoundedCornerShape(18.dp),
+            shape = VlTheme.tokens.shapes.card,
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Box {
                 CachedImage(
-                    model = resolvedUrl,
+                    model = modelSource,
                     contentDescription = null,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
                     contentScale = ContentScale.Crop
@@ -573,12 +612,7 @@ internal fun ImageBubble(
                 }
 
                 if (message.uploadProgress != null) {
-                    CircularProgressIndicator(
-                        progress = { message.uploadProgress!! },
-                        modifier = Modifier.align(Alignment.Center).size(48.dp),
-                        color = Color.White,
-                        trackColor = Color.White.copy(alpha = 0.3f),
-                    )
+                    UploadProgressOverlay(progress = message.uploadProgress!!)
                 }
             }
         }
@@ -609,7 +643,7 @@ internal fun AlbumBubble(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = null, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
-            shape = RoundedCornerShape(18.dp),
+            shape = VlTheme.tokens.shapes.card,
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Box {
@@ -684,25 +718,25 @@ internal fun InlinedReactionRow(
                 val cs = MaterialTheme.colorScheme
                 val tokens = VlTheme.tokens
                 // §7 чип: raised в покое → inset + плотная заливка при выборе, без glow.
-                val chipShape = RoundedCornerShape(12.dp)
+                val chipShape = VlTheme.tokens.shapes.chip
 
                 Box(
                     modifier = Modifier
                         .then(
-                            if (tokens.isBiolume && !iReacted) Modifier.vlRaised(tokens.structure, chipShape)
+                            if (tokens.structure.enabled && !iReacted) Modifier.vlRaised(tokens.structure, chipShape)
                             else Modifier
                         )
                         .clip(chipShape)
                         .background(
                             when {
-                                iReacted && tokens.isBiolume -> tokens.selectionFill
+                                iReacted && tokens.structure.enabled -> tokens.selectionFill
                                 iReacted -> cs.primary.copy(alpha = 0.2f)
                                 else -> cs.surfaceVariant
                             },
                             chipShape,
                         )
                         .then(
-                            if (tokens.isBiolume && iReacted) Modifier.vlInset(tokens.structure, chipShape)
+                            if (tokens.structure.enabled && iReacted) Modifier.vlInset(tokens.structure, chipShape)
                             else Modifier
                         )
                         .clickable(interactionSource = interactionSource, indication = null) {

@@ -27,8 +27,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlFab
 import by.iposdev.visorlink.ui.theme.VlTheme
-import by.iposdev.visorlink.ui.theme.vlSignalGlow
+import by.iposdev.visorlink.ui.theme.motionSpec
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 
@@ -53,10 +54,10 @@ fun ChatListFab(
         )
 
         val cs = MaterialTheme.colorScheme
-        val menuChipBg = cs.surfaceContainerHigh
+        val menuChipBg = cs.surfaceContainerHighest
         val menuChipText = cs.onSurface
-        val menuIconBg = cs.secondaryContainer
-        val menuIconTint = cs.onSecondaryContainer
+        val menuIconBg = cs.primary
+        val menuIconTint = cs.onPrimary
 
         fabItems.forEachIndexed { index, (icon, label, action) ->
             val delayMs = index * 50L
@@ -84,42 +85,36 @@ fun ChatListFab(
 
         val fabScale by animateFloatAsState(
             targetValue = if (isPressed) 0.85f else 1f,
-            animationSpec = spring(dampingRatio = 0.5f, stiffness = 400f),
+            animationSpec = VlTheme.tokens.motion.motionSpec<Float>(),
             label = "fab_scale"
         )
 
-        val fabBgOpen = cs.errorContainer
+        val fabBgOpen = cs.error
         val fabBgClosed = cs.primary
-
-        val fabContentOpen = cs.onErrorContainer
-        val fabContentClosed = cs.onPrimary
 
         // §7: в Biolume FAB — асимметричная M3E-форма с постоянным, но статичным
         // свечением (единственное исключение из «в покое не светится», §10).
         // Открытое состояние (крестик) — «отмена», поэтому свечения там нет.
         val tokens = VlTheme.tokens
         val fabShape = when {
-            showMenu -> RoundedCornerShape(16.dp)
+            showMenu -> tokens.shapes.button
             tokens.isBiolume -> tokens.shapes.fab
-            else -> CircleShape
+            else -> tokens.shapes.fab
         }
 
-        FloatingActionButton(
+        VlFab(
             onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); onToggle() },
-            modifier = Modifier
-                .scale(fabScale)
-                .vlSignalGlow(
-                    tokens = tokens.signal,
-                    color = cs.primary,
-                    shape = fabShape,
-                    active = !showMenu,
-                    alphaOverride = if (isPressed) tokens.signal.glowAlpha else tokens.signal.fabRestAlpha,
-                ),
+            modifier = Modifier.scale(fabScale),
             containerColor = if (showMenu) fabBgOpen else fabBgClosed,
-            contentColor = if (showMenu) fabContentOpen else fabContentClosed,
+            glowActive = !showMenu,
             shape = fabShape,
             interactionSource = interactionSource,
+            hapticEnabled = false // Handled in onClick lambda manually to use SELECTION
         ) {
+            val fabContentOpen = cs.onErrorContainer
+            val fabContentClosed = cs.onPrimary
+            val contentColor = if (showMenu) fabContentOpen else fabContentClosed
+
             AnimatedContent(
                 targetState = showMenu,
                 transitionSpec = {
@@ -128,10 +123,11 @@ fun ChatListFab(
                 },
                 label = "fab_icon_morph"
             ) { isOpen ->
-                val rotation by animateFloatAsState(targetValue = if (isOpen) 45f else 0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium), label = "fab_rot")
+                val rotation by animateFloatAsState(targetValue = if (isOpen) 45f else 0f, VlTheme.tokens.motion.motionSpec<Float>(), label = "fab_rot")
                 Icon(
                     imageVector = if (isOpen) Icons.Default.Close else Icons.Default.Edit,
                     contentDescription = null,
+                    tint = contentColor,
                     modifier = Modifier.size(24.dp).graphicsLayer { rotationZ = rotation }
                 )
             }
@@ -153,7 +149,7 @@ private fun FabMenuItem(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessHigh),
+        animationSpec = VlTheme.tokens.motion.motionSpec<Float>(),
         label = "fab_item_press"
     )
 
@@ -170,14 +166,13 @@ private fun FabMenuItem(
             Text(label, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, color = chipText)
         }
 
-        SmallFloatingActionButton(
+        VlFab(
             onClick = onClick,
+            icon = icon,
+            size = 40.dp,
             containerColor = iconBg,
             contentColor = iconTint,
-            shape = RoundedCornerShape(14.dp),
-            elevation = FloatingActionButtonDefaults.elevation(2.dp)
-        ) {
-            Icon(icon, null, modifier = Modifier.size(22.dp))
-        }
+            hapticEnabled = false // Haptic is handled in Row clickable
+        )
     }
 }

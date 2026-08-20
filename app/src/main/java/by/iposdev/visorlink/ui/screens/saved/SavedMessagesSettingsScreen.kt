@@ -22,8 +22,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlSurface
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -186,7 +188,7 @@ fun SavedMessagesSettingsScreen(
 @Composable
 private fun WarningBanner() {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = VlTheme.tokens.shapes.button,
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
@@ -228,21 +230,21 @@ private fun SetPinDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                OutlinedTextField(
+                VlTextField(
                     value = pin,
                     onValueChange = { if (it.length <= 8 && it.all(Char::isDigit)) pin = it },
-                    label = { Text("PIN (4–8 цифр)") },
+                    label = "PIN (4–8 цифр)",
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedTextField(
+                VlTextField(
                     value = confirmPin,
                     onValueChange = { if (it.length <= 8 && it.all(Char::isDigit)) confirmPin = it },
-                    label = { Text("Повторите PIN") },
+                    label = "Повторите PIN",
                     isError = mismatch,
-                    supportingText = if (mismatch) { { Text("PIN не совпадает", color = MaterialTheme.colorScheme.error) } } else null,
+                    supportingText = if (mismatch) "PIN не совпадает" else null,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     singleLine = true,

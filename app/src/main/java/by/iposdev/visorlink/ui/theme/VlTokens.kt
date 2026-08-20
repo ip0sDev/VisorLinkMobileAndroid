@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.theme
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -30,6 +31,9 @@ enum class VlStyle {
 
     /** Biolume: неоморфный рельеф + редкий сигнальный неон. */
     BIOLUME,
+
+    /** Forge: прямые углы, жёсткая тень, металл и красный сигнал. */
+    FORGE,
 }
 
 /**
@@ -61,6 +65,12 @@ data class VlStructureTokens(
     val enabled: Boolean,
     val shadowDark: Color,
     val shadowLight: Color,
+    /**
+     * true — тень рисуется без размытия, сплошным смещённым силуэтом, а inset
+     * превращается в жёсткую фаску. Так работает Forge: мягкое рассеивание
+     * противоречит индустриальному материалу, у станка тень резкая.
+     */
+    val hardEdge: Boolean = false,
     val raisedOffset: Dp = 6.dp,
     val raisedBlur: Dp = 14.dp,
     val raisedLightOffset: Dp = 5.dp,
@@ -110,7 +120,12 @@ data class VlSignalTokens(
 /**
  * Формы берутся из M3/M3E буквально (гайдлайн §2), Biolume меняет только то,
  * что спецификация допускает: stadium-кнопки и асимметричный FAB из shape-набора
- * M3 Expressive.
+ * M3 Expressive. Forge заменяет всё на прямые углы.
+ *
+ * [bar], [pill], [indicator] и [avatar] существуют потому, что раньше эти формы
+ * были зашиты в компонентах константами (`CircleShape`,
+ * `RoundedCornerShape(percent = 50)`) — и тема с прямыми углами не могла их
+ * переопределить.
  */
 @Immutable
 data class VlShapeTokens(
@@ -121,9 +136,55 @@ data class VlShapeTokens(
     val field: Shape,
     val chip: Shape,
     val fab: Shape,
+    /** Контейнер нижней навигации. */
+    val bar: Shape,
+    /** Stadium-подобное: pill навигации, трек тумблера. */
+    val pill: Shape,
+    /** Мелкие круглые элементы: точки статуса, бегунок тумблера, кружки акцентов. */
+    val indicator: Shape,
+    /** Аватары. Квадратные аватары — сильный индустриальный сигнал. */
+    val avatar: Shape,
     /** Радиус, от которого считается рельеф и сигнальный контур. */
     val cardRadius: Dp,
     val buttonRadius: Dp,
+)
+
+// ── Движение ─────────────────────────────────────────────────────────────────
+
+/** Как элемент реагирует на нажатие. Физика у тем принципиально разная. */
+enum class VlPressStyle {
+    /** M3E: лёгкое сжатие. */
+    SCALE,
+
+    /** Biolume: raised → inset, рельеф сам сообщает нажатие (гайдлайн §4.1). */
+    INSET,
+
+    /**
+     * Forge: элемент уезжает в свою же жёсткую тень — механическое «штампование».
+     * Ни масштаба, ни пружины: индустриальные механизмы не пружинят.
+     */
+    STAMP,
+}
+
+/**
+ * Тайминги и характер анимаций.
+ *
+ * Спеки не хранятся готовыми объектами, а собираются из примитивов функцией
+ * [motionSpec]: `AnimationSpec` не помечен `@Immutable`, и держать его в
+ * `@Immutable`-классе значило бы соврать компилятору о стабильности.
+ */
+@Immutable
+data class VlMotionTokens(
+    val pressStyle: VlPressStyle,
+    /** Множитель сжатия для [VlPressStyle.SCALE]. */
+    val pressScale: Float,
+    /** Смещение для [VlPressStyle.STAMP] — на столько же рисуется жёсткая тень. */
+    val pressOffset: Dp,
+    val useSpring: Boolean,
+    val dampingRatio: Float,
+    val stiffness: Float,
+    /** Длительность для линейных переходов (когда [useSpring] == false). */
+    val durationMs: Int,
 )
 
 // ── Статусные цвета (нет в M3 ColorScheme) ───────────────────────────────────
@@ -185,6 +246,7 @@ data class VlTokens(
     val structure: VlStructureTokens,
     val signal: VlSignalTokens,
     val shapes: VlShapeTokens,
+    val motion: VlMotionTokens,
     val status: VlStatusTokens,
     /** Заливка выбранного pill/чипа/сегмента — см. комментарий у [VlStatusTokens]. */
     val selectionFill: Color,
@@ -198,7 +260,25 @@ data class VlTokens(
     val reduceMotion: Boolean,
 ) {
     val isBiolume: Boolean get() = style == VlStyle.BIOLUME
+    val isForge: Boolean get() = style == VlStyle.FORGE
 }
+
+/**
+ * Анимационный спек темы. Пружина для M3E/Biolume, линейный переход для Forge —
+ * механика не пружинит.
+ */
+fun <T> VlMotionTokens.motionSpec(): androidx.compose.animation.core.FiniteAnimationSpec<T> =
+    if (useSpring) {
+        androidx.compose.animation.core.spring(
+            dampingRatio = dampingRatio,
+            stiffness = stiffness,
+        )
+    } else {
+        androidx.compose.animation.core.tween(
+            durationMillis = durationMs,
+            easing = androidx.compose.animation.core.LinearEasing,
+        )
+    }
 
 private val FallbackShapes = VlShapeTokens(
     button = RoundedCornerShape(16.dp),
@@ -207,6 +287,10 @@ private val FallbackShapes = VlShapeTokens(
     field = RoundedCornerShape(16.dp),
     chip = RoundedCornerShape(50),
     fab = RoundedCornerShape(16.dp),
+    bar = RoundedCornerShape(32.dp),
+    pill = RoundedCornerShape(percent = 50),
+    indicator = CircleShape,
+    avatar = CircleShape,
     cardRadius = 24.dp,
     buttonRadius = 16.dp,
 )
@@ -222,6 +306,15 @@ val LocalVlTokens = staticCompositionLocalOf {
         structure = VlStructureTokens.Disabled,
         signal = VlSignalTokens.Disabled,
         shapes = FallbackShapes,
+        motion = VlMotionTokens(
+            pressStyle = VlPressStyle.SCALE,
+            pressScale = 0.97f,
+            pressOffset = 0.dp,
+            useSpring = true,
+            dampingRatio = 1f,
+            stiffness = 1500f,
+            durationMs = 200,
+        ),
         status = VlStatusTokens(
             success = Color(0xFF4C9A2A),
             onSuccess = Color.White,

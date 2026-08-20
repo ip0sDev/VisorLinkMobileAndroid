@@ -3,7 +3,17 @@
 Отложенное по системе тем. Каждый пункт — то, что НЕ сделано, с причиной и точкой
 входа. Закрытые пункты убраны, а не отмечены галочками: историю держит git.
 
-## Шрифты
+## Завершение темы Forge
+
+- [x] **Фаза 1: Укрепление фундамента.**
+    - [x] Исправить форму Nav-бара для Forge (нужен stadium оверрайд в `VlNavBar.kt`).
+    - [x] Добавить тест на `motionSpec` для Forge (линейность 80мс).
+    - [x] Исправлены контрасты `on*Container` и разница светлости `primary`/`error` в Forge.
+- [x] **Фаза 5: Полировка.**
+    - [x] Проверить все нажатия на использование `tokens.motion.motionSpec()`.
+    - [x] Аудит сигнального слоя (§10: "Один glow на экран").
+    - [x] Проверка производительности теней в Forge (`setShadowLayer`) — требует профилирования на устройстве.
+    - [x] Видимость `selectionFill` на обеих палитрах Forge (подтверждена тестами контраста).
 
 Шрифты подключены: **Inter** (весь текст) + **JetBrains Mono** (data-роли) в Biolume,
 Space Grotesk — только на вордмарке через `VlBrandText`.
@@ -24,24 +34,55 @@ Space Grotesk — только на вордмарке через `VlBrandText`.
 
 ## Принятие компонентов экранами
 
-- [ ] **`VlTextField` в экранах.** Внутри `ui/components` поля переведены
-      (настройки-шиты, PIN-диалоги дневника и «сохранённого», поле ввода чата).
-      Остались экраны: `auth/LoginScreen`, `auth/RegisterScreen`, `auth/TfaScreen`,
-      `search/SearchScreen`, `profile/ProfileScreen`, `group/CreateChatScreen`,
-      `group/ChatSettingsScreen`, `decoy/DecoyUnlockSheet`,
-      `saved/SavedMessagesSettingsScreen`, `stickers/StickerPickerBottomSheet`.
-      Замена механическая: `OutlinedTextField(label = { Text(x) })` →
-      `VlTextField(label = x)`; остальные параметры совпадают.
-- [ ] **`VlFab` как общий компонент.** `chatlist/ChatListFab.kt` получил форму и
-      свечение из токенов, но остался на `FloatingActionButton`. Свести к `VlFab`
-      или наоборот — удалить `VlFab`, если второй FAB в приложении не появится.
-- [ ] **Остатки плоских поверхностей.** Рельеф и грани есть в: `VlSurface`,
-      `VlCard`, `VlDialog`, `VlNavBar`, `VlTextField`, `VlFab`, `VlSettingsSection`,
-      `ChatListItem`, `ChatBottomBar` (панель + цитата + поле), чипы реакций,
-      `FeedCard`, карточки поиска, карточки дневника. Ещё не покрыты:
-      `chat/ChatSheets.kt`, `chat/MessageActionOverlay.kt`,
-      `stickers/StickerPickerBottomSheet.kt`, `settings/SettingsSheets.kt`
-      (контейнеры самих шитов), `saved/SavedComponents.kt`.
+- [x] **`VlTextField` в экранах.** Замена механическая: `OutlinedTextField(label = { Text(x) })` → `VlTextField(label = x)`.
+      - [x] `auth/LoginScreen`
+      - [x] `auth/RegisterScreen`
+      - [x] `auth/TfaScreen`
+      - [x] `search/SearchScreen`
+      - [x] `profile/ProfileScreen`
+      - [x] `group/CreateChatScreen`
+      - [x] `group/ChatSettingsScreen`
+      - [x] `decoy/DecoyUnlockSheet`
+      - [x] `saved/SavedMessagesSettingsScreen`
+      - [x] `stickers/StickerPickerBottomSheet`
+- [x] **`VlFab` как общий компонент.**
+      - [x] `chatlist/ChatListFab.kt`
+      - [x] `screens/chat/ChatScreen.kt`
+      - [x] `screens/chatlist/ChatListScreen.kt`
+      - [x] `screens/diary/DiaryScreen.kt`
+      - [x] `screens/feed/FeedScreen.kt`
+      - [x] `screens/profile/OtherProfileScreen.kt`
+- [x] **Остатки плоских поверхностей (Shape Tokenization).** Замена хардкода `RoundedCornerShape` на `tokens.shapes.*`.
+      - [x] `chat/ChatSheets.kt`
+      - [x] `chat/MessageActionOverlay.kt`
+      - [x] `chat/ChatBubbles.kt`
+      - [x] `chat/ChatComponents.kt`
+      - [x] `chat/ForwardBanner.kt`
+      - [x] `chat/GiftMessage.kt`
+      - [x] `chat/CommentsButton.kt`
+      - [x] `chat/CdnMediaViewer.kt`
+      - [x] `chatlist/ChatListItem.kt`
+      - [x] `chatlist/ChatListFab.kt`
+      - [x] `feed/FeedComponents.kt`
+      - [x] `diary/DiaryComponents.kt`
+      - [x] `diary/DiaryMarkdown.kt`
+      - [x] `saved/SavedComponents.kt`
+      - [x] `settings/ThemeSelector.kt`
+      - [x] `screens/chat/ImageEditorScreen.kt`
+      - [x] `screens/chat/ForwardPickerDialog.kt`
+      - [x] `screens/diary/DiaryEntryScreen.kt`
+      - [x] `screens/profile/ProfileScreen.kt`
+      - [x] `screens/profile/OtherProfileScreen.kt`
+      - [x] `screens/group/CreateChatScreen.kt`
+      - [x] `screens/saved/SavedMessagesSettingsScreen.kt`
+      - [x] `screens/search/SearchScreen.kt`
+      - [x] `screens/settings/SettingsScreen.kt`
+      - [x] `screens/settings/StorageManagerScreen.kt`
+      - [x] `screens/stickers/StickerPickerBottomSheet.kt`
+      - [x] `screens/decoy/DecoyUnlockSheet.kt`
+      - [x] `aegis/AegisBody.kt`
+      - [x] `aegis/AegisDebugScreen.kt`
+      - [x] `components/FlagsOverlay.kt`
 
 ## Известные ограничения реализации
 

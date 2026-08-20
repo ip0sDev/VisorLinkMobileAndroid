@@ -2,6 +2,7 @@ package by.iposdev.visorlink.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -33,9 +34,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlPressStyle
 import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.motionSpec
+import by.iposdev.visorlink.ui.theme.motionSpec
 import by.iposdev.visorlink.ui.theme.vlHairline
 import by.iposdev.visorlink.ui.theme.vlRaised
 
@@ -65,35 +71,39 @@ fun VlNavigationBar(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val barShape: Shape = RoundedCornerShape(percent = 50)
+    val barShape: Shape = tokens.shapes.bar
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            // Рельеф рисуется ЗА границами панели — без воздуха снизу тень
-            // срезается краем экрана.
-            .padding(horizontal = 20.dp)
-            .padding(top = 8.dp, bottom = 12.dp),
+            // Рельеф рисуется ЗА границами панели. В Forge панель прижата к краям,
+            // поэтому воздух снаружи ей не нужен.
+            .padding(
+                start = if (tokens.isForge) 0.dp else 20.dp,
+                end = if (tokens.isForge) 0.dp else 20.dp,
+                top = 8.dp,
+                bottom = if (tokens.isForge) 0.dp else 12.dp
+            ),
         contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, barShape)
+                    if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, barShape)
                     else Modifier
                 )
                 .clip(barShape)
                 .background(
-                    if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerLow,
+                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
                     barShape,
                 )
                 .then(
-                    if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, barShape)
+                    if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, barShape)
                     else Modifier
                 )
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = if (tokens.isForge) 8.dp else 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             VlTabItem(
@@ -159,32 +169,39 @@ fun VlTabItem(
     val isPressed by interactionSource.collectIsPressedAsState()
 
     val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.93f else 1f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
+        targetValue = if (isPressed && tokens.motion.pressStyle != VlPressStyle.STAMP) 0.93f else 1f,
+        animationSpec = tokens.motion.motionSpec(),
         label = "tab_press",
     )
+    val stampOffset by animateDpAsState(
+        targetValue = if (isPressed && tokens.motion.pressStyle == VlPressStyle.STAMP) tokens.motion.pressOffset else 0.dp,
+        animationSpec = tokens.motion.motionSpec<Dp>(),
+        label = "tab_stamp",
+    )
     val indicatorScale by animateFloatAsState(
-        targetValue = if (selected) 1f else 0.7f,
-        animationSpec = spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+        // Forge не «вырастает», а щёлкает: масштаба нет, только заливка.
+        targetValue = if (selected || tokens.isForge) 1f else 0.7f,
+        animationSpec = tokens.motion.motionSpec(),
         label = "tab_indicator",
     )
     val indicatorColor by animateColorAsState(
         targetValue = if (selected) tokens.selectionFill else Color.Transparent,
-        animationSpec = tween(200),
+        animationSpec = tokens.motion.motionSpec(),
         label = "tab_indicator_color",
     )
     val contentColor by animateColorAsState(
         targetValue = if (selected) cs.primary else cs.onSurfaceVariant,
-        animationSpec = tween(200),
+        animationSpec = tokens.motion.motionSpec(),
         label = "tab_content",
     )
 
-    val pillShape: Shape = RoundedCornerShape(percent = 50)
+    val pillShape: Shape = tokens.shapes.pill
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(tokens.shapes.pill)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+            .offset { IntOffset(stampOffset.roundToPx(), stampOffset.roundToPx()) }
             .scale(pressScale)
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,

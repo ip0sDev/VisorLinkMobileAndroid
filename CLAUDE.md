@@ -102,9 +102,9 @@ Reading a flag needs no code change anywhere — `flags.isEnabled("some_key")` r
 
 ### Theming
 
-Two themes, selected at runtime: `AppTheme.MATERIAL3_EXPRESSIVE` (clean M3E, Material You dynamic color) and `AppTheme.BIOLUME` (neumorphic relief + rare signal glow, per `Biolume-Design-Guidelines.md`). `AppTheme.id` is the stable persistence key (`"m3e"` / `"biolume"`) — `AppTheme.fromId` is the only correct way to parse it; `ThemeViewModel` still persists `.name` in prefs, so both spellings exist on purpose.
+Three themes, selected at runtime: `AppTheme.MATERIAL3_EXPRESSIVE` (clean M3E), `AppTheme.BIOLUME` (neumorphic relief), and `AppTheme.FORGE` (industrial, square edges, hard shadows). `AppTheme.id` is the stable persistence key (`"m3e"`, `"biolume"`, `"forge"`).
 
-**The whole system hangs off one CompositionLocal.** `VisorLinkTheme` provides `LocalVlTokens` alongside `MaterialTheme`, carrying everything M3 has no role for: neumorphic depth, signal glow, `success`/`warning`, and monospace `data*` text roles. Read it as `VlTheme.tokens`. This is the load-bearing rule of the UI layer:
+**The whole system hangs off one CompositionLocal.** `VisorLinkTheme` provides `LocalVlTokens` alongside `MaterialTheme`, carrying everything M3 has no role for: neumorphic depth, hard-edge shadows (Forge), signal glow, `success`/`warning`, and monospace `data*` text roles. Read it as `VlTheme.tokens`.
 
 > **Components adapt to the theme; screens never mention it.** No composable takes `appTheme` as a parameter. A screen calls `VlSurface(...)` / `VlButton(...)` identically in both themes. The deleted theme system (pre-94a7fbb) threaded `appTheme: AppTheme` through every component signature — that is the mistake this design exists to avoid. If you find yourself wanting to pass a theme down, add a token instead.
 

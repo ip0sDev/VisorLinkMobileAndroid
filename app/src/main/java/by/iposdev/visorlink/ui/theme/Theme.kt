@@ -90,6 +90,19 @@ private val BiolumeShapeScale = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
+/**
+ * Forge: ни одного скругления, включая M3-компоненты со своей шкалой форм.
+ * `Shapes` принимает только `CornerBasedShape`, поэтому здесь нулевой радиус,
+ * а не `RectangleShape`.
+ */
+private val ForgeShapeScale = Shapes(
+    extraSmall = RoundedCornerShape(0.dp),
+    small = RoundedCornerShape(0.dp),
+    medium = RoundedCornerShape(0.dp),
+    large = RoundedCornerShape(0.dp),
+    extraLarge = RoundedCornerShape(0.dp),
+)
+
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
 /**
@@ -132,7 +145,11 @@ fun UserProfileTheme(
         typographyOverride = fontKey?.let { key ->
             CustomizationHelper.getTypography(
                 fontStr = key,
-                base = if (theme == AppTheme.BIOLUME) BiolumeTypography else Material3Typography,
+                base = when (theme) {
+                    AppTheme.BIOLUME -> BiolumeTypography
+                    AppTheme.FORGE -> ForgeTypography
+                    AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
+                },
             )
         },
         content = content,
@@ -184,6 +201,11 @@ fun VisorLinkTheme(
             base.withSignalAccent(colorPreset.seedColor, darkTheme)
         }
 
+        AppTheme.FORGE -> {
+            val base = if (darkTheme) ForgeSteelColorScheme else ForgeConcreteColorScheme
+            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+        }
+
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT ->
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
@@ -200,10 +222,25 @@ fun VisorLinkTheme(
                 structure = biolumeStructure(darkTheme),
                 signal = biolumeSignal(darkTheme),
                 shapes = BiolumeShapes,
+                motion = BiolumeMotion,
                 status = biolumeStatus(darkTheme),
                 selectionFill = biolumeSelectionFill(darkTheme, colorScheme.primary),
                 bubbles = biolumeBubbles(darkTheme, colorScheme.primary),
                 data = BiolumeDataTypography,
+                reduceMotion = reduceMotion,
+            )
+
+            AppTheme.FORGE -> VlTokens(
+                style = VlStyle.FORGE,
+                isDark = darkTheme,
+                structure = forgeStructure(darkTheme),
+                signal = forgeSignal(darkTheme),
+                shapes = ForgeShapes,
+                motion = ForgeMotion,
+                status = forgeStatus(darkTheme),
+                selectionFill = forgeSelectionFill(darkTheme, colorScheme.primary),
+                bubbles = forgeBubbles(darkTheme, colorScheme.primary),
+                data = ForgeDataTypography,
                 reduceMotion = reduceMotion,
             )
 
@@ -213,6 +250,7 @@ fun VisorLinkTheme(
                 structure = VlStructureTokens.Disabled,
                 signal = VlSignalTokens.Disabled,
                 shapes = Material3Shapes,
+                motion = Material3Motion,
                 status = VlStatusTokens(
                     success = if (darkTheme) Color(0xFF7BD88F) else Color(0xFF2E7D32),
                     onSuccess = if (darkTheme) Color(0xFF0A2E12) else Color.White,
@@ -253,9 +291,18 @@ fun VisorLinkTheme(
     CompositionLocalProvider(LocalVlTokens provides tokens) {
         MaterialTheme(
             colorScheme = colorScheme,
-            shapes = if (appTheme == AppTheme.BIOLUME) BiolumeShapeScale else Material3ShapeScale,
-            typography = typographyOverride
-                ?: if (appTheme == AppTheme.BIOLUME) BiolumeTypography else Material3Typography,
+            // Шкала форм для M3-компонентов, которые берут форму из темы, а не из
+            // наших токенов (BottomSheet, Menu, Snackbar и т.п.).
+            shapes = when (appTheme) {
+                AppTheme.BIOLUME -> BiolumeShapeScale
+                AppTheme.FORGE -> ForgeShapeScale
+                AppTheme.MATERIAL3_EXPRESSIVE -> Material3ShapeScale
+            },
+            typography = typographyOverride ?: when (appTheme) {
+                AppTheme.BIOLUME -> BiolumeTypography
+                AppTheme.FORGE -> ForgeTypography
+                AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
+            },
             content = content
         )
     }

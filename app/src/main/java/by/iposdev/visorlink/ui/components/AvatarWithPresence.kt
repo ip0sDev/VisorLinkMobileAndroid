@@ -35,7 +35,7 @@ fun AvatarWithPresence(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val shape = CircleShape
+    val shape = tokens.shapes.avatar
 
     Box(modifier = modifier.size(size)) {
         if (!avatarUrl.isNullOrEmpty()) {
@@ -73,10 +73,10 @@ fun AvatarWithPresence(
                     .vlBiopulse(
                         tokens = tokens,
                         color = tokens.status.success,
-                        shape = shape,
+                        shape = tokens.shapes.indicator,
                     )
-                    .border(width = 2.dp, color = cs.surface, shape = shape)
-                    .background(tokens.status.success, shape)
+                    .border(width = 2.dp, color = cs.surface, shape = tokens.shapes.indicator)
+                    .background(tokens.status.success, tokens.shapes.indicator)
             )
         }
     }
