@@ -17,6 +17,7 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.TagSearchResult
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
+import by.iposdev.visorlink.ui.components.VlCard
 import by.iposdev.visorlink.ui.components.chatlist.GroupChannelAvatar
 
 @Composable
@@ -24,10 +25,9 @@ fun UserResultCard(
     user: UserProfile,
     onChatClick: () -> Unit
 ) {
-    Card(
+    VlCard(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             AvatarWithPresence(avatarUrl = user.avatarUrl, displayName = user.displayName,
@@ -58,10 +58,9 @@ fun GroupResultCard(
     isJoining: Boolean,
     onJoinClick: () -> Unit
 ) {
-    Card(
+    VlCard(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -103,10 +102,9 @@ fun InviteTokenCard(
     isJoining: Boolean,
     onJoinClick: () -> Unit
 ) {
-    Card(
+    VlCard(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.Link, null, modifier = Modifier.size(32.dp), tint = MaterialTheme.colorScheme.primary)

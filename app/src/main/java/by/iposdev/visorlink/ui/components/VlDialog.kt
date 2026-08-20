@@ -1,20 +1,26 @@
 package by.iposdev.visorlink.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.vlHairline
+import by.iposdev.visorlink.ui.theme.vlRaised
 
 @Composable
 fun VlAlertDialog(
@@ -26,16 +32,13 @@ fun VlAlertDialog(
     dismissible: Boolean = true,
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
 
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(dismissOnBackPress = dismissible, dismissOnClickOutside = dismissible),
     ) {
-        VlSurface(
-            modifier = modifier,
-            isInput = false,
-            overrideColor = cs.surface,
-        ) {
+        val body: @Composable () -> Unit = {
             Column(Modifier.padding(start = 24.dp, top = 24.dp, end = 20.dp, bottom = 12.dp)) {
                 title?.let {
                     CompositionLocalProvider(
@@ -61,6 +64,25 @@ fun VlAlertDialog(
                     )
                 }
             }
+        }
+
+        if (tokens.isBiolume) {
+            // §3.1: диалоги и sheet сидят на surfaceContainerHigh; рельеф raised
+            // + нейтральная грань, никакого свечения (§10).
+            val shape = RoundedCornerShape(tokens.shapes.cardRadius + 8.dp)
+            Box(
+                modifier = modifier
+                    .vlRaised(tokens.structure, shape)
+                    .clip(shape)
+                    .background(cs.surfaceContainerHigh, shape)
+                    .vlHairline(cs.outlineVariant, shape)
+            ) { body() }
+        } else {
+            VlSurface(
+                modifier = modifier,
+                isInput = false,
+                overrideColor = cs.surface,
+            ) { body() }
         }
     }
 }

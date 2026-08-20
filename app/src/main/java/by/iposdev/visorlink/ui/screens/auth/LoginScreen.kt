@@ -20,6 +20,7 @@ import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlBrandText
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -61,10 +62,9 @@ fun LoginScreen(
                 style = MaterialTheme.typography.displayLarge,
                 color = MaterialTheme.colorScheme.primary
             )
-            Text(
+            VlBrandText(
                 text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold
+                color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
                 text = stringResource(R.string.login_subtitle),

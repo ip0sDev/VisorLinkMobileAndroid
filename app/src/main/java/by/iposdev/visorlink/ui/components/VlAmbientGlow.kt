@@ -16,8 +16,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
-import org.koin.compose.viewmodel.koinViewModel
+import by.iposdev.visorlink.ui.theme.VlTheme
 
+/**
+ * Фоновое цветное свечение-меш.
+ *
+ * В Biolume НЕ отображается: три постоянно анимированных цветных пятна прямо
+ * противоречат §1.2 («один сигнал за раз») и §10 («не подсвечивать glow-ом
+ * состояние покоя»). Там роль фона играет неоморфный рельеф, а свечение
+ * зарезервировано под focus/press/live.
+ *
+ * Также уважает системное отключение анимаций (§8).
+ */
 @Composable
 fun VlAmbientGlow(
     modifier: Modifier = Modifier,
@@ -25,6 +35,9 @@ fun VlAmbientGlow(
     simplifiedGraphics: Boolean = false
 ) {
     if (simplifiedGraphics) return
+
+    val tokens = VlTheme.tokens
+    if (tokens.isBiolume || tokens.reduceMotion) return
 
     val cs = MaterialTheme.colorScheme
     val accent = overrideAccent ?: cs.primary

@@ -3,6 +3,7 @@ package by.iposdev.visorlink.ui.theme
 import android.app.Activity
 import android.content.ContextWrapper
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -11,11 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
@@ -82,8 +79,27 @@ private val DarkM3 = darkColorScheme(
     surfaceContainerHighest = Color(0xFF353347),
 )
 
+private val Material3ShapeScale = Shapes(medium = RoundedCornerShape(16.dp))
+
+/** Сетка 4dp (§8): 8 · 16 · 24 · 28. */
+private val BiolumeShapeScale = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(24.dp),
+    extraLarge = RoundedCornerShape(28.dp),
+)
+
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
+/**
+ * Оформление, применяемое при просмотре чужого профиля или чата.
+ *
+ * PRO-пользователь может задать свои акцент, шрифт и тему; они применяются
+ * зрителю, только если [CustomizationHelper.shouldApplyCustomization] это
+ * разрешает (владелец — PRO, и зритель не отключил у себя чужие кастомизации).
+ * Иначе показываются глобальные настройки зрителя.
+ */
 @Composable
 fun UserProfileTheme(
     profile: UserProfile?,
@@ -91,30 +107,56 @@ fun UserProfileTheme(
     content: @Composable () -> Unit
 ) {
     val themeVm: ThemeViewModel = koinViewModel()
+    val currentTheme by themeVm.appTheme.collectAsState()
     val currentThemeMode by themeVm.themeMode.collectAsState()
     val globalPreset by themeVm.colorPreset.collectAsState()
 
+    val applyCustom = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
+    val cust = if (applyCustom) profile?.customization.orEmpty() else emptyMap()
+
+    val theme = (cust["theme"] as? String)
+        ?.let { CustomizationHelper.parseStyle(it) }
+        ?: currentTheme
+
+    val preset = (cust["accent"] as? String)
+        ?.let { CustomizationHelper.parseAccent(it) }
+        ?: globalPreset
+
+    val fontKey = cust["font"] as? String
+
     VisorLinkTheme(
+        appTheme = theme,
         themeMode = currentThemeMode,
-        colorPreset = globalPreset
-    ) {
-        MaterialTheme(
-            colorScheme = MaterialTheme.colorScheme,
-            shapes = MaterialTheme.shapes,
-            typography = MaterialTheme.typography,
-            content = content
-        )
-    }
+        colorPreset = preset,
+        setStatusBarColor = false,
+        typographyOverride = fontKey?.let { key ->
+            CustomizationHelper.getTypography(
+                fontStr = key,
+                base = if (theme == AppTheme.BIOLUME) BiolumeTypography else Material3Typography,
+            )
+        },
+        content = content,
+    )
 }
 
 // ── VisorLink Theme Composable ────────────────────────────────────────────────
 
+/**
+ * Единственная точка, где решается «как выглядит приложение».
+ *
+ * Помимо [MaterialTheme] раздаёт [LocalVlTokens] — расширение токенов, которого в
+ * M3 нет (неоморфный рельеф, сигнальное свечение, success/warning, data-роли).
+ * Благодаря этому компоненты в `ui/components` сами подстраиваются под тему, а
+ * экраны остаются тема-независимыми и НЕ получают `appTheme` параметром.
+ */
 @Composable
 fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
     setStatusBarColor: Boolean = true,
+    /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
+    typographyOverride: androidx.compose.material3.Typography? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -124,25 +166,83 @@ fun VisorLinkTheme(
         ThemeMode.SYSTEM -> systemDark
     }
 
-    val colorScheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT -> {
-            val ctx = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
+    val context = LocalContext.current
+
+    // Системная настройка «убрать анимации» (§6, §8): читаем один раз и раздаём
+    // вниз через токены, чтобы каждый компонент не лез в Settings сам.
+    val reduceMotion = remember(context) {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+    }
+
+    val colorScheme = when (appTheme) {
+        AppTheme.BIOLUME -> {
+            val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
+            base.withSignalAccent(colorPreset.seedColor, darkTheme)
         }
-        darkTheme -> DarkM3
-        else      -> LightM3
+
+        AppTheme.MATERIAL3_EXPRESSIVE -> when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT ->
+                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            darkTheme -> DarkM3
+            else      -> LightM3
+        }
+    }
+
+    val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme) {
+        when (appTheme) {
+            AppTheme.BIOLUME -> VlTokens(
+                style = VlStyle.BIOLUME,
+                isDark = darkTheme,
+                structure = biolumeStructure(darkTheme),
+                signal = biolumeSignal(darkTheme),
+                shapes = BiolumeShapes,
+                status = biolumeStatus(darkTheme),
+                selectionFill = biolumeSelectionFill(darkTheme, colorScheme.primary),
+                bubbles = biolumeBubbles(darkTheme, colorScheme.primary),
+                data = BiolumeDataTypography,
+                reduceMotion = reduceMotion,
+            )
+
+            AppTheme.MATERIAL3_EXPRESSIVE -> VlTokens(
+                style = VlStyle.MATERIAL3,
+                isDark = darkTheme,
+                structure = VlStructureTokens.Disabled,
+                signal = VlSignalTokens.Disabled,
+                shapes = Material3Shapes,
+                status = VlStatusTokens(
+                    success = if (darkTheme) Color(0xFF7BD88F) else Color(0xFF2E7D32),
+                    onSuccess = if (darkTheme) Color(0xFF0A2E12) else Color.White,
+                    warning = if (darkTheme) Color(0xFFFFC24E) else Color(0xFF8F6200),
+                    onWarning = if (darkTheme) Color(0xFF2B1B00) else Color.White,
+                ),
+                // M3E: непрозрачный secondaryContainer — штатный цвет active
+                // indicator в M3 Navigation Bar, ничего изобретать не нужно.
+                selectionFill = colorScheme.secondaryContainer,
+                bubbles = VlBubbleTokens(
+                    mineBg = colorScheme.primaryContainer,
+                    mineFg = colorScheme.onSurface,
+                    otherBg = colorScheme.surfaceVariant,
+                    otherFg = colorScheme.onSurface,
+                ),
+                data = Material3DataTypography,
+                reduceMotion = reduceMotion,
+            )
+        }
     }
 
     val view = LocalView.current
     if (!view.isInEditMode && setStatusBarColor) {
         SideEffect {
-            var context = view.context
-            while (context is ContextWrapper) {
-                if (context is Activity) break
-                context = context.baseContext
+            var ctx = view.context
+            while (ctx is ContextWrapper) {
+                if (ctx is Activity) break
+                ctx = ctx.baseContext
             }
-            val activity = context as? Activity
-            val window = activity?.window
+            val window = (ctx as? Activity)?.window
             if (window != null) {
                 window.statusBarColor = Color.Transparent.toArgb()
                 WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
@@ -150,10 +250,13 @@ fun VisorLinkTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        shapes = Shapes(medium = RoundedCornerShape(16.dp)),
-        typography = MaterialTheme.typography,
-        content = content
-    )
+    CompositionLocalProvider(LocalVlTokens provides tokens) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            shapes = if (appTheme == AppTheme.BIOLUME) BiolumeShapeScale else Material3ShapeScale,
+            typography = typographyOverride
+                ?: if (appTheme == AppTheme.BIOLUME) BiolumeTypography else Material3Typography,
+            content = content
+        )
+    }
 }

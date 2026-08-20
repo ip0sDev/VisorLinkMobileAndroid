@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +99,7 @@ fun PinInputDialog(
         title = { Text(stringResource(R.string.saved_pin_prompt)) },
         text = {
             Column {
-                OutlinedTextField(
+                VlTextField(
                     value = pin,
                     onValueChange = {
                         if (it.length <= 8 && it.all { char -> char.isDigit() }) {
@@ -106,7 +107,7 @@ fun PinInputDialog(
                             clearError()
                         }
                     },
-                    label = { Text(stringResource(R.string.saved_pin_hint)) },
+                    label = stringResource(R.string.saved_pin_hint),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     isError = pinError,

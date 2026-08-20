@@ -20,7 +20,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel

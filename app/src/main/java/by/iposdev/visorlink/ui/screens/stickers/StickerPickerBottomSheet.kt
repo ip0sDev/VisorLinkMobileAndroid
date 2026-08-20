@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.StickerItem
 import by.iposdev.visorlink.data.model.StickerPack
 import by.iposdev.visorlink.ui.components.VlAlertDialog

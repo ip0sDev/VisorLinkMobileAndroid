@@ -77,7 +77,7 @@ fun CustomizationScreen(
                         .height(200.dp)
                         .padding(16.dp)
                 ) {
-                   ProfilePreview(profile, currentTheme)
+                   ProfilePreview(profile)
                 }
             }
 
@@ -143,7 +143,7 @@ fun CustomizationScreen(
 }
 
 @Composable
-fun ProfilePreview(profile: UserProfile, appTheme: AppTheme) {
+fun ProfilePreview(profile: UserProfile) {
     val cust = profile.customization
     val bgUrl = cust["bgUrl"] as? String
     val layout = cust["layout"] as? String ?: "default"

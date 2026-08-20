@@ -19,7 +19,7 @@ object CustomizationHelper {
     }
 
     fun parseStyle(style: String): AppTheme {
-        return AppTheme.MATERIAL3_EXPRESSIVE
+        return AppTheme.fromId(style)
     }
 
     fun parseAccent(accent: String): ColorPreset {

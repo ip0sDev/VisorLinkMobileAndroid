@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.utils.CdnService
 import coil.compose.AsyncImage
 
@@ -42,7 +43,7 @@ fun MarkdownText(text: String) {
                     Icon(
                         imageVector = if (isChecked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
                         contentDescription = null,
-                        tint = if (isChecked) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isChecked) VlTheme.tokens.status.success else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(Modifier.width(8.dp))

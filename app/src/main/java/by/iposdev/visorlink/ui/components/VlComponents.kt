@@ -206,42 +206,17 @@ fun ColorPresetCircle(
     }
 }
 
-// ── VlAmbientGlow — Анимированное фоновое свечение ─────────────────────────
-
-@Composable
-fun VlAmbientGlow(
-    modifier: Modifier = Modifier,
-    simplifiedGraphics: Boolean = false
-) {
-    if (simplifiedGraphics) return
-
-    val cs = MaterialTheme.colorScheme
-    val isDark = cs.surface.luminance() < 0.5f
-
-    val c1 = cs.primary.copy(alpha = if (isDark) 0.10f else 0.15f)
-    val c2 = cs.tertiary.copy(alpha = if (isDark) 0.08f else 0.10f)
-    val c3 = cs.secondary.copy(alpha = if (isDark) 0.08f else 0.10f)
-
-    val infiniteTransition = rememberInfiniteTransition(label = "glow_mesh")
-
-    val o1x by infiniteTransition.animateFloat(initialValue = 0f, targetValue = 80f, animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing), RepeatMode.Reverse), label = "o1x")
-    val o1y by infiniteTransition.animateFloat(initialValue = -50f, targetValue = 30f, animationSpec = infiniteRepeatable(tween(7000, easing = LinearEasing), RepeatMode.Reverse), label = "o1y")
-
-    val o2x by infiniteTransition.animateFloat(initialValue = -40f, targetValue = 40f, animationSpec = infiniteRepeatable(tween(6500, easing = LinearEasing), RepeatMode.Reverse), label = "o2x")
-    val o2y by infiniteTransition.animateFloat(initialValue = 60f, targetValue = -20f, animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse), label = "o2y")
-
-    val o3x by infiniteTransition.animateFloat(initialValue = -30f, targetValue = 60f, animationSpec = infiniteRepeatable(tween(7500, easing = LinearEasing), RepeatMode.Reverse), label = "o3x")
-    val o3y by infiniteTransition.animateFloat(initialValue = -30f, targetValue = 50f, animationSpec = infiniteRepeatable(tween(8500, easing = LinearEasing), RepeatMode.Reverse), label = "o3y")
-
-    Box(modifier = modifier.fillMaxSize()) {
-        Box(Modifier.align(Alignment.TopEnd).offset(x = o1x.dp, y = o1y.dp).size(350.dp).background(Brush.radialGradient(listOf(c1, Color.Transparent)), CircleShape))
-        Box(Modifier.align(Alignment.BottomStart).offset(x = o2x.dp, y = o2y.dp).size(400.dp).background(Brush.radialGradient(listOf(c2, Color.Transparent)), CircleShape))
-        Box(Modifier.align(Alignment.CenterStart).offset(x = o3x.dp, y = o3y.dp).size(300.dp).background(Brush.radialGradient(listOf(c3, Color.Transparent)), CircleShape))
-    }
-}
+// VlAmbientGlow переехал в VlAmbientGlow.kt — там же добавлено отключение в
+// Biolume (§10) и уважение системного отключения анимаций. Дубль удалён:
+// два перегруженных объявления в одном пакете резолвились непредсказуемо.
 
 // ── VlGlassPanel ─────────────────────────────────────────────────────────────
 
+/**
+ * Всплывающая панель. В Biolume «стекла» нет как приёма (§0: язык строится на
+ * материале и рельефе), поэтому панель непрозрачная и приподнятая; в MATERIAL3
+ * сохраняется прежняя полупрозрачная подача.
+ */
 @Composable
 fun VlGlassPanel(
     modifier: Modifier = Modifier,
@@ -249,18 +224,43 @@ fun VlGlassPanel(
     simplifiedGraphics: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(radius)
+
+    if (tokens.isBiolume) {
+        Box(
+            modifier = modifier
+                .vlRaised(tokens.structure, shape)
+                .clip(shape)
+                // §3.1: sheet/диалог живут на surfaceContainerHigh.
+                .background(cs.surfaceContainerHigh, shape)
+                .vlHairline(cs.outlineVariant, shape)
+        ) {
+            content()
+        }
+        return
+    }
+
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(radius),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = if (simplifiedGraphics) 1f else 0.7f),
+        shape = shape,
+        color = cs.surface.copy(alpha = if (simplifiedGraphics) 1f else 0.7f),
         tonalElevation = 2.dp
     ) {
         content()
     }
 }
 
-// ── VlButton — Механическая кнопка с физическим вдавливанием ────────────────
+// ── VlButton — главный CTA (filled) ─────────────────────────────────────────
 
+/**
+ * Гайдлайн §7: заливка `primary`, форма stadium, обычная (не цветная) тень в
+ * покое; `glowPrimary` — ТОЛЬКО на время нажатия, и радиус при нажатии слегка
+ * уменьшается (shape-morph — паттерн M3E, §2).
+ *
+ * В MATERIAL3 поведение прежнее: скругление 16dp, без свечения и без морфинга.
+ */
 @Composable
 fun VlButton(
     onClick: () -> Unit,
@@ -272,15 +272,43 @@ fun VlButton(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val container = if (isDestructive) cs.error else cs.primary
+    val onContainer = if (isDestructive) cs.onError else cs.onPrimary
+
+    val shape: Shape = when {
+        !tokens.isBiolume -> RoundedCornerShape(16.dp)
+        isPressed -> tokens.shapes.buttonPressed
+        else -> tokens.shapes.button
+    }
 
     Button(
         onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
-        modifier = modifier.fillMaxWidth().height(56.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            // Свечение — ответ на действие, а не константа (§4.2).
+            .vlSignalGlow(
+                tokens = tokens.signal,
+                color = container,
+                shape = shape,
+                active = isPressed && enabled,
+            ),
         enabled = enabled,
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
+        interactionSource = interactionSource,
+        elevation = if (tokens.isBiolume) {
+            ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
+        } else {
+            ButtonDefaults.buttonElevation()
+        },
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (isDestructive) cs.error else cs.primary,
-            contentColor = if (isDestructive) cs.onError else cs.onPrimary
+            containerColor = container,
+            contentColor = onContainer
         )
     ) {
         content()
@@ -289,6 +317,11 @@ fun VlButton(
 
 // ── VlSwitch ─────────────────────────────────────────────────────────────────
 
+/**
+ * §4.1: трек «принимает» → neumorphic-inset, thumb «нажимает» → raised.
+ * Стандартный принцип soft UI, поэтому в Biolume собираем тумблер вручную —
+ * M3 `Switch` не даёт задать рельеф трека и бегунка раздельно.
+ */
 @Composable
 fun VlSwitch(
     checked: Boolean,
@@ -297,15 +330,64 @@ fun VlSwitch(
     hapticEnabled: Boolean = true,
 ) {
     val haptic = rememberHaptic()
-    Switch(
-        checked = checked,
-        onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(it) },
-        modifier = modifier,
+    val tokens = VlTheme.tokens
+
+    if (!tokens.isBiolume) {
+        Switch(
+            checked = checked,
+            onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(it) },
+            modifier = modifier,
+        )
+        return
+    }
+
+    val cs = MaterialTheme.colorScheme
+    val trackWidth = 52.dp
+    val trackHeight = 32.dp
+    val thumbSize = 24.dp
+    val trackShape = RoundedCornerShape(percent = 50)
+
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) trackWidth - thumbSize - 4.dp else 4.dp,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
+        label = "vlswitch_thumb",
     )
+    val thumbColor by animateColorAsState(
+        targetValue = if (checked) cs.primary else cs.onSurfaceVariant,
+        animationSpec = tween(200),
+        label = "vlswitch_color",
+    )
+
+    Box(
+        modifier = modifier
+            .size(width = trackWidth, height = trackHeight)
+            .clip(trackShape)
+            .background(if (checked) cs.primaryContainer else cs.surfaceContainer, trackShape)
+            .vlInset(tokens.structure, trackShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .size(thumbSize)
+                .vlRaised(tokens.structure, CircleShape)
+                .clip(CircleShape)
+                .background(thumbColor, CircleShape)
+        )
+    }
 }
 
 // ── VlSegmentedControl ───────────────────────────────────────────────────────
 
+/**
+ * §4.2 + §7: выбранный сегмент — плоская заливка `*Container` + neumorphic-inset,
+ * БЕЗ свечения (выбор сигналится цветом и формой, а не glow). Сам контейнер
+ * остаётся плоским, иначе рельеф контейнера и рельеф выбора спорят друг с другом.
+ */
 @Composable
 fun VlSegmentedControl(
     labels: List<String>,
@@ -316,8 +398,9 @@ fun VlSegmentedControl(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val shape = RoundedCornerShape(16.dp)
-    val itemShape = RoundedCornerShape(12.dp)
+    val itemShape: Shape = if (tokens.isBiolume) tokens.shapes.chip else RoundedCornerShape(12.dp)
 
     Box(
         modifier = modifier
@@ -328,15 +411,30 @@ fun VlSegmentedControl(
         Row(Modifier.fillMaxWidth()) {
             labels.forEachIndexed { i, label ->
                 val isSelected = selectedIndex == i
-                val bgColor by animateColorAsState(if (isSelected) cs.surfaceContainerHigh else Color.Transparent, tween(250), label = "seg_bg")
-                val textColor by animateColorAsState(if (isSelected) cs.primary else cs.onSurfaceVariant, tween(250), label = "seg_txt")
+                val targetBg = when {
+                    !isSelected -> Color.Transparent
+                    // Плотная заливка: primaryContainer с alpha .12 на контейнере
+                    // не читался, выбор выглядел как его отсутствие.
+                    else -> tokens.selectionFill
+                }
+                val bgColor by animateColorAsState(targetBg, tween(250), label = "seg_bg")
+                val textColor by animateColorAsState(
+                    if (isSelected) cs.primary else cs.onSurfaceVariant, tween(250), label = "seg_txt"
+                )
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .background(bgColor, itemShape)
                         .clip(itemShape)
+                        .background(bgColor, itemShape)
+                        .then(
+                            if (tokens.isBiolume && isSelected) {
+                                Modifier.vlInset(tokens.structure, itemShape)
+                            } else {
+                                Modifier
+                            }
+                        )
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() }, indication = null
                         ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onSelected(i) }
@@ -357,6 +455,7 @@ fun VlSegmentedControl(
 
 // ── VlIconTray ───────────────────────────────────────────────────────────
 
+/** §4.1: иконка-кнопка «нажимает» → в Biolume приподнята. */
 @Composable
 fun VlIconTray(
     icon: ImageVector,
@@ -366,6 +465,7 @@ fun VlIconTray(
     iconColor: Color? = null,
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val color = iconColor ?: if (isError) cs.error else if (selected) cs.primary else cs.onSurfaceVariant
     val size = 40.dp
     val shape = CircleShape
@@ -373,7 +473,13 @@ fun VlIconTray(
     Box(
         modifier = modifier
             .size(size)
-            .background(cs.surfaceContainerHigh, shape),
+            .vlStructure(
+                tokens = tokens.structure,
+                depth = if (tokens.isBiolume) VlDepth.Raised else VlDepth.Flat,
+                shape = shape,
+            )
+            .clip(shape)
+            .background(if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerHigh, shape),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
@@ -448,12 +554,27 @@ fun VlSettingsSection(
             }
         }
 
-        Surface(
+        // §7: карточка = neumorphic-raised + нейтральная грань. Это контейнер всех
+        // настроек, поэтому именно здесь рельеф даёт максимум читаемости структуры.
+        val tokens = VlTheme.tokens
+        val sectionShape = RoundedCornerShape(24.dp)
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 6.dp),
-            color = cs.surfaceContainerLow,
-            shape = RoundedCornerShape(24.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .then(
+                    if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, sectionShape)
+                    else Modifier
+                )
+                .clip(sectionShape)
+                .background(
+                    if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerLow,
+                    sectionShape,
+                )
+                .then(
+                    if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, sectionShape)
+                    else Modifier
+                )
         ) {
             Column(
                 modifier = Modifier

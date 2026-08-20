@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import kotlinx.coroutines.delay
 import java.util.UUID
 
@@ -91,7 +92,8 @@ private fun VlToastEntry(
                     Icon(
                         if (isError) Icons.Filled.Error else Icons.Filled.CheckCircle,
                         contentDescription = null,
-                        tint = if (isError) cs.error else cs.primary,
+                        // success — не M3-роль, поэтому берём из расширения токенов.
+                        tint = if (isError) cs.error else VlTheme.tokens.status.success,
                         modifier = Modifier.width(20.dp),
                     )
                     Spacer(Modifier.width(10.dp))

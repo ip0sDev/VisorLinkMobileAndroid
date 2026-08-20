@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.TopbarStatus
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
@@ -101,7 +102,7 @@ fun ChatTopBar(
                                 is TopbarStatus.Typing  -> TypingDots()
                                 is TopbarStatus.Online  -> Text(stringResource(R.string.chat_status_online),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF22C55E), fontSize = 11.sp)
+                                    color = VlTheme.tokens.status.success, fontSize = 11.sp)
                                 is TopbarStatus.LastSeen -> Text(
                                     status.ts?.let { ts ->
                                         stringResource(R.string.last_seen_topbar,

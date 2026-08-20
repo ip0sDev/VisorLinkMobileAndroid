@@ -547,6 +547,16 @@
     <string name="settings_custom_in_development">В разработке</string>
     <string name="settings_section_accent">Цветовой акцент</string>
 
+    <!-- Ярлыки вкладок нижней навигации (короткие — заголовки экранов отдельно) -->
+    <string name="nav_tab_chats">Чаты</string>
+
+    <!-- Оформление / селектор тем -->
+    <string name="settings_section_theme">Оформление</string>
+    <string name="theme_m3e_name">Material 3</string>
+    <string name="theme_m3e_desc">Чистый Material You с системными цветами</string>
+    <string name="theme_biolume_name">Biolume</string>
+    <string name="theme_biolume_desc">Неоморфный рельеф и биолюминесцентные акценты</string>
+
     <!-- Settings — Common -->
     <string name="settings_section_management">Управление</string>
     <string name="settings_section_privacy">Приватность</string>

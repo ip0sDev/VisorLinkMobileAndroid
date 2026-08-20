@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlNavigationBar
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryScreen
@@ -162,7 +163,7 @@ fun MainScreen(
                             .align(Alignment.BottomCenter)
                             .padding(bottom = innerPadding.calculateBottomPadding())
                     ) {
-                        CustomVlNavigationBar(
+                        VlNavigationBar(
                             selectedTab = selectedTab,
                             onTabSelected = { selectedTab = it },
                             diaryEnabled = diaryEnabled,
@@ -172,116 +173,6 @@ fun MainScreen(
                     }
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun CustomVlNavigationBar(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    diaryEnabled: Boolean,
-    discoverEnabled: Boolean,
-    onOpenDiary: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp)
-            .padding(bottom = 16.dp, top = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        VlSurface(
-            isButton = false,
-            customRadius = 32.dp,
-            modifier = Modifier.widthIn(min = 220.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .animateContentSize(spring(dampingRatio = 0.8f, stiffness = 300f))
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .height(60.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                VlTabItem(
-                    selected = selectedTab == 0,
-                    onClick = { onTabSelected(0) },
-                    icon = Icons.Outlined.ChatBubbleOutline,
-                    selectedIcon = Icons.Filled.ChatBubble,
-                    label = stringResource(R.string.chatlist_title),
-                    modifier = if (diaryEnabled || discoverEnabled) Modifier.weight(1f) else Modifier
-                )
-                if (discoverEnabled) {
-                    VlTabItem(
-                        selected = selectedTab == 1,
-                        onClick = { onTabSelected(1) },
-                        icon = Icons.Outlined.Explore,
-                        selectedIcon = Icons.Filled.Explore,
-                        label = stringResource(R.string.feed_title),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                if (diaryEnabled) {
-                    VlTabItem(
-                        selected = selectedTab == 2,
-                        onClick = onOpenDiary,
-                        icon = Icons.Default.Edit,
-                        selectedIcon = Icons.Default.Edit,
-                        label = stringResource(R.string.diary_title),
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun RowScope.VlTabItem(
-    selected: Boolean,
-    onClick: () -> Unit,
-    icon: ImageVector,
-    selectedIcon: ImageVector,
-    label: String,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.92f else 1f, label = "tab_scale")
-    
-    val contentColor = if (selected) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-    }
-
-    Box(
-        modifier = modifier
-            .scale(scale)
-            .clip(CircleShape)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .fillMaxHeight(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = if (selected) selectedIcon else icon,
-                contentDescription = label,
-                tint = contentColor,
-                modifier = Modifier.size(if (selected) 26.dp else 24.dp)
-            )
-            Text(
-                text = label,
-                fontSize = 10.sp,
-                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor,
-                maxLines = 1
-            )
         }
     }
 }

@@ -547,6 +547,16 @@
     <string name="settings_custom_in_development">In development</string>
     <string name="settings_section_accent">Color Accent</string>
 
+    <!-- Bottom navigation tab labels (short — the screen titles are separate) -->
+    <string name="nav_tab_chats">Chats</string>
+
+    <!-- Appearance / theme selector -->
+    <string name="settings_section_theme">Appearance</string>
+    <string name="theme_m3e_name">Material 3</string>
+    <string name="theme_m3e_desc">Clean Material You with system colors</string>
+    <string name="theme_biolume_name">Biolume</string>
+    <string name="theme_biolume_desc">Neumorphic relief and bioluminescent accents</string>
+
     <!-- Settings — Common -->
     <string name="settings_section_management">Management</string>
     <string name="settings_section_privacy">Privacy</string>

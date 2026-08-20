@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.vlHairline
+import by.iposdev.visorlink.ui.theme.vlRaised
 import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.UserProfile
@@ -60,6 +63,7 @@ fun ChatListItem(
 
     val shape = RoundedCornerShape(24.dp)
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val isDark = cs.surface.luminance() < 0.5f
 
     val titleColor = cs.onSurface
@@ -69,10 +73,23 @@ fun ChatListItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .padding(vertical = if (!isCompactList) 4.dp else 0.dp)
-            .scale(itemScale),
+            .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
+            .scale(itemScale)
+            // Рельеф требует воздуха вокруг элемента: в компактном режиме
+            // вертикальных отступов нет, тени соседних строк наложились бы друг
+            // на друга грязными полосами — там остаётся только грань.
+            .then(
+                if (tokens.isBiolume && !isCompactList) {
+                    Modifier.vlRaised(tokens.structure, shape)
+                } else {
+                    Modifier
+                }
+            )
+            .then(
+                if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, shape) else Modifier
+            ),
         shape = shape,
-        color = cs.surfaceContainerLow,
+        color = if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerLow,
         onClick = onClick,
         interactionSource = interactionSource
     ) {

@@ -57,19 +57,28 @@ import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.vlInset
+import by.iposdev.visorlink.ui.theme.vlRaised
 import java.text.SimpleDateFormat
 import java.util.*
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+// Цвета бабблов идут через VlTokens: в Biolume полупрозрачный primaryContainer
+// (alpha .12) для баббла слишком бледный, нужен плотный подмешанный тон.
+// См. VlBubbleTokens — там же объяснено, почему у бабблов нет рельефа.
+
 @Composable
 internal fun resolveBubbleColor(isMine: Boolean): Color {
-    return if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
+    val bubbles = VlTheme.tokens.bubbles
+    return if (isMine) bubbles.mineBg else bubbles.otherBg
 }
 
 @Composable
 internal fun resolveBubbleTextColor(isMine: Boolean): Color {
-    return if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val bubbles = VlTheme.tokens.bubbles
+    return if (isMine) bubbles.mineFg else bubbles.otherFg
 }
 
 @Composable
@@ -672,25 +681,47 @@ internal fun InlinedReactionRow(
             key(reaction.emoji) {
                 val iReacted = currentUid in reaction.uids
                 val interactionSource = remember { MutableInteractionSource() }
-                
-                Surface(
-                    modifier = Modifier.clickable(interactionSource = interactionSource, indication = null) {
-                        haptic.perform(HapticType.REACTION, hapticEnabled)
-                        onReact(reaction.emoji)
-                    },
-                    color = if (iReacted) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(12.dp)
+                val cs = MaterialTheme.colorScheme
+                val tokens = VlTheme.tokens
+                // §7 чип: raised в покое → inset + плотная заливка при выборе, без glow.
+                val chipShape = RoundedCornerShape(12.dp)
+
+                Box(
+                    modifier = Modifier
+                        .then(
+                            if (tokens.isBiolume && !iReacted) Modifier.vlRaised(tokens.structure, chipShape)
+                            else Modifier
+                        )
+                        .clip(chipShape)
+                        .background(
+                            when {
+                                iReacted && tokens.isBiolume -> tokens.selectionFill
+                                iReacted -> cs.primary.copy(alpha = 0.2f)
+                                else -> cs.surfaceVariant
+                            },
+                            chipShape,
+                        )
+                        .then(
+                            if (tokens.isBiolume && iReacted) Modifier.vlInset(tokens.structure, chipShape)
+                            else Modifier
+                        )
+                        .clickable(interactionSource = interactionSource, indication = null) {
+                            haptic.perform(HapticType.REACTION, hapticEnabled)
+                            onReact(reaction.emoji)
+                        }
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically, 
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(reaction.emoji, fontSize = 14.sp)
                         Text(
-                            reaction.count.toString(), fontSize = 12.sp,
+                            // Счётчик — data-роль (§1.5): цифры моноширинным.
+                            reaction.count.toString(),
+                            style = tokens.data.dataSmall,
                             fontWeight = if (iReacted) FontWeight.Bold else FontWeight.Medium,
-                            color = if (iReacted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (iReacted) cs.primary else cs.onSurfaceVariant,
                         )
                     }
                 }

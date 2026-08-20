@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.data.repository.BotRepository
 import by.iposdev.visorlink.data.repository.DmBot
 import by.iposdev.visorlink.ui.update.UpdateChannel
@@ -54,7 +55,7 @@ fun AdminPanelSheet(onDismiss: () -> Unit) {
 
             Text("🤖 Управление ботами", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = botUid, onValueChange = { botUid = it }, label = { Text("UID бота") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            VlTextField(value = botUid, onValueChange = { botUid = it }, label = "UID бота", modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminBanBot").call(mapOf("botUid" to botUid, "banned" to true)).await(); Toast.makeText(context, "Забанен", Toast.LENGTH_SHORT).show() } catch(e:Exception){Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()} finally{isSaving=false} } }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Ban") }
@@ -65,7 +66,7 @@ fun AdminPanelSheet(onDismiss: () -> Unit) {
 
             Text("📢 Каналы", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = channelId, onValueChange = { channelId = it }, label = { Text("Chat ID канала") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            VlTextField(value = channelId, onValueChange = { channelId = it }, label = "Chat ID канала", modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(Modifier.height(8.dp))
             Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminVerifyChannel").call(mapOf("chatId" to channelId, "badge" to "official")).await(); Toast.makeText(context, "Верифицирован", Toast.LENGTH_SHORT).show() } catch(e:Exception){} finally{isSaving=false} } }, modifier = Modifier.fillMaxWidth()) { Text("Верифицировать") }
 
@@ -73,7 +74,7 @@ fun AdminPanelSheet(onDismiss: () -> Unit) {
 
             Text("👤 Пользователи", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
-            OutlinedTextField(value = userUid, onValueChange = { userUid = it }, label = { Text("UID пользователя (пусто = себе)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+            VlTextField(value = userUid, onValueChange = { userUid = it }, label = "UID пользователя (пусто = себе)", modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(Modifier.height(8.dp))
             Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminGrantEternalPro").call(mapOf("targetUid" to userUid)).await(); Toast.makeText(context, "Вечный PRO выдан", Toast.LENGTH_SHORT).show() } catch(e:Exception){} finally{isSaving=false} } }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC5A059))) { Text("Выдать Вечный PRO") }
             Spacer(Modifier.height(32.dp))
@@ -157,9 +158,9 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
 
                 Text(stringResource(R.string.settings_bots_create_title), fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
-                OutlinedTextField(value = botName, onValueChange = { botName = it }, label = { Text(stringResource(R.string.settings_bots_field_name)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                VlTextField(value = botName, onValueChange = { botName = it }, label = stringResource(R.string.settings_bots_field_name), modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(12.dp))
-                OutlinedTextField(value = botUsername, onValueChange = { botUsername = it }, label = { Text(stringResource(R.string.settings_bots_field_username)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                VlTextField(value = botUsername, onValueChange = { botUsername = it }, label = stringResource(R.string.settings_bots_field_username), modifier = Modifier.fillMaxWidth(), singleLine = true)
                 Spacer(Modifier.height(16.dp))
 
                 Button(

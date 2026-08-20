@@ -27,6 +27,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.vlSignalGlow
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 
@@ -92,12 +94,31 @@ fun ChatListFab(
         val fabContentOpen = cs.onErrorContainer
         val fabContentClosed = cs.onPrimary
 
+        // §7: в Biolume FAB — асимметричная M3E-форма с постоянным, но статичным
+        // свечением (единственное исключение из «в покое не светится», §10).
+        // Открытое состояние (крестик) — «отмена», поэтому свечения там нет.
+        val tokens = VlTheme.tokens
+        val fabShape = when {
+            showMenu -> RoundedCornerShape(16.dp)
+            tokens.isBiolume -> tokens.shapes.fab
+            else -> CircleShape
+        }
+
         FloatingActionButton(
             onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); onToggle() },
-            modifier = Modifier.scale(fabScale),
+            modifier = Modifier
+                .scale(fabScale)
+                .vlSignalGlow(
+                    tokens = tokens.signal,
+                    color = cs.primary,
+                    shape = fabShape,
+                    active = !showMenu,
+                    alphaOverride = if (isPressed) tokens.signal.glowAlpha else tokens.signal.fabRestAlpha,
+                ),
             containerColor = if (showMenu) fabBgOpen else fabBgClosed,
             contentColor = if (showMenu) fabContentOpen else fabContentClosed,
-            shape = if (showMenu) RoundedCornerShape(16.dp) else CircleShape
+            shape = fabShape,
+            interactionSource = interactionSource,
         ) {
             AnimatedContent(
                 targetState = showMenu,

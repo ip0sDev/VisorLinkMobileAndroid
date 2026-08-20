@@ -560,16 +560,30 @@ sealed class MessageListItem {
     data class DateHeader(val label: String) : MessageListItem()
 }
 
-enum class AppTheme {
-    MATERIAL3_EXPRESSIVE
+/**
+ * Оформление приложения. Палитра, формы, типографика и слои глубины для каждой
+ * темы собираются в `ui/theme/Theme.kt`; компоненты в `ui/components` читают
+ * результат через `LocalVlTokens` и не зависят от этого enum напрямую.
+ *
+ * [id] стабилен и пишется в SharedPreferences / профиль PRO-кастомизации —
+ * при переименовании констант его менять нельзя.
+ */
+enum class AppTheme(val id: String) {
+    /** Чистый Material 3 Expressive: плоские поверхности, Material You. */
+    MATERIAL3_EXPRESSIVE("m3e"),
+
+    /** Biolume: неоморфный рельеф + редкий сигнальный неон (Abyss / Tidepool). */
+    BIOLUME("biolume");
+
+    companion object {
+        val Default = MATERIAL3_EXPRESSIVE
+
+        fun fromId(id: String?): AppTheme =
+            entries.firstOrNull { it.id == id } ?: Default
+    }
 }
 
-val AppTheme.isExthruFamily: Boolean get() = false
-val AppTheme.isForgeFamily: Boolean get() = false
-
-val AppTheme.isIndustrial: Boolean get() = false
-val AppTheme.isTerminal: Boolean get() = false
-val AppTheme.isComics: Boolean get() = false
+val AppTheme.isBiolume: Boolean get() = this == AppTheme.BIOLUME
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

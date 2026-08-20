@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.repository.FlagsRepository
 import org.koin.compose.koinInject
 
@@ -77,7 +78,7 @@ fun FlagsOverlay(
                                     Text(text = key, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                                     Text(
                                         text = value?.toString() ?: "null",
-                                        color = if (value == true) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = if (value == true) VlTheme.tokens.status.success else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                                 HorizontalDivider(

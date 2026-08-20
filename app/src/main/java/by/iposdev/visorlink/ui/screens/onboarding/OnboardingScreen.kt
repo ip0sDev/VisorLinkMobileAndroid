@@ -28,6 +28,7 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.ui.components.*
+import by.iposdev.visorlink.ui.components.settings.VlThemeSelector
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticType
@@ -99,7 +100,7 @@ fun OnboardingScreen(
                     0 -> WelcomePage(themeViewModel)
                     1 -> AppearancePage(themeViewModel)
                     2 -> FeaturesPage(themeViewModel, auth, db)
-                    3 -> FinalPage(appTheme)
+                    3 -> FinalPage()
                 }
             }
 
@@ -165,6 +166,7 @@ fun WelcomePage(themeViewModel: ThemeViewModel) {
 @Composable
 fun AppearancePage(themeViewModel: ThemeViewModel) {
     val appTheme by themeViewModel.appTheme.collectAsState()
+    val currentMode by themeViewModel.themeMode.collectAsState()
     val currentPreset by themeViewModel.colorPreset.collectAsState()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
@@ -187,7 +189,13 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
         Spacer(Modifier.height(32.dp))
 
         VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-            VlOptionRow(icon = Icons.Default.AutoAwesome, label = "Expressive", desc = "Material 3 Next", selected = appTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 0, total = 1, onClick = { themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
+            VlThemeSelector(
+                selected = appTheme,
+                onSelect = { themeViewModel.setTheme(it) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                themeMode = currentMode,
+                colorPreset = currentPreset,
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -278,7 +286,7 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
 }
 
 @Composable
-fun FinalPage(appTheme: AppTheme) {
+fun FinalPage() {
     Column(
         Modifier
             .fillMaxSize()

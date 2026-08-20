@@ -72,6 +72,7 @@ fun SettingsScreen(
     flagsRepository: FlagsRepository = koinInject(),
     proViewModel: ProViewModel = koinViewModel()
 ) {
+    val currentTheme by themeViewModel.appTheme.collectAsState()
     val currentMode by themeViewModel.themeMode.collectAsState()
     val currentPreset by themeViewModel.colorPreset.collectAsState()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -166,6 +167,16 @@ fun SettingsScreen(
                 VlSettingsSection(title = stringResource(R.string.settings_custom_title), isPremium = true) {
                     VlSettingsItem(icon = Icons.Default.Brush, title = stringResource(R.string.settings_custom_design_title), subtitle = stringResource(R.string.settings_custom_design_sub), onClick = { if (profile?.isProActive() == true) onOpenCustomization() else Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show() })
                     VlSettingsItem(icon = Icons.Default.HideImage, title = stringResource(R.string.settings_custom_hide_title), subtitle = stringResource(R.string.settings_custom_hide_sub), trailing = { VlSwitch(checked = profile?.ignoreCustomizations ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateIgnoreCustomizations(v) } }) })
+                }
+
+                VlSettingsSection(title = stringResource(R.string.settings_section_theme)) {
+                    VlThemeSelector(
+                        selected = currentTheme,
+                        onSelect = { themeViewModel.setTheme(it) },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        themeMode = currentMode,
+                        colorPreset = currentPreset,
+                    )
                 }
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {

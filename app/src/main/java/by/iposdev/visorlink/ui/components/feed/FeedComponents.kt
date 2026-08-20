@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlCard
 import by.iposdev.visorlink.data.model.FeedItem
 import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.utils.HapticType
@@ -66,12 +67,12 @@ fun FeedCard(
     var showMenu by remember { mutableStateOf(false) }
     var menuOffset by remember { mutableStateOf(Offset.Zero) }
 
-    Surface(
+    VlCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         shape = RoundedCornerShape(24.dp),
-        color = cs.surfaceContainerLow,
+        containerColor = cs.surfaceContainerLow,
         onClick = onClick
     ) {
         Column {

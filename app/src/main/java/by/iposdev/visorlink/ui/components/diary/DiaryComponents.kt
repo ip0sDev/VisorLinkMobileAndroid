@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.screens.diary.DiaryStats
@@ -151,7 +152,7 @@ fun DiaryPinDialog(
         title = { Text(stringResource(R.string.diary_pin_prompt)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
+                VlTextField(
                     value = pin,
                     onValueChange = { 
                         if (it.length <= 8 && it.all { c -> c.isDigit() }) {
@@ -159,7 +160,7 @@ fun DiaryPinDialog(
                             if (pinError) clearError()
                         }
                     },
-                    label = { Text("PIN") },
+                    label = "PIN",
                     isError = pinError,
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),

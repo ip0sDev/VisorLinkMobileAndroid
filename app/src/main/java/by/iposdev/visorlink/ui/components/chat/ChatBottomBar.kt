@@ -29,6 +29,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.vlHairline
+import by.iposdev.visorlink.ui.theme.vlInset
+import by.iposdev.visorlink.ui.theme.vlRaised
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.screens.chat.ChatUiState
 import by.iposdev.visorlink.utils.HapticType
@@ -62,6 +66,7 @@ fun ChatBottomBar(
     onClearReply: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
 
     Column(
@@ -84,20 +89,35 @@ fun ChatBottomBar(
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
+            val panelShape = RoundedCornerShape(32.dp)
             Column(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(32.dp))
+                    .then(
+                        if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, panelShape)
+                        else Modifier
+                    )
+                    .clip(panelShape)
                     .background(cs.surfaceContainerLow)
+                    .then(
+                        if (tokens.isBiolume) Modifier.vlHairline(cs.outlineVariant, panelShape)
+                        else Modifier
+                    )
                     .padding(4.dp)
             ) {
                 AnimatedVisibility(visible = uiState.replyingTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
                     uiState.replyingTo?.let { msg ->
+                        // Цитата «принимает» контент чужого сообщения → inset (§4.1).
+                        val quoteShape = RoundedCornerShape(28.dp)
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 4.dp)
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(cs.surfaceContainerHighest)
+                                .clip(quoteShape)
+                                .background(
+                                    if (tokens.isBiolume) cs.surfaceContainer
+                                    else cs.surfaceContainerHighest
+                                )
+                                .vlInset(tokens.structure, quoteShape)
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -138,11 +158,18 @@ fun ChatBottomBar(
                                 }
                             }
 
+                            // §4.1: поле ввода «принимает» → в Biolume врезано.
+                            // Счётчик символов — data-роль (§1.5, §5), поэтому моноширинный.
+                            val inputShape = RoundedCornerShape(28.dp)
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(28.dp))
-                                    .background(cs.surfaceContainerHighest)
+                                    .clip(inputShape)
+                                    .background(
+                                        if (tokens.isBiolume) cs.surfaceContainer
+                                        else cs.surfaceContainerHighest
+                                    )
+                                    .vlInset(tokens.structure, inputShape)
                                     .padding(start = 16.dp, end = 4.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.Bottom) {
@@ -165,7 +192,8 @@ fun ChatBottomBar(
 
                                     if (inputText.isNotEmpty()) {
                                         Text(
-                                            "${inputText.length}/2000", fontSize = 11.sp,
+                                            "${inputText.length}/2000",
+                                            style = tokens.data.dataSmall,
                                             color = if (inputText.length >= 2000) cs.error else cs.onSurfaceVariant,
                                             modifier = Modifier.padding(bottom = 16.dp, end = 6.dp),
                                         )
