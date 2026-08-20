@@ -81,7 +81,7 @@ class OutboxManagerTest {
         val concurrentCount = AtomicInteger(0)
         val maxConcurrent = AtomicInteger(0)
 
-        whenever(cdnUploader.uploadFile(any(), any())).thenAnswer {
+        whenever(cdnUploader.uploadFile(any(), any(), any())).thenAnswer {
             val current = concurrentCount.incrementAndGet()
             if (current > maxConcurrent.get()) {
                 maxConcurrent.set(current)
@@ -100,7 +100,7 @@ class OutboxManagerTest {
         testScheduler.advanceTimeBy(100)
         testScheduler.runCurrent()
         
-        verify(cdnUploader, timeout(2000).atLeast(2)).uploadFile(any(), any())
+        verify(cdnUploader, timeout(2000).atLeast(2)).uploadFile(any(), any(), any())
         outboxManager.stopProcessing()
     }
 
