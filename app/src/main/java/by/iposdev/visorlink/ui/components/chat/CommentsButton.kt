@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens.chat
+package by.iposdev.visorlink.ui.components.chat
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -17,24 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.Message
-import by.iposdev.visorlink.data.model.commentsAllowed
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 
-/**
- * Button shown below a channel post bubble.
- * Displays the live comment count and is greyed out when comments are off.
- *
- * Usage in MessageBubble / ImageBubble (channel posts):
- *
- *   if (chatType == ChatType.CHANNEL && channel != null) {
- *       CommentsButton(
- *           post = message,
- *           channelAllowsComments = channel.settings.allowComments,
- *           onClick = { onOpenComments(chatId, message.id) }
- *       )
- *   }
- */
 @Composable
 fun CommentsButton(
     post: Message,

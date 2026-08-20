@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens.diary
+package by.iposdev.visorlink.ui.components.diary
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*

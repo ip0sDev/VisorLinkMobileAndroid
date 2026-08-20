@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens.chat
+package by.iposdev.visorlink.ui.components.chat
 
 import android.util.Patterns
 import androidx.compose.animation.*
@@ -33,7 +33,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -52,10 +51,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.*
-import by.iposdev.visorlink.ui.screens.stickers.AddStickerPackBanner
-import by.iposdev.visorlink.ui.theme.ExthruSenderNameStyle
-import by.iposdev.visorlink.ui.theme.comicHalftone
-import by.iposdev.visorlink.ui.theme.win95TitleBar
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.utils.HapticType
@@ -68,36 +63,18 @@ import java.util.*
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 @Composable
-internal fun resolveBubbleColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
-    return when {
-        isExthru -> if (isMine) ExthruChat.bubbleMine(isDark) else ExthruChat.bubbleOther(isDark)
-        isOneUi -> {
-            if (isMine) (if (isDark) OneUiChat.BubbleMineDark else OneUiChat.BubbleMine)
-            else (if (isDark) OneUiChat.BubbleOtherDark else OneUiChat.BubbleOther)
-        }
-        else -> if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
-    }
+internal fun resolveBubbleColor(isMine: Boolean): Color {
+    return if (isMine) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
 }
 
 @Composable
-internal fun resolveBubbleTextColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
-    return when {
-        isExthru -> ExthruChat.textPrimary(isDark)
-        isOneUi -> {
-            if (isMine) Color.White
-            else (if (isDark) OneUiChat.TextPrimaryDark else OneUiChat.TextPrimary)
-        }
-        else -> if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-    }
+internal fun resolveBubbleTextColor(isMine: Boolean): Color {
+    return if (isMine) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 @Composable
-internal fun resolveLinkColor(isMine: Boolean, isOneUi: Boolean, isExthru: Boolean, isDark: Boolean): Color {
-    return when {
-        isExthru -> ExthruChat.Accent
-        isOneUi -> if (isDark) OneUiChat.BlueDark else OneUiChat.Blue
-        else -> MaterialTheme.colorScheme.primary
-    }
+internal fun resolveLinkColor(isMine: Boolean): Color {
+    return MaterialTheme.colorScheme.primary
 }
 
 fun Modifier.messageGestures(
@@ -146,13 +123,11 @@ fun Modifier.messageGestures(
 internal fun ReplyPreview(
     reply: ReplyData,
     isMine: Boolean,
-    isExthru: Boolean,
-    isDark: Boolean,
     onMedia: Boolean = false,
     onClick: () -> Unit
 ) {
-    val accentColor = if (onMedia) Color.White else if (isExthru) ExthruChat.Accent else if (isMine) Color.White else MaterialTheme.colorScheme.primary
-    val secondaryColor = if (onMedia) Color.White.copy(0.7f) else if (isExthru) ExthruChat.textSecondary(isDark) else if (isMine) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val accentColor = if (onMedia) Color.White else MaterialTheme.colorScheme.primary
+    val secondaryColor = if (onMedia) Color.White.copy(0.7f) else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
         modifier = Modifier
@@ -263,7 +238,7 @@ private fun AlbumGrid(
 }
 
 @Composable
-internal fun MessageBubble(
+fun MessageBubble(
     message: Message,
     isMine: Boolean,
     otherUid: String,
@@ -272,12 +247,6 @@ internal fun MessageBubble(
     hapticEnabled: Boolean,
     showSenderName: Boolean,
     voicePlayback: VoicePlaybackState,
-    appTheme: AppTheme,
-    isOneUi: Boolean = false,
-    isExthru: Boolean = false,
-    isForge: Boolean = false,
-    isDark: Boolean = false,
-    hasWallpaper: Boolean = false,
     onPlayVoice: (url: String, durationSec: Int) -> Unit,
     onSeekVoice: (Float) -> Unit,
     onLongPressStart: (Offset) -> Unit,
@@ -293,7 +262,6 @@ internal fun MessageBubble(
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
-    var showPackBanner by remember(message.id) { mutableStateOf(false) }
 
     val uploadProgressModifier = if (message.uploadProgress != null) {
         Modifier.alpha(0.6f)
@@ -313,7 +281,6 @@ internal fun MessageBubble(
                     VideoBubble(
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
-                        appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hasWallpaper = hasWallpaper,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onMediaTap = onMediaTap,
@@ -324,7 +291,7 @@ internal fun MessageBubble(
                 message.type == MessageType.ALBUM && !message.deleted -> {
                     AlbumBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
-                        chatType = chatType, hapticEnabled = hapticEnabled, appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
+                        chatType = chatType, hapticEnabled = hapticEnabled,
                         onAlbumTap = onAlbumTap,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
@@ -336,7 +303,6 @@ internal fun MessageBubble(
                     ImageBubble(
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
-                        appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hasWallpaper = hasWallpaper,
                         onTap = { url -> onMediaTap(url, MessageType.IMAGE) },
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
@@ -346,24 +312,19 @@ internal fun MessageBubble(
                 }
                 message.type == MessageType.STICKER && !message.deleted -> {
                     StickerBubble(
-                        message = message, isMine = isMine, currentUid = currentUid, appTheme = appTheme,
-                        isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
-                        hapticEnabled = hapticEnabled, showPackBanner = showPackBanner,
-                        onTogglePackBanner = { showPackBanner = !showPackBanner },
+                        message = message, isMine = isMine, currentUid = currentUid,
+                        hapticEnabled = hapticEnabled,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd, onReact = onReact,
                     )
-                    if (showPackBanner) {
-                        AddStickerPackBanner(packId = message.packId ?: "", packName = message.packName ?: "", packEmoji = message.packEmoji ?: "")
-                    }
                     return@Box
                 }
                 else -> {
                     TextBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled, showSenderName = showSenderName,
-                        voicePlayback = voicePlayback, appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark,
-                        isReadByOther = isReadByOther, hasWallpaper = hasWallpaper,
+                        voicePlayback = voicePlayback,
+                        isReadByOther = isReadByOther,
                         onPlayVoice = onPlayVoice, onSeekVoice = onSeekVoice,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
@@ -379,16 +340,15 @@ internal fun MessageBubble(
 @Composable
 internal fun TextBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
-    showSenderName: Boolean, voicePlayback: VoicePlaybackState, appTheme: AppTheme, isOneUi: Boolean = false,
-    isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, isReadByOther: Boolean = false,
-    hasWallpaper: Boolean = false, onPlayVoice: (String, Int) -> Unit, onSeekVoice: (Float) -> Unit,
+    showSenderName: Boolean, voicePlayback: VoicePlaybackState, isReadByOther: Boolean = false,
+    onPlayVoice: (String, Int) -> Unit, onSeekVoice: (Float) -> Unit,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
-    val bubbleColor = resolveBubbleColor(isMine, isOneUi, isExthru, isDark)
-    val textColor   = resolveBubbleTextColor(isMine, isOneUi, isExthru, isDark)
-    val linkColor   = resolveLinkColor(isMine, isOneUi, isExthru, isDark)
+    val bubbleColor = resolveBubbleColor(isMine)
+    val textColor   = resolveBubbleTextColor(isMine)
+    val linkColor   = resolveLinkColor(isMine)
 
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -398,7 +358,6 @@ internal fun TextBubble(
     ) {
         val bubbleModifier = Modifier
             .widthIn(max = 270.dp)
-            .then(if (appTheme == AppTheme.FORGE_COMICS) Modifier.comicHalftone(color = textColor.copy(alpha = 0.05f)) else Modifier)
             .messageGestures(
                 messageId = message.id,
                 interactionSource = interactionSource,
@@ -408,35 +367,29 @@ internal fun TextBubble(
                 onLongPressEnd = onLongPressEnd
             )
 
-        VlSurface(
-            appTheme = appTheme,
+        Surface(
             modifier = bubbleModifier,
-            customRadius = if (isForge) (if (appTheme == AppTheme.FORGE_COMICS) 12.dp else 0.dp) else null,
-            overrideColor = if (hasWallpaper && isExthru) bubbleColor.copy(alpha = if (isDark) 0.85f else 0.75f) else bubbleColor
+            shape = RoundedCornerShape(16.dp),
+            color = bubbleColor
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
                 if (showSenderName && !isMine) {
-                    val senderColor = if (isExthru) ExthruChat.Accent else MaterialTheme.colorScheme.primary
                     Text(
                         "@${message.senderUsername}",
-                        style      = if (isExthru) ExthruSenderNameStyle else MaterialTheme.typography.labelSmall,
-                        color      = senderColor,
+                        style      = MaterialTheme.typography.labelSmall,
+                        color      = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold,
                         modifier   = Modifier.padding(bottom = 2.dp),
                     )
                 }
 
                 message.replyData?.let { reply ->
-                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onClick = { reply.id?.let { id -> onReplyClick(id) } })
+                    ReplyPreview(reply = reply, isMine = isMine, onClick = { reply.id?.let { id -> onReplyClick(id) } })
                     Spacer(Modifier.height(4.dp))
                 }
 
-                if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
-                } else {
-                    message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
-                    }
+                message.parsedForwardFrom?.let { fwd ->
+                    ForwardBanner(forwardFrom = fwd, isMine = isMine, modifier = Modifier.fillMaxWidth())
                 }
 
                 if (message.deleted) {
@@ -466,9 +419,9 @@ internal fun TextBubble(
                                 targetState = isReadByOther,
                                 transitionSpec = { scaleIn(initialScale = 0.5f, animationSpec = spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(targetScale = 0.5f) + fadeOut() },
                                 label = "read_receipt",
-                            ) { read -> ReadReceipt(isRead = read, isExthru = isExthru, isDark = isDark) }
+                            ) { read -> ReadReceipt(isRead = read) }
                         } else {
-                            MessageStatusIcon(status = message.status, isExthru = isExthru, isDark = isDark)
+                            MessageStatusIcon(status = message.status)
                         }
                     }
                 }
@@ -482,7 +435,7 @@ internal fun TextBubble(
         ) {
             InlinedReactionRow(
                 reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-                appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
+                hapticEnabled = hapticEnabled,
                 onReact = onReact, onShowPicker = { /* no-op for now */ },
             )
         }
@@ -496,7 +449,6 @@ internal fun TextBubble(
 @Composable
 internal fun VideoBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, 
-    appTheme: AppTheme, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onMediaTap: (String, String) -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
@@ -508,62 +460,56 @@ internal fun VideoBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        VlSurface(
-            appTheme = appTheme,
+        Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { resolvedUrl?.let { onMediaTap(it, message.type) } },
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
-            customRadius = if (isForge) (if (appTheme == AppTheme.FORGE_COMICS) 18.dp else 0.dp) else 18.dp
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            CdnMediaViewer(
-                mediaId = message.cdnMediaId,
-                type = message.type,
-                localFile = message.localFile,
-                modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                onClick = { resolvedUrl?.let { onMediaTap(it, message.type) } }
-            )
-
-            Column(modifier = Modifier.matchParentSize()) {
-                if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
-                } else {
-                    message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-
-                message.replyData?.let { reply ->
-                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
-                }
-                Spacer(Modifier.weight(1f))
-                Box(
-                    modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                            style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                        )
-                        if (isMine) ReadReceipt(isRead = isReadByOther, isExthru = true, isDark = true)
-                    }
-                }
-            }
-
-            if (message.uploadProgress != null) {
-                CircularProgressIndicator(
-                    progress = { message.uploadProgress!! },
-                    modifier = Modifier.align(Alignment.Center).size(48.dp),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.3f),
+            Box {
+                CdnMediaViewer(
+                    mediaId = message.cdnMediaId,
+                    type = message.type,
+                    localFile = message.localFile,
+                    modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
+                    onClick = { resolvedUrl?.let { onMediaTap(it, message.type) } }
                 )
+
+                Column(modifier = Modifier.matchParentSize()) {
+                    message.replyData?.let { reply ->
+                        ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                            )
+                            if (isMine) ReadReceipt(isRead = isReadByOther)
+                        }
+                    }
+                }
+
+                if (message.uploadProgress != null) {
+                    CircularProgressIndicator(
+                        progress = { message.uploadProgress!! },
+                        modifier = Modifier.align(Alignment.Center).size(48.dp),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.3f),
+                    )
+                }
             }
         }
 
         InlinedReactionRow(
             reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-            appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
+            hapticEnabled = hapticEnabled,
             onReact = onReact, onShowPicker = { /* no-op */ }
         )
     }
@@ -572,7 +518,6 @@ internal fun VideoBubble(
 @Composable
 internal fun ImageBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, 
-    appTheme: AppTheme, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false,
     onTap: (String) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
@@ -583,61 +528,55 @@ internal fun ImageBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        VlSurface(
-            appTheme = appTheme,
+        Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { resolvedUrl?.let { onTap(it) } },
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
-            customRadius = if (isForge) (if (appTheme == AppTheme.FORGE_COMICS) 18.dp else 0.dp) else 18.dp
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            CachedImage(
-                model = resolvedUrl,
-                contentDescription = null,
-                modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                contentScale = ContentScale.Crop
-            )
-
-            Column(modifier = Modifier.matchParentSize()) {
-                if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
-                } else {
-                    message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
-                    }
-                }
-
-                message.replyData?.let { reply ->
-                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
-                }
-                Spacer(Modifier.weight(1f))
-                Box(
-                    modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                            style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                        )
-                        if (isMine) ReadReceipt(isRead = isReadByOther, isExthru = true, isDark = true)
-                    }
-                }
-            }
-
-            if (message.uploadProgress != null) {
-                CircularProgressIndicator(
-                    progress = { message.uploadProgress!! },
-                    modifier = Modifier.align(Alignment.Center).size(48.dp),
-                    color = Color.White,
-                    trackColor = Color.White.copy(alpha = 0.3f),
+            Box {
+                CachedImage(
+                    model = resolvedUrl,
+                    contentDescription = null,
+                    modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
+                    contentScale = ContentScale.Crop
                 )
+
+                Column(modifier = Modifier.matchParentSize()) {
+                    message.replyData?.let { reply ->
+                        ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                            )
+                            if (isMine) ReadReceipt(isRead = isReadByOther)
+                        }
+                    }
+                }
+
+                if (message.uploadProgress != null) {
+                    CircularProgressIndicator(
+                        progress = { message.uploadProgress!! },
+                        modifier = Modifier.align(Alignment.Center).size(48.dp),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.3f),
+                    )
+                }
             }
         }
 
         InlinedReactionRow(
             reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-            appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
+            hapticEnabled = hapticEnabled,
             onReact = onReact, onShowPicker = { /* no-op */ }
         )
     }
@@ -646,7 +585,6 @@ internal fun ImageBubble(
 @Composable
 internal fun AlbumBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
-    appTheme: AppTheme, isOneUi: Boolean, isExthru: Boolean, isForge: Boolean, isDark: Boolean,
     onAlbumTap: (List<AlbumImage>, Int) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
 ) {
@@ -657,38 +595,32 @@ internal fun AlbumBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        VlSurface(
-            appTheme = appTheme,
+        Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = null, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
-            customRadius = if (isForge) (if (appTheme == AppTheme.FORGE_COMICS) 18.dp else 0.dp) else 18.dp
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
         ) {
-            AlbumGrid(
-                images = message.images, revealedIndices = revealedIndices.value,
-                onReveal = { idx -> revealedIndices.value = revealedIndices.value + idx },
-                onClick = { idx -> onAlbumTap(message.images, idx) }
-            )
+            Box {
+                AlbumGrid(
+                    images = message.images, revealedIndices = revealedIndices.value,
+                    onReveal = { idx -> revealedIndices.value = revealedIndices.value + idx },
+                    onClick = { idx -> onAlbumTap(message.images, idx) }
+                )
 
-            Column(modifier = Modifier.matchParentSize()) {
-                if (message.tg_forwarded == true) {
-                    TelegramForwardBanner(message = message, modifier = Modifier.fillMaxWidth())
-                } else {
-                    message.parsedForwardFrom?.let { fwd ->
-                        ForwardBanner(forwardFrom = fwd, isMine = isMine, isExthru = isExthru, isDark = isDark, modifier = Modifier.fillMaxWidth())
+                Column(modifier = Modifier.matchParentSize()) {
+                    message.replyData?.let { reply ->
+                        ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
                     }
-                }
-
-                message.replyData?.let { reply ->
-                    ReplyPreview(reply = reply, isMine = isMine, isExthru = isExthru, isDark = isDark, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
                 }
             }
         }
 
         InlinedReactionRow(
             reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-            appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
+            hapticEnabled = hapticEnabled,
             onReact = onReact, onShowPicker = { /* no-op */ }
         )
     }
@@ -696,8 +628,8 @@ internal fun AlbumBubble(
 
 @Composable
 internal fun StickerBubble(
-    message: Message, isMine: Boolean, currentUid: String, appTheme: AppTheme, isOneUi: Boolean, isExthru: Boolean, isForge: Boolean, isDark: Boolean,
-    hapticEnabled: Boolean, showPackBanner: Boolean, onTogglePackBanner: () -> Unit,
+    message: Message, isMine: Boolean, currentUid: String,
+    hapticEnabled: Boolean,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit,
 ) {
@@ -710,7 +642,7 @@ internal fun StickerBubble(
         Box(
             modifier = Modifier.size(160.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = onTogglePackBanner, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
+                onTap = { /* no-op */ }, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             contentAlignment = Alignment.Center
         ) {
@@ -719,7 +651,7 @@ internal fun StickerBubble(
 
         InlinedReactionRow(
             reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
-            appTheme = appTheme, isOneUi = isOneUi, isExthru = isExthru, isForge = isForge, isDark = isDark, hapticEnabled = hapticEnabled,
+            hapticEnabled = hapticEnabled,
             onReact = onReact, onShowPicker = { /* no-op */ }
         )
     }
@@ -727,7 +659,7 @@ internal fun StickerBubble(
 
 @Composable
 internal fun InlinedReactionRow(
-    reactions: List<Reaction>, currentUid: String, isMine: Boolean, appTheme: AppTheme, isOneUi: Boolean, isExthru: Boolean, isForge: Boolean = false, isDark: Boolean, hapticEnabled: Boolean, onReact: (String) -> Unit, onShowPicker: () -> Unit,
+    reactions: List<Reaction>, currentUid: String, isMine: Boolean, hapticEnabled: Boolean, onReact: (String) -> Unit, onShowPicker: () -> Unit,
 ) {
     val haptic = rememberHaptic()
 
@@ -741,14 +673,13 @@ internal fun InlinedReactionRow(
                 val iReacted = currentUid in reaction.uids
                 val interactionSource = remember { MutableInteractionSource() }
                 
-                VlSurface(
-                    appTheme = appTheme,
+                Surface(
                     modifier = Modifier.clickable(interactionSource = interactionSource, indication = null) {
                         haptic.perform(HapticType.REACTION, hapticEnabled)
                         onReact(reaction.emoji)
                     },
-                    overrideColor = if (iReacted) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else null,
-                    customRadius = if (isForge) 0.dp else 12.dp
+                    color = if (iReacted) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -768,48 +699,6 @@ internal fun InlinedReactionRow(
     }
 }
 
-@Composable
-internal fun DateSeparator(label: String, isOneUi: Boolean = false, isExthru: Boolean = false, isForge: Boolean = false, isDark: Boolean = false, hasWallpaper: Boolean = false) {
-    Box(Modifier.fillMaxWidth().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
-        val effectiveTheme = if (isForge) AppTheme.FORGE_INDUSTRIAL else if (isExthru) AppTheme.BIOLUME else AppTheme.MATERIAL3_EXPRESSIVE
-        
-        VlSurface(
-            appTheme = effectiveTheme,
-            overrideColor = Color.Black.copy(alpha = if(isDark) 0.3f else 0.1f),
-            customRadius = if (isForge) 0.dp else 14.dp
-        ) {
-            Text(
-                text     = label,
-                style    = MaterialTheme.typography.labelSmall,
-                color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-            )
-        }
-    }
-}
-
-@Composable
-internal fun MessageStatusIcon(status: String, isExthru: Boolean = false, isDark: Boolean = false) {
-    val icon = when (status) {
-        SendStatus.SENDING -> Icons.Default.Schedule
-        SendStatus.QUEUED  -> Icons.Default.Schedule
-        SendStatus.ERROR   -> Icons.Default.ErrorOutline
-        else               -> Icons.Default.Done
-    }
-    val tint = when (status) {
-        SendStatus.SENDING, SendStatus.QUEUED -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        SendStatus.ERROR   -> MaterialTheme.colorScheme.error
-        else               -> MaterialTheme.colorScheme.primary
-    }
-
-    Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(13.dp), tint = tint)
-}
-
-@Composable
-internal fun ReadReceipt(isRead: Boolean, isExthru: Boolean = false, isDark: Boolean = false) {
-    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(15.dp), tint = if (isRead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-}
 
 @Composable
 internal fun LinkifiedText(

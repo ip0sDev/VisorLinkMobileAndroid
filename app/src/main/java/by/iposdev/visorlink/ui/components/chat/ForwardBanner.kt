@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens.chat
+package by.iposdev.visorlink.ui.components.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,21 +31,11 @@ import by.iposdev.visorlink.data.model.Message
 fun ForwardBanner(
     forwardFrom: ForwardFrom,
     isMine: Boolean,
-    isExthru: Boolean = false,
-    isDark: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
 ) {
-    val accentColor = when {
-        isExthru -> ExthruChat.Accent
-        isMine   -> Color.White.copy(alpha = 0.85f)
-        else     -> MaterialTheme.colorScheme.primary
-    }
-    val bgColor = when {
-        isExthru -> accentColor.copy(alpha = 0.12f)
-        isMine   -> Color.White.copy(alpha = 0.15f)
-        else     -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-    }
+    val accentColor = if (isMine) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.primary
+    val bgColor = if (isMine) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
 
     val label = buildString {
         append("↩ Переслано")

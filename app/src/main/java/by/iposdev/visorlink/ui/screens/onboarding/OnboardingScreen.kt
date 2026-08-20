@@ -53,7 +53,7 @@ fun OnboardingScreen(
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
-    val scaffoldBg = if (appTheme == AppTheme.BIOLUME || appTheme == AppTheme.FORGE) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
+    val scaffoldBg = MaterialTheme.colorScheme.surface
 
     Scaffold(
         containerColor = scaffoldBg,
@@ -66,7 +66,6 @@ fun OnboardingScreen(
             ) {
                 if (pagerState.currentPage < 3) {
                     VlButton(
-                        appTheme = appTheme,
                         onClick = {
                             scope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
@@ -77,7 +76,6 @@ fun OnboardingScreen(
                     }
                 } else {
                     VlButton(
-                        appTheme = appTheme,
                         onClick = {
                             themeViewModel.completeOnboarding()
                             onFinish()
@@ -90,7 +88,7 @@ fun OnboardingScreen(
         }
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            VlAmbientGlow(appTheme = appTheme)
+            VlAmbientGlow()
 
             HorizontalPager(
                 state = pagerState,
@@ -156,10 +154,10 @@ fun WelcomePage(themeViewModel: ThemeViewModel) {
         )
         Spacer(Modifier.height(48.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.settings_section_language)) {
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
+        VlSettingsSection(title = stringResource(R.string.settings_section_language)) {
+            VlOptionRow(icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
+            VlOptionRow(icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
+            VlOptionRow(icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
         }
     }
 }
@@ -188,15 +186,13 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
         )
         Spacer(Modifier.height(32.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.settings_section_appearance)) {
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Layers, label = "Biolume", desc = "Органичный неоморфизм", selected = appTheme == AppTheme.BIOLUME, index = 0, total = 3, onClick = { themeViewModel.setTheme(AppTheme.BIOLUME) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.AutoAwesome, label = "Expressive", desc = "Material 3 Next", selected = appTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 1, total = 3, onClick = { themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Shield, label = "Forge", desc = "Cyberpunk / Industrial", selected = appTheme == AppTheme.FORGE, index = 2, total = 3, onClick = { themeViewModel.setTheme(AppTheme.FORGE) })
+        VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
+            VlOptionRow(icon = Icons.Default.AutoAwesome, label = "Expressive", desc = "Material 3 Next", selected = appTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 0, total = 1, onClick = { themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
         }
 
         Spacer(Modifier.height(16.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.settings_section_accent)) {
+        VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -205,7 +201,6 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
                     ColorPresetCircle(
                         preset = preset,
                         isSelected = currentPreset == preset,
-                        appTheme = appTheme,
                         isDark = isDark,
                         onClick = { themeViewModel.setColorPreset(preset) }
                     )
@@ -244,9 +239,8 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
         )
         Spacer(Modifier.height(32.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.intro_features_section)) {
+        VlSettingsSection(title = stringResource(R.string.intro_features_section)) {
             VlSettingsItem(
-                appTheme = appTheme,
                 icon = Icons.Default.Explore,
                 iconColor = MaterialTheme.colorScheme.primary,
                 title = stringResource(R.string.feed_title),
@@ -254,14 +248,12 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                 index = 0, total = 2,
                 trailing = {
                     VlSwitch(
-                        appTheme = appTheme,
                         checked = discoverEnabled,
                         onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }
                     )
                 }
             )
             VlSettingsItem(
-                appTheme = appTheme,
                 icon = Icons.Default.Book,
                 iconColor = Color(0xFF10B981),
                 title = stringResource(R.string.diary_title),
@@ -269,7 +261,6 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                 index = 1, total = 2,
                 trailing = {
                     VlSwitch(
-                        appTheme = appTheme,
                         checked = diaryEnabledLocal,
                         onCheckedChange = { v ->
                             diaryEnabledLocal = v

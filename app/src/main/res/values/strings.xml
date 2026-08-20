@@ -53,6 +53,7 @@
     <string name="chatlist_fab_new_chat">New Chat</string>
     <string name="chatlist_fab_new_group">New Group</string>
     <string name="chatlist_fab_find_channel">Find Channel</string>
+    <string name="chatlist_draft_prefix">Draft:\u0020</string>
 
     <!-- Chat Screen — Top bar -->
     <string name="chat_status_online">Online</string>

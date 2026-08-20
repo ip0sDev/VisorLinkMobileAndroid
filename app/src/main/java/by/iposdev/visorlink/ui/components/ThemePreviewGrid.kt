@@ -28,12 +28,7 @@ fun ThemePreviewGrid(
     modifier: Modifier = Modifier
 ) {
     val themes = listOf(
-        AppTheme.BIOLUME,
-        AppTheme.MATERIAL3_EXPRESSIVE,
-        AppTheme.ONE_UI,
-        AppTheme.FORGE_INDUSTRIAL,
-        AppTheme.FORGE_TERMINAL,
-        AppTheme.FORGE_COMICS
+        AppTheme.MATERIAL3_EXPRESSIVE
     )
 
     LazyVerticalGrid(
@@ -61,12 +56,7 @@ fun ThemePreviewItem(
     onClick: () -> Unit
 ) {
     val themeName = when (theme) {
-        AppTheme.BIOLUME -> "Biolume"
         AppTheme.MATERIAL3_EXPRESSIVE -> "Material 3"
-        AppTheme.ONE_UI -> "One UI 8.5"
-        AppTheme.FORGE_INDUSTRIAL -> "Industrial"
-        AppTheme.FORGE_TERMINAL -> "Terminal"
-        AppTheme.FORGE_COMICS -> "Comics"
         else -> theme.name
     }
 
@@ -99,20 +89,17 @@ fun ThemePreviewItem(
                     // Mini Preview UI
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         VlSurface(
-                            appTheme = theme,
                             modifier = Modifier.size(width = 80.dp, height = 16.dp),
                             isButton = false
                         ) {}
                         
                         VlSurface(
-                            appTheme = theme,
                             modifier = Modifier.size(width = 60.dp, height = 16.dp).align(Alignment.End),
                             isButton = false,
                             overrideColor = cs.primary.copy(alpha = 0.8f)
                         ) {}
                         
                         VlSurface(
-                            appTheme = theme,
                             modifier = Modifier.fillMaxWidth().height(26.dp),
                             isButton = true
                         ) {

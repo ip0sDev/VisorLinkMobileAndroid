@@ -1,22 +1,24 @@
-package by.iposdev.visorlink.ui.screens.chat
+package by.iposdev.visorlink.ui.components.chat
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.automirrored.filled.Forward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,25 +44,17 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
-import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.Message
 import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.data.model.SendStatus
-import by.iposdev.visorlink.ui.components.LocalHazeState
-import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.launch
-import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.floor
 import kotlin.math.sqrt
 
 // Вспомогательная функция для расчета дистанции
-private fun Offset.getDistance(): Float = sqrt(this.x * this.x + this.y * this.y)
+private fun Offset.getDistanceVector(): Float = sqrt(this.x * this.x + this.y * this.y)
 
 // Данные о вызове меню
 data class ContextMenuData(
@@ -72,8 +66,8 @@ data class ContextMenuData(
 @Composable
 fun MessageActionOverlay(
     contextMenuData: ContextMenuData,
-    currentDragOffset: Offset,      // Вектор свайпа
-    isGestureMode: Boolean,         // Режим
+    currentDragOffset: Offset,
+    isGestureMode: Boolean,
     canReact: Boolean,
     currentUid: String,
     onDismiss: () -> Unit,
@@ -85,11 +79,7 @@ fun MessageActionOverlay(
     onOpenImage: () -> Unit,
     onForward: (() -> Unit)? = null,
     onReact: (String) -> Unit,
-    themeVm: ThemeViewModel = koinViewModel()
 ) {
-    val appTheme by themeVm.appTheme.collectAsState()
-    val simplifiedGraphics = false
-
     val alpha by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(200),
@@ -99,7 +89,7 @@ fun MessageActionOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f * alpha))
+            .background(Color.Black.copy(alpha = 0.4f * alpha))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                 onDismiss()
             }
@@ -109,11 +99,9 @@ fun MessageActionOverlay(
                 data = contextMenuData,
                 currentDragOffset = currentDragOffset,
                 canReact = canReact,
-                appTheme = appTheme,
                 onAction = { action, emoji ->
                     when (action) {
                         "reply" -> onReply()
-                        "copy" -> { /* Логика копирования выполняется внутри DisposableEffect */ }
                         "delete" -> onDelete()
                         "cancel_sending" -> onCancelSending()
                         "forward" -> onForward?.invoke()
@@ -126,8 +114,6 @@ fun MessageActionOverlay(
                 data = contextMenuData,
                 canReact = canReact,
                 currentUid = currentUid,
-                appTheme = appTheme,
-                simplifiedGraphics = simplifiedGraphics,
                 onDismiss = onDismiss,
                 onReply = onReply,
                 onDelete = onDelete,
@@ -142,15 +128,11 @@ fun MessageActionOverlay(
     }
 }
 
-// ── Обычный режим (Haze Blur Menu) ─────────────────────────────────────────
-
 @Composable
 private fun NormalMessageMenu(
     data: ContextMenuData,
     canReact: Boolean,
     currentUid: String,
-    appTheme: AppTheme,
-    simplifiedGraphics: Boolean,
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onDelete: () -> Unit,
@@ -163,8 +145,7 @@ private fun NormalMessageMenu(
 ) {
     val context = LocalContext.current
     val haptic = rememberHaptic()
-    val style = rememberExthruStyle(appTheme)
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val cs = MaterialTheme.colorScheme
 
     var menuSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current
@@ -173,7 +154,6 @@ private fun NormalMessageMenu(
 
     val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
 
-    // Центрирование по X: Свое сообщение прижимаем вправо, чужое - влево
     val expectedWidthPx = with(density) { 260.dp.toPx() }
     val xOffset = if (data.isMine) {
         with(density) { screenWidth.toPx() } - expectedWidthPx - with(density) { 16.dp.toPx() }
@@ -181,7 +161,6 @@ private fun NormalMessageMenu(
         with(density) { 16.dp.toPx() }
     }
 
-    // Расчет позиции Y
     val tapY = data.startOffset.y
     var yOffset = tapY - with(density) { 20.dp.toPx() }
     var showAbove = true
@@ -201,11 +180,7 @@ private fun NormalMessageMenu(
         label = "menu_slide"
     )
 
-    val hazeState = LocalHazeState.current
-    val shape = RoundedCornerShape(if (style.isForge) 0.dp else 20.dp)
-    val bgColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
-
-    Box(
+    Surface(
         modifier = Modifier
             .offset {
                 IntOffset(
@@ -214,15 +189,11 @@ private fun NormalMessageMenu(
                 )
             }
             .width(260.dp)
-            .onGloballyPositioned { menuSize = it.size }
-            .clip(shape) // Clip перед Haze
-            .then(
-                if (simplifiedGraphics) Modifier.background(bgColor) else Modifier.hazeEffect(
-                    state = hazeState,
-                    style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(bgColor)))
-                )
-            )
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), shape)
+            .onGloballyPositioned { menuSize = it.size },
+        shape = RoundedCornerShape(20.dp),
+        color = cs.surface,
+        tonalElevation = 8.dp,
+        border = borderStroke(cs)
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (isSending) {
@@ -259,11 +230,11 @@ private fun NormalMessageMenu(
                             )
                         }
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(0.2f))
+                    HorizontalDivider(color = cs.outlineVariant.copy(0.2f))
                 }
 
                 if (!data.message.deleted) {
-                    ActionItem(Icons.Default.Reply, stringResource(R.string.action_reply)) {
+                    ActionItem(Icons.AutoMirrored.Filled.Reply, stringResource(R.string.action_reply)) {
                         haptic.perform(HapticType.CLICK, true); onDismiss(); onReply()
                     }
 
@@ -293,7 +264,7 @@ private fun NormalMessageMenu(
                     }
 
                     if (onForward != null) {
-                        ActionItem(Icons.Default.Forward, "Переслать") {
+                        ActionItem(Icons.AutoMirrored.Filled.Forward, "Переслать") {
                             haptic.perform(HapticType.CLICK, true); onDismiss(); onForward()
                         }
                     }
@@ -309,22 +280,16 @@ private fun NormalMessageMenu(
     }
 }
 
-// ── Жестовый режим (Floating Nodes) ────────────────────────────────────────
-
 @Composable
 private fun GestureMessageMenu(
     data: ContextMenuData,
     currentDragOffset: Offset,
     canReact: Boolean,
-    appTheme: AppTheme,
     onAction: (action: String, emoji: String?) -> Unit
 ) {
     val haptic = rememberHaptic()
     val context = LocalContext.current
-    val style = rememberExthruStyle(appTheme)
     val cs = MaterialTheme.colorScheme
-
-    val isDark = cs.surface.luminance() < 0.5f
 
     val screenWidthPx = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
@@ -344,9 +309,8 @@ private fun GestureMessageMenu(
         if (data.isMine) actions.add("delete")
     }
 
-    // 1. Точные размеры компонентов
-    val btnHalfW = with(density) { 75.dp.toPx() } // Половина ширины кнопки действий
-    val gridW = with(density) { (4 * 36 + 20).dp.toPx() } // Ширина сетки эмодзи
+    val btnHalfW = with(density) { 75.dp.toPx() }
+    val gridW = with(density) { (4 * 36 + 20).dp.toPx() }
     val gridH = with(density) { (((QUICK_REACTIONS.size / 4) * 36) + 20).dp.toPx() }
     val actionStep = with(density) { 52.dp.toPx() }
     val margin = with(density) { 16.dp.toPx() }
@@ -355,14 +319,12 @@ private fun GestureMessageMenu(
     val growDown = data.startOffset.y < screenHeightPx / 2f
     val hasGrid = actions.contains("react")
 
-    // 2. Идеальный Clamping по X (Всегда выровнен по стороне автора сообщения)
     val menuOriginX = if (data.isMine) {
         screenWidthPx - margin - btnHalfW
     } else {
         margin + btnHalfW
     }
 
-    // 3. Идеальный Clamping по Y (Центруем вокруг точки нажатия, с защитой от вылета за экран)
     val totalActionH = actions.size * actionStep
     val maxNeededH = maxOf(totalActionH, if (hasGrid) gridH else 0f)
 
@@ -375,7 +337,6 @@ private fun GestureMessageMenu(
 
     val menuOrigin = Offset(menuOriginX, menuOriginY)
 
-    // 4. Позиционирование центров кнопок
     val actionCenters = actions.mapIndexed { i, action ->
         val yPos = (if (growDown) 1 else -1) * actionStep * (i + 1)
         action to Offset(menuOrigin.x, menuOrigin.y + yPos)
@@ -388,34 +349,29 @@ private fun GestureMessageMenu(
     } else 0f
 
     val gridTopY = if (hasGrid) {
-        val reactCenterY = actionCenters["react"]!!.y
-        var gTop = reactCenterY - (gridH / 2f)
+        val reactCenterY = actionCenters["react"]?.y ?: 0f
+        val gTop = reactCenterY - (gridH / 2f)
         gTop.coerceIn(margin, screenHeightPx - margin - gridH)
     } else 0f
 
     val gridBounds = if (hasGrid) Rect(gridLeftX, gridTopY, gridLeftX + gridW, gridTopY + gridH) else null
-
-    // 5. Виртуальная позиция пальца (Решает проблему смещения при Clamping'е)
     val virtualFingerPos = menuOrigin + currentDragOffset
 
-    // 6. Hit-Test: Ищем ближайший элемент к виртуальному пальцу
     val currentSelection = remember(virtualFingerPos, actions) {
         var newSel = "cancel"
         var foundInGrid = false
 
-        // Ищем ближайшую стандартную кнопку (Отмена или Действие)
         var closestAction = "cancel"
-        var minDistance = (virtualFingerPos - menuOrigin).getDistance()
+        var minDistance = (virtualFingerPos - menuOrigin).getDistanceVector()
 
         actionCenters.forEach { (action, center) ->
-            val dist = (virtualFingerPos - center).getDistance()
+            val dist = (virtualFingerPos - center).getDistanceVector()
             if (dist < minDistance) {
                 minDistance = dist
                 closestAction = action
             }
         }
 
-        // Проверяем эмодзи-сетку (расширяем хитбокс для удобства)
         if (hasGrid && gridBounds != null) {
             val hitBounds = Rect(
                 left = gridBounds.left - 40f, top = gridBounds.top - 40f,
@@ -428,7 +384,7 @@ private fun GestureMessageMenu(
                 val col = floor(dxInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, 3)
                 val row = floor(dyInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, (QUICK_REACTIONS.size / 4) - 1)
 
-                val idx = (row * 4 + col).coerceIn(0, QUICK_REACTIONS.size - 1)
+                val idx = (row * 4 + col).toInt().coerceIn(0, QUICK_REACTIONS.size - 1)
                 newSel = "react_${QUICK_REACTIONS[idx]}"
                 foundInGrid = true
             }
@@ -449,7 +405,6 @@ private fun GestureMessageMenu(
 
     val finalSelection by rememberUpdatedState(currentSelection)
 
-    // При закрытии оверлея вызываем выбранное действие
     DisposableEffect(Unit) {
         onDispose {
             if (finalSelection != "cancel") {
@@ -465,7 +420,6 @@ private fun GestureMessageMenu(
         }
     }
 
-    // Анимация входа
     var isVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { isVisible = true }
     val enterScale by animateFloatAsState(
@@ -474,35 +428,30 @@ private fun GestureMessageMenu(
         label = "enter_scale"
     )
 
-    val hazeState = LocalHazeState.current
-    val generalBgColor = cs.surface.copy(alpha = if (isDark) 0.4f else 0.55f)
-
     var cancelSize by remember { mutableStateOf(IntSize.Zero) }
     val actionSizes = remember { mutableStateMapOf<String, IntSize>() }
 
-    // ── РЕНДЕР ПЛАВАЮЩИХ ПУЗЫРЕЙ ──
     Box(Modifier.fillMaxSize()) {
-
         val isCancelSelected = currentSelection == "cancel"
-        val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else generalBgColor
+        val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else cs.surface
         val cancelScale by animateFloatAsState(if (isCancelSelected) 1.15f else 1f, spring(dampingRatio = 0.5f), label = "cancel_scale")
 
         Box(
             Modifier.offset { IntOffset(menuOrigin.x.toInt() - cancelSize.width / 2, menuOrigin.y.toInt() - cancelSize.height / 2) }
         ) {
-            Box(
-                Modifier
+            Surface(
+                modifier = Modifier
                     .onGloballyPositioned { cancelSize = it.size }
                     .graphicsLayer {
                         scaleX = cancelScale * enterScale
                         scaleY = cancelScale * enterScale
-                    }
-                    .clip(RoundedCornerShape(20.dp))
-                    .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(cancelColor))))
-                    .border(1.dp, if (isCancelSelected) Color(0xFFFFC107) else cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 10.dp)
+                    },
+                shape = RoundedCornerShape(20.dp),
+                color = cancelColor,
+                tonalElevation = if (isCancelSelected) 12.dp else 4.dp,
+                border = borderStroke(cs)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
                     Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -512,13 +461,13 @@ private fun GestureMessageMenu(
 
         actions.forEach { action ->
             val isSelected = currentSelection == action || (action == "react" && currentSelection.startsWith("react_"))
-            val center = actionCenters[action]!!
+            val center = actionCenters[action] ?: Offset.Zero
 
             val icon = when(action) {
                 "react" -> Icons.Default.AddReaction
-                "reply" -> Icons.Default.Reply
+                "reply" -> Icons.AutoMirrored.Filled.Reply
                 "copy" -> Icons.Default.ContentCopy
-                "forward" -> Icons.Default.Forward
+                "forward" -> Icons.AutoMirrored.Filled.Forward
                 "delete" -> Icons.Default.Delete
                 "cancel_sending" -> Icons.Default.Close
                 else -> Icons.Default.Warning
@@ -532,10 +481,10 @@ private fun GestureMessageMenu(
                 "cancel_sending" -> "Отменить"
                 else -> ""
             }
-            val color = if (action == "delete" || action == "cancel_sending") style.destructive else cs.onSurface
+            val color = if (action == "delete" || action == "cancel_sending") cs.error else cs.onSurface
             val bgColor = if (isSelected) {
-                if (action == "delete" || action == "cancel_sending") style.destructive else style.accent
-            } else generalBgColor
+                if (action == "delete" || action == "cancel_sending") cs.error else cs.primary
+            } else cs.surface
 
             val contentColor = if (isSelected) Color.White else color
             val actionScale by animateFloatAsState(if (isSelected) 1.15f else 1f, spring(dampingRatio = 0.5f), label = "action_scale")
@@ -544,19 +493,19 @@ private fun GestureMessageMenu(
             Box(
                 Modifier.offset { IntOffset(center.x.toInt() - currentSize.width / 2, center.y.toInt() - currentSize.height / 2) }
             ) {
-                Box(
-                    Modifier
+                Surface(
+                    modifier = Modifier
                         .onGloballyPositioned { actionSizes[action] = it.size }
                         .graphicsLayer {
                             scaleX = actionScale * enterScale
                             scaleY = actionScale * enterScale
-                        }
-                        .clip(RoundedCornerShape(20.dp))
-                        .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(bgColor))))
-                        .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                        },
+                    shape = RoundedCornerShape(20.dp),
+                    color = bgColor,
+                    tonalElevation = if (isSelected) 12.dp else 4.dp,
+                    border = borderStroke(cs)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                         Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
@@ -572,19 +521,19 @@ private fun GestureMessageMenu(
             Box(
                 Modifier.offset { IntOffset(gridLeftX.toInt(), gridTopY.toInt()) }
             ) {
-                Box(
-                    Modifier
+                Surface(
+                    modifier = Modifier
                         .graphicsLayer {
                             transformOrigin = TransformOrigin(if (dirX == 1) 0f else 1f, 0.5f)
                             scaleX = gridScale * enterScale
                             scaleY = gridScale * enterScale
-                        }
-                        .clip(RoundedCornerShape(24.dp))
-                        .hazeEffect(state = hazeState, style = HazeStyle(blurRadius = 24.dp, noiseFactor = 0.03f, tints = listOf(HazeTint(generalBgColor))))
-                        .border(1.dp, cs.outlineVariant.copy(0.3f), RoundedCornerShape(24.dp))
-                        .padding(10.dp)
+                        },
+                    shape = RoundedCornerShape(24.dp),
+                    color = cs.surface,
+                    tonalElevation = 6.dp,
+                    border = borderStroke(cs)
                 ) {
-                    Column {
+                    Column(Modifier.padding(10.dp)) {
                         QUICK_REACTIONS.chunked(4).forEach { row ->
                             Row {
                                 row.forEach { emoji ->
@@ -597,10 +546,10 @@ private fun GestureMessageMenu(
                                         Box(
                                             Modifier
                                                 .scale(emojiScale)
-                                                .background(if (isSelected) style.accent.copy(0.4f) else Color.Transparent, CircleShape)
+                                                .background(if (isSelected) cs.primary.copy(0.4f) else Color.Transparent, CircleShape)
                                                 .padding(4.dp)
                                         ) {
-                                            Text(emoji, fontSize = 18.sp)
+                                            Text(text = emoji, fontSize = 18.sp)
                                         }
                                     }
                                 }
@@ -612,8 +561,6 @@ private fun GestureMessageMenu(
         }
     }
 }
-
-// ── Общие переиспользуемые элементы ────────────────────────────────────────
 
 @Composable
 private fun ActionItem(icon: ImageVector, label: String, destructive: Boolean = false, onClick: () -> Unit) {
@@ -652,3 +599,8 @@ private fun EmojiReactionButton(emoji: String, isSelected: Boolean, onClick: () 
         Text(emoji, fontSize = 22.sp, modifier = Modifier.scale(if (isSelected) 1.1f else 1f).scale(scale.value))
     }
 }
+
+@Composable
+private fun borderStroke(cs: ColorScheme) = BorderStroke(
+    1.dp, cs.outlineVariant.copy(alpha = 0.3f)
+)

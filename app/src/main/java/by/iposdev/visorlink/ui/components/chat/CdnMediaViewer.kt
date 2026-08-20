@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens.chat
+package by.iposdev.visorlink.ui.components.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -82,14 +82,12 @@ fun CdnMediaViewer(
                     .data(modelSource)
                     .apply {
                         if (type == MessageType.VIDEO) {
-                            // Принудительно заставляем Coil использовать декодер видео,
-                            // так как по URL без расширения .mp4 он сам не догадается
                             decoderFactory(VideoFrameDecoder.Factory())
                         }
                     }
                     .crossfade(true)
                     .build(),
-                contentDescription = "Video Preview",
+                contentDescription = "Media Preview",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
                 onLoading = { isLoading = true; isError = false },
@@ -119,7 +117,6 @@ fun CdnMediaViewer(
             )
         }
 
-        // Оверлей кнопки Play (если видео)
         if (type == MessageType.VIDEO) {
             Box(
                 modifier = Modifier

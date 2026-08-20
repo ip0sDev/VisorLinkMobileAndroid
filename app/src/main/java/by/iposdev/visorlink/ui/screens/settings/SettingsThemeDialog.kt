@@ -18,7 +18,6 @@ fun SettingsThemeDialog(
 ) {
     VlAlertDialog(
         onDismissRequest = onDismiss,
-        appTheme = currentTheme,
         title = { Text("Выберите оформление") },
         text = {
             Column {
@@ -35,7 +34,7 @@ fun SettingsThemeDialog(
             }
         },
         actions = {
-            VlDialogButton(appTheme = currentTheme, onClick = onDismiss) {
+            VlDialogButton(onClick = onDismiss) {
                 Text("Закрыть")
             }
         }

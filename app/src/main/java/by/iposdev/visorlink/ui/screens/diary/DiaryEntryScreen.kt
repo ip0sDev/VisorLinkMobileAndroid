@@ -10,12 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
@@ -29,14 +26,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -46,22 +40,9 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.withStyle
-import by.iposdev.visorlink.utils.CdnService
-import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
-import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.diary.*
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
@@ -75,9 +56,6 @@ fun DiaryEntryScreen(
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val appTheme by themeViewModel.appTheme.collectAsState()
-    val isExthru = appTheme.isExthruFamily
-    val isForge = appTheme.name == "FORGE"
     val primaryColor = MaterialTheme.colorScheme.primary
 
     val initialText = remember(entryId, uiState.entries) {
@@ -105,9 +83,10 @@ fun DiaryEntryScreen(
     val visualTransformation = remember(primaryColor) { MarkdownWysiwygTransformation(primaryColor) }
 
     Scaffold(
+        modifier = Modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(if (entryId == null) stringResource(R.string.diary_new_entry) else stringResource(R.string.diary_edit_entry), fontWeight = FontWeight.Bold, fontFamily = if(isForge) FontFamily.Monospace else null) },
+                title = { Text(if (entryId == null) stringResource(R.string.diary_new_entry) else stringResource(R.string.diary_edit_entry), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
@@ -122,14 +101,16 @@ fun DiaryEntryScreen(
                         Icon(Icons.Default.Check, stringResource(R.string.action_save))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                )
             )
         },
-        containerColor = if (isExthru) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface,
         bottomBar = {
             Surface(
                 tonalElevation = 4.dp,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if(isExthru) 0.3f else 0.8f),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
             ) {
                 Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
@@ -191,8 +172,8 @@ fun DiaryEntryScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            if (isExthru) VlAmbientGlow(appTheme = appTheme)
+        Box(Modifier.fillMaxSize().padding(padding).background(MaterialTheme.colorScheme.background)) {
+            VlAmbientGlow()
 
             BasicTextField(
                 value = textFieldValue,
@@ -204,7 +185,6 @@ fun DiaryEntryScreen(
                 textStyle = TextStyle(
                     fontSize = 18.sp,
                     color = MaterialTheme.colorScheme.onSurface,
-                    fontFamily = if (isForge) FontFamily.Monospace else FontFamily.Default,
                     lineHeight = 26.sp
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -228,13 +208,6 @@ fun DiaryEntryScreen(
                 showDrawingDialog = false
             }
         )
-    }
-}
-
-@Composable
-fun MarkdownToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    IconButton(onClick = onClick, modifier = Modifier.size(48.dp)) {
-        Icon(icon, label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
     }
 }
 
@@ -425,79 +398,5 @@ class MarkdownWysiwygTransformation(val primaryColor: Color) : VisualTransformat
         }
 
         return TransformedText(builder.toAnnotatedString(), mapping)
-    }
-}
-
-// -----------------------------------------------------------------------------------------
-// DO NOT MODIFY BELOW. KEEP EXISTING DIALOGS AND HELPER FUNCTIONS (VlDrawingDialog)
-// -----------------------------------------------------------------------------------------
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun VlDrawingDialog(
-    onDismiss: () -> Unit,
-    onSave: (Uri) -> Unit
-) {
-    val context = LocalContext.current
-    var currentPath by remember { mutableStateOf(Path()) }
-    var paths by remember { mutableStateOf(listOf<Path>()) }
-    var color by remember { mutableStateOf(Color.Red) }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)
-    ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            Column(Modifier.fillMaxSize()) {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.diary_format_draw)) },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
-                    },
-                    actions = {
-                        IconButton(onClick = {
-                            // Dummy implementation for saving drawing
-                            // In real app, create Bitmap and save to Uri
-                            onSave(Uri.EMPTY)
-                        }) { Icon(Icons.Default.Check, null) }
-                    }
-                )
-
-                val colors = listOf(Color.Black, Color.Red, Color.Green, Color.Blue, Color.Yellow)
-                LazyRow(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(colors) { c ->
-                        Box(
-                            Modifier.size(40.dp).clip(CircleShape).background(c)
-                                .clickable { color = c }
-                                .then(if (color == c) Modifier.background(Color.White.copy(0.3f)) else Modifier)
-                        )
-                    }
-                }
-
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(16.dp)
-                        .background(Color.White, RoundedCornerShape(16.dp))
-                        .pointerInput(Unit) {
-                            detectDragGestures(
-                                onDragStart = { offset -> currentPath = Path().apply { moveTo(offset.x, offset.y) } },
-                                onDrag = { change, _ -> currentPath.lineTo(change.position.x, change.position.y) },
-                                onDragEnd = { paths = paths + currentPath; currentPath = Path() }
-                            )
-                        }
-                ) {
-                    Canvas(Modifier.fillMaxSize()) {
-                        paths.forEach { path ->
-                            drawPath(path, color, style = Stroke(width = 8f, cap = StrokeCap.Round))
-                        }
-                        drawPath(currentPath, color, style = Stroke(width = 8f, cap = StrokeCap.Round))
-                    }
-                }
-            }
-        }
     }
 }

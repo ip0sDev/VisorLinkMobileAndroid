@@ -42,9 +42,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import by.iposdev.visorlink.R
-import by.iposdev.visorlink.ui.theme.exthruRaisedShadow
-import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
-import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import by.iposdev.visorlink.utils.ApkDownloader
 import java.util.Locale
 
@@ -168,7 +165,6 @@ private fun BiolumeUpdateDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp)
-                .exthruRaisedShadow(isDark)
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(28.dp))
                 .clip(RoundedCornerShape(28.dp))
                 .padding(24.dp)
@@ -256,8 +252,7 @@ private fun BiolumeChangelogSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if (isDark) 0.5f else 0.2f)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.2f else 0.5f), RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerLow, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .clickable { expanded = !expanded }
             .padding(16.dp)
@@ -388,20 +383,18 @@ private fun BiolumeDownloadProgress(
             }
         }
 
-        // ── Неоморфный трек ──
+        // ── Трек ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(14.dp)
-                .nmInsetShadow(isDark, cornerRadius = 7.dp, darkAlpha = if (isDark) 0.6f else 0.3f)
-                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(7.dp))
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(7.dp))
         ) {
             if (!downloadError && progress > 0f) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(animatedProgress.coerceIn(0f, 1f))
                         .fillMaxHeight()
-                        .exthruSmallRaisedShadow(isDark)
                         .background(
                             Brush.horizontalGradient(
                                 listOf(
@@ -432,25 +425,13 @@ private fun NmButton(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed && enabled) 0.95f else 1f, spring(dampingRatio = 0.5f), label = "btn_scale")
 
-    val bgColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val bgColor = if (isPrimary) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerLow
     val textColor = if (isPrimary) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
-
-    val shadowMod = if (isPressed && enabled) {
-        Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp)
-    } else if (enabled) {
-        Modifier.exthruSmallRaisedShadow(isDark)
-    } else Modifier
 
     Box(
         modifier = modifier
             .scale(scale)
-            .then(shadowMod)
             .background(if (enabled) bgColor else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(16.dp))
-            .border(
-                1.dp,
-                if (isPressed || !enabled) Color.Transparent else Color.White.copy(alpha = if (isDark) 0.05f else 0.3f),
-                RoundedCornerShape(16.dp)
-            )
             .clip(RoundedCornerShape(16.dp))
             .clickable(interactionSource = interactionSource, indication = null, enabled = enabled, onClick = onClick)
             .padding(vertical = 14.dp),

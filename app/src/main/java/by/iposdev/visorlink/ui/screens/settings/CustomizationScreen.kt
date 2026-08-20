@@ -3,14 +3,9 @@ package by.iposdev.visorlink.ui.screens.settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -19,28 +14,19 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
-import by.iposdev.visorlink.data.model.isExthruFamily
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.ui.components.*
-import by.iposdev.visorlink.ui.theme.*
-import by.iposdev.visorlink.utils.CustomizationHelper
-import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import coil.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -84,7 +70,7 @@ fun CustomizationScreen(
                 .verticalScroll(rememberScrollState())
         ) {
             // Preview
-            VlSettingsSection(appTheme = currentTheme, title = "Preview") {
+            VlSettingsSection(title = "Preview") {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -95,29 +81,8 @@ fun CustomizationScreen(
                 }
             }
 
-            // Style/Theme
-            VlSettingsSection(appTheme = currentTheme, title = "Design Style") {
-                val styles = listOf("default", "biolume", "forge", "material")
-                styles.forEachIndexed { index, s ->
-                    VlOptionRow(
-                        appTheme = currentTheme,
-                        icon = when(s) {
-                            "biolume" -> Icons.Default.AutoAwesome
-                            "forge" -> Icons.Default.Terminal
-                            "material" -> Icons.Default.Palette
-                            else -> Icons.Default.Settings
-                        },
-                        label = s.replaceFirstChar { it.uppercase() },
-                        selected = (cust["style"] as? String ?: "default") == s,
-                        index = index,
-                        total = styles.size,
-                        onClick = { viewModel.updateCustomization("style", s) }
-                    )
-                }
-            }
-
             // Accent Color
-            VlSettingsSection(appTheme = currentTheme, title = "Accent Color") {
+            VlSettingsSection(title = "Accent Color") {
                 val presets = listOf(
                     "default" to ColorPreset.DEFAULT,
                     "purple" to ColorPreset.PURPLE,
@@ -137,65 +102,36 @@ fun CustomizationScreen(
                         ColorPresetCircle(
                             preset = preset,
                             isSelected = (cust["accent"] as? String ?: "default") == name,
-                            appTheme = currentTheme,
-                            isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f,
                             onClick = { viewModel.updateCustomization("accent", name) }
                         )
                     }
                 }
             }
 
-            // Layout
-            VlSettingsSection(appTheme = currentTheme, title = "Layout") {
-                val layouts = listOf("default", "banner", "compact")
-                layouts.forEachIndexed { index, l ->
-                    VlOptionRow(
-                        appTheme = currentTheme,
-                        icon = when(l) {
-                            "banner" -> Icons.Default.ViewDay
-                            "compact" -> Icons.Default.ViewStream
-                            else -> Icons.Default.Person
-                        },
-                        label = l.replaceFirstChar { it.uppercase() },
-                        selected = (cust["layout"] as? String ?: "default") == l,
-                        index = index,
-                        total = layouts.size,
-                        onClick = { viewModel.updateCustomization("layout", l) }
-                    )
-                }
-            }
-
             // Background
-            VlSettingsSection(appTheme = currentTheme, title = "Profile Background") {
+            VlSettingsSection(title = "Profile Background") {
                 VlSettingsItem(
-                    appTheme = currentTheme,
                     icon = Icons.Default.Image,
                     title = "Upload Image",
                     subtitle = (cust["bgUrl"] as? String)?.takeLast(20) ?: "None",
-                    onClick = { bgPicker.launch("image/*") },
-                    index = 0, total = 2
+                    onClick = { bgPicker.launch("image/*") }
                 )
                 VlSettingsItem(
-                    appTheme = currentTheme,
                     icon = Icons.Default.Gif,
                     title = "Upload GIF",
                     subtitle = (cust["gifUrl"] as? String)?.takeLast(20) ?: "None",
-                    onClick = { gifPicker.launch("image/gif") },
-                    index = 1, total = 2
+                    onClick = { gifPicker.launch("image/gif") }
                 )
             }
 
             // Font
-            VlSettingsSection(appTheme = currentTheme, title = "Custom Font") {
+            VlSettingsSection(title = "Custom Font") {
                 val fonts = listOf("default", "mono", "serif", "rounded")
                 fonts.forEachIndexed { index, f ->
                     VlOptionRow(
-                        appTheme = currentTheme,
                         icon = Icons.Default.TextFields,
                         label = f.replaceFirstChar { it.uppercase() },
                         selected = (cust["font"] as? String ?: "default") == f,
-                        index = index,
-                        total = fonts.size,
                         onClick = { viewModel.updateCustomization("font", f) }
                     )
                 }
@@ -213,7 +149,6 @@ fun ProfilePreview(profile: UserProfile, appTheme: AppTheme) {
     val layout = cust["layout"] as? String ?: "default"
     
     VlSurface(
-        appTheme = appTheme,
         modifier = Modifier.fillMaxSize()
     ) {
         if (bgUrl != null) {

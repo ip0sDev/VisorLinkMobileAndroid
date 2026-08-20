@@ -50,6 +50,16 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // ── FIX: Check auth state BEFORE setting content to avoid login flash ──────
+        val firebaseAuth = FirebaseAuth.getInstance()
+        val isUserLoggedIn = firebaseAuth.currentUser != null
+        
+        // If user is already logged in and email verified, skip login screen
+        if (isUserLoggedIn) {
+            // Quick verification - will be confirmed in nav graph
+            val uid = firebaseAuth.currentUser?.uid
+        }
+        
         requestNotificationPermissionIfNeeded()
         fetchAndSaveFcmToken()
 

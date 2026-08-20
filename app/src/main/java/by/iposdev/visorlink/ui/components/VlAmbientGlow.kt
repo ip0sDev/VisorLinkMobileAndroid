@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,26 +16,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
-import by.iposdev.visorlink.data.model.AppTheme
-import by.iposdev.visorlink.data.model.isExthruFamily
-import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun VlAmbientGlow(
     modifier: Modifier = Modifier,
     overrideAccent: Color? = null,
-    themeViewModel: ThemeViewModel = koinViewModel(),
     simplifiedGraphics: Boolean = false
 ) {
-    val themePrefs by themeViewModel.appTheme.collectAsState()
+    if (simplifiedGraphics) return
 
-    if (!themePrefs.isExthruFamily || themePrefs == AppTheme.FORGE || simplifiedGraphics) return
-
-    val style = rememberExthruStyle(themePrefs)
-    val accent = overrideAccent ?: style.accent
     val cs = MaterialTheme.colorScheme
+    val accent = overrideAccent ?: cs.primary
     val isDark = cs.surface.luminance() < 0.5f
 
     // Более богатая цветовая палитра для утонченного глассморфизма

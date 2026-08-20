@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.ui.screens.chat
+package by.iposdev.visorlink.ui.components.chat
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -126,7 +126,6 @@ private data class Spark(val tx: Float, val ty: Float, val scale: Float, val dur
 @Composable
 fun FullscreenGiftOverlay(chatId: String, messageId: String, onDismiss: () -> Unit) {
     var state by remember { mutableStateOf(FullscreenState.Shaking) }
-    var errorMsg by remember { mutableStateOf("") }
     val haptic = rememberHaptic()
 
     val colors = listOf(Color(0xFFFFD700), Color(0xFFFF0055), Color(0xFF00E5CC), Color(0xFF831AD4), Color(0xFF0EA5E9), Color.White)
@@ -167,7 +166,6 @@ fun FullscreenGiftOverlay(chatId: String, messageId: String, onDismiss: () -> Un
             val elapsed = System.currentTimeMillis() - startTime
             if (elapsed < 5000) delay(5000 - elapsed)
 
-            errorMsg = "Кто-то оказался быстрее!"
             state = FullscreenState.Error
             haptic.perform(HapticType.ERROR, true)
             delay(2500)

@@ -82,101 +82,6 @@ private val DarkM3 = darkColorScheme(
     surfaceContainerHighest = Color(0xFF353347),
 )
 
-// ── OneUI 8.5 ─────────────────────────────────────────────────────────────────
-
-private val LightOneUI = lightColorScheme(
-    primary = Color(0xFF006FFD),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFD6E4FF),
-    onPrimaryContainer = Color(0xFF001C45),
-    secondary = Color(0xFF0381FE),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFCCDFFF),
-    onSecondaryContainer = Color(0xFF00174A),
-    tertiary = Color(0xFF5B5EA6),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFE2E0FF),
-    onTertiaryContainer = Color(0xFF17175E),
-    error = Color(0xFFFF3B30),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFF4F4F4),
-    onBackground = Color(0xFF1A1A1A),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFEEEEEE),
-    onSurfaceVariant = Color(0xFF49454F),
-    outline = Color(0xFFE0E0E0),
-    outlineVariant = Color(0xFFCAC4D0),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F7F7),
-    surfaceContainer = Color(0xFFF2F2F2),
-    surfaceContainerHigh = Color(0xFFECECEC),
-    surfaceContainerHighest = Color(0xFFE6E6E6),
-)
-
-private val DarkOneUI = darkColorScheme(
-    primary = Color(0xFF5B9BFF),
-    onPrimary = Color(0xFF00285C),
-    primaryContainer = Color(0xFF003E8D),
-    onPrimaryContainer = Color(0xFFD6E4FF),
-    secondary = Color(0xFF63A0FF),
-    onSecondary = Color(0xFF002D6A),
-    secondaryContainer = Color(0xFF004498),
-    onSecondaryContainer = Color(0xFFCCDFFF),
-    tertiary = Color(0xFFC3C2FF),
-    onTertiary = Color(0xFF2D2D75),
-    tertiaryContainer = Color(0xFF44448D),
-    onTertiaryContainer = Color(0xFFE2E0FF),
-    error = Color(0xFFFF453A),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF161616),
-    onBackground = Color(0xFFE8E8E8),
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFE8E8E8),
-    surfaceVariant = Color(0xFF2A2A2A),
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    outline = Color(0xFF3A3A3A),
-    outlineVariant = Color(0xFF49454F),
-    surfaceContainerLowest = Color(0xFF0E0E0E),
-    surfaceContainerLow = Color(0xFF1A1A1A),
-    surfaceContainer = Color(0xFF212121),
-    surfaceContainerHigh = Color(0xFF2C2C2C),
-    surfaceContainerHighest = Color(0xFF373737),
-)
-
-// ── Typography ───────────────────────────────────────────────────────────────
-
-val ForgeIndustrialTypography = Typography(
-    displayLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 57.sp),
-    headlineLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 32.sp),
-    titleLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 22.sp),
-    bodyLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-    bodyMedium = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
-)
-
-val ForgeTerminalTypography = Typography(
-    displayLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 57.sp),
-    headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 32.sp),
-    titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 22.sp),
-    bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-    bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold, fontSize = 14.sp),
-)
-
-val ForgeComicsTypography = Typography(
-    displayLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 57.sp),
-    headlineLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 32.sp),
-    titleLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 22.sp),
-    bodyLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 16.sp),
-    bodyMedium = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Normal, fontSize = 14.sp),
-    labelLarge = TextStyle(fontFamily = FontFamily.Default, fontWeight = FontWeight.Bold, fontSize = 14.sp),
-)
-
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
 @Composable
@@ -186,37 +91,17 @@ fun UserProfileTheme(
     content: @Composable () -> Unit
 ) {
     val themeVm: ThemeViewModel = koinViewModel()
-    val globalAppTheme by themeVm.appTheme.collectAsState()
-    val globalPreset by themeVm.colorPreset.collectAsState()
     val currentThemeMode by themeVm.themeMode.collectAsState()
-
-    val applyCust = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
-    val cust = if (applyCust) profile?.customization ?: emptyMap() else emptyMap()
-
-    val customAppTheme = if (cust["style"] != null && cust["style"] != "default") {
-        CustomizationHelper.parseStyle(cust["style"] as String)
-    } else globalAppTheme
-
-    val customPreset = if (cust["accent"] != null && cust["accent"] != "default") {
-        CustomizationHelper.parseAccent(cust["accent"] as String)
-    } else globalPreset
-
-    val fontStr = cust["font"] as? String ?: "default"
+    val globalPreset by themeVm.colorPreset.collectAsState()
 
     VisorLinkTheme(
-        appTheme = customAppTheme,
         themeMode = currentThemeMode,
-        colorPreset = customPreset
+        colorPreset = globalPreset
     ) {
-        val currentTypography = MaterialTheme.typography
-        val customizedTypography = if (fontStr != "default") {
-            CustomizationHelper.getTypography(fontStr, currentTypography)
-        } else currentTypography
-
         MaterialTheme(
             colorScheme = MaterialTheme.colorScheme,
             shapes = MaterialTheme.shapes,
-            typography = customizedTypography,
+            typography = MaterialTheme.typography,
             content = content
         )
     }
@@ -225,45 +110,28 @@ fun UserProfileTheme(
 // ── VisorLink Theme Composable ────────────────────────────────────────────────
 
 @Composable
-@Suppress("DEPRECATION")
 fun VisorLinkTheme(
-    appTheme: AppTheme = AppTheme.BIOLUME,
+    appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
     setStatusBarColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
-    val darkTheme = when (appTheme) {
-        AppTheme.FORGE_INDUSTRIAL -> true // Industrial is DARK ONLY
-        else -> when (themeMode) {
-            ThemeMode.DARK   -> true
-            ThemeMode.LIGHT  -> false
-            ThemeMode.SYSTEM -> systemDark
-        }
+    val darkTheme = when (themeMode) {
+        ThemeMode.DARK   -> true
+        ThemeMode.LIGHT  -> false
+        ThemeMode.SYSTEM -> systemDark
     }
 
-    val resolvedTheme = if (appTheme == AppTheme.EXTHRU) AppTheme.BIOLUME else appTheme
-
-    val baseColorScheme = when (resolvedTheme) {
-        AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT -> {
-                val ctx = LocalContext.current
-                if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-            }
-            darkTheme -> DarkM3
-            else      -> LightM3
+    val colorScheme = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT -> {
+            val ctx = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
         }
-        AppTheme.ONE_UI -> if (darkTheme) DarkOneUI else LightOneUI
-        AppTheme.BIOLUME -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
-        AppTheme.FORGE_INDUSTRIAL -> ForgeIndustrialDarkColorScheme
-        AppTheme.FORGE_TERMINAL -> forgeTerminalColorScheme(isDark = darkTheme)
-        AppTheme.FORGE_COMICS -> forgeComicsColorScheme(isDark = darkTheme)
-        AppTheme.FORGE -> ForgeIndustrialDarkColorScheme
-        AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
+        darkTheme -> DarkM3
+        else      -> LightM3
     }
-
-    val colorScheme = baseColorScheme.withColorPreset(resolvedTheme, darkTheme, colorPreset)
 
     val view = LocalView.current
     if (!view.isInEditMode && setStatusBarColor) {
@@ -284,24 +152,8 @@ fun VisorLinkTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        shapes = when (resolvedTheme) {
-            AppTheme.ONE_UI           -> Shapes(medium = RoundedCornerShape(12.dp))
-            AppTheme.BIOLUME          -> Shapes(medium = RoundedCornerShape(24.dp))
-            AppTheme.FORGE_INDUSTRIAL -> Shapes(medium = RoundedCornerShape(0.dp))
-            AppTheme.FORGE_TERMINAL   -> Shapes(medium = RoundedCornerShape(0.dp))
-            AppTheme.FORGE_COMICS     -> Shapes(medium = RoundedCornerShape(8.dp))
-            else                      -> Shapes(medium = RoundedCornerShape(16.dp))
-        },
-        typography = when (resolvedTheme) {
-            AppTheme.FORGE_INDUSTRIAL   -> ForgeIndustrialTypography
-            AppTheme.FORGE_TERMINAL     -> ForgeTerminalTypography
-            AppTheme.FORGE_COMICS       -> ForgeComicsTypography
-            else                        -> MaterialTheme.typography
-        },
-        content = {
-            CompositionLocalProvider(LocalAppThemeOverride provides resolvedTheme) {
-                content()
-            }
-        }
+        shapes = Shapes(medium = RoundedCornerShape(16.dp)),
+        typography = MaterialTheme.typography,
+        content = content
     )
 }

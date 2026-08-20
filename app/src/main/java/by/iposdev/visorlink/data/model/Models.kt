@@ -561,35 +561,15 @@ sealed class MessageListItem {
 }
 
 enum class AppTheme {
-    MATERIAL3_EXPRESSIVE,
-    @Deprecated("Заменяется на BIOLUME/FORGE — оставлено для совместимости")
-    ONE_UI,
-    @Deprecated("Используй BIOLUME", ReplaceWith("BIOLUME"))
-    EXTHRU,
-    BIOLUME,
-    FORGE_INDUSTRIAL,
-    FORGE_TERMINAL,
-    FORGE_COMICS,
-    @Deprecated("Используй FORGE_INDUSTRIAL", ReplaceWith("FORGE_INDUSTRIAL"))
-    FORGE,
+    MATERIAL3_EXPRESSIVE
 }
 
-val AppTheme.isExthruFamily: Boolean
-    @Suppress("DEPRECATION")
-    get() = this == AppTheme.BIOLUME || this == AppTheme.FORGE_INDUSTRIAL || this == AppTheme.FORGE_TERMINAL || this == AppTheme.FORGE_COMICS || this == AppTheme.FORGE || this == AppTheme.EXTHRU
+val AppTheme.isExthruFamily: Boolean get() = false
+val AppTheme.isForgeFamily: Boolean get() = false
 
-val AppTheme.isForgeFamily: Boolean
-    @Suppress("DEPRECATION")
-    get() = this == AppTheme.FORGE_INDUSTRIAL || this == AppTheme.FORGE_TERMINAL || this == AppTheme.FORGE_COMICS || this == AppTheme.FORGE
-
-val AppTheme.isIndustrial: Boolean
-    get() = this == AppTheme.FORGE_INDUSTRIAL
-
-val AppTheme.isTerminal: Boolean
-    get() = this == AppTheme.FORGE_TERMINAL
-
-val AppTheme.isComics: Boolean
-    get() = this == AppTheme.FORGE_COMICS
+val AppTheme.isIndustrial: Boolean get() = false
+val AppTheme.isTerminal: Boolean get() = false
+val AppTheme.isComics: Boolean get() = false
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

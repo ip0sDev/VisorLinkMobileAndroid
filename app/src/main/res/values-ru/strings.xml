@@ -53,6 +53,7 @@
     <string name="chatlist_fab_new_chat">Новый чат</string>
     <string name="chatlist_fab_new_group">Новая группа</string>
     <string name="chatlist_fab_find_channel">Найти канал</string>
+    <string name="chatlist_draft_prefix">Черновик:\u0020</string>
 
     <!-- Chat Screen — Top bar -->
     <string name="chat_status_online">В сети</string>

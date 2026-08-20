@@ -28,8 +28,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 116
-        versionName = "3.1.06"
+        versionCode = 117
+        versionName = "3.1.07"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
@@ -91,9 +91,6 @@ dependencies {
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui.geometry)
-    implementation(libs.androidx.material3)
-    implementation(libs.haze)
-    implementation(libs.haze.materials)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
