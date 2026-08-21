@@ -238,13 +238,16 @@ class ChatRepository(
             val firestoreIds = currentFirestore.map { it.id }.toSet()
             val outboxMsgs = currentOutbox.map { action ->
                 val type = action.data.optString("type", action.type)
+                if (action.progress > 0f) {
+                    Log.d("ChatRepo", "Outbox message ${action.id} progress: ${action.progress}")
+                }
                 Message(
                     id = action.id,
                     senderId = currentUid,
                     type = type,
                     text = action.data.optString("text"),
                     localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
-                    uploadProgress = action.progress.takeIf { it > 0.01f && it < 1f },
+                    uploadProgress = if (action.status == 0) action.progress else null,
                     createdAt = Timestamp(Date(action.ts)),
                     status = when (action.status) {
                         1 -> SendStatus.SENT
@@ -261,6 +264,8 @@ class ChatRepository(
             firestoreMap.forEach { (id, fsMsg) ->
                 val obMsg = outboxMap[id]
                 combinedMap[id] = if (obMsg != null) {
+                    // Если сообщение есть и в Firestore, и в Outbox — значит оно уже прилетело по сети,
+                    // но Outbox еще не почищен. В этом случае прогресс уже не нужен.
                     fsMsg.copy(
                         localFile = obMsg.localFile ?: fsMsg.localFile,
                         status = SendStatus.SENT

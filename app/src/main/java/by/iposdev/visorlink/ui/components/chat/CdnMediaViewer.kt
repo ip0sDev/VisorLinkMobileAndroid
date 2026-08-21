@@ -67,11 +67,16 @@ fun CdnMediaViewer(
     val modelSource = localFile ?: resolvedUrl
 
     Box(
-        modifier = modifier
-            .sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 400.dp)
-            .clip(VlTheme.tokens.shapes.card)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .clickable { onClick?.invoke() },
+        modifier = if (isFullscreen) {
+            modifier
+                .fillMaxSize()
+                .background(Color.Black)
+        } else {
+            modifier
+                .sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 400.dp)
+                .clip(VlTheme.tokens.shapes.card)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+        }.clickable { onClick?.invoke() },
         contentAlignment = Alignment.Center
     ) {
         if (modelSource != null) {
@@ -89,7 +94,7 @@ fun CdnMediaViewer(
                     .crossfade(true)
                     .build(),
                 contentDescription = "Media Preview",
-                contentScale = ContentScale.Crop,
+                contentScale = if (isFullscreen) ContentScale.Fit else ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
                 onLoading = { isLoading = true; isError = false },
                 onSuccess = { isLoading = false; isError = false },

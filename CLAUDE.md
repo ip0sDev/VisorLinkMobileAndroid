@@ -77,9 +77,9 @@ The Retrofit base URL `http://10.0.2.2:8080` is a **placeholder**: `DynamicBaseU
 
 ### Offline-first: hand-rolled SQLite cache + outbox
 
-`utils/ChatDataCache.kt` (`LocalCacheDB`) stores chats, messages, profiles, sticker packs, and likes as JSON blobs, plus an **outbox** table of `QueuedAction`s. Repositories emit cached data first, then network data, from the same `channelFlow`.
+`utils/ChatDataCache.kt` (`LocalCacheDB`) stores chats, messages, profiles, sticker packs, and likes as JSON blobs, plus an **outbox** table of `QueuedAction`s. DB version 5 adds a `progress` column for media uploads. Repositories emit cached data first, then network data, from the same `channelFlow`.
 
-`utils/OutboxManager.kt` drains the outbox on a 2s poll loop, gated on `NetworkMonitor.isOnline`. Actions are grouped by `chatId`: **parallel across chats, strictly serial within a chat**, and the first failure in a chat breaks that chat's loop so message order survives. Media uploads additionally pass through `mediaSemaphore`. Backoff is `retryCount * 10s` up to `MAX_RETRIES = 5`, after which status flips to 2 (failed). Its constructor takes `OutboxDataSource`, `CdnUploader`, and a `CoroutineDispatcher` purely as test seams — keep that injection intact when modifying it.
+`utils/OutboxManager.kt` drains the outbox on a 2s poll loop, gated on `NetworkMonitor.isOnline`. Actions are grouped by `chatId`: **parallel across chats, strictly serial within a chat**, and the first failure in a chat breaks that chat's loop so message order survives. Media uploads additionally pass through `mediaSemaphore`. Backoff is `retryCount * 10s` up to `MAX_RETRIES = 5`, after which status flips to 2 (failed). Real-time progress is pushed to DB via `outboxDataSource.updateProgress` and observed by chat bubbles.
 
 There is a `datastore-preferences` dependency but **no DataStore usage**; all settings are `SharedPreferences`.
 
@@ -104,18 +104,21 @@ Reading a flag needs no code change anywhere — `flags.isEnabled("some_key")` r
 
 Three themes, selected at runtime: `AppTheme.MATERIAL3_EXPRESSIVE` (clean M3E), `AppTheme.BIOLUME` (neumorphic relief), and `AppTheme.FORGE` (industrial, square edges, hard shadows). `AppTheme.id` is the stable persistence key (`"m3e"`, `"biolume"`, `"forge"`).
 
-**The whole system hangs off one CompositionLocal.** `VisorLinkTheme` provides `LocalVlTokens` alongside `MaterialTheme`, carrying everything M3 has no role for: neumorphic depth, hard-edge shadows (Forge), signal glow, `success`/`warning`, and monospace `data*` text roles. Read it as `VlTheme.tokens`.
+**The whole system hangs off one CompositionLocal.** `VisorLinkTheme` provides `LocalVlTokens` alongside `MaterialTheme`, carrying everything M3 has no role for: neumorphic depth, hard-edge shadows (Forge), signal glow, `success`/`warning`, and monospace `data*` text roles. Read it as `VlTheme.tokens`. This is the load-bearing rule of the UI layer:
 
-> **Components adapt to the theme; screens never mention it.** No composable takes `appTheme` as a parameter. A screen calls `VlSurface(...)` / `VlButton(...)` identically in both themes. The deleted theme system (pre-94a7fbb) threaded `appTheme: AppTheme` through every component signature — that is the mistake this design exists to avoid. If you find yourself wanting to pass a theme down, add a token instead.
+> **Components adapt to the theme; screens never mention it.** No composable takes `appTheme` as a parameter. A screen calls `VlSurface(...)` / `VlButton(...)` identically in all themes. The deleted theme system (pre-94a7fbb) threaded `appTheme: AppTheme` through every component signature — that is the mistake this design exists to avoid. If you find yourself wanting to pass a theme down, add a token instead.
+
+**Forge Specifics.** Forge uses `hardEdge = true` in structure tokens (no blur on shadows), `VlPressStyle.STAMP` (element moves into its shadow), and linear 80ms transitions (`useSpring = false`). Headers use **JetBrains Mono** with wide tracking to mimic machine marking.
 
 Files in `ui/theme/`:
 
 | File | Holds |
 |---|---|
 | `VlTokens.kt` | `VlTokens` contract, `VlDepth` (Raised/Inset/Flat), `LocalVlTokens`, `VlTheme` accessor |
-| `BiolumePalette.kt` | Abyss (dark) / Tidepool (light) `ColorScheme`s, Biolume shapes, token factories |
+| `BiolumePalette.kt` | Abyss (dark) / Tidepool (light) `ColorScheme`s, Biolume shapes |
+| `ForgePalette.kt` | Steel (dark) / Concrete (light) `ColorScheme`s, Forge shapes (square), tokens |
 | `VlDepth.kt` | `Modifier.vlRaised` / `vlInset` / `vlSignalGlow` / `vlSignalBorder` / `vlHairline` / `vlBiopulse` |
-| `Type.kt` | Font families, per-theme type scales, the `data*` roles, `BiolumeBrandStyle` |
+| `Type.kt` | Font families, per-theme type scales, the `data*` roles, Forge technical typography |
 | `Theme.kt` | `VisorLinkTheme` — dispatches scheme/shapes/typography/tokens |
 
 **Fonts.** Biolume runs on **Inter** (all text roles) + **JetBrains Mono** (`data*` roles). Space Grotesk is bundled but used *only* by `VlBrandText` for the "VisorLink" wordmark, because **it contains zero Cyrillic glyphs** — all 66 letters are absent from its cmap. Guideline §5 assigns it display/headline/titleLarge, but this app is Russian-first, so that would render Russian headlines in system Roboto and mix two faces inside strings like "Чат с Ivan". If you ever move a role onto Space Grotesk, verify the text is Latin-only first. M3E deliberately stays on system Roboto — "clean M3E" includes its font.
@@ -151,7 +154,11 @@ Raised vs Inset is semantic, not decorative: things that *press on* something ar
 
 ### UI conventions
 
-Shared composables in `ui/components/` are prefixed `Vl`: `VlSurface`, `VlCard`, `VlButton`, `VlSwitch`, `VlSegmentedControl`, `VlSettingsSection`/`VlSettingsItem`, `VlOptionRow`, `VlDialog`, `VlToast`, `VlAmbientGlow`, `VlGlassPanel`, `VlTextField`, `VlFab`, `VlLiveDot`/`VlPresenceDot`, `VlNavigationBar`, `VlBrandText`. Two base containers, distinct on purpose: `VlSurface` is the general container (grouped-list corners via `index`/`total`, raised↔inset dispatch, press feedback), `VlCard` is content-card only (always raised + hairline in Biolume, plain M3 `Card` otherwise). Feature-specific composables go in `ui/components/<feature>/`.
+Shared composables in `ui/components/` are prefixed `Vl`: `VlSurface`, `VlCard`, `VlButton`, `VlSwitch`, `VlSegmentedControl`, `VlSettingsSection`/`VlSettingsItem`, `VlOptionRow`, `VlDialog`, `VlToast`, `VlAmbientGlow`, `VlGlassPanel`, `VlTextField`, `VlFab`, `VlLiveDot`/`VlPresenceDot`, `VlNavigationBar`, `VlBrandText`, `VlTopAppBar`.
+
+`VlTopAppBar` should be used instead of `TopAppBar` on main screens. In Forge it uses `surfaceContainerHigh` with a bottom hairline.
+
+`VlFab` supports both standard icon-only and extended (icon + text) modes. It also has a `content` slot for custom icon morphs.
 
 `VlNavigationBar` (in `ui/components/VlNavBar.kt`, moved out of `MainScreen`) is a full-width floating stadium bar: the **container** carries the structure (raised + hairline), the **active item** is a *flat* `selectionFill` pill — no inset, no glow. §4.2 lists "чип, вкладка, nav-item" under flat `*Container` fill, so the chip rule from §7 (inset on select) does **not** apply here; a 30dp-tall pill with an inset shadow reads as a smudge. Three constraints this component learned the hard way:
 

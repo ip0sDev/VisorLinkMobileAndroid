@@ -144,7 +144,8 @@ object CdnService {
                 while (input.read(ioBuffer).also { bytesRead = it } != -1) {
                     out.write(ioBuffer, 0, bytesRead)
                     totalRead += bytesRead
-                    onProgress?.invoke(totalRead.toFloat() / fileLength)
+                    val progress = totalRead.toFloat() / fileLength
+                    onProgress?.invoke(progress)
                 }
             }
             out.writeBytes(crlf)

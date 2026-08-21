@@ -14,12 +14,14 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import by.iposdev.visorlink.BuildConfig
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.utils.CustomizationHelper
 import org.koin.compose.viewmodel.koinViewModel
+import java.util.concurrent.atomic.AtomicInteger
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
 
@@ -288,7 +290,10 @@ fun VisorLinkTheme(
         }
     }
 
-    CompositionLocalProvider(LocalVlTokens provides tokens) {
+    CompositionLocalProvider(
+        LocalVlTokens provides tokens,
+        LocalSignalCounter provides remember { AtomicInteger(0) }
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             // Шкала форм для M3-компонентов, которые берут форму из темы, а не из

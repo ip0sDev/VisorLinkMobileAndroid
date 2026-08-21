@@ -1,11 +1,15 @@
 package by.iposdev.visorlink.ui.theme
 
+import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -28,6 +32,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import by.iposdev.visorlink.BuildConfig
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Два независимых слоя глубины из гайдлайна §4.
@@ -198,6 +204,8 @@ fun Modifier.vlStructure(
 // ── §4.2 Слой сигнала ────────────────────────────────────────────────────────
 
 /**
+ * Слой сигнала (§4.2)
+ *
  * Цветное свечение поверх структуры. Включается ТОЛЬКО когда элемент что-то
  * сообщает: focus, press, live, selected-CTA. Гайдлайн §10: в покое не светится
  * ничего, кроме FAB, и на экране одновременно активен максимум один glow.
@@ -215,16 +223,36 @@ fun Modifier.vlSignalGlow(
     if (!tokens.enabled || !active) return this
     val alpha = alphaOverride ?: tokens.glowAlpha
     if (alpha <= 0.001f) return this
-    return this.drawBehind {
-        drawSoftShadow(
-            path = shape.toPath(size, layoutDirection, this),
-            color = color.copy(alpha = alpha),
-            blurPx = tokens.glowBlur.toPx(),
-            dx = 0f,
-            dy = 0f,
-        )
+
+    return this.composed {
+        if (BuildConfig.DEBUG) {
+            val counter = LocalSignalCounter.current
+            DisposableEffect(Unit) {
+                val current = counter?.incrementAndGet() ?: 0
+                if (current > 1) {
+                    Log.w("VlTheme", "Violation of §10: Multiple signal glows detected on screen ($current active)")
+                }
+                onDispose { counter?.decrementAndGet() }
+            }
+        }
+
+        drawBehind {
+            drawSoftShadow(
+                path = shape.toPath(size, layoutDirection, this),
+                color = color.copy(alpha = alpha),
+                blurPx = tokens.glowBlur.toPx(),
+                dx = 0f,
+                dy = 0f,
+            )
+        }
     }
 }
+
+/**
+ * Отладочный счетчик для правила «Один glow на экран» (§10).
+ * Используется только в [BuildConfig.DEBUG].
+ */
+val LocalSignalCounter = compositionLocalOf<AtomicInteger?> { null }
 
 /**
  * Сигнальный контур — 1px по границе формы. Используется вместе с [vlSignalGlow]

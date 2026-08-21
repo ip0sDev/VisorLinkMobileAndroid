@@ -66,7 +66,17 @@ class OutboxManager(
     private var processingJob: Job? = null
     
     private val inFlightIds = ConcurrentHashMap.newKeySet<String>()
+    private val lastProgressUpdate = ConcurrentHashMap<String, Long>()
     private val mediaSemaphore = Semaphore(MEDIA_CONCURRENCY)
+
+    private suspend fun updateProgressThrottled(actionId: String, progress: Float) {
+        val now = System.currentTimeMillis()
+        val last = lastProgressUpdate[actionId] ?: 0L
+        if (now - last > 150) { // Ограничиваем частоту обновлений до ~7 FPS
+            lastProgressUpdate[actionId] = now
+            outboxDataSource.updateProgress(context, actionId, progress)
+        }
+    }
 
     init {
         scope.launch {
@@ -185,7 +195,7 @@ class OutboxManager(
                 val file = File(localPath)
                 if (file.exists()) {
                     val mediaId = cdnUploader.uploadFile(file, "image/jpeg") { progress ->
-                        scope.launch { outboxDataSource.updateProgress(context, action.id, progress) }
+                        scope.launch { updateProgressThrottled(action.id, progress) }
                     }
                     chatRepository.sendImageNow(
                         id = action.id,
@@ -197,6 +207,7 @@ class OutboxManager(
                         isSpoiler = isSpoiler
                     )
                     file.delete()
+                    lastProgressUpdate.remove(action.id)
                 }
             }
             "voice" -> {
@@ -205,7 +216,7 @@ class OutboxManager(
                 val file = File(localPath)
                 if (file.exists()) {
                     val mediaId = cdnUploader.uploadFile(file, "audio/webm") { progress ->
-                        scope.launch { outboxDataSource.updateProgress(context, action.id, progress) }
+                        scope.launch { updateProgressThrottled(action.id, progress) }
                     }
                     chatRepository.sendVoiceNow(
                         id = action.id,
@@ -216,6 +227,7 @@ class OutboxManager(
                         replyTo = replyTo
                     )
                     file.delete()
+                    lastProgressUpdate.remove(action.id)
                 }
             }
             "video" -> {
@@ -223,7 +235,7 @@ class OutboxManager(
                 val file = File(localPath)
                 if (file.exists()) {
                     val mediaId = cdnUploader.uploadFile(file, "video/mp4") { progress ->
-                        scope.launch { outboxDataSource.updateProgress(context, action.id, progress) }
+                        scope.launch { updateProgressThrottled(action.id, progress) }
                     }
                     chatRepository.sendVideoNow(
                         id = action.id,
@@ -234,6 +246,7 @@ class OutboxManager(
                         replyTo = replyTo
                     )
                     file.delete()
+                    lastProgressUpdate.remove(action.id)
                 }
             }
             "sticker" -> {

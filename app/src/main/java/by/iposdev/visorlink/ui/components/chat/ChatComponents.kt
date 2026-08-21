@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.components.chat
 
+import android.util.Log
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -40,12 +41,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -105,7 +108,9 @@ fun TypingDots(primaryColor: Color = Color.Unspecified) {
 @Composable
 fun VoiceBubble(
     messageId: String, url: String, durationSec: Int, tint: Color,
-    playback: VoicePlaybackState, onPlay: (url: String, durationSec: Int) -> Unit, onSeek: (Float) -> Unit,
+    playback: VoicePlaybackState,
+    uploadProgress: Float? = null,
+    onPlay: (url: String, durationSec: Int) -> Unit, onSeek: (Float) -> Unit,
 ) {
     val isThisMessage = playback.playingMessageId == messageId
     val isPlaying  = isThisMessage && playback.isPlaying
@@ -123,47 +128,100 @@ fun VoiceBubble(
         label = "pulse_phase",
     )
 
-    Column(modifier = Modifier.width(220.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Box(
-                modifier = Modifier.size(38.dp)
-                    .background(tint.copy(alpha = 0.15f), VlTheme.tokens.shapes.indicator)
-                    .clickable { onPlay(url, durationSec) },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
-                } else {
-                    Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+    Box(contentAlignment = Alignment.Center) {
+        Column(modifier = Modifier.width(220.dp).then(if (uploadProgress != null) Modifier.alpha(0.6f) else Modifier)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier.size(38.dp)
+                        .background(tint.copy(alpha = 0.15f), VlTheme.tokens.shapes.indicator)
+                        .clickable { onPlay(url, durationSec) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
+                    } else {
+                        Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                    }
                 }
-            }
-            Spacer(Modifier.width(8.dp))
-            Canvas(
-                modifier = Modifier.weight(1f).height(36.dp).pointerInput(messageId) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val press = event.changes.firstOrNull() ?: continue
-                            if (press.pressed) {
-                                val fraction = (press.position.x / size.width).coerceIn(0f, 1f)
-                                press.consume()
-                                onSeek(fraction)
-                                onPlay(url, durationSec)
+                Spacer(Modifier.width(8.dp))
+                Canvas(
+                    modifier = Modifier.weight(1f).height(36.dp).pointerInput(messageId) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val press = event.changes.firstOrNull() ?: continue
+                                if (press.pressed) {
+                                    val fraction = (press.position.x / size.width).coerceIn(0f, 1f)
+                                    press.consume()
+                                    onSeek(fraction)
+                                    onPlay(url, durationSec)
+                                }
                             }
                         }
-                    }
-                },
-            ) {
-                drawWaveform(waveform, progress, isThisMessage, isPlaying, pulsePhase, tint)
+                    },
+                ) {
+                    drawWaveform(waveform, progress, isThisMessage, isPlaying, pulsePhase, tint)
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth().padding(start = 46.dp, top = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatVoiceTime(currentSec), style = MaterialTheme.typography.labelSmall,
+                    color = tint.copy(alpha = 0.8f), fontSize = 10.sp)
+                Text(formatVoiceTime(totalSec), style = MaterialTheme.typography.labelSmall,
+                    color = tint.copy(alpha = 0.5f), fontSize = 10.sp)
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 46.dp, top = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatVoiceTime(currentSec), style = MaterialTheme.typography.labelSmall,
-                color = tint.copy(alpha = 0.8f), fontSize = 10.sp)
-            Text(formatVoiceTime(totalSec), style = MaterialTheme.typography.labelSmall,
-                color = tint.copy(alpha = 0.5f), fontSize = 10.sp)
+
+        if (uploadProgress != null) {
+            UploadProgressOverlay(
+                progress = uploadProgress,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+    }
+}
+
+@Composable
+fun UploadProgressOverlay(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    onCancel: (() -> Unit)? = null
+) {
+    // В логах проверяем, что компонент вообще живой
+    SideEffect {
+        if (progress > 0f) {
+            Log.d("VlUI", "Drawing progress overlay: $progress")
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.45f)), // Чуть темнее для контраста
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp) // Чуть больше
+                .background(Color.Black.copy(alpha = 0.6f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(48.dp),
+                color = Color.White,
+                strokeWidth = 4.dp, // Толще
+                trackColor = Color.White.copy(alpha = 0.2f),
+                strokeCap = StrokeCap.Round
+            )
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Cancel",
+                tint = Color.White,
+                modifier = Modifier
+                    .size(24.dp)
+                    .then(if (onCancel != null) Modifier.clickable { onCancel() } else Modifier)
+            )
         }
     }
 }

@@ -1,6 +1,7 @@
 package by.iposdev.visorlink.ui.components.chat
 
 import android.net.Uri
+import android.util.Log
 import android.util.Patterns
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -177,33 +178,6 @@ internal fun ReplyPreview(
 }
 
 @Composable
-private fun AlbumImageItem(
-    image: AlbumImage,
-    isRevealed: Boolean,
-    onReveal: () -> Unit,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url)
-    val showBlur = image.spoiler && !isRevealed
-
-    Box(modifier
-        .clip(VlTheme.tokens.shapes.card)
-        .clickable { if (showBlur) onReveal() else onClick() }
-    ) {
-        CachedImage(
-            model = resolvedUrl,
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize().then(if (showBlur) Modifier.blur(20.dp) else Modifier),
-            contentScale = ContentScale.Crop
-        )
-        if (showBlur) {
-            Icon(Icons.Default.VisibilityOff, null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(32.dp))
-        }
-    }
-}
-
-@Composable
 private fun AlbumGrid(
     images: List<AlbumImage>,
     revealedIndices: Set<Int>,
@@ -213,32 +187,73 @@ private fun AlbumGrid(
     val count = images.size
     if (count == 0) return
 
-    val gridHeight = when {
-        count == 1 -> 250.dp
-        count == 2 -> 180.dp
-        count <= 4 -> 320.dp
-        else -> 450.dp
-    }
+    val maxBubbleWidth = 280.dp
+    val spacing = 2.dp
 
-    Box(Modifier.fillMaxWidth().height(gridHeight)) {
-        if (count == 1) {
-            AlbumImageItem(images[0], isRevealed = 0 in revealedIndices, onReveal = { onReveal(0) }, onClick = { onClick(0) }, modifier = Modifier.fillMaxSize())
-        } else {
-            val columns = if (count == 2) 2 else if (count == 4) 2 else 3
+    if (count == 1) {
+        // Одиночное фото: адаптируем под естественное соотношение сторон
+        Box(
+            Modifier
+                .widthIn(max = maxBubbleWidth)
+                .heightIn(max = 450.dp)
+                .clip(VlTheme.tokens.shapes.card)
+        ) {
+            AlbumImageItem(
+                image = images[0],
+                isRevealed = 0 in revealedIndices,
+                onReveal = { onReveal(0) },
+                onClick = { onClick(0) },
+                modifier = Modifier.wrapContentSize(),
+                useCardShape = false
+            )
+        }
+    } else if (count == 2) {
+        // Два фото: в ряд, каждое с его естественным соотношением
+        Box(
+            Modifier
+                .width(maxBubbleWidth)
+                .clip(VlTheme.tokens.shapes.card)
+        ) {
+            Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(spacing)) {
+                images.forEachIndexed { index, image ->
+                    AlbumImageItem(
+                        image = image,
+                        isRevealed = index in revealedIndices,
+                        onReveal = { onReveal(index) },
+                        onClick = { onClick(index) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .wrapContentHeight(),
+                        useCardShape = false
+                    )
+                }
+            }
+        }
+    } else {
+        // 3+ фото: сетка с квадратными ячейками
+        val columns = if (count == 4) 2 else 3
+        val itemSize = (maxBubbleWidth - (spacing * (columns - 1))) / columns
+        val rows = (minOf(count, 10) + columns - 1) / columns
+        val gridHeight = (itemSize * rows) + (spacing * (rows - 1))
+
+        Box(Modifier.width(maxBubbleWidth).height(gridHeight).clip(VlTheme.tokens.shapes.card)) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(1.dp),
+                contentPadding = PaddingValues(0.dp),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+                verticalArrangement = Arrangement.spacedBy(spacing),
                 userScrollEnabled = false
             ) {
                 itemsIndexed(images.take(10)) { index, image ->
-                    Box(Modifier.aspectRatio(1f).padding(1.dp)) {
+                    Box(Modifier.aspectRatio(1f)) {
                         AlbumImageItem(
                             image = image,
                             isRevealed = index in revealedIndices,
                             onReveal = { onReveal(index) },
                             onClick = { onClick(index) },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            useCardShape = false
                         )
                         if (index == 9 && images.size > 10) {
                             Box(Modifier.fillMaxSize().background(Color.Black.copy(0.5f)), contentAlignment = Alignment.Center) {
@@ -253,38 +268,29 @@ private fun AlbumGrid(
 }
 
 @Composable
-private fun UploadProgressOverlay(
-    progress: Float,
-    onCancel: (() -> Unit)? = null
+private fun AlbumImageItem(
+    image: AlbumImage,
+    isRevealed: Boolean,
+    onReveal: () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    useCardShape: Boolean = true
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f)),
-        contentAlignment = Alignment.Center
+    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url)
+    val showBlur = image.spoiler && !isRevealed
+
+    Box(modifier
+        .then(if (useCardShape) Modifier.clip(VlTheme.tokens.shapes.card) else Modifier)
+        .clickable { if (showBlur) onReveal() else onClick() }
     ) {
-        Box(
-            modifier = Modifier
-                .size(52.dp)
-                .background(Color.Black.copy(alpha = 0.45f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            CircularProgressIndicator(
-                progress = { progress },
-                modifier = Modifier.size(46.dp),
-                color = Color.White,
-                strokeWidth = 3.dp,
-                trackColor = Color.White.copy(alpha = 0.2f),
-                strokeCap = StrokeCap.Round
-            )
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Cancel",
-                tint = Color.White,
-                modifier = Modifier
-                    .size(24.dp)
-                    .then(if (onCancel != null) Modifier.clickable { onCancel() } else Modifier)
-            )
+        CachedImage(
+            model = resolvedUrl,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize().then(if (showBlur) Modifier.blur(20.dp) else Modifier),
+            contentScale = ContentScale.Crop
+        )
+        if (showBlur) {
+            Icon(Icons.Default.VisibilityOff, null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(32.dp))
         }
     }
 }
@@ -450,7 +456,16 @@ internal fun TextBubble(
                     MessageType.TEXT  -> LinkifiedText(text = message.text ?: "", color = textColor, linkColor = linkColor, onMentionClick = onMentionClick)
                     MessageType.VOICE -> {
                         val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
-                        VoiceBubble(messageId = message.id, url = resolvedUrl ?: "", durationSec = message.duration ?: 0, tint = textColor, playback = voicePlayback, onPlay = onPlayVoice, onSeek = onSeekVoice)
+                        VoiceBubble(
+                            messageId = message.id,
+                            url = resolvedUrl ?: "",
+                            durationSec = message.duration ?: 0,
+                            tint = textColor,
+                            playback = voicePlayback,
+                            uploadProgress = message.uploadProgress,
+                            onPlay = onPlayVoice,
+                            onSeek = onSeekVoice
+                        )
                     }
                 }
 
@@ -549,7 +564,11 @@ internal fun VideoBubble(
                 }
 
                 if (message.uploadProgress != null) {
-                    UploadProgressOverlay(progress = message.uploadProgress!!)
+                    Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
+                    UploadProgressOverlay(
+                        progress = message.uploadProgress!!,
+                        modifier = Modifier.matchParentSize()
+                    )
                 }
             }
         }
@@ -612,7 +631,11 @@ internal fun ImageBubble(
                 }
 
                 if (message.uploadProgress != null) {
-                    UploadProgressOverlay(progress = message.uploadProgress!!)
+                    Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
+                    UploadProgressOverlay(
+                        progress = message.uploadProgress!!,
+                        modifier = Modifier.matchParentSize()
+                    )
                 }
             }
         }
@@ -633,6 +656,7 @@ internal fun AlbumBubble(
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val revealedIndices = remember { mutableStateOf(setOf<Int>()) }
+    val isReadByOther = (chat?.participants?.find { it != currentUid } ?: "") in message.readBy
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -644,7 +668,7 @@ internal fun AlbumBubble(
                 onTap = null, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
-            color = MaterialTheme.colorScheme.surfaceVariant
+            color = Color.Transparent // Прозрачный, так как AlbumGrid сам рисует фон/рамку если нужно
         ) {
             Box {
                 AlbumGrid(
@@ -656,6 +680,25 @@ internal fun AlbumBubble(
                 Column(modifier = Modifier.matchParentSize()) {
                     message.replyData?.let { reply ->
                         ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End, // Время справа
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                            )
+                            if (isMine) {
+                                Spacer(Modifier.width(3.dp))
+                                ReadReceipt(isRead = isReadByOther)
+                            }
+                        }
                     }
                 }
             }
