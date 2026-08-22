@@ -166,113 +166,123 @@ class OutboxManager(
 
     private suspend fun processAction(action: ChatDataCache.QueuedAction) {
         val data = action.data
-        val replyTo = if (data.has("replyTo")) {
-            val r = data.getJSONObject("replyTo")
-            ReplyData(
-                id = r.getString("id"),
-                type = r.getString("type"),
-                text = r.optString("text"),
-                url = r.optString("url"),
-                senderUsername = r.getString("senderUsername")
-            )
+        val replyTo = if (data.has("replyTo") && !data.isNull("replyTo")) {
+            try {
+                val r = data.getJSONObject("replyTo")
+                ReplyData(
+                    id = r.getString("id"),
+                    type = r.getString("type"),
+                    text = if (r.isNull("text")) null else r.optString("text"),
+                    url = if (r.isNull("url")) null else r.optString("url"),
+                    senderUsername = r.getString("senderUsername")
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse replyTo for action ${action.id}", e)
+                null
+            }
         } else null
 
-        when (action.type) {
-            "text" -> {
-                withTimeout(20_000) {
-                    chatRepository.sendTextNow(
-                        id = action.id,
-                        chatId = action.chatId,
-                        text = data.getString("text"),
-                        senderUsername = data.getString("senderUsername"),
-                        replyTo = replyTo
-                    )
-                }
-            }
-            "image" -> {
-                val localPath = data.getString("localPath")
-                val isSpoiler = data.optBoolean("isSpoiler", false)
-                val file = File(localPath)
-                if (file.exists()) {
-                    val mediaId = cdnUploader.uploadFile(file, "image/jpeg") { progress ->
-                        scope.launch { updateProgressThrottled(action.id, progress) }
+        try {
+            when (action.type) {
+                "text" -> {
+                    withTimeout(20_000) {
+                        chatRepository.sendTextNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            text = data.getString("text"),
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo
+                        )
                     }
-                    chatRepository.sendImageNow(
-                        id = action.id,
-                        chatId = action.chatId,
-                        mediaId = mediaId,
-                        fileName = file.name,
-                        senderUsername = data.getString("senderUsername"),
-                        replyTo = replyTo,
-                        isSpoiler = isSpoiler
-                    )
-                    file.delete()
-                    lastProgressUpdate.remove(action.id)
                 }
-            }
-            "voice" -> {
-                val localPath = data.getString("localPath")
-                val duration = data.getInt("duration")
-                val file = File(localPath)
-                if (file.exists()) {
-                    val mediaId = cdnUploader.uploadFile(file, "audio/webm") { progress ->
-                        scope.launch { updateProgressThrottled(action.id, progress) }
+                "image" -> {
+                    val localPath = data.getString("localPath")
+                    val isSpoiler = data.optBoolean("isSpoiler", false)
+                    val file = File(localPath)
+                    if (file.exists()) {
+                        val mediaId = cdnUploader.uploadFile(file, "image/jpeg") { progress ->
+                            scope.launch { updateProgressThrottled(action.id, progress) }
+                        }
+                        chatRepository.sendImageNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            mediaId = mediaId,
+                            fileName = file.name,
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo,
+                            isSpoiler = isSpoiler
+                        )
+                        file.delete()
+                        lastProgressUpdate.remove(action.id)
                     }
-                    chatRepository.sendVoiceNow(
-                        id = action.id,
-                        chatId = action.chatId,
-                        mediaId = mediaId,
-                        durationSec = duration,
-                        senderUsername = data.getString("senderUsername"),
-                        replyTo = replyTo
-                    )
-                    file.delete()
-                    lastProgressUpdate.remove(action.id)
                 }
-            }
-            "video" -> {
-                val localPath = data.getString("localPath")
-                val file = File(localPath)
-                if (file.exists()) {
-                    val mediaId = cdnUploader.uploadFile(file, "video/mp4") { progress ->
-                        scope.launch { updateProgressThrottled(action.id, progress) }
+                "voice" -> {
+                    val localPath = data.getString("localPath")
+                    val duration = data.getInt("duration")
+                    val file = File(localPath)
+                    if (file.exists()) {
+                        val mediaId = cdnUploader.uploadFile(file, "audio/webm") { progress ->
+                            scope.launch { updateProgressThrottled(action.id, progress) }
+                        }
+                        chatRepository.sendVoiceNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            mediaId = mediaId,
+                            durationSec = duration,
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo
+                        )
+                        file.delete()
+                        lastProgressUpdate.remove(action.id)
                     }
-                    chatRepository.sendVideoNow(
-                        id = action.id,
-                        chatId = action.chatId,
-                        mediaId = mediaId,
-                        fileName = file.name,
-                        senderUsername = data.getString("senderUsername"),
-                        replyTo = replyTo
-                    )
-                    file.delete()
-                    lastProgressUpdate.remove(action.id)
+                }
+                "video" -> {
+                    val localPath = data.getString("localPath")
+                    val file = File(localPath)
+                    if (file.exists()) {
+                        val mediaId = cdnUploader.uploadFile(file, "video/mp4") { progress ->
+                            scope.launch { updateProgressThrottled(action.id, progress) }
+                        }
+                        chatRepository.sendVideoNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            mediaId = mediaId,
+                            fileName = file.name,
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo
+                        )
+                        file.delete()
+                        lastProgressUpdate.remove(action.id)
+                    }
+                }
+                "sticker" -> {
+                    withTimeout(20_000) {
+                        chatRepository.sendStickerNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            stickerId = data.getString("stickerId"),
+                            url = data.getString("url"),
+                            packId = data.getString("packId"),
+                            packName = data.getString("packName"),
+                            packEmoji = data.getString("packEmoji"),
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo
+                        )
+                    }
+                }
+                "like" -> {
+                    withTimeout(15_000) {
+                        val messageId = data.getString("messageId")
+                        val isLiked = data.getBoolean("isLiked")
+                        functions.getHttpsCallable("toggleLike")
+                            .call(mapOf("chatId" to action.chatId, "messageId" to messageId, "isLiked" to isLiked))
+                            .await()
+                    }
                 }
             }
-            "sticker" -> {
-                withTimeout(20_000) {
-                    chatRepository.sendStickerNow(
-                        id = action.id,
-                        chatId = action.chatId,
-                        stickerId = data.getString("stickerId"),
-                        url = data.getString("url"),
-                        packId = data.getString("packId"),
-                        packName = data.getString("packName"),
-                        packEmoji = data.getString("packEmoji"),
-                        senderUsername = data.getString("senderUsername"),
-                        replyTo = replyTo
-                    )
-                }
-            }
-            "like" -> {
-                withTimeout(15_000) {
-                    val messageId = data.getString("messageId")
-                    val isLiked = data.getBoolean("isLiked")
-                    functions.getHttpsCallable("toggleLike")
-                        .call(mapOf("chatId" to action.chatId, "messageId" to messageId, "isLiked" to isLiked))
-                        .await()
-                }
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing action ${action.id} of type ${action.type}", e)
+            throw e
         }
     }
 }

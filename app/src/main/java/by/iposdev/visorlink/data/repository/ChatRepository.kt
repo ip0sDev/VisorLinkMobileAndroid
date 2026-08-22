@@ -524,7 +524,7 @@ class ChatRepository(
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
-            replyTo?.let { put("replyTo", it.toMap()) }
+            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "text", data)
         return null
@@ -575,7 +575,7 @@ class ChatRepository(
             put("localPath", tempFile.absolutePath)
             put("senderUsername", senderUsername)
             put("isSpoiler", isSpoiler)
-            replyTo?.let { put("replyTo", it.toMap()) }
+            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "image", data)
     }
@@ -624,7 +624,7 @@ class ChatRepository(
             put("localPath", file.absolutePath)
             put("duration", durationSec)
             put("senderUsername", senderUsername)
-            replyTo?.let { put("replyTo", it.toMap()) }
+            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "voice", data)
     }
@@ -677,7 +677,7 @@ class ChatRepository(
         val data = JSONObject().apply {
             put("localPath", tempFile.absolutePath)
             put("senderUsername", senderUsername)
-            replyTo?.let { put("replyTo", it.toMap()) }
+            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "video", data)
     }
@@ -728,7 +728,7 @@ class ChatRepository(
             put("packName", packName)
             put("packEmoji", packEmoji)
             put("senderUsername", senderUsername)
-            replyTo?.let { put("replyTo", it.toMap()) }
+            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "sticker", data)
     }
