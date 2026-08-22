@@ -302,4 +302,13 @@ class UserRepository(
         db.collection("users").document(currentUid)
             .update("ignoreCustomizations", ignore).await()
     }
+
+    suspend fun generateTgCode(): String {
+        val result = functions.getHttpsCallable("generateTgCode").call().await()
+        return (result.data as Map<*, *>)["code"] as String
+    }
+
+    suspend fun unbindTelegram() {
+        functions.getHttpsCallable("unbindTelegram").call().await()
+    }
 }

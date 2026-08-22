@@ -68,6 +68,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onOpenCacheSettings: () -> Unit = {},
     onOpenStorageManager: () -> Unit = {},
+    onOpenStatus: () -> Unit = {},
     onOpenCustomization: () -> Unit = {},
     onOpenAegisDebug: () -> Unit = {},
     onOpenFlagFlipper: () -> Unit = {},
@@ -293,6 +294,7 @@ fun SettingsScreen(
                 VlSettingsSection(title = stringResource(R.string.settings_section_storage)) {
                     VlSettingsItem(icon = Icons.Default.Storage, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
                     VlSettingsItem(icon = Icons.Default.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
+                    VlSettingsItem(icon = Icons.Default.HealthAndSafety, iconColor = colorStorage, title = "Статус системы", onClick = onOpenStatus)
                 }
 
                 VlSettingsSection(title = stringResource(R.string.stickers_title)) {

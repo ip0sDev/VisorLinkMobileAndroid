@@ -74,6 +74,7 @@ fun MessageActionOverlay(
     currentUid: String,
     onDismiss: () -> Unit,
     onReply: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     onCancelSending: () -> Unit,
     onSaveImage: () -> Unit,
@@ -104,6 +105,7 @@ fun MessageActionOverlay(
                 onAction = { action, emoji ->
                     when (action) {
                         "reply" -> onReply()
+                        "edit" -> onEdit()
                         "delete" -> onDelete()
                         "cancel_sending" -> onCancelSending()
                         "forward" -> onForward?.invoke()
@@ -118,6 +120,7 @@ fun MessageActionOverlay(
                 currentUid = currentUid,
                 onDismiss = onDismiss,
                 onReply = onReply,
+                onEdit = onEdit,
                 onDelete = onDelete,
                 onCancelSending = onCancelSending,
                 onSaveImage = onSaveImage,
@@ -137,6 +140,7 @@ private fun NormalMessageMenu(
     currentUid: String,
     onDismiss: () -> Unit,
     onReply: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit,
     onCancelSending: () -> Unit,
     onSaveImage: () -> Unit,
@@ -155,6 +159,10 @@ private fun NormalMessageMenu(
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
 
     val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
+
+    val canEdit = data.isMine && !data.message.deleted && !isSending && 
+            (data.message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
+            (data.message.type == MessageType.TEXT || data.message.caption != null)
 
     val expectedWidthPx = with(density) { 260.dp.toPx() }
     val xOffset = if (data.isMine) {
@@ -240,6 +248,12 @@ private fun NormalMessageMenu(
                         haptic.perform(HapticType.CLICK, true); onDismiss(); onReply()
                     }
 
+                    if (canEdit) {
+                        ActionItem(Icons.Default.Edit, stringResource(R.string.action_edit)) {
+                            haptic.perform(HapticType.CLICK, true); onDismiss(); onEdit()
+                        }
+                    }
+
                     when (data.message.type) {
                         MessageType.TEXT -> {
                             ActionItem(Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
@@ -298,6 +312,9 @@ private fun GestureMessageMenu(
     val density = LocalDensity.current
 
     val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
+    val canEdit = data.isMine && !data.message.deleted && !isSending && 
+            (data.message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
+            (data.message.type == MessageType.TEXT || data.message.caption != null)
 
     val actions = mutableListOf<String>()
     if (isSending) {
@@ -306,6 +323,7 @@ private fun GestureMessageMenu(
     } else {
         if (canReact) actions.add("react")
         actions.add("reply")
+        if (canEdit) actions.add("edit")
         if (data.message.type == MessageType.TEXT) actions.add("copy")
         actions.add("forward")
         if (data.isMine) actions.add("delete")
@@ -468,6 +486,7 @@ private fun GestureMessageMenu(
             val icon = when(action) {
                 "react" -> Icons.Default.AddReaction
                 "reply" -> Icons.AutoMirrored.Filled.Reply
+                "edit" -> Icons.Default.Edit
                 "copy" -> Icons.Default.ContentCopy
                 "forward" -> Icons.AutoMirrored.Filled.Forward
                 "delete" -> Icons.Default.Delete
@@ -477,6 +496,7 @@ private fun GestureMessageMenu(
             val text = when(action) {
                 "react" -> "Реакция"
                 "reply" -> stringResource(R.string.action_reply)
+                "edit" -> stringResource(R.string.action_edit)
                 "copy" -> stringResource(R.string.action_copy_text)
                 "forward" -> "Переслать"
                 "delete" -> stringResource(R.string.action_delete_message)

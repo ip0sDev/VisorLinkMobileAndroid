@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -314,6 +315,94 @@ fun ProfileScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center
                             )
+                        }
+
+                        // Telegram Section
+                        Spacer(Modifier.height(32.dp))
+                        VlCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { /* Do nothing */ }
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        Icons.Default.Link,
+                                        null,
+                                        tint = Color(0xFF24A1DE),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        "Telegram",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+
+                                if (user.tg_username != null) {
+                                    Text(
+                                        "Привязан: @${user.tg_username}",
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    VlButton(
+                                        onClick = {
+                                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                                            viewModel.unbindTelegram()
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        isDestructive = true
+                                    ) {
+                                        if (uiState.isLoading) {
+                                            CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                                        } else {
+                                            Text("Отвязать", fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        "Telegram не привязан. Используйте код для привязки через бота.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+
+                                    if (uiState.tgCode != null) {
+                                        SelectionContainer {
+                                            Text(
+                                                uiState.tgCode ?: "",
+                                                style = MaterialTheme.typography.headlineMedium,
+                                                fontWeight = FontWeight.Black,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                        Text(
+                                            "Введите этот код боту @VisorLinkBot",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            textAlign = TextAlign.Center
+                                        )
+                                    } else {
+                                        VlButton(
+                                            onClick = {
+                                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                                viewModel.generateTgCode()
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            enabled = !uiState.isGeneratingCode
+                                        ) {
+                                            if (uiState.isGeneratingCode) {
+                                                CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
+                                            } else {
+                                                Text("Привязать Telegram", fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {

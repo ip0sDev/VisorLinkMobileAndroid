@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
@@ -29,7 +30,7 @@ import by.iposdev.visorlink.ui.components.VlTextField
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SavedMessageActionSheet(onDismiss: () -> Unit, onDelete: () -> Unit) {
+fun SavedMessageActionSheet(onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -37,6 +38,11 @@ fun SavedMessageActionSheet(onDismiss: () -> Unit, onDelete: () -> Unit) {
         tonalElevation = 0.dp
     ) {
         Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(bottom = 12.dp)) {
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.action_edit)) },
+                leadingContent = { Icon(Icons.Default.Edit, null) },
+                modifier = Modifier.clickable(onClick = onEdit)
+            )
             ListItem(
                 headlineContent = { Text(stringResource(R.string.saved_action_delete), color = MaterialTheme.colorScheme.error) },
                 leadingContent = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },

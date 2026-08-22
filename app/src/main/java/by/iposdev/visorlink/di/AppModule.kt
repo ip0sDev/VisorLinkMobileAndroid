@@ -26,6 +26,7 @@ import by.iposdev.visorlink.ui.screens.saved.SavedMessagesViewModel
 import by.iposdev.visorlink.ui.screens.search.SearchViewModel
 import by.iposdev.visorlink.ui.screens.settings.CacheViewModel
 import by.iposdev.visorlink.ui.screens.settings.StorageViewModel
+import by.iposdev.visorlink.ui.screens.status.StatusViewModel
 import by.iposdev.visorlink.ui.screens.settings.ProViewModel
 import by.iposdev.visorlink.ui.screens.settings.CustomizationViewModel
 import by.iposdev.visorlink.ui.screens.settings.FlagFlipperViewModel
@@ -158,6 +159,7 @@ val appModule = module {
     viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
     viewModel { StorageViewModel() }
+    viewModel { StatusViewModel(get(), get()) }
 
     // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }

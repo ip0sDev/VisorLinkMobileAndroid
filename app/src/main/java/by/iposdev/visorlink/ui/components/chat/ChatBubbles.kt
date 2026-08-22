@@ -475,10 +475,20 @@ internal fun TextBubble(
                     horizontalArrangement = Arrangement.spacedBy(3.dp),
                 ) {
                     AnimatedVisibility(visible = message.createdAt != null, enter = fadeIn(tween(300))) {
-                        Text(
-                            message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                            style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            if (message.lastEdited != null) {
+                                Text(
+                                    "(изменено)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = textColor.copy(alpha = 0.5f),
+                                    fontSize = 10.sp,
+                                )
+                            }
+                            Text(
+                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
+                            )
+                        }
                     }
                     if (isMine && !message.deleted) {
                         if (chatType == ChatType.DIRECT && message.status != SendStatus.QUEUED) {

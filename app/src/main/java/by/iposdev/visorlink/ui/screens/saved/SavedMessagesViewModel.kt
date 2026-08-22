@@ -16,6 +16,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.data.model.SavedMessagesSettings
+import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.utils.*
 import com.google.firebase.auth.FirebaseAuth
@@ -42,7 +43,8 @@ data class SavedMessagesUiState(
     val isRecording: Boolean                 = false,
     val isUploading: Boolean                 = false,
     val voicePlayback: VoicePlaybackState    = VoicePlaybackState(),
-    val initialDraft: String                 = ""
+    val initialDraft: String                 = "",
+    val editingMessage: SavedMessage?        = null
 )
 
 class SavedMessagesViewModel(
@@ -356,6 +358,32 @@ class SavedMessagesViewModel(
 
     fun updateLockTimeout(minutes: Int) {
         viewModelScope.launch { repository.updateLockTimeout(currentUid, minutes) }
+    }
+
+    fun startEditing(message: SavedMessage) {
+        val text = if (message.type != MessageType.TEXT) message.caption ?: "" else message.text ?: ""
+        _uiState.update { it.copy(editingMessage = message, initialDraft = text) }
+    }
+
+    fun cancelEditing() {
+        _uiState.update { it.copy(editingMessage = null, initialDraft = "") }
+    }
+
+    fun saveEdit(newText: String) {
+        val msg = _uiState.value.editingMessage ?: return
+        if (newText.trim() == (msg.text ?: msg.caption ?: "")) {
+            cancelEditing()
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                repository.editMessage(currentUid, msg, newText.trim(), encryptionKey)
+                _uiState.update { it.copy(editingMessage = null) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Ошибка редактирования: ${e.message}") }
+            }
+        }
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }

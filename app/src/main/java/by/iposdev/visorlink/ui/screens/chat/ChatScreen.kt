@@ -220,12 +220,18 @@ fun ChatScreen(
                         onInputChange = { inputText = it; viewModel.onTextChanged(it) },
                         onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                         onStickerClick = { showStickerSheet = true },
-                        onSend = { val t = inputText; inputText = ""; viewModel.sendText(t) },
+                        onSend = {
+                            val t = inputText
+                            inputText = ""
+                            if (uiState.editingMessage != null) viewModel.saveEdit(t)
+                            else viewModel.sendText(t)
+                        },
                         onStartRecord = { viewModel.startRecording() },
                         onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
                         onCancelRecord = { viewModel.cancelRecording() },
                         onSendRecord = { viewModel.stopRecordingAndSend() },
-                        onClearReply = { viewModel.clearReply() }
+                        onClearReply = { viewModel.clearReply() },
+                        onCancelEdit = { viewModel.cancelEditing(); inputText = "" }
                     )
                 }
             ) { innerPadding ->
@@ -319,6 +325,7 @@ fun ChatScreen(
                     currentUid = viewModel.currentUid,
                     onDismiss = { contextMenuData = null; dragOffset = Offset.Zero },
                     onReply = { viewModel.setReplyTo(menuData.message); contextMenuData = null },
+                    onEdit = { viewModel.startEditing(menuData.message); contextMenuData = null },
                     onDelete = { showDeleteConfirm = menuData.message.id; contextMenuData = null },
                     onCancelSending = { viewModel.cancelSending(menuData.message.id); contextMenuData = null },
                     onSaveImage = { scope.launch { ImageCache.saveImageToGallery(context, menuData.message.url ?: "") } },

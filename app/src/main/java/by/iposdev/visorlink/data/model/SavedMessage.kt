@@ -33,6 +33,8 @@ data class SavedMessage(
     val packEmoji: String? = null,
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
+    val lastEdited: Timestamp? = null,
+    val editHistory: List<Map<String, Any>> = emptyList(),
     val createdAt: Timestamp? = null,
     val isDiary: Boolean = false,
     // Временные/Локальные данные для расшифровки на лету в UI

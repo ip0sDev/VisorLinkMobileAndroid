@@ -276,6 +276,9 @@ data class Message(
     val images: List<AlbumImage> = emptyList(),
     val forwardFrom: Map<String, Any?>? = null,
 
+    val lastEdited: Timestamp? = null,
+    val editHistory: List<Map<String, Any>> = emptyList(),
+
     // Telegram Bot Forwarding
     val tg_forwarded: Boolean? = null,
     val tg_forwarded_from: String? = null,
@@ -435,6 +438,20 @@ fun Comment.toCommentReplyData() = CommentReplyData(
     text           = text,
     url            = url,
     senderUsername = senderUsername
+)
+
+// ─── Incidents ───────────────────────────────────────────────────────────────
+
+@IgnoreExtraProperties
+data class Incident(
+    val id: String = "",
+    val service: String = "",
+    val title: String = "",
+    val description: String = "",
+    val severity: String = "minor", // minor, major, critical
+    val resolved: Boolean = false,
+    val timestamp: Timestamp? = null,
+    val resolvedAt: Timestamp? = null
 )
 
 // ─── Feed ──────────────────────────────────────────────────────────────────────

@@ -64,6 +64,7 @@ fun ChatBottomBar(
     onCancelRecord: () -> Unit,
     onSendRecord: () -> Unit,
     onClearReply: () -> Unit,
+    onCancelEdit: () -> Unit = {},
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
@@ -128,6 +129,33 @@ fun ChatBottomBar(
                                     Text(msg.text ?: "Медиа", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                                 IconButton(onClick = onClearReply, modifier = Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.Close, "Cancel", tint = cs.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = uiState.editingMessage != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                    uiState.editingMessage?.let { msg ->
+                        val quoteShape = tokens.shapes.card
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp)
+                                .clip(quoteShape)
+                                .background(cs.surfaceContainer)
+                                .vlInset(tokens.structure, quoteShape)
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Edit, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("Редактирование", style = MaterialTheme.typography.labelSmall, color = cs.primary, fontWeight = FontWeight.Bold)
+                                    Text(msg.text ?: msg.caption ?: "Медиа", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                                IconButton(onClick = onCancelEdit, modifier = Modifier.size(24.dp)) {
                                     Icon(Icons.Default.Close, "Cancel", tint = cs.onSurfaceVariant)
                                 }
                             }
@@ -209,14 +237,14 @@ fun ChatBottomBar(
 
                             Spacer(Modifier.width(8.dp))
                             AnimatedContent(
-                                targetState = inputText.isNotBlank(),
+                                targetState = inputText.isNotBlank() || uiState.editingMessage != null,
                                 transitionSpec = {
                                     scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(spring(stiffness = Spring.StiffnessHigh)) + fadeOut()
                                 },
                                 label = "send_mic",
                                 modifier = Modifier.padding(bottom = 2.dp)
-                            ) { hasText ->
-                                if (hasText) {
+                            ) { hasTextOrEdit ->
+                                if (hasTextOrEdit) {
                                     val sendScale by animateFloatAsState(if (uiState.isCooldown) 0.85f else 1f, label = "")
                                     Box(
                                         modifier = Modifier
@@ -230,7 +258,7 @@ fun ChatBottomBar(
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.AutoMirrored.Filled.Send, "Send", tint = cs.onPrimary, modifier = Modifier.size(22.dp))
+                                        Icon(if (uiState.editingMessage != null) Icons.Default.Check else Icons.AutoMirrored.Filled.Send, "Send", tint = cs.onPrimary, modifier = Modifier.size(22.dp))
                                     }
                                 } else {
                                     Box(

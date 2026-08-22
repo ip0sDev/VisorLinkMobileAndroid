@@ -107,6 +107,12 @@ fun SavedMessagesScreen(
         if (uri != null) editorUri = uri
     }
 
+    LaunchedEffect(uiState.initialDraft) {
+        if (uiState.initialDraft.isNotEmpty() && inputText.isEmpty()) {
+            inputText = uiState.initialDraft
+        }
+    }
+
     var autoBioTriggered by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.showPinInput) {
@@ -194,7 +200,7 @@ fun SavedMessagesScreen(
                 )
 
                 ChatBottomBar(
-                    uiState = adaptedChatUiState,
+                    uiState = adaptedChatUiState.copy(editingMessage = uiState.editingMessage?.toMessage(viewModel.currentUid)),
                     inputText = inputText,
                     canSendMessage = true,
                     canSendMedia = true,
@@ -208,7 +214,8 @@ fun SavedMessagesScreen(
                     onSend = {
                         val t = inputText.trim()
                         if (t.isNotBlank()) {
-                            viewModel.saveText(t)
+                            if (uiState.editingMessage != null) viewModel.saveEdit(t)
+                            else viewModel.saveText(t)
                             inputText = ""
                         }
                     },
@@ -216,7 +223,8 @@ fun SavedMessagesScreen(
                     onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
                     onCancelRecord = { viewModel.cancelRecording() },
                     onSendRecord = { viewModel.stopRecordingAndSend() },
-                    onClearReply = { }
+                    onClearReply = { },
+                    onCancelEdit = { viewModel.cancelEditing(); inputText = "" }
                 )
             }
         }
@@ -296,8 +304,13 @@ fun SavedMessagesScreen(
     }
 
     actionMsg?.let { msg ->
+        val savedMsg = uiState.messages.find { it.id == msg.id }
         SavedMessageActionSheet(
             onDismiss = { actionMsg = null },
+            onEdit = { 
+                savedMsg?.let { viewModel.startEditing(it) }
+                actionMsg = null 
+            },
             onDelete  = {
                 viewModel.deleteMessage(msg.id)
                 actionMsg = null

@@ -33,7 +33,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 private const val PAGE_SIZE = 20L
 
@@ -846,6 +849,28 @@ class ChatRepository(
         if (isFirestoreDisabled()) return
         db.collection("chats").document(chatId).collection("messages").document(messageId)
             .update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
+    }
+
+    suspend fun editMessage(chatId: String, messageId: String, newText: String, oldText: String, isCaption: Boolean = false) {
+        if (isFirestoreDisabled()) return
+        val field = if (isCaption) "caption" else "text"
+        val historyField = if (isCaption) "caption" else "text" // Prompt uses "text" in history for both? "text" to oldText.
+        
+        val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        
+        val historyItem = mapOf(
+            historyField to oldText,
+            "editedAt" to isoFormat.format(Date())
+        )
+
+        db.collection("chats").document(chatId).collection("messages").document(messageId)
+            .update(mapOf(
+                field to newText,
+                "lastEdited" to FieldValue.serverTimestamp(),
+                "editHistory" to FieldValue.arrayUnion(historyItem)
+            )).await()
     }
 
     suspend fun toggleReaction(chatId: String, messageId: String, emoji: String, currentReactions: List<Reaction>) {

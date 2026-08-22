@@ -18,6 +18,7 @@ import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -65,6 +66,7 @@ data class ChatUiState(
     val showAlbumPreview: Boolean = false,
     val singlePickedUri: Uri? = null,
     val initialDraft: String = "",
+    val editingMessage: Message? = null,
     val currentUser: UserProfile? = null
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
@@ -778,8 +780,50 @@ class ChatViewModel(
         }
     }
 
-    fun setReplyTo(message: Message) = _uiState.update { it.copy(replyingTo = message) }
+    fun setReplyTo(message: Message) = _uiState.update { it.copy(replyingTo = message, editingMessage = null) }
     fun clearReply() = _uiState.update { it.copy(replyingTo = null) }
+
+    fun startEditing(message: Message) {
+        val text = if (message.type != MessageType.TEXT) message.caption ?: "" else message.text ?: ""
+        _uiState.update { it.copy(editingMessage = message, replyingTo = null, initialDraft = text) }
+    }
+
+    fun cancelEditing() {
+        _uiState.update { it.copy(editingMessage = null, initialDraft = "") }
+    }
+
+    fun saveEdit(newText: String) {
+        val msg = _uiState.value.editingMessage ?: return
+        val isCaption = msg.type != MessageType.TEXT
+        val oldText = if (isCaption) msg.caption ?: "" else msg.text ?: ""
+        
+        if (newText.trim() == oldText.trim()) {
+            cancelEditing()
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                chatRepository.editMessage(chatId, msg.id, newText.trim(), oldText, isCaption)
+                _uiState.update { state ->
+                    val updated = state.messages.map {
+                        if (it.id == msg.id) {
+                            if (isCaption) it.copy(caption = newText.trim(), lastEdited = Timestamp.now())
+                            else it.copy(text = newText.trim(), lastEdited = Timestamp.now())
+                        } else it
+                    }
+                    state.copy(
+                        messages = updated,
+                        messageListItems = buildMessageList(updated + state.tempMessages),
+                        editingMessage = null
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
     fun clearError() = _uiState.update { it.copy(error = null) }
 
     override fun onCleared() {

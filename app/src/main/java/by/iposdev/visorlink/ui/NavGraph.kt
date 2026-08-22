@@ -15,6 +15,7 @@ import by.iposdev.visorlink.ui.aegis.AegisDebugScreen
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
+import by.iposdev.visorlink.ui.screens.status.StatusScreen
 import by.iposdev.visorlink.ui.screens.settings.CustomizationScreen
 import by.iposdev.visorlink.ui.screens.settings.FlagFlipperScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
@@ -322,6 +323,7 @@ fun VisorLinkNavGraph(
                 onNavigateBack      = { navController.popBackStack() },
                 onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
                 onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
+                onOpenStatus = { navController.navigate(Screen.Status.route) },
                 onOpenCustomization = { navController.navigate(Screen.Customization.route) },
                 onOpenAegisDebug    = { navController.navigate(Screen.AegisDebug.route) },
                 onOpenFlagFlipper   = { navController.navigate(Screen.FlagFlipper.route) },
@@ -353,6 +355,10 @@ fun VisorLinkNavGraph(
                     navController.navigate(Screen.ImageViewer.createRoute(url, type))
                 }
             )
+        }
+
+        composable(Screen.Status.route) {
+            StatusScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // Diary route removed to prevent duplicate PIN entry since it's displayed in MainScreen
