@@ -71,6 +71,8 @@ An experimental REST + WebSocket backend lives in `data/remote/chat/` (`VisorLin
 ```kotlin
 ChatRepository.isBackendEnabled() = flags.isEnabled("test_backend_enabled") && prefs("use_custom_backend")
 ChatRepository.isFirestoreDisabled()  // can additionally kill Firestore entirely
+
+Message editing is supported in both modes. For Firestore, it requires `lastEdited` (Timestamp) and `editHistory` (Array of maps) fields. For Saved Messages, text/caption is re-encrypted with AES-GCM before update.
 ```
 
 The Retrofit base URL `http://10.0.2.2:8080` is a **placeholder**: `DynamicBaseUrlInterceptor` rewrites host/port at request time from `visorlink_backend_settings` prefs, and `FirebaseAuthInterceptor` attaches the ID token. When editing chat/user/feed data flows, handle both paths — note the offline cache key gains a `_backend` suffix in that mode, and DTO→domain mapping happens via private `toDomain()` extensions inside `ChatRepository`.
@@ -96,8 +98,9 @@ Reading a flag needs no code change anywhere — `flags.isEnabled("some_key")` r
 ### Other subsystems
 
 - **Aegis assistant** (`data/aegis/`, `ui/aegis/`): `AegisBrainEngine` interface with a `DictionaryHeuristicEngine` implementation (bundled `res/raw/heuristic_dictionary.json` plus a remote dict URL from flags) and a `MediaPipeLlmEngine` stub. Debug UI behind the `is_aegis_debug_mode` flag.
-- **Self-hosted updater** (no Play Store): `UpdateApiClient` → `https://update-android.visorlink.org/api` with a generated `install_id` and channel (RELEASE/BETA/NIGHTLY/CANARY); `ApkDownloader` verifies SHA-256 before install. `AppUpdateWrapper` can force-block the UI on a required update. CI uploads the signed APK to that server and announces to Telegram.
+- **Self-hosted updater** (no Play Store): `UpdateApiClient` → `https://update-android.visorlink.org/api` with a generated `install_id` and channel (RELEASE/BETA/NIGHTLY/CANARY); `ApkDownloader` verifies SHA-256 before install. `AppUpdateWrapper` can force-block the UI on a required update. `isCanaryAllowed(installId)` gates experimental builds. CI uploads the signed APK to that server and announces to Telegram.
 - **Stealth mode**: `StealthManager` (salted SHA-256 PIN) plus `ui/screens/decoy/` — a fake news app that is the NavHost start destination when enabled, and re-locks on `Lifecycle.Event.ON_STOP`.
+- **System Status**: `StatusScreen` performs live diagnostics (CDN ping, Firestore read, Flags server ping). It features a 24h uptime timeline and incident history with duplicate suppression and local fallback for network outages. Reports incidents via `reportServiceIncident` and `resolveServiceIncident` functions.
 - **Biometrics**: used only by `SavedMessagesViewModel` and `DiaryViewModel` (`biometric_prefs`).
 
 ### Theming

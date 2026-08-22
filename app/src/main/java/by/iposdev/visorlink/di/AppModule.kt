@@ -159,7 +159,7 @@ val appModule = module {
     viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidContext()) }
     viewModel { StorageViewModel() }
-    viewModel { StatusViewModel(get(), get()) }
+    viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
 
     // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }

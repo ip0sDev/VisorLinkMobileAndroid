@@ -86,6 +86,7 @@ fun SettingsScreen(
     val notifEnabled by themeViewModel.notificationsEnabled.collectAsState()
     val currentLang by themeViewModel.language.collectAsState()
     val currentChannel by appUpdateViewModel.currentChannel.collectAsState()
+    val isCanaryAvailable by appUpdateViewModel.isCanaryAvailable.collectAsState()
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
     val compactChatList by themeViewModel.compactChatList.collectAsState()
 
@@ -128,7 +129,6 @@ fun SettingsScreen(
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
-    val deviceId = remember { flagsRepository.getDeviceId() ?: "Not paired" }
 
     val colorNotif = Color(0xFFF59E0B)
     val colorVibro = Color(0xFFEC4899)
@@ -374,7 +374,16 @@ fun SettingsScreen(
                 VlSettingsSection(title = "О приложении") {
                     if (flags.isEnabled("aegis_debug_mode_enabled")) VlSettingsItem(icon = Icons.Default.Terminal, title = "Aegis Project Debug", onClick = onOpenAegisDebug)
                     if (flags.isFlipperEnabled) VlSettingsItem(icon = Icons.Default.ToggleOn, title = "Flag Flipper", onClick = onOpenFlagFlipper)
-                    VlSettingsItem(icon = Icons.Default.Info, title = "VisorLink", subtitle = "Версия $versionString\nDevice ID: $deviceId")
+                    VlSettingsItem(
+                        icon = Icons.Default.Info, 
+                        title = "VisorLink", 
+                        subtitle = "Версия $versionString\nDevice ID: ${appUpdateViewModel.installId}",
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Device ID", appUpdateViewModel.installId))
+                            Toast.makeText(context, "Device ID скопирован", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                     VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                 }
 
@@ -385,7 +394,12 @@ fun SettingsScreen(
 
     if (showAdminPanel) AdminPanelSheet { showAdminPanel = false }
     if (showBotsManager) BotsManagerSheet { showBotsManager = false }
-    if (showChannelDialog) ChannelSelectionDialog(currentChannel = currentChannel, onDismiss = { showChannelDialog = false }, onSelect = { appUpdateViewModel.setChannel(it) { showChannelDialog = false } })
+    if (showChannelDialog) ChannelSelectionDialog(
+        currentChannel = currentChannel,
+        canaryAvailable = isCanaryAvailable,
+        onDismiss = { showChannelDialog = false },
+        onSelect = { appUpdateViewModel.setChannel(it) { showChannelDialog = false } }
+    )
     if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { authRepository.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
     if (showUrlDialog) {

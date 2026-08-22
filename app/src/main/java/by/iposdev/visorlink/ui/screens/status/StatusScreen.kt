@@ -14,8 +14,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -40,47 +42,71 @@ fun StatusScreen(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
+    val isAllSystemsUp = uiState.incidents.none { it.isActive }
+
     Scaffold(
-        containerColor = cs.surface,
+        containerColor = cs.background,
         topBar = {
             TopAppBar(
-                title = { Text("Статус системы", fontWeight = FontWeight.Black) },
+                title = { Text("Статус системы", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = cs.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = cs.onSurface)
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshStatus() }, enabled = !uiState.isRefreshing) {
                         if (uiState.isRefreshing) {
-                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = cs.primary)
                         } else {
-                            Icon(Icons.Default.Refresh, null)
+                            Icon(Icons.Default.Refresh, null, tint = cs.onSurface)
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = cs.surface.copy(alpha = 0.85f)
+                )
             )
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .fillMaxSize()
+        ) {
             VlAmbientGlow()
             
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item {
-                    Text(
-                        "СЕРВИСЫ",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = cs.primary,
-                        modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "СЕРВИСЫ",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Black,
+                            color = cs.primary,
+                            letterSpacing = 1.sp,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        if (isAllSystemsUp) {
+                            Surface(
+                                color = Color(0xFF10B981).copy(alpha = 0.1f),
+                                shape = CircleShape
+                            ) {
+                                Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF10B981), modifier = Modifier.size(12.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("ВСЕ СИСТЕМЫ ОК", style = MaterialTheme.typography.labelSmall, color = Color(0xFF10B981), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
                 }
 
                 items(uiState.services) { service ->
@@ -88,13 +114,27 @@ fun StatusScreen(
                 }
 
                 item {
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(12.dp))
                     Text(
-                        "ИСТОРИЯ ИНЦИДЕНТОВ",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
+                        "АПТАЙМ (24Ч)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
                         color = cs.primary,
-                        modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
+                        letterSpacing = 1.sp,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    UptimeTimeline(uiState.timeline)
+                }
+
+                item {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "ЖУРНАЛ СОБЫТИЙ",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Black,
+                        color = cs.primary,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
 
@@ -103,24 +143,66 @@ fun StatusScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = tokens.shapes.card,
-                            color = cs.surfaceContainerLow,
-                            border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.2f))
+                            color = cs.surfaceContainerLow.copy(alpha = 0.6f),
+                            border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.1f))
                         ) {
-                            Text(
-                                "Все системы работают в штатном режиме. Инцидентов не зафиксировано.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = cs.onSurfaceVariant,
-                                modifier = Modifier.padding(24.dp),
-                                textAlign = TextAlign.Center
-                            )
+                            Column(
+                                modifier = Modifier.padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.CheckCircle, 
+                                    null, 
+                                    tint = Color(0xFF10B981).copy(alpha = 0.5f),
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    "Все системы работают штатно. Инцидентов не обнаружено.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = cs.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
 
-                items(uiState.incidents) { incident ->
+                items(uiState.incidents, key = { it.id }) { incident ->
                     IncidentCard(incident)
                 }
+                
+                item { Spacer(Modifier.height(40.dp)) }
             }
+        }
+    }
+}
+
+@Composable
+fun UptimeTimeline(timeline: List<TimelineBar>) {
+    val cs = MaterialTheme.colorScheme
+    val green = Color(0xFF27AE60)
+    val red = Color(0xFFE74C3C)
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(32.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            timeline.forEach { bar ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (bar.isUp) green.copy(alpha = 0.8f) else red)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("24 часа назад", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+            Text("Сейчас", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
         }
     }
 }
@@ -149,11 +231,11 @@ fun ServiceStatusCard(service: ServiceStatus) {
             Spacer(Modifier.width(16.dp))
             
             Column(Modifier.weight(1f)) {
-                Text(service.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(service.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = cs.onSurface)
                 if (service.isUp) {
-                    Text("Работает", style = MaterialTheme.typography.bodySmall, color = Color(0xFF10B981))
+                    Text("Работает", style = MaterialTheme.typography.labelSmall, color = Color(0xFF10B981))
                 } else {
-                    Text(service.error ?: "Ошибка подключения", style = MaterialTheme.typography.bodySmall, color = Color(0xFFEF4444))
+                    Text(service.error ?: "Ошибка подключения", style = MaterialTheme.typography.labelSmall, color = Color(0xFFEF4444))
                 }
             }
             
@@ -167,25 +249,21 @@ fun ServiceStatusCard(service: ServiceStatus) {
 @Composable
 fun IncidentCard(incident: Incident) {
     val cs = MaterialTheme.colorScheme
-    
-    val severityColor = when (incident.severity) {
-        "critical" -> Color(0xFFEF4444)
-        "major" -> Color(0xFFF59E0B)
-        else -> Color(0xFF6B7280)
-    }
+    val green = Color(0xFF27AE60)
+    val red = Color(0xFFE74C3C)
 
     VlCard(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
-                    color = severityColor.copy(alpha = 0.1f),
+                    color = (if (incident.resolved) green else red).copy(alpha = 0.1f),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        incident.severity.uppercase(),
+                        text = if (incident.resolved) "РЕШЕНО" else "АКТИВНО",
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                         style = MaterialTheme.typography.labelSmall,
-                        color = severityColor,
+                        color = if (incident.resolved) green else red,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -193,17 +271,17 @@ fun IncidentCard(incident: Incident) {
                 Spacer(Modifier.width(8.dp))
                 
                 Text(
-                    incident.service,
-                    style = MaterialTheme.typography.labelMedium,
+                    incident.service.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
                     color = cs.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Black
                 )
                 
                 Spacer(Modifier.weight(1f))
                 
                 val dateStr = remember(incident.timestamp) {
                     val df = SimpleDateFormat("dd MMM, HH:mm", Locale("ru"))
-                    incident.timestamp?.toDate()?.let { df.format(it) } ?: ""
+                    df.format(Date(incident.timestamp))
                 }
                 
                 Text(
@@ -215,28 +293,49 @@ fun IncidentCard(incident: Incident) {
             
             Spacer(Modifier.height(12.dp))
             
-            Text(incident.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-            
-            if (incident.description.isNotEmpty()) {
-                Spacer(Modifier.height(4.dp))
+            if (incident.resolved) {
+                Text("✅ Работа сервиса полностью восстановлена.", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = cs.onSurface)
+                if (incident.resolvedAt != null) {
+                    val resolvedStr = remember(incident.resolvedAt) {
+                        val df = SimpleDateFormat("HH:mm", Locale("ru"))
+                        df.format(Date(incident.resolvedAt))
+                    }
+                    Text(
+                        "Восстановлено в $resolvedStr",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cs.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+            } else {
                 Text(
-                    incident.description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onSurfaceVariant
+                    "Наблюдается повышенный процент ошибок в сервисе ${incident.service}, некоторые функции могут не работать",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = cs.onSurface
                 )
             }
             
-            if (incident.resolved) {
+            // Техническая информация (errorTelemetry) скрыта от пользователя согласно требованиям.
+            // if (incident.errorTelemetry.isNotEmpty()) { ... }
+
+            if (incident.isLocal) {
                 Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        "Решено",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF10B981),
-                        fontWeight = FontWeight.Bold
-                    )
+                Surface(
+                    color = cs.errorContainer.copy(alpha = 0.2f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, red.copy(alpha = 0.3f))
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, null, tint = red, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "⚠️ Системный сбой связи: Ваш телефон обнаружил проблему, но не смог связаться с сервером отчётов. Сделайте скриншот и отправьте в поддержку.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSurface
+                        )
+                    }
                 }
             }
         }

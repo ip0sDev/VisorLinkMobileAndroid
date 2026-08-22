@@ -49,7 +49,7 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val prefs = application.getSharedPreferences("visorlink_update_prefs", Context.MODE_PRIVATE)
 
-    private val installId: String
+    val installId: String
         get() {
             var id = prefs.getString("install_id", null)
             if (id == null) {
@@ -69,10 +69,14 @@ class AppUpdateViewModel(application: Application) : AndroidViewModel(applicatio
     )
     val currentChannel: StateFlow<UpdateChannel> = _currentChannel.asStateFlow()
 
+    private val _isCanaryAvailable = MutableStateFlow(false)
+    val isCanaryAvailable: StateFlow<Boolean> = _isCanaryAvailable.asStateFlow()
+
     init {
         // При старте приложения регистрируем устройство и проверяем обновления
         viewModelScope.launch {
             UpdateApiClient.register(installId, _currentChannel.value.id)
+            _isCanaryAvailable.value = UpdateApiClient.isCanaryAllowed(installId)
             checkForUpdates(isManual = false)
 
             // Запускаем периодическую проверку каждые 2 часа, пока ViewModel жива

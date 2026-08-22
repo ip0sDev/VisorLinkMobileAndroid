@@ -11,8 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import by.iposdev.visorlink.ui.components.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -224,34 +225,42 @@ fun BotItem(bot: DmBot, onRegenerate: () -> Unit, onDelete: () -> Unit) {
 @Composable
 fun ChannelSelectionDialog(
     currentChannel: UpdateChannel,
+    canaryAvailable: Boolean,
     onDismiss: () -> Unit,
     onSelect: (UpdateChannel) -> Unit
 ) {
-    AlertDialog(
+    VlAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Канал обновлений", fontWeight = FontWeight.Bold) },
+        title = { Text("Канал обновлений") },
         text = {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 UpdateChannel.entries.forEach { channel ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(channel) }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        RadioButton(selected = currentChannel == channel, onClick = { onSelect(channel) })
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(channel.title, fontWeight = FontWeight.Medium)
-                            Text("Файл: ${channel.fileName}", style = MaterialTheme.typography.bodySmall)
-                        }
+                    if (channel == UpdateChannel.CANARY && !canaryAvailable && currentChannel != UpdateChannel.CANARY) {
+                        return@forEach
                     }
+                    
+                    VlOptionRow(
+                        icon = when(channel) {
+                            UpdateChannel.RELEASE -> Icons.Default.CheckCircle
+                            UpdateChannel.BETA -> Icons.Default.BugReport
+                            UpdateChannel.NIGHTLY -> Icons.Default.NightsStay
+                            UpdateChannel.CANARY -> Icons.Default.Science
+                        },
+                        label = channel.title,
+                        desc = when(channel) {
+                            UpdateChannel.RELEASE -> "Стабильные версии"
+                            UpdateChannel.BETA -> "Публичное тестирование"
+                            UpdateChannel.NIGHTLY -> "Ежедневные сборки"
+                            UpdateChannel.CANARY -> "Экспериментальные фичи"
+                        },
+                        selected = currentChannel == channel,
+                        onClick = { onSelect(channel) }
+                    )
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        actions = {
+            VlDialogButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         }
     )
 }

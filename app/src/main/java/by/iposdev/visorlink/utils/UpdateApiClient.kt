@@ -92,4 +92,18 @@ object UpdateApiClient {
             null
         }
     }
+
+    suspend fun isCanaryAllowed(installId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val url = URL("$BASE_URL/canary_allowed?install_id=$installId")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.requestMethod = "GET"
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().readText()
+                JSONObject(response).optBoolean("allowed", false)
+            } else false
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

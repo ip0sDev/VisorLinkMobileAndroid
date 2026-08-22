@@ -1,6 +1,8 @@
 package by.iposdev.visorlink.data.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.IgnoreExtraProperties
 
@@ -444,15 +446,22 @@ fun Comment.toCommentReplyData() = CommentReplyData(
 
 @IgnoreExtraProperties
 data class Incident(
+    @DocumentId
     val id: String = "",
     val service: String = "",
-    val title: String = "",
-    val description: String = "",
-    val severity: String = "minor", // minor, major, critical
+    val errorTelemetry: String = "",
+    val timestamp: Long = 0L,
     val resolved: Boolean = false,
-    val timestamp: Timestamp? = null,
-    val resolvedAt: Timestamp? = null
-)
+    val resolvedAt: Long? = null,
+
+    @get:Exclude
+    val isLocal: Boolean = false,
+
+    @get:Exclude
+    val localErrorReason: String? = null
+) {
+    val isActive: Boolean get() = !resolved
+}
 
 // ─── Feed ──────────────────────────────────────────────────────────────────────
 
