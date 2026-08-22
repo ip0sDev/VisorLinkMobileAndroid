@@ -260,7 +260,7 @@ fun OtherProfileScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(120.dp)
-                                    .clip(VlTheme.tokens.shapes.button),
+                                    .clip(VlTheme.tokens.shapes.card),
                                 contentScale = ContentScale.Crop
                             )
                             Spacer(Modifier.height(32.dp))

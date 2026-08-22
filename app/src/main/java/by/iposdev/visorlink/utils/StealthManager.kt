@@ -10,6 +10,7 @@ class StealthManager(context: Context) {
 
     companion object {
         private const val KEY_ENABLED = "stealth_mode_enabled"
+        private const val KEY_BIOMETRIC_UNLOCK = "stealth_biometric_unlock_enabled"
         private const val KEY_PIN_HASH = "stealth_pin_hash"
         private const val KEY_SALT = "stealth_pin_salt"
     }
@@ -19,6 +20,13 @@ class StealthManager(context: Context) {
 
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+    }
+
+    /** Открывать режим скрытия по отпечатку (в дополнение к PIN). */
+    fun isBiometricUnlockEnabled(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK, false)
+
+    fun setBiometricUnlockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BIOMETRIC_UNLOCK, enabled).apply()
     }
 
     fun setPin(pin: String) {

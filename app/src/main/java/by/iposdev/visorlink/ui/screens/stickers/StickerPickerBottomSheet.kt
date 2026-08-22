@@ -616,7 +616,7 @@ fun AddStickerSheet(
             val previewMod = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
-                .clip(VlTheme.tokens.shapes.button)
+                .clip(VlTheme.tokens.shapes.card)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable {
                     haptic.perform(HapticType.CLICK, true)

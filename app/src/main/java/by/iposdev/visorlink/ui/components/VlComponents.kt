@@ -4,6 +4,8 @@ import android.os.Build
 import android.util.Patterns
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -585,6 +587,7 @@ fun VlSettingsSection(
 
 // ── VlSettingsItem ───────────────────────────────────────────────────────────
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VlSettingsItem(
     icon: ImageVector,
@@ -592,6 +595,7 @@ fun VlSettingsItem(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
     isDestructive: Boolean = false,
     index: Int = 0,
     total: Int = 1,
@@ -605,8 +609,20 @@ fun VlSettingsItem(
     val color = iconColor ?: if (isDestructive) cs.error else cs.primary
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        onClick = { if (onClick != null) { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() } },
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = LocalIndication.current,
+                enabled = onClick != null || onLongClick != null,
+                onClick = { if (onClick != null) { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() } },
+                onLongClick = onLongClick?.let { action ->
+                    {
+                        haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                        action()
+                    }
+                },
+            ),
         color = Color.Transparent,
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {

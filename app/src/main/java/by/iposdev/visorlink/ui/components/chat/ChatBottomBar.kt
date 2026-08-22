@@ -90,7 +90,10 @@ fun ChatBottomBar(
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            val panelShape = tokens.shapes.bar
+            // inputPanel, а не bar: bar в Biolume — процентная (stadium) форма,
+            // её радиус считается от высоты и при появлении реплая панель
+            // превращается в капсулу. У inputPanel радиус фиксированный.
+            val panelShape = tokens.shapes.inputPanel
             Column(
                 modifier = Modifier
                     .then(

@@ -138,6 +138,9 @@ data class VlShapeTokens(
     val fab: Shape,
     /** Контейнер нижней навигации. */
     val bar: Shape,
+    /** Панель ввода чата. Фиксированный радиус: высота панели растёт при реплаях,
+     *  и процентная форма (как у [bar]) ломала бы скругления. */
+    val inputPanel: Shape,
     /** Stadium-подобное: pill навигации, трек тумблера. */
     val pill: Shape,
     /** Мелкие круглые элементы: точки статуса, бегунок тумблера, кружки акцентов. */
@@ -288,6 +291,7 @@ private val FallbackShapes = VlShapeTokens(
     chip = RoundedCornerShape(50),
     fab = RoundedCornerShape(16.dp),
     bar = RoundedCornerShape(32.dp),
+    inputPanel = RoundedCornerShape(28.dp),
     pill = RoundedCornerShape(percent = 50),
     indicator = CircleShape,
     avatar = CircleShape,

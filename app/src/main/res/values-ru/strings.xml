@@ -578,6 +578,9 @@
     <string name="settings_stealth_sub_on">Включён — при запуске откроется маскировочный экран</string>
     <string name="settings_stealth_change_pin">Сменить PIN-код скрытия</string>
     <string name="settings_stealth_change_pin_sub">Обновить код доступа для разблокировки</string>
+    <string name="settings_stealth_biometric">Разблокировка по отпечатку</string>
+    <string name="settings_stealth_biometric_sub">Открывать режим скрытия отпечатком вместо PIN-кода</string>
+    <string name="stealth_biometric_unavailable">Биометрия недоступна или не настроена на устройстве</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Канал обновлений</string>

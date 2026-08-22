@@ -576,6 +576,9 @@
     <string name="settings_stealth_sub_on">Enabled — mask screen will open on launch</string>
     <string name="settings_stealth_change_pin">Change Stealth PIN</string>
     <string name="settings_stealth_change_pin_sub">Update access code for unlocking</string>
+    <string name="settings_stealth_biometric">Fingerprint Unlock</string>
+    <string name="settings_stealth_biometric_sub">Open stealth mode with your fingerprint instead of the PIN</string>
+    <string name="stealth_biometric_unavailable">Biometrics unavailable or not enrolled on this device</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Update Channel</string>

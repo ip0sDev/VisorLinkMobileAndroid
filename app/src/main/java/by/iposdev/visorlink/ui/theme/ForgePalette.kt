@@ -202,6 +202,7 @@ val ForgeShapes = VlShapeTokens(
     chip = RectangleShape,
     fab = RectangleShape,
     bar = RectangleShape,
+    inputPanel = RectangleShape,
     pill = RectangleShape,
     indicator = RectangleShape,
     avatar = RectangleShape,

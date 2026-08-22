@@ -152,7 +152,7 @@ fun FeedCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 500.dp)
-                            .clip(VlTheme.tokens.shapes.button),
+                            .clip(VlTheme.tokens.shapes.card),
                         contentScale = ContentScale.FillWidth
                     )
 

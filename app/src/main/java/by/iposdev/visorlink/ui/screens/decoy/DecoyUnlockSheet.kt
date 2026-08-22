@@ -1,10 +1,13 @@
 package by.iposdev.visorlink.ui.screens.decoy
 
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +21,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.utils.StealthManager
@@ -26,12 +31,50 @@ import by.iposdev.visorlink.utils.StealthManager
 @Composable
 fun DecoyUnlockSheet(
     onDismiss: () -> Unit,
-    onUnlocked: () -> Unit
+    onUnlocked: () -> Unit,
 ) {
     val context = LocalContext.current
     val stealthManager = remember { StealthManager(context) }
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+
+    // Биометрия доступна, если включена в настройках и на устройстве есть отпечаток
+    val fragmentActivity = context as? FragmentActivity
+    val biometricEnabled = remember {
+        stealthManager.isBiometricUnlockEnabled() && fragmentActivity != null &&
+            (
+                BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+                    BiometricManager.BIOMETRIC_SUCCESS
+                )
+    }
+
+    val launchBiometric: () -> Unit = {
+        val activity = fragmentActivity
+        if (activity != null) {
+            val prompt = BiometricPrompt(
+                activity,
+                ContextCompat.getMainExecutor(activity),
+                object : BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                        onUnlocked()
+                    }
+                    // Ошибка/отмена — молча остаёмся на шторке с PIN-вводом
+                }
+            )
+            val info = BiometricPrompt.PromptInfo.Builder()
+                .setTitle("СЛУЖЕБНЫЙ ДОСТУП")
+                .setSubtitle("Подтвердите вход отпечатком пальца")
+                .setNegativeButtonText("Ввести PIN")
+                .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                .build()
+            prompt.authenticate(info)
+        }
+    }
+
+    // При открытии шторки сразу предлагаем отпечаток (как в обычных приложениях)
+    LaunchedEffect(biometricEnabled) {
+        if (biometricEnabled) launchBiometric()
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -93,7 +136,22 @@ fun DecoyUnlockSheet(
             ) {
                 Text("ПОДТВЕРДИТЬ", fontWeight = FontWeight.ExtraBold, letterSpacing = 1.sp, fontFamily = FontFamily.Monospace)
             }
-            Spacer(Modifier.height(32.dp))
+
+            if (biometricEnabled) {
+                TextButton(onClick = launchBiometric, modifier = Modifier.padding(top = 4.dp)) {
+                    Icon(Icons.Outlined.Fingerprint, contentDescription = null, tint = DecoyPalette.TextSecondary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "ИЛИ ВОЙТИ ПО ОТПЕЧАТКУ",
+                        color = DecoyPalette.TextSecondary,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(if (biometricEnabled) 16.dp else 32.dp))
         }
     }
 }

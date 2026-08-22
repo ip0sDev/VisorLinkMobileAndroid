@@ -5,6 +5,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.biometric.BiometricManager
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -101,6 +102,7 @@ fun SettingsScreen(
     val stealthManager = remember { StealthManager(context) }
     var isStealthEnabled by remember { mutableStateOf(stealthManager.isEnabled()) }
     var hasStealthPin by remember { mutableStateOf(stealthManager.hasPin()) }
+    var isStealthBiometricEnabled by remember { mutableStateOf(stealthManager.isBiometricUnlockEnabled()) }
 
     var showStealthSetup by remember { mutableStateOf(false) }
     var showStealthDisable by remember { mutableStateOf(false) }
@@ -123,6 +125,9 @@ fun SettingsScreen(
     var showUrlDialog by remember { mutableStateOf(false) }
 
     var showChannelDialog by remember { mutableStateOf(false) }
+    // Canary в списке каналов разблокируется зажатием на пункте версии.
+    // Финальную валидацию всё равно делает сервер (isCanaryAllowed по install_id).
+    var canaryUnlockedByLongPress by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
 
@@ -136,6 +141,7 @@ fun SettingsScreen(
     val colorCompact = Color(0xFF3B82F6)
     val colorStealth = Color(0xFF8B5CF6)
     val colorStealthPin = Color(0xFF6366F1)
+    val colorStealthBiometric = Color(0xFF14B8A6)
     val colorStorage = Color(0xFF3B82F6)
     val colorBots = Color(0xFF14B8A6)
     val colorUpdateChan = Color(0xFFF59E0B)
@@ -289,6 +295,35 @@ fun SettingsScreen(
                     if (hasStealthPin) {
                         VlSettingsItem(icon = Icons.Default.Password, iconColor = colorStealthPin, title = stringResource(R.string.settings_stealth_change_pin), subtitle = stringResource(R.string.settings_stealth_change_pin_sub), onClick = { showStealthChangePin = true })
                     }
+                    if (hasStealthPin && isStealthEnabled) {
+                        VlSettingsItem(
+                            icon = Icons.Default.Fingerprint,
+                            iconColor = colorStealthBiometric,
+                            title = stringResource(R.string.settings_stealth_biometric),
+                            subtitle = stringResource(R.string.settings_stealth_biometric_sub),
+                            trailing = {
+                                VlSwitch(
+                                    checked = isStealthBiometricEnabled,
+                                    onCheckedChange = { enable ->
+                                        if (enable) {
+                                            val canAuth = BiometricManager.from(context)
+                                                .canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                                            if (canAuth == BiometricManager.BIOMETRIC_SUCCESS) {
+                                                stealthManager.setBiometricUnlockEnabled(true)
+                                                isStealthBiometricEnabled = true
+                                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                            } else {
+                                                Toast.makeText(context, context.getString(R.string.stealth_biometric_unavailable), Toast.LENGTH_SHORT).show()
+                                            }
+                                        } else {
+                                            stealthManager.setBiometricUnlockEnabled(false)
+                                            isStealthBiometricEnabled = false
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 }
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_storage)) {
@@ -382,6 +417,14 @@ fun SettingsScreen(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Device ID", appUpdateViewModel.installId))
                             Toast.makeText(context, "Device ID скопирован", Toast.LENGTH_SHORT).show()
+                        },
+                        onLongClick = {
+                            if (canaryUnlockedByLongPress) {
+                                Toast.makeText(context, "Canary уже разблокирован", Toast.LENGTH_SHORT).show()
+                            } else {
+                                canaryUnlockedByLongPress = true
+                                Toast.makeText(context, "Canary канал разблокирован", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     )
                     VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
@@ -396,8 +439,11 @@ fun SettingsScreen(
     if (showBotsManager) BotsManagerSheet { showBotsManager = false }
     if (showChannelDialog) ChannelSelectionDialog(
         currentChannel = currentChannel,
-        canaryAvailable = isCanaryAvailable,
-        onDismiss = { showChannelDialog = false },
+        canaryAvailable = isCanaryAvailable || canaryUnlockedByLongPress,
+        onDismiss = {
+            showChannelDialog = false
+            canaryUnlockedByLongPress = false
+        },
         onSelect = { appUpdateViewModel.setChannel(it) { showChannelDialog = false } }
     )
     if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { authRepository.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
@@ -439,7 +485,9 @@ fun SettingsScreen(
             onDismiss = { showStealthDisable = false },
             onSuccess = {
                 stealthManager.setEnabled(false)
+                stealthManager.setBiometricUnlockEnabled(false)
                 isStealthEnabled = false
+                isStealthBiometricEnabled = false
                 showStealthDisable = false
                 Toast.makeText(context, "Режим скрытия отключён", Toast.LENGTH_SHORT).show()
             }
