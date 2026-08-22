@@ -26,6 +26,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.firebase.functions.FirebaseFunctions
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +39,7 @@ import org.koin.compose.viewmodel.koinViewModel
 class MainActivity : AppCompatActivity() {
 
     private val userRepository: UserRepository by inject()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val functions: FirebaseFunctions by inject()
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -57,7 +59,6 @@ class MainActivity : AppCompatActivity() {
         // If user is already logged in and email verified, skip login screen
         if (isUserLoggedIn) {
             // Quick verification - will be confirmed in nav graph
-            val uid = firebaseAuth.currentUser?.uid
         }
         
         requestNotificationPermissionIfNeeded()
@@ -113,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         FirebaseMessaging.getInstance().token
             .addOnSuccessListener { token ->
                 Log.d("FCM", "Got token: $token")
-                scope.launch {
+                lifecycleScope.launch(Dispatchers.IO) {
                     try {
                         userRepository.saveFcmToken(token)
                         Log.d("FCM", "Token saved to Firestore")
@@ -130,11 +131,11 @@ class MainActivity : AppCompatActivity() {
         // Если юзер не авторизован, функцию дергать бессмысленно (она всё равно требует auth)
         if (FirebaseAuth.getInstance().currentUser == null) return
 
-        scope.launch {
+        lifecycleScope.launch(Dispatchers.IO) {
             try {
                 Log.d("VisorLink", "Verifying official client status via Cloud Functions...")
 
-                Firebase.functions.getHttpsCallable("verifyOfficialClient")
+                functions.getHttpsCallable("verifyOfficialClient")
                     .call()
                     .await()
 

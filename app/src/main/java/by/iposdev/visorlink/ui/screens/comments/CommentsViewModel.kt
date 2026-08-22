@@ -1,11 +1,12 @@
 package by.iposdev.visorlink.ui.screens.comments
 
 import android.Manifest
+import android.app.Application
 import android.content.Context
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
@@ -48,8 +49,8 @@ class CommentsViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val context: Context
-) : ViewModel() {
+    private val application: Application
+) : AndroidViewModel(application) {
 
     val currentUid: String get() = auth.currentUser!!.uid
     private var currentUsername = ""
@@ -57,7 +58,7 @@ class CommentsViewModel(
     private val _uiState = MutableStateFlow(CommentsUiState())
     val uiState: StateFlow<CommentsUiState> = _uiState.asStateFlow()
 
-    val voicePlayer = VoicePlayerManager(context)
+    val voicePlayer = VoicePlayerManager(application)
 
     private var postListener: ListenerRegistration? = null
     private var commentsListener: ListenerRegistration? = null
@@ -213,12 +214,12 @@ class CommentsViewModel(
 
     fun startRecording() {
         voicePlayer.stop()
-        val file = File(context.cacheDir, "comment_voice_${System.currentTimeMillis()}.webm")
+        val file = File(getApplication<Application>().cacheDir, "comment_voice_${System.currentTimeMillis()}.webm")
         recordingFile = file
         recordingStart = System.currentTimeMillis()
         @Suppress("DEPRECATION")
         recorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            MediaRecorder(context) else MediaRecorder()).apply {
+            MediaRecorder(getApplication()) else MediaRecorder()).apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.WEBM)
             setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)

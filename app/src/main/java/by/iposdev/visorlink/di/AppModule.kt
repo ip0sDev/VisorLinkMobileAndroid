@@ -108,11 +108,12 @@ val appModule = module {
     single { OutboxManager(androidContext(), get(), get(), get(), get(), get()) }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
+    single { SettingsRepository(androidContext()) }
 
     viewModel { AppCheckViewModel() }
 
     viewModel { AuthViewModel(get(), get(), get()) }
-    viewModel { ThemeViewModel(androidContext()) }
+    viewModel { ThemeViewModel(get()) }
     viewModel { MainViewModel(get(), get()) }
     viewModel { ChatListViewModel(get(), get(), get(), get()) }
 
@@ -122,7 +123,7 @@ val appModule = module {
             userRepository = get(),
             auth           = get(),
             db             = get(),
-            context        = androidContext(),
+            context        = androidApplication(),
             draftManager   = get(),
             chatId         = parameters.get(),
             otherUid       = parameters.get()
@@ -136,7 +137,7 @@ val appModule = module {
             chatRepository = get(),
             userRepository = get(),
             auth           = get(),
-            context        = androidContext()
+            application    = androidApplication()
         )
     }
 
@@ -157,7 +158,7 @@ val appModule = module {
     }
 
     viewModel { AppUpdateViewModel(androidApplication()) }
-    viewModel { CacheViewModel(get(), androidContext()) }
+    viewModel { CacheViewModel(get(), androidApplication()) }
     viewModel { StorageViewModel() }
     viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
 
@@ -166,8 +167,8 @@ val appModule = module {
     single { FeedRepository(get(), get(), androidContext(), get(), get(), get()) }
     single { ForwardRepository(get()) }
 
-    viewModel { SavedMessagesViewModel(get(), get(), get(), androidContext(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get(), androidContext(), get()) }
+    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get()) }
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }

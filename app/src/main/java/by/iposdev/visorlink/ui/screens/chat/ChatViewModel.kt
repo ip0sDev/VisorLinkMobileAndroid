@@ -1,11 +1,12 @@
 package by.iposdev.visorlink.ui.screens.chat
 
+import android.app.Application
 import android.content.Context
 import android.media.MediaRecorder
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
@@ -81,11 +82,11 @@ class ChatViewModel(
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
-    private val context: Context,
+    private val context: Application,
     private val draftManager: DraftManager,
     val chatId: String,
     val otherUid: String
-) : ViewModel() {
+) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
     private var currentUsername = ""

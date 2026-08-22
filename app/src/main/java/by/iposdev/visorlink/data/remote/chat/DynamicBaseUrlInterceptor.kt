@@ -17,7 +17,13 @@ class DynamicBaseUrlInterceptor(private val context: Context) : Interceptor {
         // Our placeholder in AppModule is http://10.0.2.2:8080
         if (isEnabled && request.url.host == "10.0.2.2" && request.url.port == 8080) {
             val formattedUrl = if (customUrlStr.startsWith("http")) customUrlStr else "http://$customUrlStr"
-            formattedUrl.toHttpUrlOrNull()?.let { newBaseUrl ->
+            val newBaseUrl = formattedUrl.toHttpUrlOrNull()
+            
+            // Validate the scheme and host to prevent SSRF
+            if (newBaseUrl != null && 
+                (newBaseUrl.scheme == "http" || newBaseUrl.scheme == "https") &&
+                isValidBackendHost(newBaseUrl.host)) {
+                
                 val newUrl = request.url.newBuilder()
                     .scheme(newBaseUrl.scheme)
                     .host(newBaseUrl.host)
@@ -28,5 +34,17 @@ class DynamicBaseUrlInterceptor(private val context: Context) : Interceptor {
         }
         
         return chain.proceed(request)
+    }
+
+    private fun isValidBackendHost(host: String): Boolean {
+        // Prevent resolving local/metadata endpoints for SSRF mitigation
+        if (host == "169.254.169.254" || host == "metadata.google.internal") return false
+        
+        // Ensure no local network exploitation outside of the allowed simulator IPs
+        if (host == "localhost" || host == "127.0.0.1") return false
+        
+        // For production, you'd typically want a strict whitelist here
+        // e.g. return host.endsWith(".visorlink.com") || host == "10.0.2.2"
+        return true
     }
 }

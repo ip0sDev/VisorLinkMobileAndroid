@@ -91,7 +91,8 @@ fun SettingsScreen(
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
     val compactChatList by themeViewModel.compactChatList.collectAsState()
 
-    val profile by userRepository.currentUserFlow().collectAsState(initial = null)
+    val profileFlow = remember(userRepository) { userRepository.currentUserFlow() }
+    val profile by profileFlow.collectAsState(initial = null)
     val proState by proViewModel.uiState.collectAsState()
     val flags by flagsRepository.flags.collectAsState()
 
@@ -151,6 +152,15 @@ fun SettingsScreen(
 
     LaunchedEffect(proState.successMessage) { proState.successMessage?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); proViewModel.clearMessages() } }
     LaunchedEffect(proState.error) { proState.error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); proViewModel.clearMessages() } }
+
+    LaunchedEffect(profile?.tg_username) {
+        if (showTgBindingDialog && profile?.tg_username != null) {
+            showTgBindingDialog = false
+            isGeneratingTgCode = false
+            tgCode = null
+            Toast.makeText(context, "Telegram успешно привязан!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

@@ -171,9 +171,15 @@ class StatusViewModel(
                             if (incident.resolved) incident.id else incident.service
                         }
 
+                    val newTimeline = if (combined == state.incidents) {
+                        state.timeline
+                    } else {
+                        calculateTimeline(combined)
+                    }
+
                     state.copy(
                         incidents = combined,
-                        timeline = calculateTimeline(combined)
+                        timeline = newTimeline
                     )
                 }
             }

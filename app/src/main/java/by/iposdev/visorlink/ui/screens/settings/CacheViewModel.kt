@@ -1,7 +1,8 @@
 package by.iposdev.visorlink.ui.screens.settings
 
 import android.content.Context
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.utils.AppImageLoader
 import by.iposdev.visorlink.utils.CacheConfig
@@ -23,8 +24,8 @@ data class CacheUiState(
 
 class CacheViewModel(
     private val manager: CacheManager,
-    private val context: Context          // applicationContext из Koin
-) : ViewModel() {
+    private val context: Application
+) : AndroidViewModel(context) {
 
     private val _state = MutableStateFlow(CacheUiState(config = manager.loadConfig()))
     val state: StateFlow<CacheUiState> = _state.asStateFlow()

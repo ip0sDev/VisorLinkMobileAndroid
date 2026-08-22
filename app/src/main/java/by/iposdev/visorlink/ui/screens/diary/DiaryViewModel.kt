@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.screens.diary
 
+import android.app.Application
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
@@ -9,7 +10,7 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.data.model.UserProfile
@@ -54,9 +55,9 @@ class DiaryViewModel(
     private val repository: SavedMessagesRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val context: Context,
+    private val application: Application,
     private val reminderManager: DiaryReminderManager
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     val currentUid: String get() = auth.currentUser?.uid ?: ""
 
@@ -239,7 +240,7 @@ class DiaryViewModel(
     }
 
     fun hasBiometricPinSaved(): Boolean {
-        val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+        val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
         return prefs.contains("pin_enc_$currentUid")
     }
 
@@ -266,7 +267,7 @@ class DiaryViewModel(
             val iv = cipher.iv
             val encrypted = cipher.doFinal(pin.toByteArray(Charsets.UTF_8))
 
-            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("pin_iv_$currentUid", Base64.encodeToString(iv, Base64.DEFAULT))
                 .putString("pin_enc_$currentUid", Base64.encodeToString(encrypted, Base64.DEFAULT))
@@ -278,7 +279,7 @@ class DiaryViewModel(
 
     private fun getPinFromKeystoreSecurely(): String? {
         return try {
-            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
             val ivStr = prefs.getString("pin_iv_$currentUid", null) ?: return null
             val encStr = prefs.getString("pin_enc_$currentUid", null) ?: return null
 
