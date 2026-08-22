@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,10 +26,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.BuildConfig
@@ -124,6 +129,18 @@ fun SettingsScreen(
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
     val deviceId = remember { flagsRepository.getDeviceId() ?: "Not paired" }
 
+    val colorNotif = Color(0xFFF59E0B)
+    val colorVibro = Color(0xFFEC4899)
+    val colorDynInput = Color(0xFF10B981)
+    val colorCompact = Color(0xFF3B82F6)
+    val colorStealth = Color(0xFF8B5CF6)
+    val colorStealthPin = Color(0xFF6366F1)
+    val colorStorage = Color(0xFF3B82F6)
+    val colorBots = Color(0xFF14B8A6)
+    val colorUpdateChan = Color(0xFFF59E0B)
+    val colorUpdateCheck = Color(0xFF10B981)
+    val colorEmail = Color(0xFF64748B)
+    val colorPassword = Color(0xFFF43F5E)
 
     LaunchedEffect(proState.successMessage) { proState.successMessage?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); proViewModel.clearMessages() } }
     LaunchedEffect(proState.error) { proState.error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); proViewModel.clearMessages() } }
@@ -201,19 +218,155 @@ fun SettingsScreen(
                 }
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_management)) {
-                    VlSettingsItem(icon = Icons.Default.NotificationsActive, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
-                    VlSettingsItem(icon = Icons.Default.Vibration, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
-                    VlSettingsItem(icon = Icons.Default.KeyboardHide, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
-                    VlSettingsItem(icon = Icons.Default.ViewAgenda, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
+                    VlSettingsItem(icon = Icons.Default.NotificationsActive, iconColor = colorNotif, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
+                    VlSettingsItem(icon = Icons.Default.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
+                    VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
+                    VlSettingsItem(icon = Icons.Default.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
+                    VlSettingsItem(icon = Icons.Default.Explore, iconColor = Color(0xFF10B981), title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsState().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
+                }
+
+                VlSettingsSection(title = stringResource(R.string.diary_title)) {
+                    VlSettingsItem(
+                        icon = Icons.Default.Book,
+                        iconColor = MaterialTheme.colorScheme.primary,
+                        title = stringResource(R.string.diary_enable_title),
+                        subtitle = stringResource(R.string.diary_enable_sub),
+                        trailing = {
+                            VlSwitch(
+                                checked = profile?.diaryEnabled ?: false,
+                                onCheckedChange = { v ->
+                                    haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                    scope.launch {
+                                        val uid = profile?.uid ?: return@launch
+                                        Firebase.firestore.collection("users").document(uid).update("diaryEnabled", v)
+                                    }
+                                }
+                            )
+                        }
+                    )
+                    if (profile?.diaryEnabled == true) {
+                        VlSettingsItem(
+                            icon = Icons.Default.Notifications,
+                            iconColor = Color(0xFFF59E0B),
+                            title = stringResource(R.string.diary_reminders_title),
+                            subtitle = stringResource(R.string.diary_reminders_sub, profile?.diaryReminderTime ?: "21:00"),
+                            onClick = {
+                                val parts = (profile?.diaryReminderTime ?: "21:00").split(":")
+                                val picker = TimePickerDialog(
+                                    context,
+                                    { _, h, m ->
+                                        val time = String.format(Locale.US, "%02d:%02d", h, m)
+                                        scope.launch {
+                                            val uid = profile?.uid ?: return@launch
+                                            Firebase.firestore.collection("users").document(uid).update("diaryReminderTime", time)
+                                        }
+                                    },
+                                    parts[0].toInt(),
+                                    parts[1].toInt(),
+                                    true
+                                )
+                                picker.show()
+                            },
+                            trailing = {
+                                VlSwitch(
+                                    checked = profile?.diaryRemindersEnabled ?: false,
+                                    onCheckedChange = { v ->
+                                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                        scope.launch {
+                                            val uid = profile?.uid ?: return@launch
+                                            Firebase.firestore.collection("users").document(uid).update("diaryRemindersEnabled", v)
+                                        }
+                                    }
+                                )
+                            }
+                        )
+                    }
                 }
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_privacy)) {
-                    VlSettingsItem(icon = Icons.Default.VisibilityOff, title = stringResource(R.string.settings_stealth_title), trailing = { VlSwitch(checked = isStealthEnabled, onCheckedChange = { if (it) { if (hasStealthPin) { stealthManager.setEnabled(true); isStealthEnabled = true } else showStealthSetup = true } else showStealthDisable = true }) })
+                    VlSettingsItem(icon = Icons.Default.VisibilityOff, iconColor = colorStealth, title = stringResource(R.string.settings_stealth_title), subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off), trailing = { VlSwitch(checked = isStealthEnabled, onCheckedChange = { if (it) { if (hasStealthPin) { stealthManager.setEnabled(true); isStealthEnabled = true } else showStealthSetup = true } else showStealthDisable = true }) })
+                    if (hasStealthPin) {
+                        VlSettingsItem(icon = Icons.Default.Password, iconColor = colorStealthPin, title = stringResource(R.string.settings_stealth_change_pin), subtitle = stringResource(R.string.settings_stealth_change_pin_sub), onClick = { showStealthChangePin = true })
+                    }
                 }
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_storage)) {
-                    VlSettingsItem(icon = Icons.Default.Storage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
-                    VlSettingsItem(icon = Icons.Default.CloudQueue, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
+                    VlSettingsItem(icon = Icons.Default.Storage, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
+                    VlSettingsItem(icon = Icons.Default.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
+                }
+
+                VlSettingsSection(title = stringResource(R.string.stickers_title)) {
+                    VlSettingsItem(icon = Icons.Default.SmartToy, iconColor = colorBots, title = stringResource(R.string.settings_bots_title), subtitle = stringResource(R.string.settings_bots_subtitle), onClick = { showBotsManager = true })
+                }
+
+                if (profile?.isAdmin == true) {
+                    VlSettingsSection(title = stringResource(R.string.settings_admin_panel)) {
+                        VlSettingsItem(icon = Icons.Default.AdminPanelSettings, iconColor = MaterialTheme.colorScheme.error, title = "Admin Panel", onClick = { showAdminPanel = true })
+                    }
+                }
+
+                VlSettingsSection(title = stringResource(R.string.settings_section_updates)) {
+                    VlSettingsItem(icon = Icons.Default.Science, iconColor = colorUpdateChan, title = stringResource(R.string.settings_update_channel), subtitle = stringResource(R.string.settings_update_channel_current, currentChannel.title), onClick = { showChannelDialog = true })
+                    VlSettingsItem(
+                        icon = Icons.Default.Sync,
+                        iconColor = colorUpdateCheck,
+                        title = stringResource(R.string.settings_check_updates),
+                        subtitle = stringResource(R.string.settings_check_updates_sub),
+                        onClick = {
+                            haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                            Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
+                            appUpdateViewModel.checkForUpdates(isManual = true) { hasUpdate ->
+                                if (!hasUpdate) {
+                                    Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                }
+
+                if (flags.isEnabled("test_backend_enabled")) {
+                    VlSettingsSection(title = "Тестирование") {
+                        VlSettingsItem(icon = Icons.Default.BugReport, iconColor = MaterialTheme.colorScheme.tertiary, title = "Бэкенд: Чаты", subtitle = "Ktor + Redis для сообщений", trailing = { VlSwitch(checked = useBackend, onCheckedChange = { useBackend = it; backendPrefs.edit().putBoolean("use_custom_backend", it).apply() }) })
+                        VlSettingsItem(icon = Icons.Default.PersonSearch, iconColor = MaterialTheme.colorScheme.primary, title = "Бэкенд: Профили", subtitle = "Поиск и данные пользователей", trailing = { VlSwitch(checked = useBackendProfile, onCheckedChange = { useBackendProfile = it; backendPrefs.edit().putBoolean("use_backend_profile", it).apply() }) })
+                        VlSettingsItem(icon = Icons.Default.RssFeed, iconColor = MaterialTheme.colorScheme.error, title = "Бэкенд: Лента", subtitle = "Discover Feed через API", trailing = { VlSwitch(checked = useBackendFeed, onCheckedChange = { useBackendFeed = it; backendPrefs.edit().putBoolean("use_backend_feed", it).apply() }) })
+                        VlSettingsItem(icon = Icons.Default.CloudOff, iconColor = Color.Gray, title = "Железно отключить Firestore", subtitle = "Полная блокировка Firebase БД", trailing = { VlSwitch(checked = disableFirestore, onCheckedChange = { disableFirestore = it; backendPrefs.edit().putBoolean("disable_firestore_completely", it).apply() }) })
+                        VlSettingsItem(icon = Icons.Default.Dns, iconColor = MaterialTheme.colorScheme.secondary, title = "Адрес бэкенда", subtitle = customBackendUrl, onClick = { showUrlDialog = true })
+                    }
+                }
+
+                VlSettingsSection(title = stringResource(R.string.settings_section_account)) {
+                    VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
+                    if (flags.isEnabled("2fa_enabled")) {
+                        VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { val uid = profile?.uid ?: return@launch; Firebase.firestore.collection("users").document(uid).update("tfaEnabled", v) } }) })
+                    }
+                    VlSettingsItem(
+                        icon = Icons.AutoMirrored.Filled.Send,
+                        iconColor = Color(0xFF2AABEE),
+                        title = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked, profile?.tg_username ?: "") else stringResource(R.string.settings_tg_link),
+                        subtitle = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
+                        onClick = {
+                            if (profile?.tg_username != null) {
+                                scope.launch {
+                                    try {
+                                        Firebase.functions("europe-west1").getHttpsCallable("unlinkTelegram").call().await()
+                                        Toast.makeText(context, context.getString(R.string.settings_tg_unlinked_toast), Toast.LENGTH_SHORT).show()
+                                    } catch (e: Exception) { Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show() }
+                                }
+                            } else {
+                                showTgBindingDialog = true; isGeneratingTgCode = true; tgCode = null; tgError = null
+                                scope.launch {
+                                    try {
+                                        val result = Firebase.functions("europe-west1").getHttpsCallable("generateTgCode").call().await()
+                                        val data = result.data as Map<*, *>
+                                        if (data["success"] == true) tgCode = data["code"] as String
+                                        else tgError = "Ошибка: ${data["error"]}"
+                                    } catch (e: Exception) { tgError = e.message ?: "Ошибка сети" } finally { isGeneratingTgCode = false }
+                                }
+                            }
+                        }
+                    )
+                    VlSettingsItem(icon = Icons.Default.Password, iconColor = colorPassword, title = stringResource(R.string.settings_password_change), onClick = { showPasswordDialog = true })
+                    VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, iconColor = MaterialTheme.colorScheme.error, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                 }
 
                 VlSettingsSection(title = "О приложении") {
@@ -232,6 +385,216 @@ fun SettingsScreen(
     if (showBotsManager) BotsManagerSheet { showBotsManager = false }
     if (showChannelDialog) ChannelSelectionDialog(currentChannel = currentChannel, onDismiss = { showChannelDialog = false }, onSelect = { appUpdateViewModel.setChannel(it) { showChannelDialog = false } })
     if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { authRepository.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
+
+    if (showUrlDialog) {
+        var url by remember { mutableStateOf(customBackendUrl) }
+        VlAlertDialog(
+            onDismissRequest = { showUrlDialog = false },
+            title = { Text("Адрес бэкенда") },
+            text = { VlTextField(value = url, onValueChange = { url = it }, label = "URL (напр. 10.0.2.2:8080)", modifier = Modifier.fillMaxWidth()) },
+            actions = {
+                VlDialogButton(onClick = { showUrlDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(isPrimary = true, onClick = {
+                    customBackendUrl = url
+                    backendPrefs.edit().putString("custom_backend_url", url).apply()
+                    showUrlDialog = false
+                }) { Text(stringResource(R.string.action_save)) }
+            }
+        )
+    }
+
+    if (showStealthSetup) {
+        StealthSetupDialog(
+            onDismiss = { showStealthSetup = false },
+            onConfirm = { pin ->
+                stealthManager.setPin(pin)
+                stealthManager.setEnabled(true)
+                isStealthEnabled = true
+                hasStealthPin = true
+                showStealthSetup = false
+                Toast.makeText(context, "Режим скрытия включён", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (showStealthDisable) {
+        StealthDisableDialog(
+            stealthManager = stealthManager,
+            onDismiss = { showStealthDisable = false },
+            onSuccess = {
+                stealthManager.setEnabled(false)
+                isStealthEnabled = false
+                showStealthDisable = false
+                Toast.makeText(context, "Режим скрытия отключён", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (showStealthChangePin) {
+        StealthChangePinDialog(
+            stealthManager = stealthManager,
+            onDismiss = { showStealthChangePin = false },
+            onSuccess = { newPin ->
+                stealthManager.setPin(newPin)
+                showStealthChangePin = false
+                Toast.makeText(context, "PIN-код обновлён", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (showTgBindingDialog) {
+        VlAlertDialog(
+            onDismissRequest = { showTgBindingDialog = false },
+            title = { Text("Привязка Telegram") },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    if (isGeneratingTgCode) {
+                        CircularProgressIndicator(modifier = Modifier.size(36.dp), color = MaterialTheme.colorScheme.primary)
+                    } else if (tgError != null) {
+                        Text(tgError!!, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                    } else if (tgCode != null) {
+                        Text(text = tgCode!!, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = 8.sp), color = Color(0xFF2AABEE), modifier = Modifier.padding(vertical = 16.dp))
+                        Text("Отправьте нашему боту в Telegram команду:", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+                            Text("/start ${tgCode!!}", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold))
+                        }
+                        Text("Срок действия кода — 5 минут.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
+                    }
+                }
+            },
+            actions = { VlDialogButton(onClick = { showTgBindingDialog = false }) { Text(stringResource(R.string.action_close)) } }
+        )
+    }
+
+    if (showPasswordDialog) {
+        ChangePasswordDialog(
+            onDismiss = { showPasswordDialog = false },
+            onConfirm = { current, newPass ->
+                scope.launch {
+                    try {
+                        val user = FirebaseAuth.getInstance().currentUser
+                        val credential = EmailAuthProvider.getCredential(user?.email!!, current)
+                        user.reauthenticate(credential).await()
+                        user.updatePassword(newPass).await()
+                        showPasswordDialog = false
+                        Toast.makeText(context, context.getString(R.string.dialog_password_success), Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) { Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show() }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun StealthSetupDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_stealth_setup_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.dialog_stealth_setup_text), fontSize = 13.sp)
+                VlTextField(value = pin, onValueChange = { pin = it; error = null }, label = stringResource(R.string.dialog_stealth_setup_pin), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                VlTextField(value = confirm, onValueChange = { confirm = it; error = null }, label = stringResource(R.string.dialog_stealth_setup_confirm), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            VlDialogButton(isPrimary = true, onClick = {
+                if (pin.length < 4) error = "Минимум 4 цифры"
+                else if (pin != confirm) error = "PIN-коды не совпадают"
+                else onConfirm(pin)
+            }) { Text(stringResource(R.string.action_accept)) }
+        }
+    )
+}
+
+@Composable
+private fun StealthDisableDialog(stealthManager: StealthManager, onDismiss: () -> Unit, onSuccess: () -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Отключить режим скрытия?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Введите текущий PIN-код для подтверждения.", fontSize = 13.sp)
+                VlTextField(value = pin, onValueChange = { pin = it; error = null }, label = "Текущий PIN-код", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(isDestructive = true, onClick = {
+                if (stealthManager.verifyPin(pin)) onSuccess()
+                else error = "Неверный PIN-код"
+            }) { Text("Отключить") }
+        }
+    )
+}
+
+@Composable
+private fun StealthChangePinDialog(stealthManager: StealthManager, onDismiss: () -> Unit, onSuccess: (String) -> Unit) {
+    var current by remember { mutableStateOf("") }
+    var newPin by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Смена PIN-кода") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                VlTextField(value = current, onValueChange = { current = it; error = null }, label = "Текущий PIN-код", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                VlTextField(value = newPin, onValueChange = { newPin = it; error = null }, label = "Новый PIN-код", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                VlTextField(value = confirm, onValueChange = { confirm = it; error = null }, label = "Повторите новый PIN-код", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(isPrimary = true, onClick = {
+                if (!stealthManager.verifyPin(current)) error = "Неверный текущий PIN-код"
+                else if (newPin.length < 4) error = "Минимум 4 цифры"
+                else if (newPin != confirm) error = "Новые PIN-коды не совпадают"
+                else onSuccess(newPin)
+            }) { Text("Сохранить") }
+        }
+    )
+}
+
+@Composable
+fun ChangePasswordDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+    var current by remember { mutableStateOf("") }
+    var newPass by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    VlAlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.dialog_password_change_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                VlTextField(value = current, onValueChange = { current = it; error = null }, label = stringResource(R.string.dialog_password_current), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                VlTextField(value = newPass, onValueChange = { newPass = it; error = null }, label = stringResource(R.string.dialog_password_new), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                VlTextField(value = confirm, onValueChange = { confirm = it; error = null }, label = stringResource(R.string.dialog_password_confirm), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+        },
+        actions = {
+            VlDialogButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            VlDialogButton(isPrimary = true, onClick = {
+                if (newPass.length < 6) error = "Min 6 characters"
+                else if (newPass != confirm) error = "Passwords don't match"
+                else onConfirm(current, newPass)
+            }) { Text(stringResource(R.string.action_save)) }
+        }
+    )
 }
 
 @Composable
