@@ -28,8 +28,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 130
-        versionName = "3.4.00"
+        versionCode = 131
+        versionName = "3.4.01"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
