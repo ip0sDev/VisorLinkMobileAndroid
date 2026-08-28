@@ -233,7 +233,7 @@ class ChatViewModel(
                         )
                     }
 
-                    if (ActiveChatTracker.activeChatId == chatId) {
+                    if (ActiveChatTracker.isChatActive(chatId)) {
                         viewModelScope.launch {
                             try {
                                 chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
@@ -526,7 +526,7 @@ class ChatViewModel(
                     )
                 }
 
-                if (ActiveChatTracker.activeChatId == chatId) {
+                if (ActiveChatTracker.isChatActive(chatId)) {
                     try {
                         chatRepository.markMessagesAsRead(chatId, older, currentUid)
                         NotificationHelper.clearNotification(context, chatId)

@@ -10,6 +10,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
@@ -20,8 +21,7 @@ import by.iposdev.visorlink.ui.components.FlagsOverlay
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.VisorLinkTheme
-import by.iposdev.visorlink.ui.update.AppUpdateViewModel
-import by.iposdev.visorlink.ui.update.AppUpdateWrapper
+import com.ipos.store.sdk.IposStoreUpdates
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.Firebase
@@ -45,7 +45,6 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         Log.d("FCM", "Notification permission granted: $granted")
-        if (granted) fetchAndSaveFcmToken()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,30 +61,32 @@ class MainActivity : AppCompatActivity() {
         }
         
         requestNotificationPermissionIfNeeded()
-        fetchAndSaveFcmToken()
 
         // Вызываем нашу проверку официального клиента
         verifyAppCheckStatus()
 
         setContent {
-            val themeViewModel: ThemeViewModel      = koinViewModel()
-            val authViewModel: AuthViewModel        = koinViewModel()
-            val updateViewModel: AppUpdateViewModel = koinViewModel()
+            val themeViewModel: ThemeViewModel = koinViewModel()
+            val authViewModel: AuthViewModel   = koinViewModel()
 
             val appTheme    by themeViewModel.appTheme.collectAsState()
             val themeMode   by themeViewModel.themeMode.collectAsState()
             val colorPreset by themeViewModel.colorPreset.collectAsState()
 
+            LaunchedEffect(Unit) {
+                IposStoreUpdates.checkUpdate()
+            }
+
             VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
                 AppCheckGuard {
-                    AppUpdateWrapper(viewModel = updateViewModel) {
+                    by.iposdev.visorlink.ui.legal.LegalConsentGuard(authViewModel = authViewModel) {
                         Box {
                             VisorLinkNavGraph(
                                 authViewModel = authViewModel,
-                                themeViewModel = themeViewModel,
-                                appUpdateViewModel = updateViewModel
+                                themeViewModel = themeViewModel
                             )
                             FlagsOverlay()
+                            IposStoreUpdates.IposUpdateHost()
                         }
                     }
                 }
@@ -98,7 +99,7 @@ class MainActivity : AppCompatActivity() {
             when {
                 ContextCompat.checkSelfPermission(
                     this, Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> fetchAndSaveFcmToken()
+                ) == PackageManager.PERMISSION_GRANTED -> { /* Разрешение уже есть */ }
 
                 shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS) ->
                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -109,21 +110,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun fetchAndSaveFcmToken() {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
-        FirebaseMessaging.getInstance().token
-            .addOnSuccessListener { token ->
-                Log.d("FCM", "Got token: $token")
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try {
-                        userRepository.saveFcmToken(token)
-                        Log.d("FCM", "Token saved to Firestore")
-                    } catch (e: Exception) {
-                        Log.e("FCM", "Failed to save FCM token", e)
-                    }
-                }
-            }
-            .addOnFailureListener { e -> Log.e("FCM", "Failed to get FCM token", e) }
+    override fun onResume() {
+        super.onResume()
+        by.iposdev.visorlink.utils.ActiveChatTracker.isAppInForeground = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        by.iposdev.visorlink.utils.ActiveChatTracker.isAppInForeground = false
     }
 
     // --- НОВАЯ ФУНКЦИЯ ДЛЯ APP CHECK ---

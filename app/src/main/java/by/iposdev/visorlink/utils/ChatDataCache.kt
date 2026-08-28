@@ -631,6 +631,7 @@ object ChatDataCache {
         put("online", online)
         put("isAdmin", isAdmin)
         put("diaryEnabled", diaryEnabled)
+        if (acceptedVersion != null) put("acceptedVersion", acceptedVersion)
         val custom = JSONObject()
         customization.forEach { (k, v) -> custom.put(k, v) }
         put("customization", custom)
@@ -650,6 +651,7 @@ object ChatDataCache {
             online      = optBoolean("online", false),
             isAdmin     = optBoolean("isAdmin", false),
             diaryEnabled = optBoolean("diaryEnabled", false),
+            acceptedVersion = if (isNull("acceptedVersion") || !has("acceptedVersion")) null else optString("acceptedVersion"),
             customization = customMap
         )
     } catch (e: Exception) { null }

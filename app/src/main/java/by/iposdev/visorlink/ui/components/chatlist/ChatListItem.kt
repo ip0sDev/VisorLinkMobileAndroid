@@ -189,6 +189,7 @@ fun ChatListItemCompact(
     currentUid: String,
     otherProfile: UserProfile?,
     draftText: String?,
+    isSavedMessages: Boolean = false,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -208,19 +209,23 @@ fun ChatListItemCompact(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.size(54.dp)) {
-            when (chatType) {
-                ChatType.DIRECT -> AvatarWithPresence(
-                    avatarUrl = otherProfile?.avatarUrl,
-                    displayName = chat.otherDisplayName(currentUid),
-                    isOnline = otherProfile?.online ?: false,
-                    size = 54.dp
-                )
-                ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
-                    avatarUrl = chat.avatarUrl,
-                    name = chat.name,
-                    isChannel = chatType == ChatType.CHANNEL,
-                    size = 54.dp
-                )
+            if (isSavedMessages) {
+                SavedMessagesIcon(size = 54.dp)
+            } else {
+                when (chatType) {
+                    ChatType.DIRECT -> AvatarWithPresence(
+                        avatarUrl = otherProfile?.avatarUrl,
+                        displayName = chat.otherDisplayName(currentUid),
+                        isOnline = otherProfile?.online ?: false,
+                        size = 54.dp
+                    )
+                    ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
+                        avatarUrl = chat.avatarUrl,
+                        name = chat.name,
+                        isChannel = chatType == ChatType.CHANNEL,
+                        size = 54.dp
+                    )
+                }
             }
         }
 
@@ -231,11 +236,15 @@ fun ChatListItemCompact(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                if (chatType != ChatType.DIRECT) {
+                if (chatType != ChatType.DIRECT && !isSavedMessages) {
                     Text(if (chatType == ChatType.CHANNEL) "📢" else "👥", fontSize = 11.sp)
                 }
                 Text(
-                    text = if (chatType == ChatType.DIRECT) chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" } else chat.name,
+                    text = when {
+                        isSavedMessages -> stringResource(R.string.saved_messages_title)
+                        chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" }
+                        else -> chat.name
+                    },
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = titleColor,

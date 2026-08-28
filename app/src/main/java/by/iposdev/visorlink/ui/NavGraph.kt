@@ -35,15 +35,13 @@ import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
 import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.StealthManager
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun VisorLinkNavGraph(
     authViewModel: AuthViewModel,
-    themeViewModel: ThemeViewModel,
-    appUpdateViewModel: AppUpdateViewModel
+    themeViewModel: ThemeViewModel
 ) {
     val navController = rememberNavController()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -75,9 +73,10 @@ fun VisorLinkNavGraph(
     val authState by authViewModel.authState.collectAsState()
     val showOnboarding by themeViewModel.showOnboarding.collectAsState()
     val isTfaRequired by authViewModel.isTfaRequired.collectAsState()
+    val isSessionReady by authViewModel.isSessionReady.collectAsState()
 
     // ── Three-state auth guard + Onboarding + 2FA ─────────────────────────────
-    LaunchedEffect(authState, isStealthUnlocked, showOnboarding, isTfaRequired) {
+    LaunchedEffect(authState, isStealthUnlocked, showOnboarding, isTfaRequired, isSessionReady) {
         if (stealthManager.isEnabled() && !isStealthUnlocked) {
             return@LaunchedEffect
         }
@@ -103,8 +102,13 @@ fun VisorLinkNavGraph(
             is AuthState.Unverified -> navController.navigate(Screen.VerifyEmail.route) {
                 popUpTo(0) { inclusive = true }
             }
-            is AuthState.Verified   -> navController.navigate(Screen.ChatList.route) {
-                popUpTo(0) { inclusive = true }
+            is AuthState.Verified   -> {
+                if (isSessionReady) {
+                    authViewModel.onSessionReadyAfter2FA()
+                    navController.navigate(Screen.ChatList.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             }
         }
     }
@@ -114,7 +118,7 @@ fun VisorLinkNavGraph(
         stealthManager.isEnabled() && !isStealthUnlocked -> "decoy"
         showOnboarding                    -> Screen.Onboarding.route
         isTfaRequired                     -> Screen.Tfa.route
-        authState is AuthState.Verified   -> Screen.ChatList.route
+        isSessionReady                    -> Screen.ChatList.route
         authState is AuthState.Unverified -> Screen.VerifyEmail.route
         else                              -> Screen.Login.route
     }
@@ -137,7 +141,8 @@ fun VisorLinkNavGraph(
             OnboardingScreen(
                 onFinish = {
                     // Reactive guard will handle navigation to ChatList/Login
-                }
+                },
+                authViewModel = authViewModel
             )
         }
 
@@ -327,8 +332,7 @@ fun VisorLinkNavGraph(
                 onOpenCustomization = { navController.navigate(Screen.Customization.route) },
                 onOpenAegisDebug    = { navController.navigate(Screen.AegisDebug.route) },
                 onOpenFlagFlipper   = { navController.navigate(Screen.FlagFlipper.route) },
-                themeViewModel      = themeViewModel,
-                appUpdateViewModel  = appUpdateViewModel
+                themeViewModel      = themeViewModel
             )
         }
 

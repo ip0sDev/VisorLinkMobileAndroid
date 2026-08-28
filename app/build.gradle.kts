@@ -28,8 +28,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 129
-        versionName = "3.3.04"
+        versionCode = 130
+        versionName = "3.4.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
@@ -88,6 +88,9 @@ sentry {
 }
 
 dependencies {
+    // ── Ipos Store In-App Updates SDK ─────────────────────────────────────────
+    implementation(files("libs/ipos-store-sdk-release.aar"))
+
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui.geometry)

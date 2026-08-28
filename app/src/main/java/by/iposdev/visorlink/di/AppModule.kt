@@ -32,7 +32,6 @@ import by.iposdev.visorlink.ui.screens.settings.CustomizationViewModel
 import by.iposdev.visorlink.ui.screens.settings.FlagFlipperViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.CacheManager
 import by.iposdev.visorlink.utils.TfaManager
 import by.iposdev.visorlink.utils.DiaryReminderManager
@@ -100,6 +99,7 @@ val appModule = module {
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
+    single { LegalRepository(get(), androidContext()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
@@ -109,10 +109,11 @@ val appModule = module {
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
+    single { by.iposdev.visorlink.utils.FcmManager(androidContext(), get(), get()) }
 
     viewModel { AppCheckViewModel() }
 
-    viewModel { AuthViewModel(get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
     viewModel { MainViewModel(get(), get()) }
     viewModel { ChatListViewModel(get(), get(), get(), get()) }
@@ -142,7 +143,7 @@ val appModule = module {
     }
 
     viewModel { SearchViewModel(get(), get(), get()) }
-    viewModel { ProfileViewModel(get(), get()) }
+    viewModel { ProfileViewModel(get(), get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
 
     viewModel { StickerPackViewModel(get(), get()) }
@@ -157,7 +158,6 @@ val appModule = module {
         )
     }
 
-    viewModel { AppUpdateViewModel(androidApplication()) }
     viewModel { CacheViewModel(get(), androidApplication()) }
     viewModel { StorageViewModel() }
     viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }

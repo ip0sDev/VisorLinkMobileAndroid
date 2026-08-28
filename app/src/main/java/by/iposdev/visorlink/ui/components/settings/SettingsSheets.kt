@@ -28,7 +28,6 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.data.repository.BotRepository
 import by.iposdev.visorlink.data.repository.DmBot
-import by.iposdev.visorlink.ui.update.UpdateChannel
 import com.google.firebase.Firebase
 import com.google.firebase.functions.functions
 import kotlinx.coroutines.launch
@@ -222,45 +221,3 @@ fun BotItem(bot: DmBot, onRegenerate: () -> Unit, onDelete: () -> Unit) {
     }
 }
 
-@Composable
-fun ChannelSelectionDialog(
-    currentChannel: UpdateChannel,
-    canaryAvailable: Boolean,
-    onDismiss: () -> Unit,
-    onSelect: (UpdateChannel) -> Unit
-) {
-    VlAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Канал обновлений") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                UpdateChannel.entries.forEach { channel ->
-                    if (channel == UpdateChannel.CANARY && !canaryAvailable && currentChannel != UpdateChannel.CANARY) {
-                        return@forEach
-                    }
-                    
-                    VlOptionRow(
-                        icon = when(channel) {
-                            UpdateChannel.RELEASE -> Icons.Default.CheckCircle
-                            UpdateChannel.BETA -> Icons.Default.BugReport
-                            UpdateChannel.NIGHTLY -> Icons.Default.NightsStay
-                            UpdateChannel.CANARY -> Icons.Default.Science
-                        },
-                        label = channel.title,
-                        desc = when(channel) {
-                            UpdateChannel.RELEASE -> "Стабильные версии"
-                            UpdateChannel.BETA -> "Публичное тестирование"
-                            UpdateChannel.NIGHTLY -> "Ежедневные сборки"
-                            UpdateChannel.CANARY -> "Экспериментальные фичи"
-                        },
-                        selected = currentChannel == channel,
-                        onClick = { onSelect(channel) }
-                    )
-                }
-            }
-        },
-        actions = {
-            VlDialogButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-        }
-    )
-}

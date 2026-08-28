@@ -34,7 +34,8 @@ class AuthViewModelTest {
             on { userProfileFlow(any()) } doReturn flowOf(null)
         }
         tfaManager = mock()
-        viewModel = AuthViewModel(authRepository, userRepository, tfaManager)
+        val fcmManager: by.iposdev.visorlink.utils.FcmManager = mock()
+        viewModel = AuthViewModel(authRepository, userRepository, tfaManager, fcmManager)
     }
 
     @After

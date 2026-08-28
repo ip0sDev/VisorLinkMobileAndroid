@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
+import by.iposdev.visorlink.ui.components.VlBrandText
 import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.components.chatlist.*
 import by.iposdev.visorlink.ui.theme.*
@@ -70,12 +71,21 @@ fun ChatListScreen(
         topBar = {
             VlTopAppBar(
                 title = {
+                    val tokens = VlTheme.tokens
                     Column {
-                        Text(
-                            stringResource(R.string.chatlist_title),
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (tokens.isBiolume) {
+                            VlBrandText(
+                                text = stringResource(R.string.chatlist_title),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 20.sp
+                            )
+                        } else {
+                            Text(
+                                stringResource(R.string.chatlist_title),
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                         AnimatedVisibility(
                             visible = !isScrolled,
                             enter = expandVertically(
@@ -181,26 +191,8 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
-                        // 📌 SAVED MESSAGES
-                        item(key = "saved_messages") {
-                            val savedChat = viewModel.savedMessagesEntry
-                            ChatListItem(
-                                chat = savedChat,
-                                chatType = ChatType.DIRECT,
-                                currentUid = viewModel.currentUid,
-                                otherProfile = null,
-                                draftText = drafts[savedChat.id],
-                                isSavedMessages = true,
-                                isCompactList = compactList,
-                                onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
-                            )
-                            if (!compactList) {
-                                Spacer(Modifier.height(8.dp))
-                            }
-                        }
-
-                        // 📌 CHAT LIST
-                        if (compactList && chats.isNotEmpty()) {
+                        if (compactList) {
+                            // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {
                                 val cs = MaterialTheme.colorScheme
                                 val shape = RoundedCornerShape(24.dp)
@@ -213,6 +205,27 @@ fun ChatListScreen(
                                         .background(cs.surfaceContainerLow, shape)
                                         .clip(shape)
                                 ) {
+                                    // 📌 SAVED MESSAGES (первая строка компактного блока)
+                                    val savedChat = viewModel.savedMessagesEntry
+                                    ChatListItemCompact(
+                                        chat = savedChat,
+                                        chatType = ChatType.DIRECT,
+                                        currentUid = viewModel.currentUid,
+                                        otherProfile = null,
+                                        draftText = drafts[savedChat.id],
+                                        isSavedMessages = true,
+                                        onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
+                                    )
+
+                                    if (chats.isNotEmpty()) {
+                                        HorizontalDivider(
+                                            modifier = Modifier.padding(start = 76.dp, end = 16.dp),
+                                            thickness = 0.5.dp,
+                                            color = cs.outlineVariant.copy(alpha = 0.4f)
+                                        )
+                                    }
+
+                                    // 📌 ВСЕ ОСТАЛЬНЫЕ ЧАТЫ
                                     chats.forEachIndexed { index, chat ->
                                         val chatType = chat.chatType()
                                         val otherUid = when (chatType) {
@@ -240,6 +253,22 @@ fun ChatListScreen(
                                 }
                             }
                         } else {
+                            // ── ОБЫЧНЫЙ РЕЖИМ (Отдельные карточки с отступами) ────────────────────────
+                            // 📌 SAVED MESSAGES
+                            item(key = "saved_messages") {
+                                val savedChat = viewModel.savedMessagesEntry
+                                ChatListItem(
+                                    chat = savedChat,
+                                    chatType = ChatType.DIRECT,
+                                    currentUid = viewModel.currentUid,
+                                    otherProfile = null,
+                                    draftText = drafts[savedChat.id],
+                                    isSavedMessages = true,
+                                    isCompactList = false,
+                                    onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
+                                )
+                                Spacer(Modifier.height(8.dp))
+                            }
                             itemsIndexed(chats, key = { _, chat -> chat.id }) { index, chat ->
                                 val chatType = chat.chatType()
                                 val otherUid = when (chatType) {

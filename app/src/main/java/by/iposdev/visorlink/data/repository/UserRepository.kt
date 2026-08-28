@@ -252,6 +252,16 @@ class UserRepository(
             .call(mapOf("token" to token)).await()
     }
 
+    suspend fun removeFcmToken(token: String) {
+        val uid = currentUid ?: return
+        try {
+            db.collection("users").document(uid)
+                .update("fcmTokens", FieldValue.arrayRemove(token)).await()
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Failed to remove FCM token from Firestore", e)
+        }
+    }
+
     fun clientStatusFlow(uid: String): Flow<Boolean> = callbackFlow {
         val ref = Firebase.database.getReference("users/$uid/clientStatus/isOfficial")
         val listener = object : ValueEventListener {

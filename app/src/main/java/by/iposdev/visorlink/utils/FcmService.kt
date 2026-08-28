@@ -20,6 +20,8 @@ import org.koin.android.ext.android.inject
 class FcmService : FirebaseMessagingService() {
 
     private val userRepository: by.iposdev.visorlink.data.repository.UserRepository by inject()
+    private val tfaManager: TfaManager by inject()
+    private val authRepository: by.iposdev.visorlink.data.repository.AuthRepository by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNewToken(token: String) {
@@ -29,14 +31,20 @@ class FcmService : FirebaseMessagingService() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null) {
             Log.d("FCM", "User not logged in, skipping token save")
-            // Токен будет отправлен позже через AuthStateListener в VisorLinkApp
             return
         }
 
         scope.launch {
             try {
-                userRepository.saveFcmToken(token)
-                Log.d("FCM", "New token saved")
+                val authTime = authRepository.getAuthTime()
+                val isTfaPassed = authTime != null && tfaManager.isTfaPassed(authTime)
+                val profile = userRepository.getUserProfile(uid)
+                if (profile != null && (!profile.tfaEnabled || isTfaPassed)) {
+                    userRepository.saveFcmToken(token)
+                    Log.d("FCM", "New token saved post-2FA")
+                } else {
+                    Log.d("FCM", "2FA pending or profile loading: deferring new token registration")
+                }
             } catch (e: Exception) {
                 Log.e("FCM", "Failed to save new token", e)
             }
@@ -78,10 +86,10 @@ class FcmService : FirebaseMessagingService() {
             ?: message.data["body"]
             ?: "You have a new message"
 
-        // Если чат открыт на экране прямо сейчас — скрываем уведомление
-        val isCurrentChat = ActiveChatTracker.isAppInForeground && ActiveChatTracker.activeChatId == chatId
+        // Если чат открыт на экране прямо сейчас и приложение на переднем плане — скрываем уведомление
+        val isCurrentChat = ActiveChatTracker.isChatActive(chatId)
         if (isCurrentChat) {
-            Log.d("FCM", "Suppressed notification: chat $chatId is currently open")
+            Log.d("FCM", "Suppressed notification: chat $chatId is currently open in foreground")
             return
         }
 

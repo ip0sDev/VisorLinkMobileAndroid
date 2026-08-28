@@ -33,6 +33,8 @@ import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.screens.auth.AuthCard
+import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -44,6 +46,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun OnboardingScreen(
     onFinish: () -> Unit,
     themeViewModel: ThemeViewModel = koinViewModel(),
+    authViewModel: AuthViewModel = koinViewModel(),
     auth: FirebaseAuth = koinInject(),
     db: FirebaseFirestore = koinInject()
 ) {
@@ -58,14 +61,44 @@ fun OnboardingScreen(
 
     Scaffold(
         containerColor = scaffoldBg,
-        bottomBar = {
+        topBar = {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .padding(24.dp)
-                    .navigationBarsPadding()
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, bottom = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (pagerState.currentPage < 3) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(4) { i ->
+                        val isCurrent = pagerState.currentPage == i
+                        val color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                        val width by animateDpAsState(
+                            targetValue = if (isCurrent) 24.dp else 8.dp,
+                            animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+                            label = "onboarding_indicator_width"
+                        )
+                        Box(
+                            Modifier
+                                .size(width = width, height = 8.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                        )
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            if (pagerState.currentPage < 3) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .navigationBarsPadding()
+                ) {
                     VlButton(
                         onClick = {
                             scope.launch {
@@ -75,20 +108,15 @@ fun OnboardingScreen(
                     ) {
                         Text(stringResource(R.string.action_next), fontWeight = FontWeight.Bold)
                     }
-                } else {
-                    VlButton(
-                        onClick = {
-                            themeViewModel.completeOnboarding()
-                            onFinish()
-                        }
-                    ) {
-                        Text(stringResource(R.string.intro_start_btn), fontWeight = FontWeight.Bold)
-                    }
                 }
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
             VlAmbientGlow()
 
             HorizontalPager(
@@ -100,24 +128,12 @@ fun OnboardingScreen(
                     0 -> WelcomePage(themeViewModel)
                     1 -> AppearancePage(themeViewModel)
                     2 -> FeaturesPage(themeViewModel, auth, db)
-                    3 -> FinalPage()
-                }
-            }
-
-            // Indicator
-            Row(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                repeat(4) { i ->
-                    val color = if (pagerState.currentPage == i) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                    Box(
-                        Modifier
-                            .size(if (pagerState.currentPage == i) 24.dp else 8.dp, 8.dp)
-                            .clip(CircleShape)
-                            .background(color)
+                    3 -> AuthPage(
+                        authViewModel = authViewModel,
+                        onSuccess = {
+                            themeViewModel.completeOnboarding()
+                            onFinish()
+                        }
                     )
                 }
             }
@@ -286,28 +302,20 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
 }
 
 @Composable
-fun FinalPage() {
-    Column(
-        Modifier
+fun AuthPage(
+    authViewModel: AuthViewModel,
+    onSuccess: () -> Unit
+) {
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text("✨", fontSize = 80.sp)
-        Spacer(Modifier.height(24.dp))
-        Text(
-            stringResource(R.string.intro_final_title),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            stringResource(R.string.intro_final_desc),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+        AuthCard(
+            viewModel = authViewModel,
+            onLoginSuccess = onSuccess,
+            onRegistrationComplete = onSuccess
         )
     }
 }

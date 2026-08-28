@@ -6,4 +6,7 @@ object ActiveChatTracker {
 
     @Volatile
     var isAppInForeground: Boolean = false
+
+    fun isChatActive(chatId: String): Boolean =
+        isAppInForeground && activeChatId == chatId
 }

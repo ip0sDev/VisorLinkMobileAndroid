@@ -54,6 +54,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         }
 
         NotificationHelper.createChannels(this)
+        com.ipos.store.sdk.IposStoreUpdates.init(this)
 
         // ─── Firebase App Check ───────────────────────────────────────────────
         if (BuildConfig.DEBUG) {
@@ -126,20 +127,10 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             }
         })
 
-        // Автоматически управляем presence и FCM токеном при смене auth state
+        // Автоматически управляем presence при смене auth state
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             val uid = auth.currentUser?.uid
             if (uid != null) {
-                // ── ИСПРАВЛЕНИЕ FCM: Отправляем токен сразу после авторизации ──
-                FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                    try {
-                        Firebase.functions.getHttpsCallable("saveFcmToken").call(mapOf("token" to token))
-                        Log.d("FCM", "Token synced on auth state change")
-                    } catch (e: Exception) {
-                        Log.e("FCM", "Failed to sync token on auth state change", e)
-                    }
-                }
-
                 presenceManager?.detach()
                 presenceManager = PresenceManager(uid).also {
                     it.attach(ProcessLifecycleOwner.get().lifecycle)

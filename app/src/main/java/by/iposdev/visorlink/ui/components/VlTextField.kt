@@ -66,12 +66,22 @@ fun VlTextField(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
+    val fieldShape = if (tokens.isForge) tokens.shapes.field else androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+
     if (!tokens.structure.enabled) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = modifier.fillMaxWidth(),
             enabled = enabled,
+            shape = fieldShape,
+            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = cs.surfaceContainerLow,
+                unfocusedContainerColor = cs.surfaceContainerLow.copy(alpha = 0.60f),
+                focusedBorderColor = cs.primary,
+                unfocusedBorderColor = cs.outlineVariant.copy(alpha = 0.50f),
+                cursorColor = cs.primary
+            ),
             label = label?.let { { Text(it) } },
             placeholder = placeholder?.let { { Text(it) } },
             singleLine = singleLine,
@@ -91,7 +101,7 @@ fun VlTextField(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isFocused by interactionSource.collectIsFocusedAsState()
-    val shape: Shape = tokens.shapes.field
+    val shape: Shape = fieldShape
     val signalColor = if (isError) cs.error else cs.primary
 
     Column(modifier = modifier.fillMaxWidth()) {

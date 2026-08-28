@@ -89,7 +89,7 @@ fun ChatListFab(
             label = "fab_scale"
         )
 
-        val fabBgOpen = cs.error
+        val fabBgOpen = cs.primary
         val fabBgClosed = cs.primary
 
         // §7: в Biolume FAB — асимметричная M3E-форма с постоянным, но статичным
@@ -111,7 +111,7 @@ fun ChatListFab(
             interactionSource = interactionSource,
             hapticEnabled = false // Handled in onClick lambda manually to use SELECTION
         ) {
-            val fabContentOpen = cs.onErrorContainer
+            val fabContentOpen = cs.onPrimary
             val fabContentClosed = cs.onPrimary
             val contentColor = if (showMenu) fabContentOpen else fabContentClosed
 
@@ -123,7 +123,7 @@ fun ChatListFab(
                 },
                 label = "fab_icon_morph"
             ) { isOpen ->
-                val rotation by animateFloatAsState(targetValue = if (isOpen) 45f else 0f, VlTheme.tokens.motion.motionSpec<Float>(), label = "fab_rot")
+                val rotation by animateFloatAsState(targetValue = if (isOpen) 90f else 0f, VlTheme.tokens.motion.motionSpec<Float>(), label = "fab_rot")
                 Icon(
                     imageVector = if (isOpen) Icons.Default.Close else Icons.Default.Edit,
                     contentDescription = null,

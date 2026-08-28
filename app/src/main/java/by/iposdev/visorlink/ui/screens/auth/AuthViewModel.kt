@@ -40,7 +40,8 @@ data class TfaUiState(
 class AuthViewModel(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
-    private val tfaManager: TfaManager
+    private val tfaManager: TfaManager,
+    private val fcmManager: by.iposdev.visorlink.utils.FcmManager
 ) : ViewModel() {
 
     // Three-state auth stream — consumed by the root nav guard
@@ -90,6 +91,40 @@ class AuthViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
+    /**
+     * Флаг полной готовности пользовательской сессии.
+     * true ТОЛЬКО если:
+     * 1. Пользователь верифицирован (AuthState.Verified).
+     * 2. Профиль пользователя загружен (profile != null).
+     * 3. 2FA либо подтверждена, либо отключена.
+     *
+     * Пока false — переход в чаты и регистрация FCM токена СТРОГО ЗАБЛОКИРОВАНЫ.
+     */
+    val isSessionReady: StateFlow<Boolean> = combine(
+        authState,
+        currentUserProfile,
+        _tfaPassed
+    ) { state, profile, passed ->
+        if (state !is AuthState.Verified) return@combine false
+        if (profile == null) return@combine false
+        if (profile.tfaEnabled) {
+            passed
+        } else {
+            true
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    init {
+        viewModelScope.launch {
+            authState.collect { state ->
+                if (state is AuthState.NoSession) {
+                    // При отсутствии сессии / выходе на экран логина токен FCM должен быть полностью аннулирован
+                    fcmManager.revokeToken()
+                }
+            }
+        }
+    }
+
     fun request2FA(method: String) {
         viewModelScope.launch {
             _tfaUiState.value = TfaUiState(isLoading = true)
@@ -110,8 +145,25 @@ class AuthViewModel(
                     }
                     _tfaPassed.value = true
                     _tfaUiState.value = TfaUiState(tfaPassed = true)
+                    viewModelScope.launch {
+                        fcmManager.syncTokenAfter2FA()
+                    }
                 }
                 .onFailure { _tfaUiState.value = TfaUiState(error = "Invalid code or expired") }
+        }
+    }
+
+    /**
+     * Вызывается когда сессия верифицирована и 2FA пройдена (или не требуется).
+     * Настраивает FCM токен строго после 2FA.
+     */
+    fun onSessionReadyAfter2FA() {
+        viewModelScope.launch {
+            if (isSessionReady.value) {
+                fcmManager.syncTokenAfter2FA()
+            } else {
+                android.util.Log.w("AuthViewModel", "Cannot sync FCM: session is NOT ready yet (2FA in progress or profile loading)")
+            }
         }
     }
 
@@ -131,6 +183,9 @@ class AuthViewModel(
         }
         viewModelScope.launch {
             _uiState.value = AuthUiState(isLoading = true)
+            // Перед логином убеждаемся, что старый FCM токен отозван,
+            // чтобы 2FA код не пришёл в пуше на ещё не аутентифицированное устройство
+            fcmManager.revokeToken()
             runCatching { authRepository.login(email.trim(), password) }
                 .onSuccess { _uiState.value = AuthUiState(success = true) }
                 .onFailure { _uiState.value = AuthUiState(error = friendlyMessage(it)) }
@@ -156,6 +211,18 @@ class AuthViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun sendPasswordReset(email: String, onResult: (Boolean, String?) -> Unit) {
+        if (email.isBlank()) {
+            onResult(false, "Укажите email для сброса пароля")
+            return
+        }
+        viewModelScope.launch {
+            runCatching { authRepository.sendPasswordResetEmail(email) }
+                .onSuccess { onResult(true, null) }
+                .onFailure { onResult(false, friendlyMessage(it)) }
+        }
     }
 
     // ── Email verification screen ─────────────────────────────────────────────
@@ -233,7 +300,11 @@ class AuthViewModel(
         stopVerificationPolling()
         tfaManager.clearCache()
         _tfaPassed.value = false
-        authRepository.logout()
+        viewModelScope.launch {
+            // FCM токены автоматически отзываются при сбросе приложения / логауте
+            fcmManager.revokeToken()
+            authRepository.logout()
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

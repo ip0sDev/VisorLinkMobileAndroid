@@ -50,7 +50,11 @@ data class UserProfile(
     val ntfyTopics: List<String> = emptyList(),
     val settings: Map<String, Any?> = emptyMap(),
     val mutedChatIds: List<String> = emptyList(),
-    val lastBitsClaim: Timestamp? = null
+    val lastBitsClaim: Timestamp? = null,
+
+    // Legal & Compliance consent tracking
+    val acceptedAt: Timestamp? = null,
+    val acceptedVersion: String? = null
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false

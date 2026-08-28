@@ -107,6 +107,10 @@ class AuthRepository(
         auth.signInWithEmailAndPassword(email, password).await()
     }
 
+    suspend fun sendPasswordResetEmail(email: String) {
+        auth.sendPasswordResetEmail(email.trim()).await()
+    }
+
     // ── Email verification ────────────────────────────────────────────────────
     /**
      * Reload the current user and force-refresh the ID token so Firestore

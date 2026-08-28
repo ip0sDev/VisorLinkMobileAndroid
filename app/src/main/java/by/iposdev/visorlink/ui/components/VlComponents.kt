@@ -398,8 +398,8 @@ fun VlSegmentedControl(
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val shape = RoundedCornerShape(16.dp)
-    val itemShape: Shape = if (tokens.structure.enabled) tokens.shapes.chip else RoundedCornerShape(12.dp)
+    val shape = if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(percent = 50)
+    val itemShape: Shape = if (tokens.isForge) RoundedCornerShape(2.dp) else RoundedCornerShape(percent = 50)
 
     Box(
         modifier = modifier
@@ -424,7 +424,6 @@ fun VlSegmentedControl(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxHeight()
                         .clip(itemShape)
                         .background(bgColor, itemShape)
                         .then(

@@ -26,7 +26,8 @@ data class ProfileUiState(
 
 class ProfileViewModel(
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val fcmManager: by.iposdev.visorlink.utils.FcmManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -115,8 +116,10 @@ class ProfileViewModel(
     }
 
     fun logout() {
-        // PresenceManager.detach() вызывается в VisorLinkApp через AuthStateListener
-        authRepository.logout()
+        viewModelScope.launch {
+            runCatching { fcmManager.revokeToken() }
+            authRepository.logout()
+        }
     }
 
     fun clearMessages() = _uiState.update { it.copy(error = null, successMessage = null, tgCode = null) }

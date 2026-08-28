@@ -46,7 +46,7 @@ import by.iposdev.visorlink.ui.components.*
 import by.iposdev.visorlink.ui.components.settings.*
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.update.AppUpdateViewModel
+import com.ipos.store.sdk.IposStoreUpdates
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.StealthManager
@@ -74,11 +74,11 @@ fun SettingsScreen(
     onOpenAegisDebug: () -> Unit = {},
     onOpenFlagFlipper: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
-    appUpdateViewModel: AppUpdateViewModel,
     userRepository: UserRepository = koinInject(),
     authRepository: AuthRepository = koinInject(),
     flagsRepository: FlagsRepository = koinInject(),
-    proViewModel: ProViewModel = koinViewModel()
+    proViewModel: ProViewModel = koinViewModel(),
+    authViewModel: by.iposdev.visorlink.ui.screens.auth.AuthViewModel = koinViewModel()
 ) {
     val currentTheme by themeViewModel.appTheme.collectAsState()
     val currentMode by themeViewModel.themeMode.collectAsState()
@@ -86,8 +86,6 @@ fun SettingsScreen(
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val notifEnabled by themeViewModel.notificationsEnabled.collectAsState()
     val currentLang by themeViewModel.language.collectAsState()
-    val currentChannel by appUpdateViewModel.currentChannel.collectAsState()
-    val isCanaryAvailable by appUpdateViewModel.isCanaryAvailable.collectAsState()
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
     val compactChatList by themeViewModel.compactChatList.collectAsState()
 
@@ -124,13 +122,9 @@ fun SettingsScreen(
     var disableFirestore by remember { mutableStateOf(backendPrefs.getBoolean("disable_firestore_completely", false)) }
     var customBackendUrl by remember { mutableStateOf(backendPrefs.getString("custom_backend_url", "10.0.2.2:8080") ?: "10.0.2.2:8080") }
     var showUrlDialog by remember { mutableStateOf(false) }
-
-    var showChannelDialog by remember { mutableStateOf(false) }
-    // Canary в списке каналов разблокируется зажатием на пункте версии.
-    // Финальную валидацию всё равно делает сервер (isCanaryAllowed по install_id).
-    var canaryUnlockedByLongPress by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showLegalDialog by remember { mutableStateOf(false) }
 
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
@@ -353,7 +347,17 @@ fun SettingsScreen(
                 }
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_updates)) {
-                    VlSettingsItem(icon = Icons.Default.Science, iconColor = colorUpdateChan, title = stringResource(R.string.settings_update_channel), subtitle = stringResource(R.string.settings_update_channel_current, currentChannel.title), onClick = { showChannelDialog = true })
+                    VlSettingsItem(
+                        icon = Icons.Default.Storefront,
+                        iconColor = colorUpdateChan,
+                        title = "Ipos Store",
+                        subtitle = if (IposStoreUpdates.isStoreInstalled()) "Клиент установлен (фоновые обновления)" else "Не установлен (нажмите для скачивания)",
+                        onClick = {
+                            if (!IposStoreUpdates.isStoreInstalled()) {
+                                IposStoreUpdates.openStoreDownload()
+                            }
+                        }
+                    )
                     VlSettingsItem(
                         icon = Icons.Default.Sync,
                         iconColor = colorUpdateCheck,
@@ -362,9 +366,14 @@ fun SettingsScreen(
                         onClick = {
                             haptic.perform(HapticType.SUCCESS, hapticEnabled)
                             Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
-                            appUpdateViewModel.checkForUpdates(isManual = true) { hasUpdate ->
-                                if (!hasUpdate) {
-                                    Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                try {
+                                    val update = IposStoreUpdates.checkUpdate()
+                                    if (update == null && IposStoreUpdates.isStoreInstalled()) {
+                                        Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Ошибка проверки: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -422,20 +431,19 @@ fun SettingsScreen(
                     VlSettingsItem(
                         icon = Icons.Default.Info, 
                         title = "VisorLink", 
-                        subtitle = "Версия $versionString\nDevice ID: ${appUpdateViewModel.installId}",
+                        subtitle = "Версия $versionString",
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Device ID", appUpdateViewModel.installId))
-                            Toast.makeText(context, "Device ID скопирован", Toast.LENGTH_SHORT).show()
-                        },
-                        onLongClick = {
-                            if (canaryUnlockedByLongPress) {
-                                Toast.makeText(context, "Canary уже разблокирован", Toast.LENGTH_SHORT).show()
-                            } else {
-                                canaryUnlockedByLongPress = true
-                                Toast.makeText(context, "Canary канал разблокирован", Toast.LENGTH_SHORT).show()
-                            }
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Version", versionString))
+                            Toast.makeText(context, "Версия скопирована", Toast.LENGTH_SHORT).show()
                         }
+                    )
+                    VlSettingsItem(
+                        icon = Icons.Default.Gavel,
+                        iconColor = MaterialTheme.colorScheme.primary,
+                        title = "Правовая информация",
+                        subtitle = "Условия использования и конфиденциальность",
+                        onClick = { showLegalDialog = true }
                     )
                     VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                 }
@@ -447,16 +455,7 @@ fun SettingsScreen(
 
     if (showAdminPanel) AdminPanelSheet { showAdminPanel = false }
     if (showBotsManager) BotsManagerSheet { showBotsManager = false }
-    if (showChannelDialog) ChannelSelectionDialog(
-        currentChannel = currentChannel,
-        canaryAvailable = isCanaryAvailable || canaryUnlockedByLongPress,
-        onDismiss = {
-            showChannelDialog = false
-            canaryUnlockedByLongPress = false
-        },
-        onSelect = { appUpdateViewModel.setChannel(it) { showChannelDialog = false } }
-    )
-    if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { authRepository.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
+    if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { showLogoutDialog = false; authViewModel.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
     if (showUrlDialog) {
         var url by remember { mutableStateOf(customBackendUrl) }
@@ -555,6 +554,17 @@ fun SettingsScreen(
                     } catch (e: Exception) { Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show() }
                 }
             }
+        )
+    }
+
+    if (showLegalDialog) {
+        val legalRepo: by.iposdev.visorlink.data.repository.LegalRepository = koinInject()
+        val latestVer by legalRepo.observeLatestVersion().collectAsState(initial = legalRepo.loadBundledVersion())
+        by.iposdev.visorlink.ui.screens.legal.LegalConsentDialog(
+            currentVersion = latestVer,
+            legalRepository = legalRepo,
+            isReadOnly = true,
+            onDismissReadOnly = { showLegalDialog = false }
         )
     }
 }

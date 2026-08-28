@@ -1,16 +1,15 @@
 package by.iposdev.visorlink.ui.components
 
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubble
@@ -21,44 +20,26 @@ import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
-import by.iposdev.visorlink.ui.theme.VlPressStyle
 import by.iposdev.visorlink.ui.theme.VlTheme
-import by.iposdev.visorlink.ui.theme.motionSpec
-import by.iposdev.visorlink.ui.theme.motionSpec
 import by.iposdev.visorlink.ui.theme.vlHairline
 import by.iposdev.visorlink.ui.theme.vlRaised
 
 /**
- * Нижняя навигация — плавающая «таблетка».
- *
- * Разделение слоёв здесь строго по гайдлайну:
- *  - **панель** — структура: raised + нейтральная грань, она физически лежит над
- *    контентом (§4.1);
- *  - **активный пункт** — ПЛОСКАЯ заливка `selectionFill` + pill-форма, без
- *    рельефа и без свечения. Это прямое требование §4.2 («Selected: чип, вкладка,
- *    nav-item → плоская заливка `*Container`, БЕЗ glow») — вдавливать pill, как
- *    чип из §7, здесь нельзя: на элементе высотой 30dp inset-тень читается размытым
- *    пятном, а не рельефом.
- *
- * Панель сама отбивается от системной навигации: у Scaffold в `MainScreen`
- * `contentWindowInsets` обнулены, поэтому рассчитывать на inset родителя нельзя.
+ * Нижняя навигация — плавающая панель в стиле Biolume с раскрывающимися пилюлями.
  */
 @Composable
 fun VlNavigationBar(
@@ -71,25 +52,24 @@ fun VlNavigationBar(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val barShape: Shape = tokens.shapes.bar
+    val barShape: Shape = if (tokens.isForge) tokens.shapes.bar else RoundedCornerShape(32.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            // Рельеф рисуется ЗА границами панели. В Forge панель прижата к краям,
-            // поэтому воздух снаружи ей не нужен.
             .padding(
-                start = if (tokens.isForge) 0.dp else 20.dp,
-                end = if (tokens.isForge) 0.dp else 20.dp,
+                start = if (tokens.isForge) 0.dp else 24.dp,
+                end = if (tokens.isForge) 0.dp else 24.dp,
                 top = 8.dp,
-                bottom = if (tokens.isForge) 0.dp else 12.dp
+                bottom = if (tokens.isForge) 0.dp else 16.dp
             ),
         contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(64.dp)
                 .then(
                     if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, barShape)
                     else Modifier
@@ -103,23 +83,19 @@ fun VlNavigationBar(
                     if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, barShape)
                     else Modifier
                 )
-                .padding(horizontal = 6.dp, vertical = if (tokens.isForge) 8.dp else 6.dp),
+                .padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             VlTabItem(
-                modifier = Modifier.weight(1f),
                 selected = selectedTab == 0,
                 onClick = { onTabSelected(0) },
                 icon = Icons.Outlined.ChatBubbleOutline,
                 selectedIcon = Icons.Filled.ChatBubble,
-                // Ярлык вкладки, а НЕ chatlist_title: тот равен «VisorLink» —
-                // это заголовок экрана, и в роли подписи вкладки он выглядел
-                // как случайное слово рядом с «Discover» и «Дневник».
                 label = stringResource(R.string.nav_tab_chats),
             )
             if (discoverEnabled) {
                 VlTabItem(
-                    modifier = Modifier.weight(1f),
                     selected = selectedTab == 1,
                     onClick = { onTabSelected(1) },
                     icon = Icons.Outlined.Explore,
@@ -129,7 +105,6 @@ fun VlNavigationBar(
             }
             if (diaryEnabled) {
                 VlTabItem(
-                    modifier = Modifier.weight(1f),
                     selected = selectedTab == 2,
                     onClick = onOpenDiary,
                     icon = Icons.Default.Edit,
@@ -142,16 +117,7 @@ fun VlNavigationBar(
 }
 
 /**
- * Пункт навигации: pill-индикатор с иконкой и подпись под ним.
- *
- * Индикатор — **отдельный слой позади иконки**, а не её родитель. Иначе анимация
- * появления масштабировала бы и саму иконку: невыбранные пункты рисовались бы
- * ощутимо мельче выбранного (ровно этот баг здесь и был).
- *
- * Ширину задаёт родитель через `weight(1f)`: панель тянется на всю доступную
- * ширину и делит её равными долями. При размере по контенту панель с двумя
- * вкладками сжималась до ~164dp и висела узкой пилюлей по центру экрана, а
- * подписи разной длины («Чаты» / «Discover») делали пункты неровными.
+ * Пункт навигации: горизонтальная расширяющаяся pill-капсула со скейлом иконки и анимацией текста.
  */
 @Composable
 fun VlTabItem(
@@ -164,77 +130,93 @@ fun VlTabItem(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
+    val isDark = cs.surface.luminance() < 0.5f
 
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
 
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed && tokens.motion.pressStyle != VlPressStyle.STAMP) 0.93f else 1f,
-        animationSpec = tokens.motion.motionSpec(),
-        label = "tab_press",
+    // Selection pill color
+    val pillColor by animateColorAsState(
+        targetValue = if (selected) {
+            if (isDark) cs.primary.copy(alpha = 0.20f)
+            else cs.primary.copy(alpha = 0.14f)
+        } else {
+            Color.Transparent
+        },
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "tab_pill_color"
     )
-    val stampOffset by animateDpAsState(
-        targetValue = if (isPressed && tokens.motion.pressStyle == VlPressStyle.STAMP) tokens.motion.pressOffset else 0.dp,
-        animationSpec = tokens.motion.motionSpec<Dp>(),
-        label = "tab_stamp",
-    )
-    val indicatorScale by animateFloatAsState(
-        // Forge не «вырастает», а щёлкает: масштаба нет, только заливка.
-        targetValue = if (selected || tokens.isForge) 1f else 0.7f,
-        animationSpec = tokens.motion.motionSpec(),
-        label = "tab_indicator",
-    )
-    val indicatorColor by animateColorAsState(
-        targetValue = if (selected) tokens.selectionFill else Color.Transparent,
-        animationSpec = tokens.motion.motionSpec(),
-        label = "tab_indicator_color",
-    )
+
     val contentColor by animateColorAsState(
         targetValue = if (selected) cs.primary else cs.onSurfaceVariant,
-        animationSpec = tokens.motion.motionSpec(),
-        label = "tab_content",
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "tab_content_color"
     )
 
-    val pillShape: Shape = tokens.shapes.pill
+    val pillShape: Shape = if (tokens.isForge) tokens.shapes.pill else CircleShape
 
-    Column(
+    Box(
         modifier = modifier
-            .clip(tokens.shapes.pill)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .offset { IntOffset(stampOffset.roundToPx(), stampOffset.roundToPx()) }
-            .scale(pressScale)
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(width = 56.dp, height = 30.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            // Индикатор: сосед иконки, не родитель — масштабируется только он.
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .scale(indicatorScale)
-                    .clip(pillShape)
-                    .background(indicatorColor, pillShape)
+            .clip(pillShape)
+            .background(pillColor)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
             )
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            val scale by animateFloatAsState(
+                targetValue = if (selected) 1.15f else 1.0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessLow
+                ),
+                label = "icon_scale"
+            )
+
             Icon(
                 imageVector = if (selected) selectedIcon else icon,
                 contentDescription = label,
                 tint = contentColor,
-                // Размер постоянный: скачок 24↔26dp при переключении читался
-                // как дребезг.
-                modifier = Modifier.size(23.dp),
+                modifier = Modifier
+                    .size(24.dp)
+                    .scale(scale)
             )
+
+            AnimatedVisibility(
+                visible = selected,
+                enter = fadeIn(tween(150)) + expandHorizontally(
+                    spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow
+                    )
+                ),
+                exit = fadeOut(tween(100)) + shrinkHorizontally(tween(120))
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            color = contentColor,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        maxLines = 1
+                    )
+                }
+            }
         }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
-        )
     }
 }

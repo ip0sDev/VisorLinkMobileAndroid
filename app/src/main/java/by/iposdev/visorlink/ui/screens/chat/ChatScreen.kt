@@ -46,6 +46,9 @@ import coil.compose.AsyncImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -147,10 +150,25 @@ fun ChatScreen(
     val canSendMessage = uiState.canSendMessage
     val canSendMedia = uiState.canSendMedia
 
-    DisposableEffect(chatId) {
-        ActiveChatTracker.activeChatId = chatId
-        NotificationHelper.clearNotification(context, chatId)
-        onDispose { ActiveChatTracker.activeChatId = null }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, chatId) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    ActiveChatTracker.activeChatId = chatId
+                    NotificationHelper.clearNotification(context, chatId)
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    ActiveChatTracker.activeChatId = null
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            ActiveChatTracker.activeChatId = null
+        }
     }
 
     val newestMessage = (uiState.messageListItems.lastOrNull() as? MessageListItem.MessageItem)?.message
