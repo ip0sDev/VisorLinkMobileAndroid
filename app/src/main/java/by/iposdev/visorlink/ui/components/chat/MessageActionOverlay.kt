@@ -37,6 +37,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -83,6 +84,11 @@ fun MessageActionOverlay(
     onForward: (() -> Unit)? = null,
     onReact: (String) -> Unit,
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) {
+        keyboardController?.hide()
+    }
+
     val alpha by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(200),
@@ -164,12 +170,22 @@ private fun NormalMessageMenu(
             (data.message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
             (data.message.type == MessageType.TEXT || data.message.caption != null)
 
+    val screenWidthPx = with(density) { screenWidth.toPx() }
+    val alignRight = when {
+        data.startOffset.x > screenWidthPx * 0.58f -> true
+        data.startOffset.x < screenWidthPx * 0.42f -> false
+        else -> data.isMine
+    }
+
     val expectedWidthPx = with(density) { 260.dp.toPx() }
-    val xOffset = if (data.isMine) {
-        with(density) { screenWidth.toPx() } - expectedWidthPx - with(density) { 16.dp.toPx() }
+    val xOffset = if (alignRight) {
+        screenWidthPx - expectedWidthPx - with(density) { 16.dp.toPx() }
     } else {
         with(density) { 16.dp.toPx() }
     }
+
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val effectiveScreenHeightPx = with(density) { screenHeight.toPx() } - imeBottom
 
     val tapY = data.startOffset.y
     var yOffset = tapY - with(density) { 20.dp.toPx() }
@@ -178,7 +194,7 @@ private fun NormalMessageMenu(
         yOffset = tapY + with(density) { 20.dp.toPx() }
         showAbove = false
     }
-    val maxY = with(density) { screenHeight.toPx() } - (menuSize.height) - 100f
+    val maxY = effectiveScreenHeightPx - (menuSize.height) - with(density) { 16.dp.toPx() }
     if (yOffset > maxY && menuSize.height > 0) yOffset = maxY
 
     var isVisible by remember { mutableStateOf(false) }
@@ -329,17 +345,28 @@ private fun GestureMessageMenu(
         if (data.isMine) actions.add("delete")
     }
 
-    val btnHalfW = with(density) { 75.dp.toPx() }
+    val cardWidth = 156.dp
+    val cardHeight = 42.dp
+    val btnHalfW = with(density) { (cardWidth / 2).toPx() }
+    val btnHalfH = with(density) { (cardHeight / 2).toPx() }
     val gridW = with(density) { (4 * 36 + 20).dp.toPx() }
     val gridH = with(density) { (((QUICK_REACTIONS.size / 4) * 36) + 20).dp.toPx() }
     val actionStep = with(density) { 52.dp.toPx() }
     val margin = with(density) { 16.dp.toPx() }
 
-    val dirX = if (data.isMine) -1 else 1
-    val growDown = data.startOffset.y < screenHeightPx / 2f
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val effectiveScreenHeightPx = screenHeightPx - imeBottom
+
+    val alignRight = when {
+        data.startOffset.x > screenWidthPx * 0.58f -> true
+        data.startOffset.x < screenWidthPx * 0.42f -> false
+        else -> data.isMine
+    }
+    val dirX = if (alignRight) -1 else 1
+    val growDown = data.startOffset.y < (effectiveScreenHeightPx / 2f)
     val hasGrid = actions.contains("react")
 
-    val menuOriginX = if (data.isMine) {
+    val menuOriginX = if (alignRight) {
         screenWidthPx - margin - btnHalfW
     } else {
         margin + btnHalfW
@@ -348,8 +375,8 @@ private fun GestureMessageMenu(
     val totalActionH = actions.size * actionStep
     val maxNeededH = maxOf(totalActionH, if (hasGrid) gridH else 0f)
 
-    val rawMaxY = if (growDown) screenHeightPx - margin - maxNeededH - btnHalfW else screenHeightPx - margin - btnHalfW
-    val rawMinY = if (growDown) margin + btnHalfW else margin + maxNeededH + btnHalfW
+    val rawMaxY = if (growDown) effectiveScreenHeightPx - margin - maxNeededH - btnHalfH else effectiveScreenHeightPx - margin - btnHalfH
+    val rawMinY = if (growDown) margin + btnHalfH else margin + maxNeededH + btnHalfH
 
     val safeMinY = minOf(rawMinY, rawMaxY)
     val safeMaxY = maxOf(rawMinY, rawMaxY)
@@ -371,7 +398,7 @@ private fun GestureMessageMenu(
     val gridTopY = if (hasGrid) {
         val reactCenterY = actionCenters["react"]?.y ?: 0f
         val gTop = reactCenterY - (gridH / 2f)
-        gTop.coerceIn(margin, screenHeightPx - margin - gridH)
+        gTop.coerceIn(margin, effectiveScreenHeightPx - margin - gridH)
     } else 0f
 
     val gridBounds = if (hasGrid) Rect(gridLeftX, gridTopY, gridLeftX + gridW, gridTopY + gridH) else null
@@ -448,20 +475,18 @@ private fun GestureMessageMenu(
         label = "enter_scale"
     )
 
-    var cancelSize by remember { mutableStateOf(IntSize.Zero) }
-    val actionSizes = remember { mutableStateMapOf<String, IntSize>() }
-
     Box(Modifier.fillMaxSize()) {
         val isCancelSelected = currentSelection == "cancel"
         val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else cs.surface
         val cancelScale by animateFloatAsState(if (isCancelSelected) 1.15f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "cancel_scale")
 
         Box(
-            Modifier.offset { IntOffset(menuOrigin.x.toInt() - cancelSize.width / 2, menuOrigin.y.toInt() - cancelSize.height / 2) }
+            Modifier.offset { IntOffset((menuOrigin.x - btnHalfW).toInt(), (menuOrigin.y - btnHalfH).toInt()) }
         ) {
             Surface(
                 modifier = Modifier
-                    .onGloballyPositioned { cancelSize = it.size }
+                    .width(cardWidth)
+                    .height(cardHeight)
                     .graphicsLayer {
                         scaleX = cancelScale * enterScale
                         scaleY = cancelScale * enterScale
@@ -471,10 +496,15 @@ private fun GestureMessageMenu(
                 tonalElevation = if (isCancelSelected) 12.dp else 4.dp,
                 border = borderStroke(cs)
             ) {
-                Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
         }
@@ -496,10 +526,10 @@ private fun GestureMessageMenu(
             val text = when(action) {
                 "react" -> "Реакция"
                 "reply" -> stringResource(R.string.action_reply)
-                "edit" -> stringResource(R.string.action_edit)
-                "copy" -> stringResource(R.string.action_copy_text)
+                "edit" -> "Изменить"
+                "copy" -> "Копировать"
                 "forward" -> "Переслать"
-                "delete" -> stringResource(R.string.action_delete_message)
+                "delete" -> "Удалить"
                 "cancel_sending" -> "Отменить"
                 else -> ""
             }
@@ -510,14 +540,14 @@ private fun GestureMessageMenu(
 
             val contentColor = if (isSelected) Color.White else color
             val actionScale by animateFloatAsState(if (isSelected) 1.15f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "action_scale")
-            val currentSize = actionSizes[action] ?: IntSize.Zero
 
             Box(
-                Modifier.offset { IntOffset(center.x.toInt() - currentSize.width / 2, center.y.toInt() - currentSize.height / 2) }
+                Modifier.offset { IntOffset((center.x - btnHalfW).toInt(), (center.y - btnHalfH).toInt()) }
             ) {
                 Surface(
                     modifier = Modifier
-                        .onGloballyPositioned { actionSizes[action] = it.size }
+                        .width(cardWidth)
+                        .height(cardHeight)
                         .graphicsLayer {
                             scaleX = actionScale * enterScale
                             scaleY = actionScale * enterScale
@@ -527,10 +557,15 @@ private fun GestureMessageMenu(
                     tonalElevation = if (isSelected) 12.dp else 4.dp,
                     border = borderStroke(cs)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(10.dp))
+                        Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
             }

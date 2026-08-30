@@ -40,6 +40,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ChatListScreen(
     onOpenChat: (chatId: String, otherUid: String) -> Unit,
+    onOpenTopicList: (chatId: String) -> Unit = {},
     onOpenSearch: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -239,7 +240,10 @@ fun ChatListScreen(
                                             currentUid = viewModel.currentUid,
                                             otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                             draftText = drafts[chat.id],
-                                            onClick = { onOpenChat(chat.id, otherUid) }
+                                            onClick = {
+                                                if (chat.isForumActive) onOpenTopicList(chat.id)
+                                                else onOpenChat(chat.id, otherUid)
+                                            }
                                         )
 
                                         if (index < chats.size - 1) {
@@ -283,7 +287,10 @@ fun ChatListScreen(
                                     otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                     draftText = drafts[chat.id],
                                     isCompactList = compactList,
-                                    onClick = { onOpenChat(chat.id, otherUid) }
+                                    onClick = {
+                                        if (chat.isForumActive) onOpenTopicList(chat.id)
+                                        else onOpenChat(chat.id, otherUid)
+                                    }
                                 )
                             }
                         }

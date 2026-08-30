@@ -45,6 +45,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun MainScreen(
     onOpenChat: (String, String) -> Unit,
+    onOpenTopicList: (String) -> Unit = {},
     onOpenSearch: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -120,6 +121,7 @@ fun MainScreen(
                     when (selectedTab) {
                         0 -> ChatListScreen(
                             onOpenChat = onOpenChat,
+                            onOpenTopicList = onOpenTopicList,
                             onOpenSearch = onOpenSearch,
                             onOpenProfile = onOpenProfile,
                             onOpenSettings = onOpenSettings,

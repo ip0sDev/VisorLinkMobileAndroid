@@ -2,12 +2,14 @@ package by.iposdev.visorlink.data.model
 
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.PropertyName
 import com.google.firebase.firestore.IgnoreExtraProperties
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
+@IgnoreExtraProperties
 data class UserProfile(
     val uid: String = "",
     val email: String = "",
@@ -21,7 +23,9 @@ data class UserProfile(
     val updatedAt: Timestamp? = null,
     val fcmTokens: List<String> = emptyList(),
 
-    val isAdmin: Boolean = false,
+    @get:PropertyName("isAdmin") @set:PropertyName("isAdmin")
+    var isAdmin: Boolean = false,
+    var lastMessageAt: Timestamp? = null,
     val isBot: Boolean = false,
     val botBadge: String = "unverified",
     val ownerId: String? = null,
@@ -66,14 +70,20 @@ data class UserProfile(
 
 enum class ChatType { DIRECT, GROUP, CHANNEL }
 
+@IgnoreExtraProperties
 data class ChatSettings(
     val joinByLink: Boolean = true,
     val joinByTag: Boolean = false,
     val allowReactions: Boolean = true,
     val allowComments: Boolean = true,
-    val inviteLink: String = ""
-)
+    val inviteLink: String = "",
+    val isForum: Boolean = false,
+    val is_forum: Boolean = false
+) {
+    val isForumEnabled: Boolean get() = isForum || is_forum
+}
 
+@IgnoreExtraProperties
 data class Chat(
     val id: String = "",
     val type: String = "direct",
@@ -86,11 +96,15 @@ data class Chat(
     val createdBy: String = "",
     val memberCount: Int = 0,
     val memberIds: List<String> = emptyList(),
+    val isForum: Boolean = false,
+    val is_forum: Boolean = false,
     val settings: ChatSettings = ChatSettings(),
     val lastMessage: Any? = null,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null
 ) {
+    val isForumActive: Boolean get() = isForum || is_forum || settings.isForum || settings.is_forum
+
     fun lastMessageText(): String {
         return when (lastMessage) {
             is String -> lastMessage
@@ -118,6 +132,41 @@ data class Chat(
 
     fun otherUsername(currentUid: String) =
         participantData[otherParticipantId(currentUid)]?.get("username") ?: ""
+}
+
+fun DocumentSnapshot.toChatOrNull(): Chat? {
+    try {
+        val chat = this.toObject(Chat::class.java)?.copy(id = this.id)
+        val sMap = this.get("settings") as? Map<*, *>
+        val forumFromMap = (sMap?.get("isForum") as? Boolean)
+            ?: (sMap?.get("is_forum") as? Boolean)
+            ?: false
+        val forumFromRoot = this.getBoolean("isForum")
+            ?: this.getBoolean("is_forum")
+            ?: false
+        val isForum = forumFromMap || forumFromRoot || (chat?.isForumActive == true)
+
+        val baseSettings = chat?.settings ?: ChatSettings()
+        val finalSettings = baseSettings.copy(
+            joinByLink = (sMap?.get("joinByLink") as? Boolean) ?: baseSettings.joinByLink,
+            joinByTag = (sMap?.get("joinByTag") as? Boolean) ?: baseSettings.joinByTag,
+            allowReactions = (sMap?.get("allowReactions") as? Boolean) ?: baseSettings.allowReactions,
+            allowComments = (sMap?.get("allowComments") as? Boolean) ?: baseSettings.allowComments,
+            inviteLink = (sMap?.get("inviteLink") as? String) ?: baseSettings.inviteLink,
+            isForum = isForum,
+            is_forum = isForum
+        )
+
+        return (chat ?: Chat(id = this.id)).copy(
+            id = this.id,
+            isForum = isForum,
+            is_forum = isForum,
+            settings = finalSettings
+        )
+    } catch (e: Exception) {
+        android.util.Log.e("ChatParser", "Error parsing chat doc $id", e)
+        return null
+    }
 }
 
 // ─── Member ───────────────────────────────────────────────────────────────────
@@ -281,6 +330,7 @@ data class Message(
     val caption: String? = null,
     val images: List<AlbumImage> = emptyList(),
     val forwardFrom: Map<String, Any?>? = null,
+    val topicId: String? = null,
 
     val lastEdited: Timestamp? = null,
     val editHistory: List<Map<String, Any>> = emptyList(),
@@ -638,3 +688,139 @@ data class AppSettings(
     val hapticFeedback: Boolean = true,
     val notificationsEnabled: Boolean = true
 )
+
+// ─── Topics & Kanban Tasks ───────────────────────────────────────────────────
+
+@IgnoreExtraProperties
+data class Topic(
+    @DocumentId val id: String = "",
+    val title: String = "",
+    val icon: String? = null,
+    val color: String? = null,
+    val type: String = "chat", // "chat" | "tasks"
+    val isGeneral: Boolean = false,
+    val isClosed: Boolean = false,
+    val createdBy: String = "",
+    val createdAt: Timestamp? = null,
+    val lastMessageAt: Timestamp? = null,
+    val lastMessage: Any? = null,
+    val unreadCount: Int = 0
+) {
+    val displayIcon: String get() = if (!icon.isNullOrBlank()) icon else if (isGeneral) "#" else if (type == "tasks") "📋" else "💬"
+    val displayColor: String get() = if (!color.isNullOrBlank()) color else if (type == "tasks") "#8C6BFF" else "#35C7E8"
+    val isTasks: Boolean get() = type == "tasks"
+
+    fun lastMessageText(): String {
+        return when (lastMessage) {
+            is String -> lastMessage
+            is Map<*, *> -> {
+                val text = (lastMessage["text"] as? String) ?: ""
+                val sender = (lastMessage["senderUsername"] as? String)
+                if (!sender.isNullOrBlank() && text.isNotBlank()) {
+                    "$sender: $text"
+                } else {
+                    text
+                }
+            }
+            else -> ""
+        }
+    }
+}
+
+enum class TaskStatus(val id: String, val title: String, val icon: String) {
+    TODO("todo", "К выполнению", "📥"),
+    IN_PROGRESS("in_progress", "В работе", "⚡"),
+    REVIEW("review", "На проверке", "👀"),
+    DONE("done", "Готово", "✅");
+
+    companion object {
+        fun fromId(id: String?) = entries.find { it.id == id } ?: TODO
+    }
+}
+
+enum class TaskPriority(val id: String, val title: String, val icon: String, val hexColor: String) {
+    LOW("low", "Низкий", "🟢", "#A8DB6E"),
+    MEDIUM("medium", "Средний", "🟡", "#FFC24E"),
+    HIGH("high", "Высокий", "🔴", "#FF8A48"),
+    URGENT("urgent", "Срочный", "🔥", "#FF4D6A");
+
+    companion object {
+        fun fromId(id: String?) = entries.find { it.id == id } ?: MEDIUM
+    }
+}
+
+@IgnoreExtraProperties
+data class TaskItem(
+    @DocumentId val id: String = "",
+    val title: String = "",
+    val description: String = "",
+    val status: String = "todo", // "todo", "in_progress", "review", "done"
+    val priority: String = "medium", // "low", "medium", "high", "urgent"
+    val assigneeId: String? = null,
+    val assigneeName: String? = null,
+    val assigneeAvatar: String? = null,
+    val dueDate: String? = null,
+    val createdBy: String = "",
+    val createdByName: String = "",
+    val createdAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null
+)
+
+fun DocumentSnapshot.toTopicOrNull(): Topic? {
+    try {
+        val topic = this.toObject(Topic::class.java)?.copy(id = this.id)
+        val isGen = this.getBoolean("isGeneral") ?: (topic?.isGeneral == true)
+        val isCls = this.getBoolean("isClosed") ?: (topic?.isClosed == true)
+        val tTitle = this.getString("title") ?: topic?.title ?: ""
+        val tIcon = this.getString("icon") ?: topic?.icon
+        val tColor = this.getString("color") ?: topic?.color
+        val tType = this.getString("type") ?: topic?.type ?: "chat"
+        val tCreatedBy = this.getString("createdBy") ?: topic?.createdBy ?: ""
+        val tCreatedAt = this.getTimestamp("createdAt") ?: topic?.createdAt
+        val tLastMsgAt = this.getTimestamp("lastMessageAt") ?: topic?.lastMessageAt
+        val tLastMsg = this.get("lastMessage") ?: topic?.lastMessage
+        val tUnread = (this.getLong("unreadCount")?.toInt()) ?: topic?.unreadCount ?: 0
+
+        return Topic(
+            id = this.id,
+            title = tTitle,
+            icon = tIcon,
+            color = tColor,
+            type = tType,
+            isGeneral = isGen,
+            isClosed = isCls,
+            createdBy = tCreatedBy,
+            createdAt = tCreatedAt,
+            lastMessageAt = tLastMsgAt,
+            lastMessage = tLastMsg,
+            unreadCount = tUnread
+        )
+    } catch (e: Exception) {
+        android.util.Log.e("TopicParser", "Error parsing topic doc $id", e)
+        return null
+    }
+}
+
+fun DocumentSnapshot.toTaskItemOrNull(): TaskItem? {
+    try {
+        val task = this.toObject(TaskItem::class.java)?.copy(id = this.id)
+        return TaskItem(
+            id = this.id,
+            title = this.getString("title") ?: task?.title ?: "",
+            description = this.getString("description") ?: task?.description ?: "",
+            status = this.getString("status") ?: task?.status ?: "todo",
+            priority = this.getString("priority") ?: task?.priority ?: "medium",
+            assigneeId = this.getString("assigneeId") ?: task?.assigneeId,
+            assigneeName = this.getString("assigneeName") ?: task?.assigneeName,
+            assigneeAvatar = this.getString("assigneeAvatar") ?: task?.assigneeAvatar,
+            dueDate = this.getString("dueDate") ?: task?.dueDate,
+            createdBy = this.getString("createdBy") ?: task?.createdBy ?: "",
+            createdByName = this.getString("createdByName") ?: task?.createdByName ?: "",
+            createdAt = this.getTimestamp("createdAt") ?: task?.createdAt,
+            updatedAt = this.getTimestamp("updatedAt") ?: task?.updatedAt
+        )
+    } catch (e: Exception) {
+        android.util.Log.e("TaskParser", "Error parsing task doc $id", e)
+        return null
+    }
+}

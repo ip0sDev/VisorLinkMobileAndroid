@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
@@ -59,21 +60,26 @@ import org.koin.core.parameter.parametersOf
 fun ChatScreen(
     chatId: String,
     otherUid: String,
+    topicId: String? = null,
     onNavigateBack: () -> Unit,
     onOpenOtherProfile: (String) -> Unit,
-    onOpenStickers: (onSelect: (Sticker) -> Unit) -> Unit,
+    onOpenStickers: (onSelect: (Sticker) -> Unit) -> Unit = {},
     onOpenChatSettings: (chatId: String) -> Unit = {},
     onOpenImageViewer: (url: String, type: String) -> Unit = { _, _ -> },
     onMentionClick: (String) -> Unit = {},
     onOpenComments: (messageId: String) -> Unit = {},
+    onForward: ((Message) -> Unit)? = null,
+    onOpenTopicList: ((String) -> Unit)? = null,
     hapticEnabled: Boolean = true,
 ) {
-    val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid) })
+    val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid, topicId) })
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val inputFocusRequester = remember { FocusRequester() }
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -95,6 +101,19 @@ fun ChatScreen(
     LaunchedEffect(uiState.initialDraft) {
         if (uiState.initialDraft.isNotEmpty() && inputText.isEmpty()) {
             inputText = uiState.initialDraft
+        }
+    }
+
+    LaunchedEffect(uiState.chat?.isForumActive, topicId) {
+        if (topicId == null && uiState.chat?.isForumActive == true && onOpenTopicList != null) {
+            onOpenTopicList(chatId)
+        }
+    }
+
+    LaunchedEffect(uiState.replyingTo) {
+        if (uiState.replyingTo != null) {
+            inputFocusRequester.requestFocus()
+            keyboardController?.show()
         }
     }
 
@@ -226,7 +245,8 @@ fun ChatScreen(
                         onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
                         onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
                         onLeaveClick = { showLeaveDialog = true },
-                        onAegisClick = { aegisViewModel.onInteract() }, isAegisEnabled = isAegisEnabled
+                        onAegisClick = { aegisViewModel.onInteract() }, isAegisEnabled = isAegisEnabled,
+                        onOpenTopicList = if (onOpenTopicList != null) { { onOpenTopicList(chatId) } } else null
                     )
                 },
                 bottomBar = {
@@ -234,7 +254,7 @@ fun ChatScreen(
                         uiState = uiState, inputText = inputText,
                         canSendMessage = canSendMessage, canSendMedia = canSendMedia,
                         hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                        audioPermission = audioPermission, focusRequester = remember { FocusRequester() },
+                        audioPermission = audioPermission, focusRequester = inputFocusRequester,
                         onInputChange = { inputText = it; viewModel.onTextChanged(it) },
                         onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
                         onStickerClick = { showStickerSheet = true },
@@ -288,7 +308,12 @@ fun ChatScreen(
                                         val isMine = item.message.senderId == viewModel.currentUid
                                         SwipeableMessage(
                                             message = item.message, isMine = isMine, hapticEnabled = hapticEnabled,
-                                            onReply = { haptic.perform(HapticType.SELECTION, hapticEnabled); viewModel.setReplyTo(item.message) }
+                                            onReply = {
+                                                haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                                viewModel.setReplyTo(item.message)
+                                                inputFocusRequester.requestFocus()
+                                                keyboardController?.show()
+                                            }
                                         ) {
                                             MessageBubble(
                                                 message = item.message, isMine = isMine,
@@ -299,6 +324,7 @@ fun ChatScreen(
                                                 onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
                                                 onSeekVoice = { viewModel.seekVoice(it) },
                                                 onLongPressStart = { offset ->
+                                                    keyboardController?.hide()
                                                     contextMenuData = ContextMenuData(item.message, isMine, offset)
                                                     dragOffset = Offset.Zero
                                                 },

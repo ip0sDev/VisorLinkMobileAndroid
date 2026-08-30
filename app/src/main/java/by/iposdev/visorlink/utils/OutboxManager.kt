@@ -181,6 +181,7 @@ class OutboxManager(
                 null
             }
         } else null
+        val topicId = if (data.has("topicId") && !data.isNull("topicId")) data.getString("topicId") else null
 
         try {
             when (action.type) {
@@ -191,7 +192,8 @@ class OutboxManager(
                             chatId = action.chatId,
                             text = data.getString("text"),
                             senderUsername = data.getString("senderUsername"),
-                            replyTo = replyTo
+                            replyTo = replyTo,
+                            topicId = topicId
                         )
                     }
                 }
@@ -210,7 +212,8 @@ class OutboxManager(
                             fileName = file.name,
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
-                            isSpoiler = isSpoiler
+                            isSpoiler = isSpoiler,
+                            topicId = topicId
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -230,7 +233,8 @@ class OutboxManager(
                             mediaId = mediaId,
                             durationSec = duration,
                             senderUsername = data.getString("senderUsername"),
-                            replyTo = replyTo
+                            replyTo = replyTo,
+                            topicId = topicId
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -249,7 +253,8 @@ class OutboxManager(
                             mediaId = mediaId,
                             fileName = file.name,
                             senderUsername = data.getString("senderUsername"),
-                            replyTo = replyTo
+                            replyTo = replyTo,
+                            topicId = topicId
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -266,7 +271,8 @@ class OutboxManager(
                             packName = data.getString("packName"),
                             packEmoji = data.getString("packEmoji"),
                             senderUsername = data.getString("senderUsername"),
-                            replyTo = replyTo
+                            replyTo = replyTo,
+                            topicId = topicId
                         )
                     }
                 }

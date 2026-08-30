@@ -31,6 +31,8 @@ import by.iposdev.visorlink.ui.screens.settings.ProViewModel
 import by.iposdev.visorlink.ui.screens.settings.CustomizationViewModel
 import by.iposdev.visorlink.ui.screens.settings.FlagFlipperViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
+import by.iposdev.visorlink.ui.screens.topics.TopicListViewModel
+import by.iposdev.visorlink.ui.screens.topics.TaskTrackerViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.CacheManager
 import by.iposdev.visorlink.utils.TfaManager
@@ -97,6 +99,7 @@ val appModule = module {
     single { AuthRepository(get(), get()) }
     single { ChatRepository(get(), get(), get(), androidContext(), get(), get(), get(), get()) }
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
+    single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
     single { LegalRepository(get(), androidContext()) }
@@ -126,8 +129,32 @@ val appModule = module {
             db             = get(),
             context        = androidApplication(),
             draftManager   = get(),
-            chatId         = parameters.get(),
-            otherUid       = parameters.get()
+            chatId         = parameters[0],
+            otherUid       = parameters[1],
+            initialTopicId = if (parameters.size() > 2) parameters[2] else null
+        )
+    }
+
+    viewModel { parameters ->
+        TopicListViewModel(
+            chatId           = parameters.get(),
+            topicsRepository = get(),
+            chatRepository   = get(),
+            userRepository   = get(),
+            auth             = get(),
+            db               = get()
+        )
+    }
+
+    viewModel { parameters ->
+        TaskTrackerViewModel(
+            chatId           = parameters[0],
+            topicId          = parameters[1],
+            topicsRepository = get(),
+            chatRepository   = get(),
+            userRepository   = get(),
+            auth             = get(),
+            db               = get()
         )
     }
 
@@ -150,11 +177,12 @@ val appModule = module {
 
     viewModel { params ->
         ChatSettingsViewModel(
-            chatRepository = get(),
-            userRepository = get(),
-            auth           = get(),
-            db             = get(),
-            chatId         = params.get()
+            chatRepository   = get(),
+            userRepository   = get(),
+            topicsRepository = get(),
+            auth             = get(),
+            db               = get(),
+            chatId           = params.get()
         )
     }
 

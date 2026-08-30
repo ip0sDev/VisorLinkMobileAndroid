@@ -58,7 +58,7 @@ class OutboxManagerTest {
         testScheduler.advanceTimeBy(100)
         testScheduler.runCurrent()
         
-        verify(chatRepository, timeout(2000).times(2)).sendTextNow(any(), any(), any(), any(), anyOrNull())
+        verify(chatRepository, timeout(2000).times(2)).sendTextNow(any(), any(), any(), any(), anyOrNull(), anyOrNull())
         outboxManager.stopProcessing()
     }
 

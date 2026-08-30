@@ -418,7 +418,9 @@ object ChatDataCache {
             put("allowReactions", settings.allowReactions)
             put("allowComments", settings.allowComments)
             put("inviteLink", settings.inviteLink)
+            put("isForum", settings.isForum || isForum)
         }
+        put("isForum", isForumActive)
         put("settings", sData)
         put("lastMessage", lastMessage?.toString() ?: JSONObject.NULL)
         put("lastMessageAt", lastMessageAt?.seconds ?: JSONObject.NULL)
@@ -442,12 +444,17 @@ object ChatDataCache {
         val mList = (0 until mArray.length()).map { mArray.getString(it) }
 
         val sObj = optJSONObject("settings") ?: JSONObject()
+        val isForumSetting = sObj.optBoolean("isForum", false) || sObj.optBoolean("is_forum", false)
+        val isForumRoot = optBoolean("isForum", false) || optBoolean("is_forum", false)
+        val isForumFinal = isForumSetting || isForumRoot
+
         val settings = ChatSettings(
             joinByLink = sObj.optBoolean("joinByLink", true),
             joinByTag = sObj.optBoolean("joinByTag", false),
             allowReactions = sObj.optBoolean("allowReactions", true),
             allowComments = sObj.optBoolean("allowComments", true),
-            inviteLink = sObj.optString("inviteLink", "")
+            inviteLink = sObj.optString("inviteLink", ""),
+            isForum = isForumFinal
         )
 
         return Chat(
@@ -462,6 +469,7 @@ object ChatDataCache {
             createdBy = optString("createdBy", ""),
             memberCount = optInt("memberCount", 0),
             memberIds = mList,
+            isForum = isForumFinal,
             settings = settings,
             lastMessage = if (isNull("lastMessage")) null else getString("lastMessage"),
             lastMessageAt = if (isNull("lastMessageAt")) null else com.google.firebase.Timestamp(getLong("lastMessageAt"), 0),

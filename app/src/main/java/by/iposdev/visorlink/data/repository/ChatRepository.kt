@@ -156,7 +156,7 @@ class ChatRepository(
             .addSnapshotListener { snap, _ ->
                 directChats.clear()
                 snap?.documents?.forEach { doc ->
-                    try { doc.toObject(Chat::class.java)?.copy(id = doc.id)?.let { directChats.add(it) } } catch (_: Exception) {}
+                    doc.toChatOrNull()?.let { directChats.add(it) }
                 }
                 merge()
             }
@@ -166,7 +166,7 @@ class ChatRepository(
             .addSnapshotListener { snap, _ ->
                 groupChats.clear()
                 snap?.documents?.forEach { doc ->
-                    try { doc.toObject(Chat::class.java)?.copy(id = doc.id)?.let { groupChats.add(it) } } catch (_: Exception) {}
+                    doc.toChatOrNull()?.let { groupChats.add(it) }
                 }
                 merge()
             }
@@ -507,7 +507,17 @@ class ChatRepository(
         return (result.data as Map<*, *>)["inviteLink"] as String
     }
 
-    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?): Message? {
+    suspend fun setForumMode(chatId: String, isForum: Boolean) {
+        try {
+            db.collection("chats").document(chatId).update("settings.isForum", isForum).await()
+        } catch (_: Exception) {
+            try {
+                db.collection("chats").document(chatId).update("isForum", isForum).await()
+            } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null): Message? {
         if (isBackendEnabled()) {
             return try {
                 val response = api.sendMessage(SendMessageRequest(
@@ -527,13 +537,14 @@ class ChatRepository(
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
+            if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "text", data)
         return null
     }
 
-    suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) {
         if (isBackendEnabled()) {
             api.sendMessage(SendMessageRequest(
                 chatId = chatId,
@@ -547,8 +558,7 @@ class ChatRepository(
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
-        val batch  = db.batch()
-        batch.set(msgRef, mapOf(
+        val msgData = mutableMapOf<String, Any?>(
             "senderId"       to currentUid,
             "senderUsername" to senderUsername,
             "type"           to MessageType.TEXT,
@@ -558,16 +568,29 @@ class ChatRepository(
             "reactions"      to emptyList<Any>(),
             "readBy"         to listOf(currentUid),
             "replyTo"        to replyTo?.toMap()
-        ))
+        )
+        if (topicId != null) {
+            msgData["topicId"] = topicId
+        }
+
+        val batch  = db.batch()
+        batch.set(msgRef, msgData)
         batch.update(db.collection("chats").document(chatId), mapOf(
             "lastMessage"   to text,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
+        if (topicId != null) {
+            val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+            batch.update(topicRef, mapOf(
+                "lastMessage" to mapOf("text" to text, "senderUsername" to senderUsername),
+                "lastMessageAt" to FieldValue.serverTimestamp()
+            ))
+        }
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
     }
 
-    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false) = withContext(Dispatchers.IO) {
+    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, topicId: String? = null) = withContext(Dispatchers.IO) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "image.jpg"}"
         val tempFile = File(context.cacheDir, fileName)
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -578,12 +601,13 @@ class ChatRepository(
             put("localPath", tempFile.absolutePath)
             put("senderUsername", senderUsername)
             put("isSpoiler", isSpoiler)
+            if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "image", data)
     }
 
-    suspend fun sendImageNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean) {
+    suspend fun sendImageNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean, topicId: String? = null) {
         if (isBackendEnabled()) {
             api.sendMessage(SendMessageRequest(
                 chatId = chatId,
@@ -613,26 +637,35 @@ class ChatRepository(
             "readBy"         to listOf(currentUid),
             "replyTo"        to replyTo?.toMap()
         )
+        if (topicId != null) msg["topicId"] = topicId
         msg.putAll(extra)
 
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "📷 Image", "lastMessageAt" to FieldValue.serverTimestamp()))
+        if (topicId != null) {
+            val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+            batch.update(topicRef, mapOf(
+                "lastMessage" to mapOf("text" to "📷 Image", "senderUsername" to senderUsername),
+                "lastMessageAt" to FieldValue.serverTimestamp()
+            ))
+        }
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
     }
 
-    suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?) = withContext(Dispatchers.IO) {
+    suspend fun sendVoice(chatId: String, file: File, durationSec: Int, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) = withContext(Dispatchers.IO) {
         val data = JSONObject().apply {
             put("localPath", file.absolutePath)
             put("duration", durationSec)
             put("senderUsername", senderUsername)
+            if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "voice", data)
     }
 
-    suspend fun sendVoiceNow(id: String, chatId: String, mediaId: String, durationSec: Int, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendVoiceNow(id: String, chatId: String, mediaId: String, durationSec: Int, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) {
         if (isBackendEnabled()) {
             api.sendMessage(SendMessageRequest(
                 chatId = chatId,
@@ -661,16 +694,24 @@ class ChatRepository(
             "readBy"         to listOf(currentUid),
             "replyTo"        to replyTo?.toMap()
         )
+        if (topicId != null) msg["topicId"] = topicId
         msg.putAll(extra)
 
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "🎤 Voice message", "lastMessageAt" to FieldValue.serverTimestamp()))
+        if (topicId != null) {
+            val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+            batch.update(topicRef, mapOf(
+                "lastMessage" to mapOf("text" to "🎤 Voice message", "senderUsername" to senderUsername),
+                "lastMessageAt" to FieldValue.serverTimestamp()
+            ))
+        }
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
     }
 
-    suspend fun sendVideo(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?) = withContext(Dispatchers.IO) {
+    suspend fun sendVideo(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) = withContext(Dispatchers.IO) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "video.mp4"}"
         val tempFile = File(context.cacheDir, fileName)
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -680,12 +721,13 @@ class ChatRepository(
         val data = JSONObject().apply {
             put("localPath", tempFile.absolutePath)
             put("senderUsername", senderUsername)
+            if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "video", data)
     }
 
-    suspend fun sendVideoNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendVideoNow(id: String, chatId: String, mediaId: String, fileName: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) {
         if (isBackendEnabled()) {
             api.sendMessage(SendMessageRequest(
                 chatId = chatId,
@@ -714,16 +756,24 @@ class ChatRepository(
             "readBy"         to listOf(currentUid),
             "replyTo"        to replyTo?.toMap()
         )
+        if (topicId != null) msg["topicId"] = topicId
         msg.putAll(extra)
 
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "🎥 Video", "lastMessageAt" to FieldValue.serverTimestamp()))
+        if (topicId != null) {
+            val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+            batch.update(topicRef, mapOf(
+                "lastMessage" to mapOf("text" to "🎥 Video", "senderUsername" to senderUsername),
+                "lastMessageAt" to FieldValue.serverTimestamp()
+            ))
+        }
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
     }
 
-    suspend fun sendSticker(chatId: String, sticker: StickerItem, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendSticker(chatId: String, sticker: StickerItem, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) {
         val data = JSONObject().apply {
             put("stickerId", sticker.id)
             put("url", sticker.url)
@@ -731,12 +781,13 @@ class ChatRepository(
             put("packName", packName)
             put("packEmoji", packEmoji)
             put("senderUsername", senderUsername)
+            if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
         }
         ChatDataCache.addToOutbox(context, chatId, "sticker", data)
     }
 
-    suspend fun sendStickerNow(id: String, chatId: String, stickerId: String, url: String, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?) {
+    suspend fun sendStickerNow(id: String, chatId: String, stickerId: String, url: String, packId: String, packName: String, packEmoji: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null) {
         if (isBackendEnabled()) {
             api.sendMessage(SendMessageRequest(
                 chatId = chatId,
@@ -770,11 +821,19 @@ class ChatRepository(
             "readBy"         to listOf(currentUid),
             "replyTo"        to replyTo?.toMap()
         )
+        if (topicId != null) msg["topicId"] = topicId
         msg.putAll(extra)
 
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to "$packEmoji Sticker", "lastMessageAt" to FieldValue.serverTimestamp()))
+        if (topicId != null) {
+            val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+            batch.update(topicRef, mapOf(
+                "lastMessage" to mapOf("text" to "$packEmoji Sticker", "senderUsername" to senderUsername),
+                "lastMessageAt" to FieldValue.serverTimestamp()
+            ))
+        }
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
         batch.commit().await()
     }

@@ -50,6 +50,7 @@ fun ChatTopBar(
     onLeaveClick: () -> Unit,
     onAegisClick: () -> Unit = {},
     isAegisEnabled: Boolean = false,
+    onOpenTopicList: (() -> Unit)? = null,
 ) {
     val haptic = rememberHaptic()
 
@@ -84,15 +85,33 @@ fun ChatTopBar(
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        when (uiState.chatType) {
-                            ChatType.DIRECT -> uiState.otherUser?.displayName ?: ""
-                            else -> uiState.chat?.name ?: ""
-                        },
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+                    if (uiState.currentTopic != null) {
+                        Text(
+                            text = "${uiState.currentTopic.displayIcon} ${uiState.currentTopic.title}",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = uiState.chat?.name ?: "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else {
+                        Text(
+                            when (uiState.chatType) {
+                                ChatType.DIRECT -> uiState.otherUser?.displayName ?: ""
+                                else -> uiState.chat?.name ?: ""
+                            },
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                     when (uiState.chatType) {
                         ChatType.DIRECT -> AnimatedContent(
                             targetState = uiState.topbarStatus,
@@ -145,6 +164,11 @@ fun ChatTopBar(
                     Icon(Icons.Default.Wallpaper, contentDescription = stringResource(R.string.wallpaper),
                         tint = if (uiState.wallpaperUrl != null) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface)
+                }
+            }
+            if (uiState.chat?.isForumActive == true && onOpenTopicList != null) {
+                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenTopicList() }) {
+                    Icon(Icons.Default.Forum, contentDescription = stringResource(R.string.topics_title))
                 }
             }
             if (uiState.chatType != ChatType.DIRECT && isAdmin) {

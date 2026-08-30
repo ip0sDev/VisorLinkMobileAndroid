@@ -14,6 +14,8 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
+import kotlinx.coroutines.*
+
 class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
 
     private val rtdb = Firebase.database
@@ -21,6 +23,8 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
     private val connectedRef = rtdb.getReference(".info/connected")
     private var connectedListener: ValueEventListener? = null
     private var isAppInForeground = false
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var heartbeatJob: Job? = null
 
     fun attach(lifecycle: Lifecycle) {
         lifecycle.addObserver(this)
@@ -38,15 +42,11 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
                 )
 
                 // online: true пишем ТОЛЬКО если приложение на переднем плане.
-                // При фоновых FCM-соединениях RTDB может переподключиться и
-                // вызвать этот колбэк — без флага мы бы ошибочно ставили online.
                 if (isAppInForeground) {
                     presenceRef.setValue(
                         mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
                     )
                 }
-                // Если фон — ничего не пишем. onDisconnect уже гарантирует offline
-                // как только соединение оборвётся.
             }
 
             override fun onCancelled(e: DatabaseError) {}
@@ -54,15 +54,31 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
         connectedRef.addValueEventListener(connectedListener!!)
     }
 
+    private fun startHeartbeat() {
+        heartbeatJob?.cancel()
+        heartbeatJob = scope.launch {
+            while (isActive && isAppInForeground) {
+                delay(30_000L) // регулярный пинг каждые 30 секунд
+                if (isAppInForeground) {
+                    presenceRef.updateChildren(
+                        mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
+                    )
+                }
+            }
+        }
+    }
+
     override fun onStart(owner: LifecycleOwner) {
         isAppInForeground = true
         presenceRef.setValue(
             mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
         )
+        startHeartbeat()
     }
 
     override fun onStop(owner: LifecycleOwner) {
         isAppInForeground = false
+        heartbeatJob?.cancel()
         // Явно пишем offline сразу при уходе в фон, не ждём дропа соединения
         presenceRef.setValue(
             mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
@@ -72,6 +88,7 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
     fun detach() {
         connectedListener?.let { connectedRef.removeEventListener(it) }
         isAppInForeground = false
+        heartbeatJob?.cancel()
         presenceRef.setValue(
             mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
         )

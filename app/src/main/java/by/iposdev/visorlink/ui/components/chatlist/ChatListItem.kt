@@ -126,7 +126,7 @@ fun ChatListItem(
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (chatType != ChatType.DIRECT && !isSavedMessages) {
-                        Text(if (chatType == ChatType.CHANNEL) "📢" else "👥", fontSize = 11.sp)
+                        Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
                     }
                     Text(
                         text = when {
@@ -237,7 +237,7 @@ fun ChatListItemCompact(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (chatType != ChatType.DIRECT && !isSavedMessages) {
-                    Text(if (chatType == ChatType.CHANNEL) "📢" else "👥", fontSize = 11.sp)
+                    Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
                 }
                 Text(
                     text = when {

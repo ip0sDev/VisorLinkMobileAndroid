@@ -36,6 +36,8 @@ import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.StealthManager
+import by.iposdev.visorlink.ui.screens.topics.TopicListScreen
+import by.iposdev.visorlink.ui.screens.topics.TaskTrackerScreen
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -192,6 +194,9 @@ fun VisorLinkNavGraph(
                         navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
                     }
                 },
+                onOpenTopicList = { chatId ->
+                    navController.navigate(Screen.TopicList.createRoute(chatId))
+                },
                 onOpenSearch        = { navController.navigate(Screen.Search.createRoute(null)) },
                 onOpenProfile       = { navController.navigate(Screen.Profile.route) },
                 onOpenSettings      = { navController.navigate(Screen.Settings.route) },
@@ -217,18 +222,72 @@ fun VisorLinkNavGraph(
         }
 
         composable(
+            route = Screen.TopicList.route,
+            arguments = listOf(
+                navArgument("chatId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            TopicListScreen(
+                chatId = chatId,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenTopicChat = { cId, tId ->
+                    navController.navigate(Screen.Chat.createRoute(cId, cId, tId))
+                },
+                onOpenTaskTracker = { cId, tId ->
+                    navController.navigate(Screen.TaskTracker.createRoute(cId, tId))
+                },
+                onOpenSettings = { cId ->
+                    navController.navigate(Screen.ChatSettings.createRoute(cId))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.TaskTracker.route,
+            arguments = listOf(
+                navArgument("chatId")  { type = NavType.StringType },
+                navArgument("topicId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val chatId  = backStackEntry.arguments?.getString("chatId")  ?: return@composable
+            val topicId = backStackEntry.arguments?.getString("topicId") ?: return@composable
+            TaskTrackerScreen(
+                chatId = chatId,
+                topicId = topicId,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenOtherProfile = { uid ->
+                    navController.navigate(Screen.OtherProfile.createRoute(uid))
+                },
+                onOpenImageViewer = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
+                },
+                onOpenChatSettings = { cId ->
+                    navController.navigate(Screen.ChatSettings.createRoute(cId))
+                }
+            )
+        }
+
+        composable(
             route = Screen.Chat.route,
             arguments = listOf(
                 navArgument("chatId")   { type = NavType.StringType },
-                navArgument("otherUid") { type = NavType.StringType }
+                navArgument("otherUid") { type = NavType.StringType },
+                navArgument("topicId")  {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
             )
         ) { backStackEntry ->
             val chatId   = backStackEntry.arguments?.getString("chatId")   ?: return@composable
             val otherUid = backStackEntry.arguments?.getString("otherUid") ?: return@composable
+            val topicId  = backStackEntry.arguments?.getString("topicId")
 
             ChatScreen(
                 chatId             = chatId,
                 otherUid           = otherUid,
+                topicId            = topicId,
                 onNavigateBack     = { navController.popBackStack() },
                 onOpenOtherProfile = { uid ->
                     navController.navigate(Screen.OtherProfile.createRoute(uid))
@@ -245,6 +304,11 @@ fun VisorLinkNavGraph(
                 },
                 onOpenComments     = { msgId ->
                     navController.navigate(Screen.Comments.createRoute(chatId, msgId))
+                },
+                onOpenTopicList = { cId ->
+                    navController.navigate(Screen.TopicList.createRoute(cId)) {
+                        popUpTo(Screen.Chat.route) { inclusive = true }
+                    }
                 },
                 hapticEnabled = hapticEnabled
             )

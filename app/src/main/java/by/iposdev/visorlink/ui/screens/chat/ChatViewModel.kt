@@ -68,7 +68,9 @@ data class ChatUiState(
     val singlePickedUri: Uri? = null,
     val initialDraft: String = "",
     val editingMessage: Message? = null,
-    val currentUser: UserProfile? = null
+    val currentUser: UserProfile? = null,
+    val currentTopic: Topic? = null,
+    val topicId: String? = null
 ) {
     val canSendMessage get() = canSendMessage(myMember, chatType)
     val canSendMedia get() = canSendMedia(myMember, chatType)
@@ -85,7 +87,8 @@ class ChatViewModel(
     private val context: Application,
     private val draftManager: DraftManager,
     val chatId: String,
-    val otherUid: String
+    val otherUid: String,
+    val initialTopicId: String? = null
 ) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -102,6 +105,20 @@ class ChatViewModel(
     private var typingManager: TypingManager? = null
     private var onlineCountListener: ValueEventListener? = null
     private var wallpaperListener: ListenerRegistration? = null
+    private var rawMessages = listOf<Message>()
+
+    private fun filterByTopic(msgs: List<Message>, topic: Topic?, topicId: String?): List<Message> {
+        val tid = topicId ?: topic?.id
+        if (tid == null) return msgs
+        val isGeneral = topic?.isGeneral == true || tid == "general"
+        return msgs.filter { msg ->
+            if (isGeneral) {
+                msg.topicId.isNullOrEmpty() || msg.topicId == tid || msg.topicId == "general"
+            } else {
+                msg.topicId == tid
+            }
+        }
+    }
 
     init {
         viewModelScope.launch {
@@ -129,6 +146,23 @@ class ChatViewModel(
             }
         }
 
+        if (initialTopicId != null) {
+            _uiState.update { it.copy(topicId = initialTopicId) }
+            viewModelScope.launch {
+                db.collection("chats").document(chatId).collection("topics").document(initialTopicId)
+                    .addSnapshotListener { snap, _ ->
+                        if (snap != null && snap.exists()) {
+                            val topic = try { snap.toObject(Topic::class.java)?.copy(id = snap.id) } catch (_: Exception) { null }
+                            _uiState.update { state ->
+                                val filtered = filterByTopic(rawMessages, topic, initialTopicId)
+                                val items = buildMessageList(filtered + filterByTopic(state.tempMessages, topic, initialTopicId))
+                                state.copy(currentTopic = topic, messages = filtered, messageListItems = items)
+                            }
+                        }
+                    }
+            }
+        }
+
         viewModelScope.launch {
             val exists = waitForChat()
             if (!exists) {
@@ -148,9 +182,7 @@ class ChatViewModel(
                 db.collection("chats").document(chatId)
                     .addSnapshotListener { snap, error ->
                         if (error != null || snap == null) return@addSnapshotListener
-                        val chat = try {
-                            snap.toObject(Chat::class.java)?.copy(id = chatId)
-                        } catch (e: Exception) { null } ?: return@addSnapshotListener
+                        val chat = snap.toChatOrNull() ?: return@addSnapshotListener
 
                         val type = chat.chatType()
                         _uiState.update { it.copy(chat = chat, chatType = type) }
@@ -186,24 +218,30 @@ class ChatViewModel(
                 }
 
                 launch {
-                    launch {
-                        userRepository.clientStatusFlow(otherUid).collect { isOfficial ->
-                            val state = _uiState.value
-                            if (!isOfficial && !state.hasDismissedUnofficialWarning) {
-                                _uiState.update { it.copy(showUnofficialClientWarning = true) }
-                            } else if (isOfficial) {
-                                _uiState.update { it.copy(showUnofficialClientWarning = false) }
-                            }
+                    userRepository.clientStatusFlow(otherUid).collect { isOfficial ->
+                        val state = _uiState.value
+                        if (!isOfficial && !state.hasDismissedUnofficialWarning) {
+                            _uiState.update { it.copy(showUnofficialClientWarning = true) }
+                        } else if (isOfficial) {
+                            _uiState.update { it.copy(showUnofficialClientWarning = false) }
                         }
                     }
+                }
+
+                var lastOtherActiveTime = 0L
+                launch {
                     combine(
                         PresenceManager.observePresence(otherUid).filterNotNull(),
                         TypingManager.observeTyping(chatId, currentUid)
                     ) { presence, typing ->
-                        when {
-                            typing -> TopbarStatus.Typing
-                            presence.online -> TopbarStatus.Online
-                            else -> TopbarStatus.LastSeen(presence.lastSeen)
+                        val now = System.currentTimeMillis()
+                        if (typing) {
+                            lastOtherActiveTime = now
+                            TopbarStatus.Typing
+                        } else if (presence.online || (lastOtherActiveTime > 0L && now - lastOtherActiveTime < 10_000L)) {
+                            TopbarStatus.Online
+                        } else {
+                            TopbarStatus.LastSeen(presence.lastSeen)
                         }
                     }
                         .catch { emit(TopbarStatus.Offline) }
@@ -215,18 +253,19 @@ class ChatViewModel(
                 chatRepository.latestMessagesFlow(chatId) { latestMessages, latestLastDoc ->
                     _uiState.update { state ->
                         val latestMap = latestMessages.associateBy { it.id }
-                        val olderMessages = state.messages.filter { it.id !in latestMap }
+                        val olderMessages = rawMessages.filter { it.id !in latestMap }
                         val combined = (olderMessages + latestMessages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+                        rawMessages = combined
 
-                        val allMessages = combined + state.tempMessages
+                        val filtered = filterByTopic(combined, state.currentTopic, state.topicId ?: initialTopicId)
+                        val allMessages = filtered + filterByTopic(state.tempMessages, state.currentTopic, state.topicId ?: initialTopicId)
                         val items = buildMessageList(allMessages)
 
-                        // ИСПРАВЛЕНИЕ: Восстанавливаем курсор из сети (latestLastDoc), если кэш (state.lastDoc) пустой
                         val newLastDoc = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.lastDoc else latestLastDoc
                         val newHasMore = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.hasMore else (latestLastDoc != null)
 
                         state.copy(
-                            messages = combined,
+                            messages = filtered,
                             messageListItems = items,
                             lastDoc = newLastDoc,
                             hasMore = newHasMore
@@ -383,11 +422,13 @@ class ChatViewModel(
         val tempId = "temp_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
         val reply = _uiState.value.replyingTo?.toReplyData()
 
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
         val tempMsg = Message(
             id = tempId,
             senderId = currentUid,
             senderUsername = currentUsername,
             type = type,
+            topicId = activeTopicId,
             localFile = file,
             uploadProgress = 0.01f,
             createdAt = com.google.firebase.Timestamp.now(),
@@ -424,7 +465,7 @@ class ChatViewModel(
                 val msgRef = db.collection("chats").document(chatId).collection("messages").document()
                 val batch = db.batch()
 
-                batch.set(msgRef, mapOf(
+                val msgMap = mutableMapOf<String, Any?>(
                     "senderId" to currentUid,
                     "senderUsername" to currentUsername,
                     "type" to type,
@@ -434,13 +475,23 @@ class ChatViewModel(
                     "readBy" to listOf(currentUid),
                     "deleted" to false,
                     "replyTo" to tempMsg.replyTo
-                ))
+                )
+                if (activeTopicId != null) msgMap["topicId"] = activeTopicId
+
+                batch.set(msgRef, msgMap)
 
                 val preview = if (isGif) "🖼️ GIF" else "🎥 Видео"
                 batch.update(db.collection("chats").document(chatId), mapOf(
                     "lastMessage" to preview,
                     "lastMessageAt" to FieldValue.serverTimestamp()
                 ))
+                if (activeTopicId != null) {
+                    val topicRef = db.collection("chats").document(chatId).collection("topics").document(activeTopicId)
+                    batch.update(topicRef, mapOf(
+                        "lastMessage" to mapOf("text" to preview, "senderUsername" to currentUsername),
+                        "lastMessageAt" to FieldValue.serverTimestamp()
+                    ))
+                }
 
                 batch.update(db.collection("users").document(currentUid), "lastMessageAt", FieldValue.serverTimestamp())
                 batch.commit().await()
@@ -513,13 +564,17 @@ class ChatViewModel(
 
                 _uiState.update { currentState ->
                     val olderFiltered = older.filter { oldMsg ->
-                        currentState.messages.none { it.id == oldMsg.id }
+                        rawMessages.none { it.id == oldMsg.id }
                     }
-                    val combined = (olderFiltered + currentState.messages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+                    val combined = (olderFiltered + rawMessages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+                    rawMessages = combined
+
+                    val filtered = filterByTopic(combined, currentState.currentTopic, currentState.topicId ?: initialTopicId)
+                    val allMessages = filtered + filterByTopic(currentState.tempMessages, currentState.currentTopic, currentState.topicId ?: initialTopicId)
 
                     currentState.copy(
-                        messages = combined,
-                        messageListItems = buildMessageList(combined + currentState.tempMessages),
+                        messages = filtered,
+                        messageListItems = buildMessageList(allMessages),
                         isLoadingMore = false,
                         hasMore = newLastDoc != null,
                         lastDoc = newLastDoc ?: currentState.lastDoc
@@ -577,12 +632,13 @@ class ChatViewModel(
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
         viewModelScope.launch {
             typingManager?.stopTyping()
             clearReply()
             draftManager.clearDraft(chatId)
             try { 
-                val sentMessage = chatRepository.sendText(chatId, trimmed, currentUsername, reply)
+                val sentMessage = chatRepository.sendText(chatId, trimmed, currentUsername, reply, activeTopicId)
                 if (sentMessage != null) {
                     // Optimistic UI update for custom backend
                     _uiState.update { state ->
@@ -604,10 +660,11 @@ class ChatViewModel(
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendImage(chatId, uri, currentUsername, reply, isSpoiler) }
+            try { chatRepository.sendImage(chatId, uri, currentUsername, reply, isSpoiler, activeTopicId) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) } }
         }
@@ -618,10 +675,11 @@ class ChatViewModel(
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendVideo(chatId, uri, currentUsername, reply) }
+            try { chatRepository.sendVideo(chatId, uri, currentUsername, reply, activeTopicId) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) } }
         }
@@ -632,10 +690,11 @@ class ChatViewModel(
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
         viewModelScope.launch {
             clearReply()
             try {
-                chatRepository.sendSticker(chatId, sticker, packId, packName, packEmoji, currentUsername, reply)
+                chatRepository.sendSticker(chatId, sticker, packId, packName, packEmoji, currentUsername, reply, activeTopicId)
             } catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
@@ -675,10 +734,11 @@ class ChatViewModel(
 
         if (!startCooldown()) return
 
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendVoice(chatId, file, duration, currentUsername, reply) }
+            try { chatRepository.sendVoice(chatId, file, duration, currentUsername, reply, activeTopicId) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) }; file.delete() }
         }

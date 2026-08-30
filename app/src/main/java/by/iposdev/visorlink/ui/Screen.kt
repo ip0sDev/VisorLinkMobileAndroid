@@ -27,8 +27,17 @@ sealed class Screen(val route: String) {
             if (query != null) "find_channel?query=$query" else "find_channel"
     }
 
-    object Chat : Screen("chat/{chatId}/{otherUid}") {
-        fun createRoute(chatId: String, otherUid: String) = "chat/$chatId/$otherUid"
+    object Chat : Screen("chat/{chatId}/{otherUid}?topicId={topicId}") {
+        fun createRoute(chatId: String, otherUid: String, topicId: String? = null) =
+            if (topicId != null) "chat/$chatId/$otherUid?topicId=$topicId" else "chat/$chatId/$otherUid"
+    }
+
+    object TopicList : Screen("topic_list/{chatId}") {
+        fun createRoute(chatId: String) = "topic_list/$chatId"
+    }
+
+    object TaskTracker : Screen("task_tracker/{chatId}/{topicId}") {
+        fun createRoute(chatId: String, topicId: String) = "task_tracker/$chatId/$topicId"
     }
 
     object OtherProfile : Screen("other_profile/{uid}") {

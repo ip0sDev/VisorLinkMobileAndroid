@@ -59,6 +59,7 @@ data class ChatSettingsUiState(
     val joinByLink: Boolean = true,
     val joinByTag: Boolean = false,
     val allowReactions: Boolean = true,
+    val isForum: Boolean = false,
     val inviteLink: String = "",
     // UI
     val isLoading: Boolean = false,
@@ -83,6 +84,7 @@ data class ChatSettingsUiState(
 class ChatSettingsViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: by.iposdev.visorlink.data.repository.UserRepository,
+    private val topicsRepository: by.iposdev.visorlink.data.repository.TopicsRepository,
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     val chatId: String
@@ -99,8 +101,7 @@ class ChatSettingsViewModel(
             db.collection("chats").document(chatId)
                 .addSnapshotListener { snap, _ ->
                     if (snap == null) return@addSnapshotListener
-                    val chat = try { snap.toObject(Chat::class.java)?.copy(id = chatId) }
-                    catch (_: Exception) { null } ?: return@addSnapshotListener
+                    val chat = snap.toChatOrNull() ?: return@addSnapshotListener
                     val settings = chat.settings
                     _uiState.update {
                         it.copy(
@@ -111,6 +112,7 @@ class ChatSettingsViewModel(
                             joinByLink = settings.joinByLink,
                             joinByTag = settings.joinByTag,
                             allowReactions = settings.allowReactions,
+                            isForum = chat.isForumActive,
                             inviteLink = settings.inviteLink
                         )
                     }
@@ -190,6 +192,19 @@ class ChatSettingsViewModel(
         viewModelScope.launch {
             try { chatRepository.updateChatSettings(chatId, mapOf("settings.allowReactions" to enabled)) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
+        }
+    }
+
+    fun toggleForumMode(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                if (enabled) {
+                    topicsRepository.ensureGeneralTopic(chatId)
+                }
+                chatRepository.setForumMode(chatId, enabled)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
         }
     }
 
@@ -341,6 +356,7 @@ fun ChatSettingsScreen(
                     onToggleJoinByLink = viewModel::toggleJoinByLink,
                     onToggleJoinByTag = viewModel::toggleJoinByTag,
                     onToggleAllowReactions = viewModel::toggleAllowReactions,
+                    onToggleForumMode = viewModel::toggleForumMode,
                     onRegenerateLink = { viewModel.regenerateInviteLink() },
                     onCopyLink = { link ->
                         clipboard.setText(AnnotatedString(link))
@@ -374,6 +390,7 @@ private fun InfoTab(
     onToggleJoinByLink: (Boolean) -> Unit,
     onToggleJoinByTag: (Boolean) -> Unit,
     onToggleAllowReactions: (Boolean) -> Unit,
+    onToggleForumMode: (Boolean) -> Unit,
     onRegenerateLink: () -> Unit,
     onCopyLink: (String) -> Unit,
     onLeave: () -> Unit
@@ -544,6 +561,18 @@ private fun InfoTab(
                     checked = uiState.joinByTag,
                     onCheckedChange = onToggleJoinByTag
                 )
+            }
+
+            if (!isChannel) {
+                item {
+                    SettingsToggleRow(
+                        icon = Icons.Default.Forum,
+                        title = stringResource(R.string.chat_settings_forum_mode),
+                        subtitle = stringResource(R.string.chat_settings_forum_mode_sub),
+                        checked = uiState.isForum,
+                        onCheckedChange = onToggleForumMode
+                    )
+                }
             }
 
             if (isChannel) {
