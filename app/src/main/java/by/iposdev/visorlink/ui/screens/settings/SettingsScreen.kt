@@ -247,10 +247,8 @@ fun SettingsScreen(
                                 checked = profile?.diaryEnabled ?: false,
                                 onCheckedChange = { v ->
                                     haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                    scope.launch {
-                                        val uid = profile?.uid ?: return@launch
-                                        Firebase.firestore.collection("users").document(uid).update("diaryEnabled", v)
-                                    }
+                                    val uid = profile?.uid ?: return@VlSwitch
+                                    userRepository.updateDiaryEnabled(uid, v)
                                 }
                             )
                         }
@@ -268,8 +266,8 @@ fun SettingsScreen(
                                     { _, h, m ->
                                         val time = String.format(Locale.US, "%02d:%02d", h, m)
                                         scope.launch {
-                                            val uid = profile?.uid ?: return@launch
-                                            Firebase.firestore.collection("users").document(uid).update("diaryReminderTime", time)
+                                            val currentReminders = profile?.diaryRemindersEnabled ?: false
+                                            userRepository.updateDiaryReminders(currentReminders, time)
                                         }
                                     },
                                     parts[0].toInt(),
@@ -284,8 +282,8 @@ fun SettingsScreen(
                                     onCheckedChange = { v ->
                                         haptic.perform(HapticType.SELECTION, hapticEnabled)
                                         scope.launch {
-                                            val uid = profile?.uid ?: return@launch
-                                            Firebase.firestore.collection("users").document(uid).update("diaryRemindersEnabled", v)
+                                            val currentTime = profile?.diaryReminderTime ?: "21:00"
+                                            userRepository.updateDiaryReminders(v, currentTime)
                                         }
                                     }
                                 )
@@ -393,7 +391,7 @@ fun SettingsScreen(
                 VlSettingsSection(title = stringResource(R.string.settings_section_account)) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
                     if (flags.isEnabled("2fa_enabled")) {
-                        VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { val uid = profile?.uid ?: return@launch; Firebase.firestore.collection("users").document(uid).update("tfaEnabled", v) } }) })
+                        VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
                     }
                     VlSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
@@ -445,7 +443,6 @@ fun SettingsScreen(
                         subtitle = "Условия использования и конфиденциальность",
                         onClick = { showLegalDialog = true }
                     )
-                    VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                 }
 
                 Spacer(Modifier.height(padding.calculateBottomPadding() + 32.dp))
@@ -684,10 +681,64 @@ fun ChangePasswordDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> U
 @Composable
 private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, proState: ProUiState, hapticEnabled: Boolean) {
     VlSettingsSection(title = stringResource(R.string.pro_title), isPremium = true) {
-        VlSettingsItem(icon = Icons.Default.WorkspacePremium, title = if (profile.isProActive()) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive))
-        VlSettingsItem(icon = Icons.Default.Toll, title = stringResource(R.string.pro_bits), trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = Color(0xFFC5A059)) })
+        val expirySubtitle = if (profile.isProActive() && profile.proUntil != null) {
+            val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(profile.proUntil.toDate())
+            "Активен до $dateStr"
+        } else null
+
+        VlSettingsItem(
+            icon = Icons.Default.WorkspacePremium,
+            title = if (profile.isProActive()) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive),
+            subtitle = expirySubtitle
+        )
+        VlSettingsItem(
+            icon = Icons.Default.Toll,
+            title = stringResource(R.string.pro_bits),
+            trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = Color(0xFFC5A059)) }
+        )
+
         if (!profile.isProActive()) {
-            Button(onClick = { proViewModel.buyPro(false) }, modifier = Modifier.padding(16.dp).fillMaxWidth()) { Text(stringResource(R.string.pro_action_buy, 1000)) }
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                if (!profile.trialUsed) {
+                    OutlinedButton(
+                        onClick = { proViewModel.buyPro(true) },
+                        enabled = !proState.isLoading,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Попробовать PRO бесплатно (1 день)")
+                    }
+                }
+                Button(
+                    onClick = { proViewModel.buyPro(false) },
+                    enabled = !proState.isLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (proState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text(stringResource(R.string.pro_action_buy, 100))
+                    }
+                }
+            }
+        }
+
+        if (proState.error != null) {
+            Text(
+                text = proState.error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+        if (proState.successMessage != null) {
+            Text(
+                text = proState.successMessage,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
         }
     }
 }

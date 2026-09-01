@@ -88,6 +88,29 @@ class StickerPackRepository(
         return _packsFlow.value.any { it.id == packId }
     }
 
+    suspend fun fetchPackDetails(packId: String): StickerPack? = withContext(Dispatchers.IO) {
+        val local = _packsFlow.value.find { it.id == packId }
+        if (local != null) return@withContext local
+
+        try {
+            val token = auth.currentUser?.getIdToken(false)?.await()?.token
+            val url = URL("$baseUrl/stickerpacks/$packId")
+            val conn = url.openConnection() as HttpURLConnection
+            if (!token.isNullOrEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer $token")
+            }
+            if (conn.responseCode == 200) {
+                val response = conn.inputStream.bufferedReader().readText()
+                val json = JSONObject(response)
+                val packJson = json.optJSONObject("pack") ?: json
+                parseStickerPack(packJson)
+            } else null
+        } catch (e: Exception) {
+            Log.e("StickerRepo", "Failed to fetch pack details for $packId", e)
+            null
+        }
+    }
+
     suspend fun createPack(name: String, emoji: String): String = withContext(Dispatchers.IO) {
         val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
         val url = URL("$baseUrl/stickerpacks/create")

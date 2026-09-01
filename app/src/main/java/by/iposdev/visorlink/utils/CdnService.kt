@@ -1,6 +1,7 @@
 // utils/CdnService.kt
 package by.iposdev.visorlink.utils
 
+import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
@@ -80,8 +81,14 @@ object CdnService {
     }
 
     suspend fun getFileUrl(cdnMediaId: String): String {
-        val token = FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token ?: ""
-        return "$BASE_URL/f/$cdnMediaId?token=$token"
+        val token = try {
+            FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+        } catch (_: Exception) { null }
+        return if (!token.isNullOrEmpty()) {
+            "$BASE_URL/f/$cdnMediaId?token=$token"
+        } else {
+            "$BASE_URL/p/$cdnMediaId"
+        }
     }
 
     suspend fun uploadFile(
@@ -160,11 +167,13 @@ object CdnService {
                 responseJson.getString("media_id")
             }
             401 -> {
+                val err = try { connection.errorStream?.bufferedReader()?.readText() } catch (_: Exception) { null }
+                Log.e("CdnService", "CDN 401 Unauthorized: $err")
                 if (!forceRefreshAuth) {
-                    // Ретрай с обновлением токена
+                    // Ретрай с принудительным обновлением токена
                     uploadFile(file, mimeType, isVault, forceRefreshAuth = true, onProgress)
                 } else {
-                    throw Exception("Unauthorized: Ошибка авторизации")
+                    throw Exception("Unauthorized: ${err ?: "Ошибка авторизации"}")
                 }
             }
             413 -> throw Exception("Превышена квота облака. Удалите старые файлы или приобретите PRO")

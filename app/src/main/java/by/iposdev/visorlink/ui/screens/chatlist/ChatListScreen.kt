@@ -56,6 +56,7 @@ fun ChatListScreen(
     val profileCache by viewModel.profileCache.collectAsState()
     val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
     val drafts by viewModel.drafts.collectAsState()
+    val isManualFallbackActive by viewModel.isManualFallbackActive.collectAsState()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val compactList by themeViewModel.compactChatList.collectAsState()
@@ -178,11 +179,20 @@ fun ChatListScreen(
                 label = "list_empty_toggle"
             ) { isEmpty ->
                 if (isEmpty) {
-                    ChatListEmptyState(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
-                    )
+                    ) {
+                        if (isManualFallbackActive) {
+                            BackendFallbackBanner(
+                                onRetryNewBackend = { viewModel.retryNewBackend() }
+                            )
+                        }
+                        ChatListEmptyState(
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 } else {
                     LazyColumn(
                         state = listState,
@@ -192,6 +202,13 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
+                        if (isManualFallbackActive) {
+                            item(key = "backend_fallback_banner") {
+                                BackendFallbackBanner(
+                                    onRetryNewBackend = { viewModel.retryNewBackend() }
+                                )
+                            }
+                        }
                         if (compactList) {
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {

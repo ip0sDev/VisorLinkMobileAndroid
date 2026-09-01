@@ -75,13 +75,21 @@ import kotlin.random.Random
 
 @Composable
 fun resolveCdnUrl(cdnMediaId: String?, fallbackUrl: String?): String? {
-    var resolvedUrl by remember(cdnMediaId, fallbackUrl) { mutableStateOf(fallbackUrl) }
-    LaunchedEffect(cdnMediaId) {
-        if (cdnMediaId != null) {
-            resolvedUrl = CdnService.getFileUrl(cdnMediaId)
+    val effectiveMediaId = cdnMediaId
+        ?: fallbackUrl?.substringAfter("/f/", "")?.substringBefore("?")?.takeIf { it.isNotEmpty() && !it.contains("/") }
+        ?: fallbackUrl?.substringAfter("/p/", "")?.substringBefore("?")?.takeIf { it.isNotEmpty() && !it.contains("/") }
+
+    var resolvedUrl by remember(effectiveMediaId, fallbackUrl) {
+        mutableStateOf(if (effectiveMediaId != null && fallbackUrl?.contains("token=") != true) null else fallbackUrl)
+    }
+    LaunchedEffect(effectiveMediaId, fallbackUrl) {
+        if (!effectiveMediaId.isNullOrEmpty()) {
+            resolvedUrl = CdnService.getFileUrl(effectiveMediaId)
+        } else {
+            resolvedUrl = fallbackUrl
         }
     }
-    return resolvedUrl
+    return resolvedUrl ?: fallbackUrl
 }
 
 @Composable

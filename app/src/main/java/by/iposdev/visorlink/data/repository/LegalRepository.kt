@@ -17,12 +17,16 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import by.iposdev.visorlink.data.remote.chat.VisorLinkApi
+import by.iposdev.visorlink.data.repository.FlagsRepository
 import org.json.JSONArray
 import org.json.JSONObject
 
 class LegalRepository(
     private val firestore: FirebaseFirestore,
-    private val context: Context
+    private val context: Context,
+    private val api: VisorLinkApi? = null,
+    private val flagsRepository: FlagsRepository? = null
 ) {
     companion object {
         private const val TAG = "LegalRepository"
@@ -75,6 +79,23 @@ class LegalRepository(
         val bundled = loadBundledVersion()
         trySend(bundled)
 
+        if (flagsRepository?.isBackendV2Enabled() == true) {
+            if (api != null) {
+                try {
+                    val doc = api.getInternalDocument("legal_tos")
+                    val json = JSONObject(doc.content)
+                    val version = json.optString("version")
+                    if (!version.isNullOrBlank()) {
+                        trySend(version)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to fetch remote ToS version from backend v2: ${e.message}")
+                }
+            }
+            awaitClose { }
+            return@callbackFlow
+        }
+
         val docRef = firestore.collection("internal")
             .document("legal_tos")
             .collection("tos")
@@ -102,6 +123,18 @@ class LegalRepository(
      * Загрузка полного документа Условий использования (ToS).
      */
     suspend fun getTosDocument(): LegalDocument = withContext(Dispatchers.IO) {
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                val doc = api.getInternalDocument("legal_tos")
+                val json = JSONObject(doc.content)
+                val container = parseLegalContainer(json)
+                if (container.tos != null) return@withContext container.tos
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch remote ToS from backend v2: ${e.message}")
+            }
+            return@withContext loadBundledTosDocument()
+        }
+
         try {
             val subSnap = firestore.collection("internal")
                 .document("legal_tos")
@@ -137,6 +170,18 @@ class LegalRepository(
      * Загрузка полного документа Политики конфиденциальности.
      */
     suspend fun getPrivacyPolicyDocument(): LegalDocument = withContext(Dispatchers.IO) {
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                val doc = api.getInternalDocument("legal_privacy_policy")
+                val json = JSONObject(doc.content)
+                val container = parseLegalContainer(json)
+                if (container.privacyPolicy != null) return@withContext container.privacyPolicy!!
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to fetch remote Privacy Policy from backend v2: ${e.message}")
+            }
+            return@withContext loadBundledPrivacyDocument()
+        }
+
         try {
             val ppSnap = firestore.collection("internal")
                 .document("legal_privacy_policy")
@@ -159,6 +204,35 @@ class LegalRepository(
      * Запись подтверждения согласия в профиль пользователя /users/{userId}.
      */
     suspend fun recordConsent(userId: String, version: String): Unit = withContext(Dispatchers.IO) {
+        val timestamp = System.currentTimeMillis()
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                api.updateProfile(by.iposdev.visorlink.data.remote.chat.UpdateProfileRequest(
+                    acceptedAt = timestamp,
+                    acceptedVersion = version,
+                    customization = mapOf(
+                        "acceptedAt" to timestamp,
+                        "acceptedVersion" to version
+                    )
+                ))
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record consent on backend: ${e.message}")
+            }
+            try {
+                val cacheUid = "${userId}_backend"
+                val cached = by.iposdev.visorlink.utils.ChatDataCache.loadProfile(context, cacheUid)
+                if (cached != null) {
+                    by.iposdev.visorlink.utils.ChatDataCache.saveProfile(
+                        context,
+                        cached.copy(
+                            acceptedVersion = version,
+                            acceptedAt = com.google.firebase.Timestamp(java.util.Date(timestamp))
+                        )
+                    )
+                }
+            } catch (_: Exception) {}
+            return@withContext
+        }
         firestore.collection("users").document(userId).update(
             mapOf(
                 "acceptedAt" to FieldValue.serverTimestamp(),

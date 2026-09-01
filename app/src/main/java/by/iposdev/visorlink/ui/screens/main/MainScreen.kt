@@ -77,6 +77,14 @@ fun MainScreen(
 
     val showNavbar = diaryEnabled || discoverEnabled
     val isOnline by mainViewModel.isOnline.collectAsState()
+    val showFallbackPrompt by mainViewModel.showFallbackPrompt.collectAsState()
+
+    if (showFallbackPrompt) {
+        by.iposdev.visorlink.ui.components.BackendFallbackOfferDialog(
+            onDismissRequest = { mainViewModel.dismissFallbackPrompt() },
+            onConfirmFallback = { mainViewModel.confirmFallback() }
+        )
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

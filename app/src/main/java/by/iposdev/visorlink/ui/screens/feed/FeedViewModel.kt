@@ -44,8 +44,15 @@ class FeedViewModel(
     fun onRefresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
-            delay(1000)
-            _uiState.update { it.copy(isRefreshing = false) }
+            val profile = userRepository.getUserProfile(currentUid)
+            val interests = profile?.interestWeights ?: emptyMap()
+            val fresh = feedRepository.getFeed(interests)
+            if (fresh.isNotEmpty()) {
+                _uiState.update { it.copy(items = fresh, isRefreshing = false, isLoading = false) }
+            } else {
+                delay(500)
+                _uiState.update { it.copy(isRefreshing = false) }
+            }
         }
     }
 

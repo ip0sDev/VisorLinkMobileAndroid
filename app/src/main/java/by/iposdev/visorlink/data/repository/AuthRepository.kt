@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
+import by.iposdev.visorlink.data.remote.chat.SyncUserRequest
+import by.iposdev.visorlink.data.remote.chat.VisorLinkApi
+import by.iposdev.visorlink.data.repository.FlagsRepository
+
 // ─── Auth state ───────────────────────────────────────────────────────────────
 
 sealed class AuthState {
@@ -19,7 +23,9 @@ sealed class AuthState {
 
 class AuthRepository(
     private val auth: FirebaseAuth,
-    private val functions: FirebaseFunctions          // inject via Koin
+    private val functions: FirebaseFunctions,          // inject via Koin
+    private val api: VisorLinkApi? = null,
+    private val flagsRepository: FlagsRepository? = null
 ) {
     val currentUser: FirebaseUser? get() = auth.currentUser
     val currentUid: String? get() = auth.currentUser?.uid
@@ -62,15 +68,6 @@ class AuthRepository(
     }
 
     // ── Registration ──────────────────────────────────────────────────────────
-    /**
-     * Per guideline §2.1:
-     *  1. createUserWithEmailAndPassword
-     *  2. Call createUserProfile Cloud Function (writes /users + /usernames atomically)
-     *  3. sendEmailVerification
-     *
-     * Client no longer writes to Firestore directly — security rules require
-     * email_verified == true, so we delegate to the CF (Admin SDK bypasses rules).
-     */
     suspend fun register(email: String, password: String, username: String) {
         val clean = username.lowercase().trim()
         require(clean.length in 3..32) { "Username must be 3–32 characters" }
@@ -82,19 +79,26 @@ class AuthRepository(
         val cred = auth.createUserWithEmailAndPassword(email, password).await()
         val user = cred.user ?: error("Auth account creation returned null user")
 
-        // Step 2 — create Firestore profile via Cloud Function
-        // CF validates username, writes /users/{uid} and /usernames/{username} atomically.
-        // If username is taken the CF deletes the Auth account and throws already-exists.
-        try {
-            functions
-                .getHttpsCallable("createUserProfile")
-                .call(mapOf("username" to username.trim()))
-                .await()
-        } catch (e: Exception) {
-            // CF already deleted the Auth account if username is taken.
-            // Attempt local cleanup as a safety net for other errors.
-            runCatching { user.delete().await() }
-            throw mapFunctionsError(e)
+        // Step 2 — create profile
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                api.syncUser(SyncUserRequest(username = username.trim()))
+            } catch (e: Exception) {
+                runCatching { user.delete().await() }
+                throw e
+            }
+        } else {
+            try {
+                functions
+                    .getHttpsCallable("createUserProfile")
+                    .call(mapOf("username" to username.trim()))
+                    .await()
+            } catch (e: Exception) {
+                // CF already deleted the Auth account if username is taken.
+                // Attempt local cleanup as a safety net for other errors.
+                runCatching { user.delete().await() }
+                throw mapFunctionsError(e)
+            }
         }
 
         // Step 3 — send verification email
@@ -105,7 +109,13 @@ class AuthRepository(
     // ── Login ─────────────────────────────────────────────────────────────────
     suspend fun login(email: String, password: String) {
         auth.signInWithEmailAndPassword(email, password).await()
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                api.syncUser(SyncUserRequest())
+            } catch (_: Exception) {}
+        }
     }
+
 
     suspend fun sendPasswordResetEmail(email: String) {
         auth.sendPasswordResetEmail(email.trim()).await()

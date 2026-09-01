@@ -317,6 +317,7 @@ fun MessageBubble(
     onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {},
     chat: Chat? = null,
+    onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
@@ -374,6 +375,7 @@ fun MessageBubble(
                         hapticEnabled = hapticEnabled,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd, onReact = onReact,
+                        onStickerClick = onStickerClick,
                     )
                     return@Box
                 }
@@ -728,6 +730,7 @@ internal fun StickerBubble(
     hapticEnabled: Boolean,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit,
+    onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -738,7 +741,8 @@ internal fun StickerBubble(
         Box(
             modifier = Modifier.size(160.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = { /* no-op */ }, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
+                onTap = { onStickerClick?.invoke(message.packId, message.stickerId) },
+                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             contentAlignment = Alignment.Center
         ) {

@@ -27,12 +27,14 @@ fun LegalConsentGuard(
     val isVerified = authState is AuthState.Verified
     val currentUser = if (authState is AuthState.Verified) (authState as AuthState.Verified).user else null
 
-    // Наблюдение за профилем текущего пользователя
-    val userProfile by userRepository.currentUserFlow().collectAsState(initial = null)
+    val currentUid = currentUser?.uid
+    val userProfileFlow = remember(currentUid) {
+        if (currentUid != null) userRepository.userProfileFlow(currentUid) else kotlinx.coroutines.flow.flowOf(null)
+    }
+    val userProfile by userProfileFlow.collectAsState(initial = null)
 
-    // Наблюдение за актуальной версией ToS/Privacy на лету через Firestore snapshot
-    val latestVersion by legalRepository.observeLatestVersion()
-        .collectAsState(initial = legalRepository.loadBundledVersion())
+    val latestVersionFlow = remember { legalRepository.observeLatestVersion() }
+    val latestVersion by latestVersionFlow.collectAsState(initial = legalRepository.loadBundledVersion())
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -60,6 +62,12 @@ fun LegalConsentGuard(
                     coroutineScope.launch {
                         try {
                             legalRepository.recordConsent(currentUser.uid, latestVersion)
+                            userRepository.updateCachedProfile(currentUser.uid) {
+                                it.copy(
+                                    acceptedVersion = latestVersion,
+                                    acceptedAt = com.google.firebase.Timestamp.now()
+                                )
+                            }
                         } catch (e: Exception) {
                             android.util.Log.e("LegalConsentGuard", "Error recording consent", e)
                         }

@@ -13,7 +13,8 @@ class FlagFlipperViewModel(
             it.value is Boolean && it.value == true 
         }.keys.toMutableSet()
         
-        // Ensure core flags are present if they were true on server
+        // Ensure core flags are present
+        keys.add("backend_v2_enabled")
         if (flags.testFlag) keys.add("test_flag")
         if (flags.isAegisDebugMode) {
             keys.add("aegis_debug_mode_enabled")

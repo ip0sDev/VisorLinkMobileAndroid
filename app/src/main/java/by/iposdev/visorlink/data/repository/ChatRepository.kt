@@ -20,12 +20,13 @@ import by.iposdev.visorlink.utils.VoiceCache
 import by.iposdev.visorlink.utils.NetworkMonitor
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.MetadataChanges
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -50,42 +51,55 @@ class ChatRepository(
     private val wsClient: ChatWebSocketClient,
     private val flagsRepository: FlagsRepository
 ) {
-    private val currentUid get() = auth.currentUser!!.uid
+    private val currentUid get() = auth.currentUser?.uid ?: ""
     private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
 
     fun isBackendEnabled(): Boolean {
+        val serverV2 = flagsRepository.isBackendV2Enabled()
         val serverFlag = flagsRepository.flags.value.isEnabled("test_backend_enabled")
         val userSetting = backendPrefs.getBoolean("use_custom_backend", false)
-        return serverFlag && userSetting
+        return serverV2 || (serverFlag && userSetting)
     }
 
     fun isFirestoreDisabled(): Boolean {
-        return flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
-                backendPrefs.getBoolean("disable_firestore_completely", false)
+        return flagsRepository.isBackendV2Enabled() || (flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
+                backendPrefs.getBoolean("disable_firestore_completely", false))
     }
 
-    private fun MessageDto.toDomain() = Message(
-        id = id,
-        senderId = senderId,
-        senderUsername = senderUsername,
-        type = type,
-        text = text,
-        url = url,
-        fileName = fileName,
-        duration = duration,
-        stickerId = stickerId,
-        packId = packId,
-        packName = packName,
-        packEmoji = packEmoji,
-        createdAt = Timestamp(Date(createdAt)),
-        deleted = deleted,
-        replyTo = replyTo?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
-        reactions = reactions?.map { mapOf("emoji" to it.emoji, "uids" to it.uids, "count" to it.count) } ?: emptyList(),
-        readBy = readBy ?: emptyList(),
-        spoiler = spoiler,
-        caption = caption,
-        images = images?.map { AlbumImage(url = it.url, cdnMediaId = it.cdnMediaId, fileName = it.fileName, spoiler = it.spoiler) } ?: emptyList()
-    )
+    private fun MessageDto.toDomain(): Message {
+        val effectiveCdnId = cdnMediaId
+            ?: url?.substringAfter("/f/", "")?.substringBefore("?")?.takeIf { it.isNotEmpty() && !it.contains("/") }
+            ?: url?.substringAfter("/p/", "")?.substringBefore("?")?.takeIf { it.isNotEmpty() && !it.contains("/") }
+
+        return Message(
+            id = id,
+            senderId = senderId,
+            senderUsername = senderUsername,
+            type = type,
+            text = text,
+            url = url,
+            cdnMediaId = effectiveCdnId,
+            fileName = fileName,
+            duration = duration,
+            stickerId = stickerId,
+            packId = packId,
+            packName = packName,
+            packEmoji = packEmoji,
+            createdAt = Timestamp(Date(createdAt)),
+            deleted = deleted,
+            replyTo = replyTo?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
+            reactions = reactions?.map { mapOf("emoji" to it.emoji, "uids" to it.uids, "count" to it.count) } ?: emptyList(),
+            readBy = readBy ?: emptyList(),
+            spoiler = spoiler,
+            caption = caption,
+            images = images?.map { 
+                val imgCdnId = it.cdnMediaId
+                    ?: it.url?.substringAfter("/f/", "")?.substringBefore("?")?.takeIf { u -> u.isNotEmpty() && !u.contains("/") }
+                    ?: it.url?.substringAfter("/p/", "")?.substringBefore("?")?.takeIf { u -> u.isNotEmpty() && !u.contains("/") }
+                AlbumImage(url = it.url, cdnMediaId = imgCdnId, fileName = it.fileName, spoiler = it.spoiler) 
+            } ?: emptyList()
+        )
+    }
 
     private fun ChatDto.toDomain() = Chat(
         id = id,
@@ -94,7 +108,7 @@ class ChatRepository(
         participantData = participantData?.mapValues { (_, v) -> mapOf("username" to v.username, "displayName" to v.displayName) } ?: emptyMap(),
         name = name ?: "",
         createdAt = Timestamp(Date(createdAt)),
-        lastMessage = lastMessage,
+        lastMessage = lastMessageText,
         lastMessageAt = lastMessageAt?.let { Timestamp(Date(it)) }
     )
 
@@ -114,19 +128,55 @@ class ChatRepository(
         val cacheUid = if (isBackendEnabled()) uid + "_backend" else uid
         
         if (isBackendEnabled()) {
-            val cached = ChatDataCache.loadChatList(context, cacheUid)
-            if (cached.isNotEmpty()) send(cached)
+            var currentChats = ChatDataCache.loadChatList(context, cacheUid)
+            if (currentChats.isNotEmpty()) send(currentChats)
 
             try {
                 val chats = api.getChats().map { it.toDomain() }
                     .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
-                send(chats)
+                currentChats = chats
+                send(currentChats)
                 withContext(Dispatchers.IO) { ChatDataCache.saveChatList(context, cacheUid, chats) }
             } catch (e: Exception) {
-                if (cached.isEmpty()) send(emptyList())
+                if (currentChats.isEmpty()) send(emptyList())
             }
+
+            launch {
+                wsClient.connect()
+                wsClient.subscribeUser(uid)
+
+                launch {
+                    wsClient.updatedChats.collect { updatedDto ->
+                        val updated = updatedDto.toDomain()
+                        currentChats = (currentChats.filter { it.id != updated.id } + updated)
+                            .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+                        send(currentChats)
+                        withContext(Dispatchers.IO) { ChatDataCache.saveChatList(context, cacheUid, currentChats) }
+                    }
+                }
+
+                launch {
+                    wsClient.incomingMessages.collect { msgDto ->
+                        val chatId = msgDto.chatId ?: return@collect
+                        val existing = currentChats.find { it.id == chatId }
+                        if (existing != null) {
+                            val updated = existing.copy(
+                                lastMessage = msgDto.text ?: msgDto.caption ?: "Message",
+                                lastMessageAt = Timestamp(Date(msgDto.createdAt))
+                            )
+                            currentChats = (currentChats.filter { it.id != chatId } + updated)
+                                .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+                            send(currentChats)
+                            withContext(Dispatchers.IO) { ChatDataCache.saveChatList(context, cacheUid, currentChats) }
+                        }
+                    }
+                }
+            }
+
+            awaitClose { }
             return@channelFlow
         }
+
 
         if (isFirestoreDisabled()) {
             val cached = ChatDataCache.loadChatList(context, cacheUid)
@@ -201,26 +251,51 @@ class ChatRepository(
             // 3. Listen to WebSocket
             launch {
                 try {
-                    val customUrl = backendPrefs.getString("custom_backend_url", "http://10.0.2.2:8080") ?: "http://10.0.2.2:8080"
-                    Log.d("ChatRepo", "🔌 Connecting to WebSocket: $customUrl")
+                    val customUrl = backendPrefs.getString("custom_backend_url", "https://backend.visorlink.org") ?: "https://backend.visorlink.org"
                     wsClient.connect(customUrl)
-                    wsClient.incomingMessages.collect { msgDto ->
-                        Log.d("ChatRepo", "📩 Incoming WS message: ${msgDto.id} for chat ${msgDto.chatId}")
-                        val domainMsg = msgDto.toDomain()
-                        
-                        if (msgDto.chatId == chatId || chatId == "all") {
-                            currentMessages = (currentMessages.filter { it.id != domainMsg.id } + domainMsg)
-                                .sortedBy { it.createdAt?.seconds ?: 0L }
-                            onUpdate(currentMessages, null)
-                            launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, currentMessages) }
+                    wsClient.subscribeChat(chatId)
+
+                    launch {
+                        wsClient.incomingMessages.collect { msgDto ->
+                            if (msgDto.chatId == chatId || chatId == "all") {
+                                val domainMsg = msgDto.toDomain()
+                                currentMessages = (currentMessages.filter { it.id != domainMsg.id } + domainMsg)
+                                    .sortedBy { it.createdAt?.seconds ?: 0L }
+                                onUpdate(currentMessages, null)
+                                launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, currentMessages) }
+                            }
+                        }
+                    }
+
+                    launch {
+                        wsClient.updatedMessages.collect { msgDto ->
+                            if (msgDto.chatId == chatId || chatId == "all") {
+                                val domainMsg = msgDto.toDomain()
+                                currentMessages = currentMessages.map { if (it.id == domainMsg.id) domainMsg else it }
+                                    .sortedBy { it.createdAt?.seconds ?: 0L }
+                                onUpdate(currentMessages, null)
+                                launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, currentMessages) }
+                            }
+                        }
+                    }
+
+                    launch {
+                        wsClient.deletedMessages.collect { delPayload ->
+                            if (delPayload.chatId == chatId || delPayload.chatId == null) {
+                                currentMessages = currentMessages.filter { it.id != delPayload.id }
+                                onUpdate(currentMessages, null)
+                                launch(Dispatchers.IO) { ChatDataCache.saveMessages(context, chatId, currentMessages) }
+                            }
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("ChatRepo", "❌ WS Error", e)
+                    Log.e("ChatRepo", "❌ WS Error in latestMessagesFlow", e)
                 }
             }
 
-            awaitClose { wsClient.disconnect() }
+            awaitClose {
+                wsClient.unsubscribeChat(chatId)
+            }
             return@channelFlow
         }
 
@@ -336,17 +411,42 @@ class ChatRepository(
     }
 
     suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> = try {
-        val snap = db.collection("chats").document(chatId).collection("messages")
-            .orderBy("createdAt", Query.Direction.DESCENDING).startAfter(startAfterDoc).limit(PAGE_SIZE).get().await()
-        val messages = snap.documents.mapNotNull { doc ->
-            try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
-        }.reversed()
-        Pair(messages, if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
+        if (isBackendEnabled()) {
+            val msgs = api.getMessages(chatId, limit = PAGE_SIZE.toInt(), before = startAfterDoc.id).map { it.toDomain() }
+            Pair(msgs, null)
+        } else {
+            val snap = db.collection("chats").document(chatId).collection("messages")
+                .orderBy("createdAt", Query.Direction.DESCENDING).startAfter(startAfterDoc).limit(PAGE_SIZE).get().await()
+            val messages = snap.documents.mapNotNull { doc ->
+                try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
+            }.reversed()
+            Pair(messages, if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
+        }
     } catch (e: Exception) {
         Pair(emptyList(), null)
     }
 
     fun membersFlow(chatId: String): Flow<List<Member>> = callbackFlow {
+        if (isBackendEnabled()) {
+            try {
+                val dtos = api.getChatMembers(chatId)
+                val members = dtos.map {
+                    Member(
+                        uid = it.userId,
+                        role = it.role,
+                        joinedAt = it.joinedAt?.let { ts -> Timestamp(Date(ts)) } ?: Timestamp.now(),
+                        muted = it.muted,
+                        banned = it.banned
+                    )
+                }
+                trySend(members)
+            } catch (_: Exception) {
+                trySend(emptyList())
+            }
+            awaitClose { }
+            return@callbackFlow
+        }
+
         if (isFirestoreDisabled()) {
             trySend(emptyList())
             awaitClose { }
@@ -363,7 +463,18 @@ class ChatRepository(
     }
 
     suspend fun getMyMemberData(chatId: String): Member? = try {
-        if (isFirestoreDisabled()) null
+        if (isBackendEnabled()) {
+            val members = api.getChatMembers(chatId)
+            members.find { it.userId == currentUid }?.let {
+                Member(
+                    uid = it.userId,
+                    role = it.role,
+                    joinedAt = it.joinedAt?.let { ts -> Timestamp(Date(ts)) } ?: Timestamp.now(),
+                    muted = it.muted,
+                    banned = it.banned
+                )
+            }
+        } else if (isFirestoreDisabled()) null
         else {
             val snap = db.collection("chats").document(chatId).collection("members").document(currentUid).get().await()
             snap.toObject(Member::class.java)?.copy(uid = snap.id)
@@ -371,6 +482,25 @@ class ChatRepository(
     } catch (e: Exception) { null }
 
     fun pendingInvitesFlow(uid: String): Flow<List<GroupInvite>> = callbackFlow {
+        if (isBackendEnabled()) {
+            try {
+                val invites = api.getInvites().map {
+                    GroupInvite(
+                        id = it.id,
+                        chatId = it.chatId,
+                        invitedBy = it.inviterUsername ?: it.inviterId ?: "",
+                        createdAt = Timestamp.now(),
+                        status = it.status
+                    )
+                }
+                trySend(invites)
+            } catch (_: Exception) {
+                trySend(emptyList())
+            }
+            awaitClose { }
+            return@callbackFlow
+        }
+
         if (isFirestoreDisabled()) {
             trySend(emptyList())
             awaitClose { }
@@ -387,6 +517,27 @@ class ChatRepository(
     }
 
     fun notificationsFlow(uid: String): Flow<List<AppNotification>> = callbackFlow {
+        if (isBackendEnabled()) {
+            try {
+                val notifs = api.getNotifications().map {
+                    AppNotification(
+                        id = it.id,
+                        type = it.type,
+                        chatId = (it.data?.get("chatId") as? String) ?: "",
+                        inviteId = (it.data?.get("inviteId") as? String) ?: "",
+                        invitedBy = it.title ?: "",
+                        createdAt = Timestamp(Date(it.createdAt)),
+                        read = it.read
+                    )
+                }
+                trySend(notifs)
+            } catch (_: Exception) {
+                trySend(emptyList())
+            }
+            awaitClose { }
+            return@callbackFlow
+        }
+
         if (isFirestoreDisabled()) {
             trySend(emptyList())
             awaitClose { }
@@ -441,6 +592,15 @@ class ChatRepository(
     }
 
     suspend fun createChat(type: String, name: String, tag: String, description: String = ""): Pair<String, String> {
+        if (isBackendEnabled()) {
+            val res = api.createChat(CreateChatRequest(
+                type = type,
+                name = name,
+                tag = tag,
+                description = description
+            ))
+            return Pair(res.id, res.inviteLink ?: res.id)
+        }
         if (isFirestoreDisabled()) throw Exception("Firestore is disabled")
         val result = functions.getHttpsCallable("createChat").call(mapOf("type" to type, "name" to name, "tag" to tag, "description" to description)).await()
         val data = result.data as Map<*, *>
@@ -448,6 +608,24 @@ class ChatRepository(
     }
 
     suspend fun findByTag(tag: String): TagSearchResult {
+        if (isBackendEnabled()) {
+            return try {
+                val res = api.findByTag(tag)
+                TagSearchResult(
+                    found = true,
+                    chatId = res.id,
+                    name = res.name ?: "",
+                    tag = res.tag ?: tag,
+                    description = res.description ?: "",
+                    avatarUrl = res.avatarUrl,
+                    memberCount = res.memberCount ?: 0,
+                    type = res.type,
+                    joinByTag = res.joinByTag ?: false
+                )
+            } catch (e: Exception) {
+                TagSearchResult(found = false)
+            }
+        }
         if (isFirestoreDisabled()) return TagSearchResult(found = false)
         val result = functions.getHttpsCallable("findByTag").call(mapOf("tag" to tag)).await()
         val data = result.data as Map<*, *>
@@ -466,46 +644,97 @@ class ChatRepository(
     }
 
     suspend fun joinByTag(tag: String): String {
+        if (isBackendEnabled()) {
+            val res = api.joinByTag(JoinByTagRequest(tag = tag))
+            return res.id
+        }
         if (isFirestoreDisabled()) throw Exception("Firestore is disabled")
         val result = functions.getHttpsCallable("joinByTag").call(mapOf("tag" to tag)).await()
         return (result.data as Map<*, *>)["chatId"] as String
     }
 
     suspend fun joinByInvite(token: String): Pair<String, String> {
+        if (isBackendEnabled()) {
+            val res = api.joinByInvite(JoinByInviteRequest(inviteCode = token))
+            return Pair(res.id, res.type)
+        }
         val result = functions.getHttpsCallable("joinByInvite").call(mapOf("token" to token)).await()
         val data = result.data as Map<*, *>
         return Pair(data["chatId"] as String, data["chatType"] as? String ?: "group")
     }
 
     suspend fun inviteUser(chatId: String, username: String) {
+        if (isBackendEnabled()) {
+            api.inviteUser(chatId, InviteUserRequest(targetUsername = username))
+            return
+        }
         functions.getHttpsCallable("inviteUser").call(mapOf("chatId" to chatId, "targetUsername" to username)).await()
     }
 
     suspend fun respondToInvite(inviteId: String, accept: Boolean): String? {
+        if (isBackendEnabled()) {
+            api.respondToInvite(inviteId, RespondInviteRequest(action = if (accept) "accept" else "decline"))
+            return null
+        }
         val result = functions.getHttpsCallable("respondToInvite").call(mapOf("inviteId" to inviteId, "accept" to accept)).await()
         return (result.data as Map<*, *>)["chatId"] as? String
     }
 
     suspend fun leaveChat(chatId: String) {
+        if (isBackendEnabled()) {
+            api.leaveChat(chatId)
+            return
+        }
         functions.getHttpsCallable("leaveChat").call(mapOf("chatId" to chatId)).await()
     }
 
     suspend fun moderateUser(chatId: String, targetUid: String, action: String, durationMinutes: Int? = null) {
+        if (isBackendEnabled()) {
+            api.moderateUser(chatId, ModerateUserRequest(
+                targetUid = targetUid,
+                action = action,
+                durationSeconds = durationMinutes?.times(60)
+            ))
+            return
+        }
         functions.getHttpsCallable("moderateUser").call(mapOf("chatId" to chatId, "targetUid" to targetUid, "action" to action, "durationMinutes" to durationMinutes)).await()
     }
 
     suspend fun setMemberRole(chatId: String, targetUid: String, role: String) {
+        if (isBackendEnabled()) {
+            api.setMemberRole(chatId, targetUid, SetRoleRequest(targetUid = targetUid, role = role))
+            return
+        }
         functions.getHttpsCallable("setMemberRole").call(mapOf("chatId" to chatId, "targetUid" to targetUid, "role" to role)).await()
     }
 
     suspend fun updateChatSettings(chatId: String, params: Map<String, Any?>) {
+        if (isBackendEnabled()) {
+            api.updateChatSettings(chatId, UpdateChatSettingsRequest(
+                name = params["name"] as? String,
+                tag = params["tag"] as? String,
+                description = params["description"] as? String,
+                avatarUrl = params["avatarUrl"] as? String,
+                joinByLink = params["joinByLink"] as? Boolean,
+                joinByTag = params["joinByTag"] as? Boolean,
+                allowReactions = params["allowReactions"] as? Boolean,
+                allowComments = params["allowComments"] as? Boolean,
+                noForwards = params["noForwards"] as? Boolean,
+                botAllowed = params["botAllowed"] as? Boolean
+            ))
+            return
+        }
         functions.getHttpsCallable("updateChatSettings").call(params + mapOf("chatId" to chatId)).await()
     }
 
     suspend fun regenerateInviteLink(chatId: String): String {
+        if (isBackendEnabled()) {
+            return api.regenerateInviteLink(chatId).inviteLink
+        }
         val result = functions.getHttpsCallable("regenerateInviteLink").call(mapOf("chatId" to chatId)).await()
         return (result.data as Map<*, *>)["inviteLink"] as String
     }
+
 
     suspend fun setForumMode(chatId: String, isForum: Boolean) {
         try {
@@ -854,6 +1083,14 @@ class ChatRepository(
     }
 
     suspend fun sendAlbum(chatId: String, images: List<AlbumImage>, caption: String?, replyTo: ReplyData?): String {
+        if (isBackendEnabled()) {
+            val res = api.sendAlbum(chatId, SendAlbumRequest(
+                images = images.map { AlbumImageDto(url = it.url, cdnMediaId = it.cdnMediaId, fileName = it.fileName, spoiler = it.spoiler) },
+                caption = caption,
+                replyTo = replyTo?.let { ReplyDto(id = it.id, type = it.type, text = it.text, url = it.url, senderUsername = it.senderUsername) }
+            ))
+            return res.id
+        }
         val data = buildMap<String, Any?> {
             put("chatId",  chatId)
             put("images",  images.map { it.toMap() })
@@ -896,6 +1133,12 @@ class ChatRepository(
     suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {
         val unread = messages.filter { it.senderId != uid && !it.readBy.contains(uid) && !it.deleted }
         if (unread.isEmpty()) return
+        if (isBackendEnabled()) {
+            for (msg in unread) {
+                try { api.markMessageAsRead(chatId, msg.id) } catch (_: Exception) {}
+            }
+            return
+        }
         val batch = db.batch()
         for (msg in unread) {
             val ref = db.collection("chats").document(chatId).collection("messages").document(msg.id)
@@ -905,12 +1148,25 @@ class ChatRepository(
     }
 
     suspend fun deleteMessage(chatId: String, messageId: String) {
+        if (isBackendEnabled()) {
+            try { api.deleteMessage(chatId, messageId) } catch (_: Exception) {}
+            return
+        }
         if (isFirestoreDisabled()) return
         db.collection("chats").document(chatId).collection("messages").document(messageId)
             .update(mapOf("deleted" to true, "deletedAt" to FieldValue.serverTimestamp())).await()
     }
 
     suspend fun editMessage(chatId: String, messageId: String, newText: String, oldText: String, isCaption: Boolean = false) {
+        if (isBackendEnabled()) {
+            try {
+                api.editMessage(chatId, messageId, EditMessageRequest(
+                    text = newText,
+                    caption = if (isCaption) newText else null
+                ))
+            } catch (_: Exception) {}
+            return
+        }
         if (isFirestoreDisabled()) return
         val field = if (isCaption) "caption" else "text"
         val historyField = if (isCaption) "caption" else "text" // Prompt uses "text" in history for both? "text" to oldText.
@@ -933,6 +1189,12 @@ class ChatRepository(
     }
 
     suspend fun toggleReaction(chatId: String, messageId: String, emoji: String, currentReactions: List<Reaction>) {
+        if (isBackendEnabled()) {
+            try {
+                api.toggleReaction(chatId, messageId, ReactionRequest(emoji = emoji))
+            } catch (_: Exception) {}
+            return
+        }
         if (isFirestoreDisabled()) return
         val ref = db.collection("chats").document(chatId).collection("messages").document(messageId)
         val existing = currentReactions.find { it.emoji == emoji }
@@ -951,6 +1213,32 @@ class ChatRepository(
     }
 
     fun listenComments(chatId: String, messageId: String, onUpdate: (List<Comment>) -> Unit): ListenerRegistration {
+        if (isBackendEnabled()) {
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                try {
+                    val comments = api.getComments(chatId, messageId).map { dto ->
+                        Comment(
+                            id = dto.id,
+                            senderId = dto.senderId,
+                            senderUsername = dto.senderUsername,
+                            type = dto.type,
+                            text = dto.text,
+                            url = dto.url,
+                            fileName = dto.fileName,
+                            duration = dto.duration,
+                            reactions = dto.reactions?.map {
+                                mapOf<String, Any>("emoji" to it.emoji, "uids" to it.uids, "count" to it.count.toLong())
+                            } ?: emptyList(),
+                            spoiler = dto.spoiler,
+                            replyTo = dto.replyTo?.let { CommentReplyData(it.id, it.type, it.text, it.url, it.senderUsername) },
+                            createdAt = Timestamp(Date(dto.createdAt))
+                        )
+                    }
+                    onUpdate(comments)
+                } catch (_: Exception) {}
+            }
+            return ListenerRegistration { }
+        }
         return db.collection("chats").document(chatId).collection("messages").document(messageId)
             .collection("comments").orderBy("createdAt", Query.Direction.ASCENDING)
             .addSnapshotListener { snap, error ->
@@ -966,6 +1254,19 @@ class ChatRepository(
     }
 
     suspend fun addComment(chatId: String, messageId: String, type: String, text: String? = null, cdnMediaId: String? = null, url: String? = null, fileName: String? = null, duration: Int? = null, spoiler: Boolean = false, replyTo: CommentReplyData? = null): String {
+        if (isBackendEnabled()) {
+            val res = api.addComment(chatId, messageId, AddCommentRequest(
+                type = type,
+                text = text,
+                url = url,
+                fileName = fileName,
+                duration = duration,
+                stickerId = null,
+                replyToId = replyTo?.id,
+                spoiler = spoiler
+            ))
+            return res.id
+        }
         val data = buildMap<String, Any?> {
             put("chatId", chatId); put("messageId", messageId); put("type", type)
             if (text != null) put("text", text)
@@ -982,8 +1283,13 @@ class ChatRepository(
     }
 
     suspend fun togglePostComments(chatId: String, messageId: String, enabled: Boolean) {
+        if (isBackendEnabled()) {
+            try { api.toggleFeedComments(messageId) } catch (_: Exception) {}
+            return
+        }
         functions.getHttpsCallable("togglePostComments").call(mapOf("chatId" to chatId, "messageId" to messageId, "enabled" to enabled)).await()
     }
+
 
     suspend fun toggleCommentReaction(chatId: String, messageId: String, commentId: String, emoji: String, currentReactions: List<Reaction>) {
         val existing = currentReactions.find { it.emoji == emoji }

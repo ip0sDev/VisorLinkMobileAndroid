@@ -32,12 +32,12 @@ class ProViewModel(
             } catch (e: Exception) {
                 var msg = e.message ?: "Неизвестная ошибка"
 
-                // Парсим ошибки от Cloud Function
-                if (msg.contains("Not enough bits", ignoreCase = true) || msg.contains("bits", ignoreCase = true)) {
+                // Парсим ошибки от Cloud Function и нового бэкенда
+                if (msg.contains("Not enough bits", ignoreCase = true) || msg.contains("bits", ignoreCase = true) || msg.contains("битов", ignoreCase = true)) {
                     msg = "Недостаточно Битов для покупки PRO."
-                } else if (msg.contains("already pro", ignoreCase = true) || msg.contains("Already active", ignoreCase = true)) {
+                } else if (msg.contains("already pro", ignoreCase = true) || msg.contains("Already active", ignoreCase = true) || msg.contains("уже активна", ignoreCase = true)) {
                     msg = "У вас уже активна подписка PRO."
-                } else if (msg.contains("trial already used", ignoreCase = true)) {
+                } else if (msg.contains("trial already used", ignoreCase = true) || msg.contains("Пробный период", ignoreCase = true) || msg.contains("пробную", ignoreCase = true)) {
                     msg = "Вы уже использовали пробную версию."
                 }
 

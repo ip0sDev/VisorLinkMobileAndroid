@@ -60,7 +60,8 @@ class OutboxManager(
     private val networkMonitor: NetworkMonitor,
     private val outboxDataSource: OutboxDataSource = ChatDataOutboxSource(),
     private val cdnUploader: CdnUploader = DefaultCdnUploader(),
-    coroutineContext: CoroutineContext = Dispatchers.IO
+    coroutineContext: CoroutineContext = Dispatchers.IO,
+    private val fallbackManager: by.iposdev.visorlink.data.repository.BackendFallbackManager? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + coroutineContext)
     private var processingJob: Job? = null
@@ -288,6 +289,9 @@ class OutboxManager(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing action ${action.id} of type ${action.type}", e)
+            scope.launch {
+                fallbackManager?.checkHealth()
+            }
             throw e
         }
     }

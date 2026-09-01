@@ -7,6 +7,7 @@ import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.DraftManager
+import by.iposdev.visorlink.data.repository.BackendFallbackManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,8 +16,16 @@ class ChatListViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val draftManager: DraftManager
+    private val draftManager: DraftManager,
+    private val fallbackManager: BackendFallbackManager? = null
 ) : ViewModel() {
+
+    val isManualFallbackActive: StateFlow<Boolean> = fallbackManager?.manualFallbackActive
+        ?: MutableStateFlow(false).asStateFlow()
+
+    fun retryNewBackend() {
+        fallbackManager?.disableManualFallback()
+    }
 
     val currentUid: String get() = auth.currentUser!!.uid
 

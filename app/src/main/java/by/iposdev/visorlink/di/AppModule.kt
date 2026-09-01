@@ -4,6 +4,7 @@ package by.iposdev.visorlink.di
 import by.iposdev.visorlink.data.aegis.*
 import by.iposdev.visorlink.data.remote.flags.AegisKeyManager
 import by.iposdev.visorlink.data.remote.flags.FlagsApi
+import by.iposdev.visorlink.data.remote.chat.BackendConnectivityInterceptor
 import by.iposdev.visorlink.data.remote.chat.ChatWebSocketClient
 import by.iposdev.visorlink.data.remote.chat.DynamicBaseUrlInterceptor
 import by.iposdev.visorlink.data.remote.chat.FirebaseAuthInterceptor
@@ -78,37 +79,39 @@ val appModule = module {
     }
     single { AegisKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
+    single { BackendFallbackManager(androidContext(), get()) { get<VisorLinkApi>() } }
 
     // --- Chat Backend ---
     single(named("chatOkHttp")) {
         OkHttpClient.Builder()
             .addInterceptor(DynamicBaseUrlInterceptor(androidContext()))
+            .addInterceptor(BackendConnectivityInterceptor(get()))
             .addInterceptor(FirebaseAuthInterceptor())
             .build()
     }
     single {
         Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:8080") // Default for emulator, should be configurable
+            .baseUrl("https://backend.visorlink.org/")
             .client(get(named("chatOkHttp")))
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(VisorLinkApi::class.java)
     }
-    single { ChatWebSocketClient(get(named("chatOkHttp"))) }
+    single { ChatWebSocketClient(get(named("chatOkHttp")), get()) }
 
-    single { AuthRepository(get(), get()) }
+    single { AuthRepository(get(), get(), get(), get()) }
     single { ChatRepository(get(), get(), get(), androidContext(), get(), get(), get(), get()) }
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
-    single { BotRepository(get()) }
-    single { LegalRepository(get(), androidContext()) }
+    single { BotRepository(get(), get(), get()) }
+    single { LegalRepository(get(), androidContext(), get(), get()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
     single { NetworkMonitor(androidContext()) }
-    single { OutboxManager(androidContext(), get(), get(), get(), get(), get()) }
+    single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), fallbackManager = get()) }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
@@ -118,8 +121,8 @@ val appModule = module {
 
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
-    viewModel { MainViewModel(get(), get()) }
-    viewModel { ChatListViewModel(get(), get(), get(), get()) }
+    viewModel { MainViewModel(get(), get(), get()) }
+    viewModel { ChatListViewModel(get(), get(), get(), get(), get()) }
 
     viewModel { parameters ->
         ChatViewModel(

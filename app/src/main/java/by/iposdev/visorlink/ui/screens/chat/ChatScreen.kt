@@ -85,6 +85,7 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
+    var selectedStickerPack by remember { mutableStateOf<Triple<String, String?, String?>?>(null) }
 
     val aegisViewModel: AegisLifeViewModel = koinViewModel()
     val aegisUiState by aegisViewModel.uiState.collectAsState()
@@ -337,6 +338,11 @@ fun ChatScreen(
                                                 onMentionClick = onMentionClick,
                                                 onOpenComments = { onOpenComments(item.message.id) },
                                                 chat = uiState.chat,
+                                                onStickerClick = { packId, _ ->
+                                                    if (!packId.isNullOrEmpty()) {
+                                                        selectedStickerPack = Triple(packId, item.message.packName, item.message.packEmoji)
+                                                    }
+                                                }
                                             )
                                         }
                                     }
@@ -475,6 +481,15 @@ fun ChatScreen(
             message = aegisUiState.message, onDismiss = { aegisViewModel.onDismiss(it) },
             onBoop = { aegisViewModel.processIntent(LinkIntent.Boop) },
             onPet = { aegisViewModel.processIntent(LinkIntent.Pet) }
+        )
+    }
+
+    selectedStickerPack?.let { (packId, name, emoji) ->
+        by.iposdev.visorlink.ui.components.chat.StickerPackBottomSheet(
+            packId = packId,
+            fallbackPackName = name,
+            fallbackPackEmoji = emoji,
+            onDismiss = { selectedStickerPack = null }
         )
     }
 }
