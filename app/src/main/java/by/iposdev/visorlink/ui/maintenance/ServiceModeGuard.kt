@@ -70,7 +70,7 @@ fun ServiceModeGuard(
 
             remoteConfig.fetchAndActivate().await()
 
-            serviceModeEnabled = remoteConfig.getBoolean("service_mode_enabled")
+            serviceModeEnabled = false
             isLoaded = true
 
             if (BuildConfig.DEBUG) {
@@ -88,17 +88,6 @@ fun ServiceModeGuard(
     // Показываем контент приложения
     Box {
         content()
-
-        // Если сервисный режим включён, админ не нажал bypass — показываем блокировку
-        if (serviceModeEnabled && !isBypassed && isLoaded) {
-            ServiceModeBlocker(
-                isAdmin = isAdmin,
-                onBypass = {
-                    haptic.perform(HapticType.CLICK, hapticEnabled)
-                    isBypassed = true
-                }
-            )
-        }
     }
 }
 
