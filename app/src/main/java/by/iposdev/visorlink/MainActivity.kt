@@ -18,6 +18,7 @@ import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.ui.VisorLinkNavGraph
 import by.iposdev.visorlink.ui.appcheck.AppCheckGuard
 import by.iposdev.visorlink.ui.components.FlagsOverlay
+import by.iposdev.visorlink.ui.maintenance.ServiceModeGuard
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.ui.theme.VisorLinkTheme
@@ -28,6 +29,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.functions.FirebaseFunctions
 import androidx.lifecycle.lifecycleScope
+import by.iposdev.visorlink.ui.legal.LegalConsentGuard
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -78,15 +80,17 @@ class MainActivity : AppCompatActivity() {
             }
 
             VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
-                AppCheckGuard {
-                    by.iposdev.visorlink.ui.legal.LegalConsentGuard(authViewModel = authViewModel) {
-                        Box {
-                            VisorLinkNavGraph(
-                                authViewModel = authViewModel,
-                                themeViewModel = themeViewModel
-                            )
-                            FlagsOverlay()
-                            IposStoreUpdates.IposUpdateHost()
+                ServiceModeGuard(authViewModel = authViewModel) {
+                    AppCheckGuard {
+                        LegalConsentGuard(authViewModel = authViewModel) {
+                            Box {
+                                VisorLinkNavGraph(
+                                    authViewModel = authViewModel,
+                                    themeViewModel = themeViewModel
+                                )
+                                FlagsOverlay()
+                                IposStoreUpdates.IposUpdateHost()
+                            }
                         }
                     }
                 }
