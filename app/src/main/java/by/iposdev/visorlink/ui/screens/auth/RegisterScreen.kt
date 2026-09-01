@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.unit.dp
 import by.iposdev.visorlink.R
+import by.iposdev.visorlink.ui.components.VlTextField
 import org.koin.compose.viewmodel.koinViewModel
 
 private const val MIN_PASSWORD_LENGTH = 6   // Firebase minimum
@@ -91,36 +92,35 @@ fun RegisterScreen(
 
             // ── Username ──────────────────────────────────────────────────────
             // Guideline §3.2: 3–32 chars, [a-zA-Z0-9_]+ only.
-            OutlinedTextField(
+            VlTextField(
                 value = username,
                 onValueChange = {
                     username = it.filter { c -> c.isLetterOrDigit() || c == '_' }
                     viewModel.clearError()
                 },
-                label = { Text(stringResource(R.string.register_field_username)) },
-                leadingIcon = { Icon(Icons.Default.AlternateEmail, contentDescription = null) },
-                // MD3: prefix shows "@" inline without overlapping the label
-                prefix = { Text("@") },
-                supportingText = { Text(stringResource(R.string.register_username_hint)) },
+                label = stringResource(R.string.register_field_username),
+                placeholder = stringResource(R.string.register_field_username),
+                leading = { Icon(Icons.Default.AlternateEmail, contentDescription = null) },
+                trailing = { Text("@", color = MaterialTheme.colorScheme.onSurfaceVariant) },
                 singleLine = true,
+                supportingText = stringResource(R.string.register_username_hint),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(Modifier.height(12.dp))
 
             // ── Email ─────────────────────────────────────────────────────────
-            OutlinedTextField(
+            VlTextField(
                 value = email,
                 onValueChange = { email = it; viewModel.clearError() },
-                label = { Text(stringResource(R.string.login_field_email)) },
-                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                label = stringResource(R.string.login_field_email),
+                leading = { Icon(Icons.Default.Email, contentDescription = null) },
                 // Show server-side email error (e.g. already-in-use) on this field
                 isError = uiState.error?.contains("email", ignoreCase = true) == true,
                 supportingText = if (uiState.error?.contains("email", ignoreCase = true) == true)
-                    ({ Text(uiState.error!!) }) else null,
+                    uiState.error else null,
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
@@ -130,14 +130,13 @@ fun RegisterScreen(
                 keyboardActions = KeyboardActions(onNext = { passwordFocus.requestFocus() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(emailFocus),
-                shape = MaterialTheme.shapes.medium
+                    .focusRequester(emailFocus)
             )
 
             Spacer(Modifier.height(12.dp))
 
             // ── Password ──────────────────────────────────────────────────────
-            OutlinedTextField(
+            VlTextField(
                 value = password,
                 onValueChange = {
                     password = it
@@ -145,9 +144,9 @@ fun RegisterScreen(
                     passwordMismatchError = false
                     viewModel.clearError()
                 },
-                label = { Text(stringResource(R.string.login_field_password)) },
-                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
-                trailingIcon = {
+                label = stringResource(R.string.login_field_password),
+                leading = { Icon(Icons.Default.Lock, contentDescription = null) },
+                trailing = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
                             imageVector = if (passwordVisible) Icons.Default.VisibilityOff
@@ -158,7 +157,7 @@ fun RegisterScreen(
                 },
                 // Inline validation: password too short
                 isError = passwordLengthError,
-                supportingText = if (passwordLengthError) ({ Text(passwordTooShort) }) else null,
+                supportingText = if (passwordLengthError) passwordTooShort else null,
                 visualTransformation = if (passwordVisible) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 singleLine = true,
@@ -169,25 +168,24 @@ fun RegisterScreen(
                 keyboardActions = KeyboardActions(onNext = { confirmFocus.requestFocus() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(passwordFocus),
-                shape = MaterialTheme.shapes.medium
+                    .focusRequester(passwordFocus)
             )
 
             Spacer(Modifier.height(12.dp))
 
             // ── Confirm password ──────────────────────────────────────────────
-            OutlinedTextField(
+            VlTextField(
                 value = confirm,
                 onValueChange = {
                     confirm = it
                     passwordMismatchError = false
                     viewModel.clearError()
                 },
-                label = { Text(stringResource(R.string.register_field_confirm)) },
-                leadingIcon = { Icon(Icons.Default.LockOpen, contentDescription = null) },
+                label = stringResource(R.string.register_field_confirm),
+                leading = { Icon(Icons.Default.LockOpen, contentDescription = null) },
                 // Inline validation: passwords don't match
                 isError = passwordMismatchError,
-                supportingText = if (passwordMismatchError) ({ Text(passwordsMismatch) }) else null,
+                supportingText = if (passwordMismatchError) passwordsMismatch else null,
                 visualTransformation = if (passwordVisible) VisualTransformation.None
                 else PasswordVisualTransformation(),
                 singleLine = true,
@@ -198,8 +196,7 @@ fun RegisterScreen(
                 keyboardActions = KeyboardActions(onDone = { submit() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(confirmFocus),
-                shape = MaterialTheme.shapes.medium
+                    .focusRequester(confirmFocus)
             )
 
             // ── Generic server error (username taken, network, etc.) ───────────

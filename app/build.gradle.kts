@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.sentry.android)
 }
@@ -17,7 +18,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         ""
     }
 }
-val currentChannel = "CANARY"
+val currentChannel = "RELEASE"
 
 android {
     namespace = "by.iposdev.visorlink"
@@ -27,11 +28,11 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 100
-        versionName = "3.0.00"
+        versionCode = 134
+        versionName = "3.4.04"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
+        buildConfigField("String", "CHANNEL", "\"RELEASE\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -66,6 +67,10 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 sentry {
@@ -83,10 +88,12 @@ sentry {
 }
 
 dependencies {
+    // ── Ipos Store In-App Updates SDK ─────────────────────────────────────────
+    implementation(files("libs/ipos-store-sdk-release.aar"))
+
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.haze)
-    implementation(libs.haze.materials)
+    implementation(libs.androidx.compose.ui.geometry)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
@@ -108,6 +115,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.media)
     implementation(libs.sentry.android)
 
@@ -137,9 +145,16 @@ dependencies {
     implementation(libs.androidx.media3.exoplayer) // или 1.3.0+
     implementation(libs.androidx.media3.ui)
     implementation(libs.coil.video)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.jwt.decode)
+    implementation(libs.kotlinx.serialization.json)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)
+    testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

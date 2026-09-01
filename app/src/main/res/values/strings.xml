@@ -29,6 +29,14 @@
     <string name="login_no_account">Don\'t have an account?\u0020</string>
     <string name="login_register_link">Register</string>
 
+    <!-- Auth — 2FA -->
+    <string name="tfa_title">Two-Factor Protection</string>
+    <string name="tfa_code_hint">Enter 6-digit code</string>
+    <string name="tfa_instruction">Check your VisorLink bot or your email</string>
+    <string name="tfa_field_label">Verification Code</string>
+    <string name="tfa_action_confirm">Confirm</string>
+    <string name="tfa_action_resend_email">Resend to Email</string>
+
     <!-- Auth — Register -->
     <string name="register_title">Create Account</string>
     <string name="register_field_username">Username</string>
@@ -45,6 +53,12 @@
     <string name="chatlist_fab_new_chat">New Chat</string>
     <string name="chatlist_fab_new_group">New Group</string>
     <string name="chatlist_fab_find_channel">Find Channel</string>
+    <string name="chatlist_draft_prefix">Draft:\u0020</string>
+
+    <plurals name="chatlist_chats_count">
+        <item quantity="one">%1$d chat</item>
+        <item quantity="other">%1$d chats</item>
+    </plurals>
 
     <!-- Chat Screen — Top bar -->
     <string name="chat_status_online">Online</string>
@@ -309,6 +323,8 @@
     <string name="cache_limit_images">Image cache limit</string>
     <string name="cache_limit_voice">Voice cache limit</string>
     <string name="cache_limit_history">Keep chat history</string>
+    <string name="cache_limit_unlimited">Unlimited cache</string>
+    <string name="cache_limit_unlimited_sub">Do not auto-delete old files</string>
     <string name="cache_limit_mb">%1$d MB</string>
     <string name="cache_limit_days">%1$d days</string>
     <string name="cache_toast_images_cleared">Image cache cleared</string>
@@ -536,6 +552,18 @@
     <string name="settings_custom_in_development">In development</string>
     <string name="settings_section_accent">Color Accent</string>
 
+    <!-- Bottom navigation tab labels (short — the screen titles are separate) -->
+    <string name="nav_tab_chats">Chats</string>
+
+    <!-- Appearance / theme selector -->
+    <string name="settings_section_theme">Appearance</string>
+    <string name="theme_m3e_name">Material 3</string>
+    <string name="theme_m3e_desc">Clean Material You with system colors</string>
+    <string name="theme_biolume_name">Biolume</string>
+    <string name="theme_biolume_desc">Neumorphic relief and bioluminescent accents</string>
+    <string name="theme_forge_name">Forge</string>
+    <string name="theme_forge_desc">Industrial: square edges, hard shadow, red accent</string>
+
     <!-- Settings — Common -->
     <string name="settings_section_management">Management</string>
     <string name="settings_section_privacy">Privacy</string>
@@ -548,6 +576,9 @@
     <string name="settings_stealth_sub_on">Enabled — mask screen will open on launch</string>
     <string name="settings_stealth_change_pin">Change Stealth PIN</string>
     <string name="settings_stealth_change_pin_sub">Update access code for unlocking</string>
+    <string name="settings_stealth_biometric">Fingerprint Unlock</string>
+    <string name="settings_stealth_biometric_sub">Open stealth mode with your fingerprint instead of the PIN</string>
+    <string name="stealth_biometric_unavailable">Biometrics unavailable or not enrolled on this device</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Update Channel</string>
@@ -556,6 +587,9 @@
     <!-- Settings — Account -->
     <string name="settings_tg_link">Bind Telegram</string>
     <string name="settings_password_change">Change Password</string>
+    <string name="settings_tfa_title">Two-Factor Auth</string>
+    <string name="settings_tfa_sub_on">Your account is protected</string>
+    <string name="settings_tfa_sub_off">Add an extra layer of security</string>
     <string name="settings_logout">Sign Out</string>
 
     <!-- PRO Banner -->
@@ -587,4 +621,56 @@
     <string name="dialog_password_confirm">Confirm Password</string>
     <string name="dialog_password_error_short">Min 6 characters</string>
     <string name="dialog_password_success">Password changed</string>
+
+    <!-- Topics and Kanban Tasks -->
+    <string name="topics_title">Topics</string>
+    <string name="topics_general">General Chat</string>
+    <string name="topics_filter_all">All</string>
+    <string name="topics_filter_chats">💬 Chats</string>
+    <string name="topics_filter_tasks">📋 Tasks</string>
+    <string name="topics_search_hint">Search topics...</string>
+    <string name="topics_create_title">New Topic</string>
+    <string name="topics_name_label">Topic title</string>
+    <string name="topics_name_hint">e.g. Design and UI/UX</string>
+    <string name="topics_icon_label">Icon</string>
+    <string name="topics_color_label">Color</string>
+    <string name="topics_type_label">Topic type</string>
+    <string name="topics_type_chat">💬 Chat</string>
+    <string name="topics_type_tasks">📋 Tasks</string>
+    <string name="topics_empty">No topics yet</string>
+    <string name="topics_empty_desc">Create a topic to organize discussions and tasks</string>
+    <string name="topics_create_action">Create</string>
+    <string name="topics_closed_badge">Closed</string>
+    <string name="topics_delete_confirm">Delete topic?</string>
+    <string name="topics_delete_warning">All messages and tasks in this topic will be deleted</string>
+    <string name="tasks_title">Tasks</string>
+    <string name="tasks_tab_kanban">📋 Kanban</string>
+    <string name="tasks_tab_list">📄 Task List</string>
+    <string name="tasks_tab_chat">💬 Discussion</string>
+    <string name="tasks_all_topics">All topics</string>
+    <string name="tasks_progress_format">%1$d/%2$d completed (%3$d%%)</string>
+    <string name="tasks_create_title">New Task</string>
+    <string name="tasks_edit_title">Edit Task</string>
+    <string name="tasks_name_label">Task title</string>
+    <string name="tasks_desc_label">Description</string>
+    <string name="tasks_status_label">Status</string>
+    <string name="tasks_priority_label">Priority</string>
+    <string name="tasks_assignee_label">Assignee</string>
+    <string name="tasks_assignee_none">Unassigned</string>
+    <string name="tasks_due_date_label">Due date</string>
+    <string name="tasks_due_date_hint">YYYY-MM-DD</string>
+    <string name="tasks_status_todo">To Do</string>
+    <string name="tasks_status_in_progress">In Progress</string>
+    <string name="tasks_status_review">Review</string>
+    <string name="tasks_status_done">Done</string>
+    <string name="tasks_priority_low">Low</string>
+    <string name="tasks_priority_medium">Medium</string>
+    <string name="tasks_priority_high">High</string>
+    <string name="tasks_priority_urgent">Urgent</string>
+    <string name="tasks_empty">No tasks in this topic</string>
+    <string name="tasks_add_button">+ Task</string>
+    <string name="tasks_delete_confirm">Delete task?</string>
+    <string name="chat_settings_forum_mode">Topics (Forum Mode)</string>
+    <string name="chat_settings_forum_mode_sub">Split group into topics with tasks and kanban board</string>
+    <string name="topics_permission_denied">Action not permitted</string>
 </resources>

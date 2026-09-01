@@ -20,10 +20,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.theme.exthruSmallRaisedShadow
-import by.iposdev.visorlink.ui.theme.nmInsetShadow
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -41,7 +38,6 @@ fun AddStickerPackBanner(
     themeVm: ThemeViewModel = koinViewModel()
 ) {
     val appTheme by themeVm.appTheme.collectAsState()
-    val isExthru = appTheme == AppTheme.EXTHRU
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     var bannerState by remember(packId) { mutableStateOf<AddPackBannerState>(AddPackBannerState.Idle) }
@@ -69,16 +65,11 @@ fun AddStickerPackBanner(
         exit = fadeOut(tween(200)) + shrinkVertically()
     ) {
         // Контейнер: в Exthru это "вдавленный" слот, в M3/OneUI — цветная карточка
-        val bannerModifier = Modifier
+    val bannerModifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
-            .then(
-                if (isExthru) Modifier
-                    .nmInsetShadow(isDark, cornerRadius = 12.dp)
-                else Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-            )
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.secondaryContainer)
 
         Box(modifier = bannerModifier) {
             Row(
@@ -112,8 +103,7 @@ fun AddStickerPackBanner(
                                 "Добавить пак «$packName»",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = if (isExthru) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSecondaryContainer,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 maxLines = 1
                             )
                         }
@@ -145,8 +135,7 @@ fun AddStickerPackBanner(
                             val btnMod = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
-                                .background(if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent)
+                                .background(Color.Transparent)
                                 .clickable {
                                     viewModel.addForeignPack(packId) { result ->
                                         bannerState = result

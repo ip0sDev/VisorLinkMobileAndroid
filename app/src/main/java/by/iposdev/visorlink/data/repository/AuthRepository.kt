@@ -2,6 +2,7 @@ package by.iposdev.visorlink.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GetTokenResult
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -106,6 +107,10 @@ class AuthRepository(
         auth.signInWithEmailAndPassword(email, password).await()
     }
 
+    suspend fun sendPasswordResetEmail(email: String) {
+        auth.sendPasswordResetEmail(email.trim()).await()
+    }
+
     // ── Email verification ────────────────────────────────────────────────────
     /**
      * Reload the current user and force-refresh the ID token so Firestore
@@ -124,6 +129,28 @@ class AuthRepository(
     suspend fun resendVerificationEmail() {
         auth.currentUser?.sendEmailVerification()?.await()
             ?: error("No authenticated user")
+    }
+
+    // ── Two-Factor Authentication ─────────────────────────────────────────────
+
+    suspend fun request2FA(method: String) {
+        functions
+            .getHttpsCallable("request2FA")
+            .call(mapOf("method" to method))
+            .await()
+    }
+
+    suspend fun verify2FA(code: String) {
+        functions
+            .getHttpsCallable("verify2FA")
+            .call(mapOf("code" to code))
+            .await()
+    }
+
+    suspend fun getAuthTime(): String? {
+        val user = auth.currentUser ?: return null
+        val result: GetTokenResult = user.getIdToken(false).await()
+        return result.claims["auth_time"]?.toString()
     }
 
     // ── Logout ────────────────────────────────────────────────────────────────

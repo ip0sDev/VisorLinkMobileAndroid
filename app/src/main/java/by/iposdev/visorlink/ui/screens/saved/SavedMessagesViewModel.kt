@@ -1,6 +1,7 @@
 // ui/screens/saved/SavedMessagesViewModel.kt
 package by.iposdev.visorlink.ui.screens.saved
 
+import android.app.Application
 import android.content.Context
 import android.media.MediaRecorder
 import android.net.Uri
@@ -12,13 +13,16 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.data.model.SavedMessagesSettings
+import by.iposdev.visorlink.data.model.MessageType
+import by.iposdev.visorlink.data.repository.ForwardRepository
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
 import by.iposdev.visorlink.utils.*
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -42,16 +46,19 @@ data class SavedMessagesUiState(
     val isRecording: Boolean                 = false,
     val isUploading: Boolean                 = false,
     val voicePlayback: VoicePlaybackState    = VoicePlaybackState(),
-    val initialDraft: String                 = ""
+    val initialDraft: String                 = "",
+    val editingMessage: SavedMessage?        = null
 )
 
 class SavedMessagesViewModel(
     private val repository: SavedMessagesRepository,
     private val auth: FirebaseAuth,
+    private val db: FirebaseFirestore,
     private val voicePlayer: VoicePlayerManager,
-    private val context: Context,
-    private val draftManager: DraftManager
-) : ViewModel() {
+    private val context: Application,
+    private val draftManager: DraftManager,
+    private val forwardRepository: ForwardRepository
+) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser?.uid ?: ""
 
@@ -171,7 +178,7 @@ class SavedMessagesViewModel(
     }
 
     fun hasBiometricPinSaved(): Boolean {
-        val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+        val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
         return prefs.contains("pin_enc_$currentUid")
     }
 
@@ -196,7 +203,7 @@ class SavedMessagesViewModel(
             val iv = cipher.iv
             val encrypted = cipher.doFinal(pin.toByteArray(Charsets.UTF_8))
 
-            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
             prefs.edit()
                 .putString("pin_iv_$currentUid", Base64.encodeToString(iv, Base64.DEFAULT))
                 .putString("pin_enc_$currentUid", Base64.encodeToString(encrypted, Base64.DEFAULT))
@@ -208,7 +215,7 @@ class SavedMessagesViewModel(
 
     private fun getPinFromKeystoreSecurely(): String? {
         return try {
-            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
             val ivStr = prefs.getString("pin_iv_$currentUid", null) ?: return null
             val encStr = prefs.getString("pin_enc_$currentUid", null) ?: return null
 
@@ -269,13 +276,13 @@ class SavedMessagesViewModel(
 
     fun startRecording() {
         voicePlayer.stop()
-        val file = File(context.cacheDir, "saved_voice_${System.currentTimeMillis()}.webm")
+        val file = File(getApplication<Application>().cacheDir, "saved_voice_${System.currentTimeMillis()}.webm")
         recordingFile = file
         recordingStart = System.currentTimeMillis()
 
         @Suppress("DEPRECATION")
         recorder = (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            MediaRecorder(context) else MediaRecorder()).apply {
+            MediaRecorder(getApplication()) else MediaRecorder()).apply {
             setAudioSource(MediaRecorder.AudioSource.MIC)
             setOutputFormat(MediaRecorder.OutputFormat.WEBM)
             setAudioEncoder(MediaRecorder.AudioEncoder.OPUS)
@@ -349,13 +356,39 @@ class SavedMessagesViewModel(
             repository.disablePin(currentUid)
             encryptionKey = null
             _uiState.update { it.copy(isEncryptionEnabled = false) }
-            val prefs = context.getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
+            val prefs = getApplication<Application>().getSharedPreferences("biometric_prefs", Context.MODE_PRIVATE)
             prefs.edit().remove("pin_iv_$currentUid").remove("pin_enc_$currentUid").apply()
         }
     }
 
     fun updateLockTimeout(minutes: Int) {
         viewModelScope.launch { repository.updateLockTimeout(currentUid, minutes) }
+    }
+
+    fun startEditing(message: SavedMessage) {
+        val text = if (message.type != MessageType.TEXT) message.caption ?: "" else message.text ?: ""
+        _uiState.update { it.copy(editingMessage = message, initialDraft = text) }
+    }
+
+    fun cancelEditing() {
+        _uiState.update { it.copy(editingMessage = null, initialDraft = "") }
+    }
+
+    fun saveEdit(newText: String) {
+        val msg = _uiState.value.editingMessage ?: return
+        if (newText.trim() == (msg.text ?: msg.caption ?: "")) {
+            cancelEditing()
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                repository.editMessage(currentUid, msg, newText.trim(), encryptionKey)
+                _uiState.update { it.copy(editingMessage = null) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Ошибка редактирования: ${e.message}") }
+            }
+        }
     }
 
     fun clearError() = _uiState.update { it.copy(error = null) }

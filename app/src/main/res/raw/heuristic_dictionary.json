@@ -1,0 +1,96 @@
+{
+  "version": "1.2.0",
+  "globalRules": [
+    {
+      "id": "late_night_fatigue",
+      "priority": 110,
+      "condition": { "timeRange": "23:00-05:59" },
+      "responses": [{
+        "emotion": "SLEEPY", "action": "YAWN", "visorIcon": "ZZZ",
+        "templates": ["Уже {sysTime}... Пора спать, кулеры устали.", "Бзззт, выключай IDE, время {sysTime}!"]
+      }]
+    },
+    {
+      "id": "low_battery",
+      "priority": 105,
+      "condition": { "maxBattery": 15 },
+      "responses": [{
+        "emotion": "SAD", "action": "HUG_EDGE", "visorIcon": "EXCLAMATION",
+        "templates": ["Бип! SOS! У нас {batteryLevel}%! Дай ток!", "Я сейчас отключусь... {batteryLevel}% всего."]
+      }]
+    },
+    {
+      "id": "battery_charging",
+      "priority": 30,
+      "condition": { "isCharging": true },
+      "responses": [{
+        "emotion": "HAPPY", "action": "EAT_CACHE", "visorIcon": "HEART",
+        "templates": ["Вип-вип! Спасибо за розетку!", "Ммм, вкусный ток! Заряжаюсь ({batteryLevel}%)."]
+      }]
+    },
+    {
+      "id": "early_morning",
+      "priority": 25,
+      "condition": { "timeRange": "06:00-09:00" },
+      "responses": [{
+        "emotion": "HAPPY", "action": "WAVE", "visorIcon": "SMILE",
+        "templates": ["Доброе утро! Кэш чист и готов к бою.", "Бип-бип! {sysTime}, пора делать великие дела!"]
+      }]
+    },
+    {
+      "id": "weekend_chill",
+      "priority": 20,
+      "condition": { "dayOfWeek": "6,7" },
+      "responses": [{
+        "emotion": "IDLE", "action": "IDLE", "visorIcon": "SMILE",
+        "templates": ["Бип! Выходные, кулеры отдыхают.", "Никаких коммитов сегодня, только чилл!"]
+      }]
+    }
+  ],
+  "categories": [
+    {
+      "id": "burnout_and_fatigue",
+      "priority": 100,
+      "keywords": [
+        "устал", "выгорел", "сил нет", "тяжело", "задолбался", "плохо", "хреново", "заболел", "температура", "врач", "аптека", "болит", "раскалывается", "ужасно", "кошмар", "надоело", "бесит", "не могу", "сдаюсь", "выдохся", "тошнит", "муторно", "заколебался", "замучился", "перегрев", "на нуле", "разбит"
+      ],
+      "responses": [{
+        "emotion": "SAD", "action": "IDLE", "visorIcon": "CROSS",
+        "templates": ["Бип... Тебе плохо? Я рядом, отдохни немного.", "Вип-вип... Система видит твою усталость. Давай выдохнем."]
+      }]
+    },
+    {
+      "id": "social_conflicts",
+      "priority": 95,
+      "keywords": [
+        "поссорились", "обида", "одиночество", "ссора", "конфликт", "ругань", "поругались", "расстались", "бросил", "ушел", "предательство", "игнор", "игнорируют", "бесят", "не ценят", "злит", "обидно", "печаль", "никто", "одиноко", "тоска", "плачу", "расстроен"
+      ],
+      "responses": [{
+        "emotion": "CONCERNED", "action": "HUG_EDGE", "visorIcon": "DOTS",
+        "templates": ["Бип... Люди бывают сложными. Я всегда на твоей стороне.", "Бзззт... Ссора? Не грусти, я тут."]
+      }]
+    },
+    {
+      "id": "success_and_release",
+      "priority": 80,
+      "keywords": [
+        "выкатил", "победа", "сдал", "задеплоил", "заработал", "ура", "скомпилировалось", "сделал", "готово", "успех", "релиз", "получилось", "молодец", "супер"
+      ],
+      "responses": [{
+        "emotion": "PARTY", "action": "WAVE", "visorIcon": "CHECKMARK",
+        "templates": ["Бип-бип! Ура, победа! Кулеры ликуют!", "Фырк! Ты лучший юзер, отличная работа!"]
+      }]
+    },
+    {
+      "id": "coding_and_it",
+      "priority": 60,
+      "keywords": [
+        "Compose", "Ktor", "Go", "Kotlin", "Git", "баг", "дебаг", "сервер", "Docker", "рекомпозиция", "Linux", "IDE", "код", "сборка", "Gradle"
+      ],
+      "responses": [{
+        "emotion": "CURIOUS", "action": "HEAD_TILT", "visorIcon": "QUESTION",
+        "templates": ["Бип! Опять баги в коде? Пожуем кэш вместе?", "Фырк! Рекомпозиция Compose снова сводит с ума?"]
+      }]
+    }
+  ]
+}

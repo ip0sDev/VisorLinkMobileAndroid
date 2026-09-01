@@ -29,6 +29,14 @@
     <string name="login_no_account">Нет аккаунта?\u0020</string>
     <string name="login_register_link">Регистрация</string>
 
+    <!-- Auth — 2FA -->
+    <string name="tfa_title">Двухфакторная защита</string>
+    <string name="tfa_code_hint">Введите 6-значный код</string>
+    <string name="tfa_instruction">Проверьте бота VisorLink или вашу почту</string>
+    <string name="tfa_field_label">Код подтверждения</string>
+    <string name="tfa_action_confirm">Подтвердить</string>
+    <string name="tfa_action_resend_email">Отправить на Email</string>
+
     <!-- Auth — Register -->
     <string name="register_title">Создать аккаунт</string>
     <string name="register_field_username">Имя пользователя</string>
@@ -45,6 +53,14 @@
     <string name="chatlist_fab_new_chat">Новый чат</string>
     <string name="chatlist_fab_new_group">Новая группа</string>
     <string name="chatlist_fab_find_channel">Найти канал</string>
+    <string name="chatlist_draft_prefix">Черновик:\u0020</string>
+
+    <plurals name="chatlist_chats_count">
+        <item quantity="one">%1$d чат</item>
+        <item quantity="few">%1$d чата</item>
+        <item quantity="many">%1$d чатов</item>
+        <item quantity="other">%1$d чатов</item>
+    </plurals>
 
     <!-- Chat Screen — Top bar -->
     <string name="chat_status_online">В сети</string>
@@ -309,6 +325,8 @@
     <string name="cache_limit_images">Лимит кэша картинок</string>
     <string name="cache_limit_voice">Лимит кэша голосовых</string>
     <string name="cache_limit_history">Хранить историю чатов</string>
+    <string name="cache_limit_unlimited">Безлимитный кэш</string>
+    <string name="cache_limit_unlimited_sub">Не удалять старые файлы автоматически</string>
     <string name="cache_limit_mb">%1$d МБ</string>
     <string name="cache_limit_days">%1$d дней</string>
     <string name="cache_toast_images_cleared">Кэш картинок очищен</string>
@@ -536,6 +554,18 @@
     <string name="settings_custom_in_development">В разработке</string>
     <string name="settings_section_accent">Цветовой акцент</string>
 
+    <!-- Ярлыки вкладок нижней навигации (короткие — заголовки экранов отдельно) -->
+    <string name="nav_tab_chats">Чаты</string>
+
+    <!-- Оформление / селектор тем -->
+    <string name="settings_section_theme">Оформление</string>
+    <string name="theme_m3e_name">Material 3</string>
+    <string name="theme_m3e_desc">Чистый Material You с системными цветами</string>
+    <string name="theme_biolume_name">Biolume</string>
+    <string name="theme_biolume_desc">Неоморфный рельеф и биолюминесцентные акценты</string>
+    <string name="theme_forge_name">Forge</string>
+    <string name="theme_forge_desc">Индустриальный: прямые углы, жёсткая тень, красный акцент</string>
+
     <!-- Settings — Common -->
     <string name="settings_section_management">Управление</string>
     <string name="settings_section_privacy">Приватность</string>
@@ -548,6 +578,9 @@
     <string name="settings_stealth_sub_on">Включён — при запуске откроется маскировочный экран</string>
     <string name="settings_stealth_change_pin">Сменить PIN-код скрытия</string>
     <string name="settings_stealth_change_pin_sub">Обновить код доступа для разблокировки</string>
+    <string name="settings_stealth_biometric">Разблокировка по отпечатку</string>
+    <string name="settings_stealth_biometric_sub">Открывать режим скрытия отпечатком вместо PIN-кода</string>
+    <string name="stealth_biometric_unavailable">Биометрия недоступна или не настроена на устройстве</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Канал обновлений</string>
@@ -556,6 +589,9 @@
     <!-- Settings — Account -->
     <string name="settings_tg_link">Привязать Telegram</string>
     <string name="settings_password_change">Изменить пароль</string>
+    <string name="settings_tfa_title">Двухфакторная защита (2FA)</string>
+    <string name="settings_tfa_sub_on">Ваш аккаунт защищён</string>
+    <string name="settings_tfa_sub_off">Дополнительный уровень безопасности</string>
     <string name="settings_logout">Выйти из аккаунта</string>
 
     <!-- PRO Banner -->
@@ -587,4 +623,56 @@
     <string name="dialog_password_confirm">Подтвердите пароль</string>
     <string name="dialog_password_error_short">Минимум 6 символов</string>
     <string name="dialog_password_success">Пароль изменён</string>
+
+    <!-- Topics and Kanban Tasks -->
+    <string name="topics_title">Темы</string>
+    <string name="topics_general">Общий чат</string>
+    <string name="topics_filter_all">Все</string>
+    <string name="topics_filter_chats">💬 Чаты</string>
+    <string name="topics_filter_tasks">📋 Задачи</string>
+    <string name="topics_search_hint">Поиск по темам...</string>
+    <string name="topics_create_title">Новая тема</string>
+    <string name="topics_name_label">Название темы</string>
+    <string name="topics_name_hint">Например: Дизайн и UI/UX</string>
+    <string name="topics_icon_label">Иконка</string>
+    <string name="topics_color_label">Цвет</string>
+    <string name="topics_type_label">Тип темы</string>
+    <string name="topics_type_chat">💬 Чат</string>
+    <string name="topics_type_tasks">📋 Задачи</string>
+    <string name="topics_empty">Нет тем</string>
+    <string name="topics_empty_desc">Создайте тему для организации обсуждений и задач</string>
+    <string name="topics_create_action">Создать</string>
+    <string name="topics_closed_badge">Закрыта</string>
+    <string name="topics_delete_confirm">Удалить тему?</string>
+    <string name="topics_delete_warning">Все сообщения и задачи в этой теме будут удалены</string>
+    <string name="tasks_title">Задачи</string>
+    <string name="tasks_tab_kanban">📋 Канбан-доска</string>
+    <string name="tasks_tab_list">📄 Список задач</string>
+    <string name="tasks_tab_chat">💬 Обсуждение</string>
+    <string name="tasks_all_topics">Все темы</string>
+    <string name="tasks_progress_format">%1$d/%2$d выполнено (%3$d%%)</string>
+    <string name="tasks_create_title">Новая задача</string>
+    <string name="tasks_edit_title">Редактирование задачи</string>
+    <string name="tasks_name_label">Название задачи</string>
+    <string name="tasks_desc_label">Описание</string>
+    <string name="tasks_status_label">Статус</string>
+    <string name="tasks_priority_label">Приоритет</string>
+    <string name="tasks_assignee_label">Исполнитель</string>
+    <string name="tasks_assignee_none">Не назначен</string>
+    <string name="tasks_due_date_label">Срок выполнения</string>
+    <string name="tasks_due_date_hint">ГГГГ-ММ-ДД</string>
+    <string name="tasks_status_todo">К выполнению</string>
+    <string name="tasks_status_in_progress">В работе</string>
+    <string name="tasks_status_review">На проверке</string>
+    <string name="tasks_status_done">Готово</string>
+    <string name="tasks_priority_low">Низкий</string>
+    <string name="tasks_priority_medium">Средний</string>
+    <string name="tasks_priority_high">Высокий</string>
+    <string name="tasks_priority_urgent">Срочный</string>
+    <string name="tasks_empty">В этой теме нет задач</string>
+    <string name="tasks_add_button">+ Задача</string>
+    <string name="tasks_delete_confirm">Удалить задачу?</string>
+    <string name="chat_settings_forum_mode">Темы (Режим форума)</string>
+    <string name="chat_settings_forum_mode_sub">Разделить группу на темы с канбаном и задачами</string>
+    <string name="topics_permission_denied">Действие запрещено правами доступа</string>
 </resources>

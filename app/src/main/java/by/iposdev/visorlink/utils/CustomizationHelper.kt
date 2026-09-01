@@ -19,13 +19,7 @@ object CustomizationHelper {
     }
 
     fun parseStyle(style: String): AppTheme {
-        return when (style.lowercase()) {
-            "biolume" -> AppTheme.BIOLUME
-            "forge" -> AppTheme.FORGE
-            "material" -> AppTheme.MATERIAL3_EXPRESSIVE
-            "oneui" -> AppTheme.ONE_UI
-            else -> AppTheme.BIOLUME
-        }
+        return AppTheme.fromId(style)
     }
 
     fun parseAccent(accent: String): ColorPreset {

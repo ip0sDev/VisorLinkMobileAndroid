@@ -1,16 +1,15 @@
 package by.iposdev.visorlink.ui.components
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -21,23 +20,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import by.iposdev.visorlink.data.model.AppTheme
-import by.iposdev.visorlink.ui.theme.accentGlowShadow
-import by.iposdev.visorlink.ui.theme.forgeNeuBrutalism
-import by.iposdev.visorlink.ui.theme.nmInsetShadow
-import by.iposdev.visorlink.ui.theme.nmRaisedShadow
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
+import by.iposdev.visorlink.ui.theme.VlDepth
+import by.iposdev.visorlink.ui.theme.VlPressStyle
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.motionSpec
+import by.iposdev.visorlink.ui.theme.vlHairline
+import by.iposdev.visorlink.ui.theme.vlStructure
 
+/**
+ * Базовый контейнер приложения.
+ *
+ * Компонент объявляет **роль** поверхности (кликабельная / принимающая ввод /
+ * элемент группы), а как эту роль отрисовать — решает тема через
+ * `VlTheme.tokens`:
+ *  - MATERIAL3 — плоская заливка + лёгкий scale при нажатии (как было);
+ *  - BIOLUME — неоморфный рельеф: raised в покое, inset при нажатии и у полей
+ *    ввода (§4.1), плюс нейтральная грань `outlineVariant` у карточек (§7).
+ *
+ * Подпись сознательно не меняется: экраны вызывают `VlSurface` одинаково для
+ * любой темы и ничего про тему не знают.
+ */
 @Composable
 fun VlSurface(
-    appTheme: AppTheme,
     modifier: Modifier = Modifier,
     isButton: Boolean = false,
     isInput: Boolean = false,
@@ -50,154 +58,98 @@ fun VlSurface(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val isDark = cs.surface.luminance() < 0.5f
+    val tokens = VlTheme.tokens
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val showInset = isInput || isPressed
 
-    val baseRadius = customRadius ?: if (isButton) 20.dp else 24.dp
+    // Радиусы всегда из токенов: у Forge они нулевые, и «квадратность» должна
+    // распространяться в том числе на скругления элементов группы.
+    val baseRadius = customRadius ?: if (isButton) {
+        tokens.shapes.buttonRadius
+    } else {
+        tokens.shapes.cardRadius
+    }
 
-    val shape: Shape = when {
-        appTheme == AppTheme.FORGE -> RectangleShape
-        total <= 1 -> RoundedCornerShape(baseRadius)
-        else -> {
-            val smallR = 4.dp
-            when {
-                index == 0 -> RoundedCornerShape(topStart = baseRadius, topEnd = baseRadius, bottomStart = smallR, bottomEnd = smallR)
-                index == total - 1 -> RoundedCornerShape(topStart = smallR, topEnd = smallR, bottomStart = baseRadius, bottomEnd = baseRadius)
-                else -> RoundedCornerShape(smallR)
-            }
+    // Скругления элемента группы: у крайних — большой радиус снаружи, внутренние
+    // углы схлопываются до 4dp. Работает одинаково в обеих темах.
+    val shape: Shape = if (total <= 1) {
+        RoundedCornerShape(baseRadius)
+    } else {
+        val smallR = 4.dp
+        when (index) {
+            0 -> RoundedCornerShape(topStart = baseRadius, topEnd = baseRadius, bottomStart = smallR, bottomEnd = smallR)
+            total - 1 -> RoundedCornerShape(topStart = smallR, topEnd = smallR, bottomStart = baseRadius, bottomEnd = baseRadius)
+            else -> RoundedCornerShape(smallR)
         }
     }
 
-    // 🔥 Плавная "прыгучая" анимация а-ля Flutter easeOutBack / Spring
-    val pressedScale = if (appTheme == AppTheme.MATERIAL3_EXPRESSIVE || appTheme == AppTheme.ONE_UI) 0.96f else 0.93f
+    // §4.1: то, что «принимает» (поле ввода) или уже нажато — врезано;
+    // остальное — приподнято. В M3 оба варианта дают no-op.
+    val depth = when {
+        !tokens.structure.enabled -> VlDepth.Flat
+        isInput -> VlDepth.Inset
+        // Forge нажимается «штампом»: элемент уезжает в свою тень, поэтому рельеф
+        // при нажатии не врезается, а снимается — иначе тень и вдавленность спорят.
+        isPressed && tokens.motion.pressStyle == VlPressStyle.STAMP -> VlDepth.Flat
+        isPressed -> VlDepth.Inset
+        else -> VlDepth.Raised
+    }
+
+    // Каждая тема нажимается по-своему: M3E сжимается, Biolume меняет рельеф,
+    // Forge механически садится в тень.
     val scale by animateFloatAsState(
-        targetValue = if (isPressed && !isInput) pressedScale else 1f,
-        animationSpec = spring(
-            dampingRatio = if (isPressed) Spring.DampingRatioNoBouncy else Spring.DampingRatioMediumBouncy,
-            stiffness = if (isPressed) Spring.StiffnessHigh else Spring.StiffnessMedium
-        ),
+        targetValue = if (isPressed && !isInput && tokens.motion.pressStyle == VlPressStyle.SCALE) {
+            tokens.motion.pressScale
+        } else {
+            1f
+        },
+        animationSpec = tokens.motion.motionSpec(),
         label = "vlsurface_scale",
+    )
+    val stampOffset by animateDpAsState(
+        targetValue = if (isPressed && !isInput && tokens.motion.pressStyle == VlPressStyle.STAMP) {
+            tokens.motion.pressOffset
+        } else {
+            0.dp
+        },
+        animationSpec = tokens.motion.motionSpec(),
+        label = "vlsurface_stamp",
     )
 
     val clickModifier = if (onClick != null) {
         Modifier.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-    } else Modifier
-
-    when (appTheme) {
-        AppTheme.MATERIAL3_EXPRESSIVE, AppTheme.ONE_UI -> {
-            val bg = overrideColor ?: if (isInput) cs.surfaceContainerHighest else cs.surfaceContainerLow
-            Box(
-                modifier = modifier
-                    .scale(scale)
-                    .clip(shape)
-                    .background(bg, shape)
-                    .then(clickModifier)
-                    .padding(contentPadding),
-                contentAlignment = Alignment.Center,
-            ) { content() }
-        }
-
-        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> {
-            val style = rememberExthruStyle(appTheme)
-            val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg
-
-            val shadowMod = Modifier.forgeNeuBrutalism(
-                isPressed = isPressed,
-                isDark = isDark,
-                offsetDp = if (isButton) 3.dp else 4.dp
-            )
-
-            Box(
-                modifier = modifier
-                    // Не рисуем тень для полей ввода (чтобы они не выпирали, а были плоскими)
-                    .then(if (!isInput) shadowMod else Modifier.border(2.dp, if(isDark) Color(0xFF333333) else Color.Black, RectangleShape))
-                    .background(bg, shape)
-                    .then(clickModifier)
-                    .padding(contentPadding),
-                contentAlignment = Alignment.Center,
-            ) { content() }
-        }
-
-        else -> {
-            val style = rememberExthruStyle(appTheme)
-            // Фон делаем немного прозрачным, чтобы Haze и Glow красиво просвечивали
-            val bg = overrideColor ?: if (isInput) style.inputBg else style.cardBg.copy(alpha = if (isDark) 0.8f else 0.9f)
-
-            val isBiolume = appTheme == AppTheme.BIOLUME || appTheme == AppTheme.EXTHRU
-            val shadowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (!showInset) {
-                Modifier.nmRaisedShadow(
-                    isDark = isDark,
-                    shadowRadius = if (isBiolume) 20.dp else if (isButton) 8.dp else 16.dp, 
-                    offsetDp = if (isBiolume) 8.dp else if (isButton) 4.dp else 6.dp,
-                    cornerRadius = baseRadius,
-                    darkAlpha = if (isDark) 0.6f else 0.25f,
-                    lightAlpha = if (isDark) 0.05f else 0.75f
-                )
-            } else {
-                Modifier.nmInsetShadow(
-                    isDark = isDark,
-                    cornerRadius = baseRadius,
-                    lineWidthDp = if (isButton) 2.dp else 1.5.dp,
-                )
-            }
-
-            val glowModifier = if (overrideColor == Color.Transparent && !isBiolume) Modifier else if (onClick != null && !isInput) {
-                Modifier.accentGlowShadow(accent = style.accent, isPressed = isPressed, cornerRadius = baseRadius)
-            } else Modifier
-
-            val borderColor = if (overrideColor == Color.Transparent && !isBiolume) {
-                Color.Transparent
-            } else if (isDark) {
-                Color.White.copy(alpha = 0.05f)
-            } else {
-                // Светлая тема Biolume: почти незаметный акцент по краям
-                style.accent.copy(alpha = 0.12f)
-            }
-
-            Box(
-                modifier = modifier
-                    .scale(scale)
-                    .then(shadowModifier)
-                    .then(glowModifier)
-                    .background(bg, shape)
-                    .clip(shape)
-                    .then(if (borderColor == Color.Transparent) Modifier else Modifier.border(
-                        width = 1.dp,
-                        color = borderColor,
-                        shape = shape
-                    ))
-                    .then(if (isBiolume && !showInset) Modifier.border(
-                        width = 0.5.dp,
-                        brush = Brush.verticalGradient(listOf(Color.White.copy(0.4f), Color.Transparent)),
-                        shape = shape
-                    ) else Modifier)
-                    .then(clickModifier),
-                contentAlignment = Alignment.Center,
-            ) {
-                // Внутренний блик
-                if (!showInset && (overrideColor != Color.Transparent || isBiolume)) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .background(
-                                brush = Brush.linearGradient(
-                                    colors = if (isDark)
-                                        listOf(Color.White.copy(0.04f), Color.Transparent)
-                                    else
-                                        listOf(Color.White.copy(0.2f), Color.Transparent)
-                                ),
-                                shape = shape
-                            )
-                    )
-                }
-                
-                Box(Modifier.padding(contentPadding), contentAlignment = Alignment.Center) {
-                    content()
-                }
-            }
-        }
+    } else {
+        Modifier
     }
+
+    val bg = overrideColor ?: when {
+        // §3.1: и карточки, и поля в покое сидят на surfaceContainer — рельеф
+        // различает их роли, а не заливка. В Forge то же самое, только рельеф жёсткий.
+        tokens.structure.enabled -> cs.surfaceContainer
+        isInput -> cs.surfaceContainerHighest
+        else -> cs.surfaceContainerLow
+    }
+
+    // Грань нужна там, где рельеф может не прочитаться (§3.1); в Forge она ещё и
+    // самостоятельный элемент языка — кромка металла. На цветной заливке
+    // (overrideColor) не рисуем: там уже есть свой контур.
+    val hairlineModifier = if (tokens.structure.enabled && !isInput && overrideColor == null) {
+        Modifier.vlHairline(cs.outlineVariant, shape)
+    } else {
+        Modifier
+    }
+
+    Box(
+        modifier = modifier
+            .offset(x = stampOffset, y = stampOffset)
+            .scale(scale)
+            .vlStructure(tokens.structure, depth, shape)
+            .clip(shape)
+            .background(bg, shape)
+            .then(hairlineModifier)
+            .then(clickModifier)
+            .padding(contentPadding),
+        contentAlignment = Alignment.Center,
+    ) { content() }
 }

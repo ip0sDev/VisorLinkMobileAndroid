@@ -15,6 +15,10 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import javax.crypto.SecretKey
 
 class SavedMessagesRepository(
@@ -253,6 +257,53 @@ class SavedMessagesRepository(
 
     suspend fun deleteMessage(uid: String, messageId: String) {
         db.collection("savedMessages").document(uid).collection("messages").document(messageId).delete().await()
+    }
+
+    suspend fun editMessage(uid: String, message: SavedMessage, newText: String, key: SecretKey?) {
+        val isCaption = message.type != MessageType.TEXT && message.caption != null
+        val oldText = if (isCaption) message.caption ?: "" else message.text ?: ""
+        
+        val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val currentTimeISO = isoFormat.format(Date())
+
+        val updates = mutableMapOf<String, Any?>(
+            "lastEdited" to FieldValue.serverTimestamp()
+        )
+
+        if (key != null) {
+            val (encNewText, ivNew) = encryptText(newText, key)
+            val (encOldText, ivOld) = encryptText(oldText, key)
+
+            val historyItem = mapOf(
+                "encryptedText" to encOldText,
+                "iv" to ivOld,
+                "editedAt" to currentTimeISO
+            )
+
+            if (isCaption) {
+                updates["encryptedCaption"] = encNewText
+            } else {
+                updates["encryptedText"] = encNewText
+            }
+            updates["iv"] = ivNew
+            updates["editHistory"] = FieldValue.arrayUnion(historyItem)
+        } else {
+            val historyItem = mapOf(
+                "text" to oldText,
+                "editedAt" to currentTimeISO
+            )
+            if (isCaption) {
+                updates["caption"] = newText
+            } else {
+                updates["text"] = newText
+            }
+            updates["editHistory"] = FieldValue.arrayUnion(historyItem)
+        }
+
+        db.collection("savedMessages").document(uid).collection("messages").document(message.id)
+            .update(updates).await()
     }
 
     private fun decryptIfNeeded(msg: SavedMessage, key: SecretKey?): SavedMessage {

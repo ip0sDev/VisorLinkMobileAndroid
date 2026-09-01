@@ -12,9 +12,10 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.UUID
 
 private const val DB_NAME = "visorlink_cache.db"
-private const val DB_VERSION = 3
+private const val DB_VERSION = 5
 private const val TAG = "ChatDataCache"
 
 class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
@@ -24,7 +25,7 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
         db.execSQL("CREATE TABLE messages (chat_id TEXT, msg_id TEXT, ts INTEGER, data TEXT, PRIMARY KEY(chat_id, msg_id))")
         db.execSQL("CREATE TABLE profiles (uid TEXT PRIMARY KEY, data TEXT)")
         db.execSQL("CREATE TABLE stickers (uid TEXT, pack_id TEXT, data TEXT, PRIMARY KEY(uid, pack_id))")
-        db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
+        db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0, retry_count INTEGER DEFAULT 0, last_attempt INTEGER DEFAULT 0, last_error TEXT, progress REAL DEFAULT 0.0)")
         db.execSQL("CREATE TABLE likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
     }
 
@@ -35,6 +36,22 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
         }
         if (oldVersion == 2) {
             db.execSQL("ALTER TABLE outbox ADD COLUMN status INTEGER DEFAULT 0")
+        }
+        if (oldVersion < 4) {
+            try {
+                db.execSQL("ALTER TABLE outbox ADD COLUMN retry_count INTEGER DEFAULT 0")
+                db.execSQL("ALTER TABLE outbox ADD COLUMN last_attempt INTEGER DEFAULT 0")
+                db.execSQL("ALTER TABLE outbox ADD COLUMN last_error TEXT")
+            } catch (e: Exception) {
+                Log.e("ChatDataCache", "Upgrade to v4 failed", e)
+            }
+        }
+        if (oldVersion < 5) {
+            try {
+                db.execSQL("ALTER TABLE outbox ADD COLUMN progress REAL DEFAULT 0.0")
+            } catch (e: Exception) {
+                Log.e("ChatDataCache", "Upgrade to v5 failed", e)
+            }
         }
     }
 }
@@ -79,11 +96,22 @@ object ChatDataCache {
         }
     }
 
+    suspend fun pruneOldData(context: Context, days: Int) = withContext(Dispatchers.IO) {
+        if (days <= 0) return@withContext
+        try {
+            val db = getDb(context).writableDatabase
+            val threshold = System.currentTimeMillis() / 1000L - (days * 24 * 60 * 60)
+            db.execSQL("DELETE FROM messages WHERE ts < ?", arrayOf(threshold.toString()))
+            Log.d(TAG, "Pruned messages older than $days days (threshold: $threshold)")
+        } catch (e: Exception) { Log.e(TAG, "Failed to prune old data", e) }
+    }
+
     // ── Outbox ───────────────────────────────────────────────────────────────
 
     suspend fun addToOutbox(context: Context, chatId: String, type: String, data: JSONObject): String =
         withContext(Dispatchers.IO) {
-            val id = "queued_${System.currentTimeMillis()}"
+            val uuid = UUID.randomUUID().toString().take(8)
+            val id = "queued_${System.currentTimeMillis()}_$uuid"
             try {
                 val db = getDb(context).writableDatabase
                 val stmt = db.compileStatement("INSERT INTO outbox (id, chat_id, type, data, ts, status) VALUES (?, ?, ?, ?, ?, 0)")
@@ -94,7 +122,7 @@ object ChatDataCache {
                 stmt.bindLong(5, System.currentTimeMillis())
                 stmt.executeInsert()
                 _outboxSignal.emit(Unit)
-            } catch (e: Exception) { Log.e(TAG, "Failed to add to outbox", e) }
+            } catch (e: Exception) { Log.e(TAG, "Failed to add to outbox (id=$id)", e) }
             id
         }
 
@@ -103,7 +131,7 @@ object ChatDataCache {
             val list = mutableListOf<QueuedAction>()
             try {
                 val db = getDb(context).readableDatabase
-                db.rawQuery("SELECT id, chat_id, type, data, ts, status FROM outbox ORDER BY ts ASC", null).use { cursor ->
+                db.rawQuery("SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC", null).use { cursor ->
                     while (cursor.moveToNext()) {
                         list.add(QueuedAction(
                             id = cursor.getString(0),
@@ -111,12 +139,42 @@ object ChatDataCache {
                             type = cursor.getString(2),
                             data = JSONObject(cursor.getString(3)),
                             ts = cursor.getLong(4),
-                            status = cursor.getInt(5)
+                            status = cursor.getInt(5),
+                            retryCount = cursor.getInt(6),
+                            lastAttempt = cursor.getLong(7),
+                            lastError = cursor.getString(8),
+                            progress = cursor.getFloat(9)
                         ))
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load outbox", e) }
             list
+        }
+
+    suspend fun updateOutboxProgress(context: Context, id: String, progress: Float) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("UPDATE outbox SET progress=? WHERE id=?")
+                stmt.bindDouble(1, progress.toDouble())
+                stmt.bindString(2, id)
+                stmt.executeUpdateDelete()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to update outbox progress", e) }
+        }
+
+    suspend fun updateOutboxRetry(context: Context, id: String, retryCount: Int, error: String?) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("UPDATE outbox SET retry_count=?, last_attempt=?, last_error=? WHERE id=?")
+                stmt.bindLong(1, retryCount.toLong())
+                stmt.bindLong(2, System.currentTimeMillis())
+                if (error == null) stmt.bindNull(3) else stmt.bindString(3, error)
+                stmt.bindString(4, id)
+                stmt.executeUpdateDelete()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to update outbox retry", e) }
         }
 
     suspend fun updateOutboxStatus(context: Context, id: String, status: Int) =
@@ -152,7 +210,18 @@ object ChatDataCache {
         }
 
     // Action types: "text", "image", "sticker", "like"
-    data class QueuedAction(val id: String, val chatId: String, val type: String, val data: JSONObject, val ts: Long, val status: Int = 0)
+    data class QueuedAction(
+        val id: String,
+        val chatId: String,
+        val type: String,
+        val data: JSONObject,
+        val ts: Long,
+        val status: Int = 0,
+        val retryCount: Int = 0,
+        val lastAttempt: Long = 0,
+        val lastError: String? = null,
+        val progress: Float = 0f
+    )
 
     // ── Likes ────────────────────────────────────────────────────────────────
 
@@ -349,7 +418,9 @@ object ChatDataCache {
             put("allowReactions", settings.allowReactions)
             put("allowComments", settings.allowComments)
             put("inviteLink", settings.inviteLink)
+            put("isForum", settings.isForum || isForum)
         }
+        put("isForum", isForumActive)
         put("settings", sData)
         put("lastMessage", lastMessage?.toString() ?: JSONObject.NULL)
         put("lastMessageAt", lastMessageAt?.seconds ?: JSONObject.NULL)
@@ -373,12 +444,17 @@ object ChatDataCache {
         val mList = (0 until mArray.length()).map { mArray.getString(it) }
 
         val sObj = optJSONObject("settings") ?: JSONObject()
+        val isForumSetting = sObj.optBoolean("isForum", false) || sObj.optBoolean("is_forum", false)
+        val isForumRoot = optBoolean("isForum", false) || optBoolean("is_forum", false)
+        val isForumFinal = isForumSetting || isForumRoot
+
         val settings = ChatSettings(
             joinByLink = sObj.optBoolean("joinByLink", true),
             joinByTag = sObj.optBoolean("joinByTag", false),
             allowReactions = sObj.optBoolean("allowReactions", true),
             allowComments = sObj.optBoolean("allowComments", true),
-            inviteLink = sObj.optString("inviteLink", "")
+            inviteLink = sObj.optString("inviteLink", ""),
+            isForum = isForumFinal
         )
 
         return Chat(
@@ -393,6 +469,7 @@ object ChatDataCache {
             createdBy = optString("createdBy", ""),
             memberCount = optInt("memberCount", 0),
             memberIds = mList,
+            isForum = isForumFinal,
             settings = settings,
             lastMessage = if (isNull("lastMessage")) null else getString("lastMessage"),
             lastMessageAt = if (isNull("lastMessageAt")) null else com.google.firebase.Timestamp(getLong("lastMessageAt"), 0),
@@ -562,6 +639,7 @@ object ChatDataCache {
         put("online", online)
         put("isAdmin", isAdmin)
         put("diaryEnabled", diaryEnabled)
+        if (acceptedVersion != null) put("acceptedVersion", acceptedVersion)
         val custom = JSONObject()
         customization.forEach { (k, v) -> custom.put(k, v) }
         put("customization", custom)
@@ -581,6 +659,7 @@ object ChatDataCache {
             online      = optBoolean("online", false),
             isAdmin     = optBoolean("isAdmin", false),
             diaryEnabled = optBoolean("diaryEnabled", false),
+            acceptedVersion = if (isNull("acceptedVersion") || !has("acceptedVersion")) null else optString("acceptedVersion"),
             customization = customMap
         )
     } catch (e: Exception) { null }

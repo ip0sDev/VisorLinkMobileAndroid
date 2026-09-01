@@ -2,6 +2,7 @@ package by.iposdev.visorlink.ui.screens.chat
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import by.iposdev.visorlink.ui.components.chat.VoiceBubble
 import by.iposdev.visorlink.utils.VoicePlaybackState
 
 /**

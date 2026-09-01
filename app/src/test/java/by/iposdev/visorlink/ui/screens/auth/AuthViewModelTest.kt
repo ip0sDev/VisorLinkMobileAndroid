@@ -2,9 +2,12 @@ package by.iposdev.visorlink.ui.screens.auth
 
 import by.iposdev.visorlink.data.repository.AuthRepository
 import by.iposdev.visorlink.data.repository.AuthState
+import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.TfaManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.*
@@ -17,6 +20,8 @@ class AuthViewModelTest {
 
     private val testDispatcher = UnconfinedTestDispatcher()
     private lateinit var authRepository: AuthRepository
+    private lateinit var userRepository: UserRepository
+    private lateinit var tfaManager: TfaManager
     private lateinit var viewModel: AuthViewModel
 
     @Before
@@ -25,7 +30,12 @@ class AuthViewModelTest {
         authRepository = mock {
             on { authState } doReturn MutableStateFlow(AuthState.NoSession)
         }
-        viewModel = AuthViewModel(authRepository)
+        userRepository = mock {
+            on { userProfileFlow(any()) } doReturn flowOf(null)
+        }
+        tfaManager = mock()
+        val fcmManager: by.iposdev.visorlink.utils.FcmManager = mock()
+        viewModel = AuthViewModel(authRepository, userRepository, tfaManager, fcmManager)
     }
 
     @After

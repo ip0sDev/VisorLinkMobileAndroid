@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
@@ -249,7 +250,7 @@ fun ImageEditorScreen(
                         },
                         modifier = Modifier
                             .size(56.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape)
+                            .background(MaterialTheme.colorScheme.primary, VlTheme.tokens.shapes.fab)
                     ) {
                         if (isProcessing) {
                             CircularProgressIndicator(
@@ -537,7 +538,7 @@ private fun ToolButton(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(VlTheme.tokens.shapes.indicator)
             .background(
                 if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
                 else Color.Transparent
@@ -591,9 +592,9 @@ private fun DrawToolOptions(
                 Box(
                     modifier = Modifier
                         .size(if (color == c) 32.dp else 26.dp)
-                        .background(c, CircleShape)
+                        .background(c, VlTheme.tokens.shapes.indicator)
                         .then(
-                            if (color == c) Modifier.border(2.dp, Color.White, CircleShape)
+                            if (color == c) Modifier.border(2.dp, Color.White, VlTheme.tokens.shapes.indicator)
                             else Modifier
                         )
                         .clickable { onColorChange(c) }
@@ -643,7 +644,7 @@ fun SpoilerToggle(
 
     Surface(
         onClick = onToggle,
-        shape = RoundedCornerShape(12.dp),
+        shape = VlTheme.tokens.shapes.chip,
         color = bgColor,
         modifier = modifier
     ) {

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,26 +16,31 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
-import by.iposdev.visorlink.data.model.AppTheme
-import by.iposdev.visorlink.data.model.isExthruFamily
-import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
-import org.koin.compose.viewmodel.koinViewModel
+import by.iposdev.visorlink.ui.theme.VlTheme
 
+/**
+ * Фоновое цветное свечение-меш.
+ *
+ * В Biolume НЕ отображается: три постоянно анимированных цветных пятна прямо
+ * противоречат §1.2 («один сигнал за раз») и §10 («не подсвечивать glow-ом
+ * состояние покоя»). Там роль фона играет неоморфный рельеф, а свечение
+ * зарезервировано под focus/press/live.
+ *
+ * Также уважает системное отключение анимаций (§8).
+ */
 @Composable
 fun VlAmbientGlow(
     modifier: Modifier = Modifier,
     overrideAccent: Color? = null,
-    themeViewModel: ThemeViewModel = koinViewModel(),
     simplifiedGraphics: Boolean = false
 ) {
-    val themePrefs by themeViewModel.appTheme.collectAsState()
+    if (simplifiedGraphics) return
 
-    if (!themePrefs.isExthruFamily || themePrefs == AppTheme.FORGE || simplifiedGraphics) return
+    val tokens = VlTheme.tokens
+    if (tokens.isBiolume || tokens.reduceMotion) return
 
-    val style = rememberExthruStyle(themePrefs)
-    val accent = overrideAccent ?: style.accent
     val cs = MaterialTheme.colorScheme
+    val accent = overrideAccent ?: cs.primary
     val isDark = cs.surface.luminance() < 0.5f
 
     // Более богатая цветовая палитра для утонченного глассморфизма

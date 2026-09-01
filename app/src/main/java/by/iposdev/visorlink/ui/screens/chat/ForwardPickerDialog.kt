@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.ForwardableMessage
@@ -134,14 +135,14 @@ fun ForwardPickerDialog(
                             if (icon != null) {
                                 Box(
                                     Modifier.size(42.dp)
-                                        .clip(CircleShape)
+                                        .clip(VlTheme.tokens.shapes.indicator)
                                         .background(MaterialTheme.colorScheme.secondaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) { Text(icon, fontSize = 18.sp) }
                             } else {
                                 Box(
                                     Modifier.size(42.dp)
-                                        .clip(CircleShape)
+                                        .clip(VlTheme.tokens.shapes.indicator)
                                         .background(MaterialTheme.colorScheme.primaryContainer),
                                     contentAlignment = Alignment.Center
                                 ) {

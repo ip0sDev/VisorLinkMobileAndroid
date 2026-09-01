@@ -10,6 +10,11 @@ import by.iposdev.visorlink.utils.ActiveChatTracker
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.OutboxManager
 import by.iposdev.visorlink.utils.PresenceManager
+import by.iposdev.visorlink.data.repository.FlagsRepository
+import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.DiaryReminderManager
+import by.iposdev.visorlink.utils.CacheManager
+import by.iposdev.visorlink.utils.AppImageLoader
 import io.sentry.android.core.SentryAndroid
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -21,6 +26,8 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.context.GlobalContext
@@ -31,11 +38,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
     private var presenceManager: PresenceManager? = null
 
     override fun newImageLoader(): ImageLoader {
-        return ImageLoader.Builder(this)
-            .components {
-                add(ImageDecoderDecoder.Factory())
-            }
-            .build()
+        return AppImageLoader.get(this)
     }
 
     override fun onCreate() {
@@ -51,6 +54,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         }
 
         NotificationHelper.createChannels(this)
+        com.ipos.store.sdk.IposStoreUpdates.init(this)
 
         // ─── Firebase App Check ───────────────────────────────────────────────
         if (BuildConfig.DEBUG) {
@@ -73,8 +77,43 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             modules(appModule)
         }
 
+        // Initialize Cache
+        val cacheManager: CacheManager = GlobalContext.get().get()
+        AppImageLoader.init(this, cacheManager.loadConfig())
+        MainScope().launch {
+            cacheManager.evictIfNeeded()
+        }
+
         // Initialize OutboxManager to start background processing
         GlobalContext.get().get<OutboxManager>()
+
+        // ─── Feature Flags ───
+        MainScope().launch {
+            try {
+                Log.d("VisorLinkApp", "Starting flags fetch from Application.onCreate")
+                GlobalContext.get().get<FlagsRepository>().fetchFlags()
+                Log.d("VisorLinkApp", "Flags fetch call completed")
+            } catch (e: Exception) {
+                Log.e("VisorLinkApp", "Failed to fetch flags", e)
+            }
+        }
+
+        // ─── Diary Reminders Observer ───
+        MainScope().launch {
+            try {
+                val userRepository: UserRepository = GlobalContext.get().get()
+                val reminderManager: DiaryReminderManager = GlobalContext.get().get()
+                userRepository.currentUserFlow().collect { profile ->
+                    if (profile?.diaryEnabled == true && profile.diaryRemindersEnabled) {
+                        reminderManager.scheduleReminder(profile.diaryReminderTime)
+                    } else {
+                        reminderManager.cancelReminder()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("VisorLinkApp", "Diary reminder observer failed", e)
+            }
+        }
 
         // Регистрируем наблюдатель за жизненным циклом (свернуто/развернуто)
         // через анонимный объект, чтобы не было конфликтов с методами Application
@@ -88,20 +127,10 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             }
         })
 
-        // Автоматически управляем presence и FCM токеном при смене auth state
+        // Автоматически управляем presence при смене auth state
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             val uid = auth.currentUser?.uid
             if (uid != null) {
-                // ── ИСПРАВЛЕНИЕ FCM: Отправляем токен сразу после авторизации ──
-                FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
-                    try {
-                        Firebase.functions.getHttpsCallable("saveFcmToken").call(mapOf("token" to token))
-                        Log.d("FCM", "Token synced on auth state change")
-                    } catch (e: Exception) {
-                        Log.e("FCM", "Failed to sync token on auth state change", e)
-                    }
-                }
-
                 presenceManager?.detach()
                 presenceManager = PresenceManager(uid).also {
                     it.attach(ProcessLifecycleOwner.get().lifecycle)

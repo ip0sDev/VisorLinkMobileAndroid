@@ -1,5 +1,8 @@
 package by.iposdev.visorlink.ui.screens.decoy
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,10 +16,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import kotlinx.coroutines.delay
 
 @Composable
@@ -26,6 +32,28 @@ fun DecoyHomeScreen(
     var tabIndex by remember { mutableIntStateOf(1) }
     var tapCount by remember { mutableIntStateOf(0) }
     var showUnlockSheet by remember { mutableStateOf(false) }
+
+    // Статус-бар: маскировочный экран всегда тёмный, поэтому иконки должны быть
+    // светлыми независимо от темы приложения. При уходе с экрана возвращаем как было.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = view.context.findActivity()?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val previousLightIcons = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose {
+            if (controller != null && previousLightIcons != null) {
+                controller.isAppearanceLightStatusBars = previousLightIcons
+            }
+        }
+    }
+    // Переутверждаем после SideEffect темы: VisorLinkTheme перекрашивает иконки
+    // статус-бара при каждой своей рекомпозиции и перезаписал бы наше значение.
+    SideEffect {
+        view.context.findActivity()?.window?.let { window ->
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+        }
+    }
 
     // Сброс тапов через время
     LaunchedEffect(tapCount) {
@@ -48,7 +76,12 @@ fun DecoyHomeScreen(
     Scaffold(
         containerColor = DecoyPalette.Background,
         topBar = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DecoyPalette.Background)
+                    .statusBarsPadding()
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -71,7 +104,12 @@ fun DecoyHomeScreen(
             }
         },
         bottomBar = {
-            Column {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DecoyPalette.Background)
+                    .navigationBarsPadding()
+            ) {
                 HorizontalDivider(color = DecoyPalette.Border)
                 Row(modifier = Modifier.fillMaxWidth().background(DecoyPalette.Panel)) {
                     DecoyTabItem(
@@ -120,7 +158,7 @@ fun DecoyHomeScreen(
 }
 
 @Composable
-private fun DecoyTabItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun DecoyTabItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
     val color = if (selected) DecoyPalette.Accent else DecoyPalette.TextSecondary
     Column(
         modifier = modifier.clickable(onClick = onClick).padding(vertical = 12.dp),
@@ -130,4 +168,14 @@ private fun DecoyTabItem(icon: androidx.compose.ui.graphics.vector.ImageVector, 
         Spacer(Modifier.height(4.dp))
         Text(label, color = color, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
     }
+}
+
+/** Поднимаемся по цепочке ContextWrapper до Activity (паттерн из Theme.kt). */
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }

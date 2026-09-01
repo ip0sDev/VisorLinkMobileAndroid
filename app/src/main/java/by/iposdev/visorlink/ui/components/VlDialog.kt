@@ -1,83 +1,49 @@
 package by.iposdev.visorlink.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.LocalTextStyle
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import by.iposdev.visorlink.data.model.AppTheme
-import by.iposdev.visorlink.ui.theme.rememberExthruStyle
+import by.iposdev.visorlink.ui.theme.VlTheme
+import by.iposdev.visorlink.ui.theme.vlHairline
+import by.iposdev.visorlink.ui.theme.vlRaised
 
-/**
- * Кастомный алерт-диалог — порт `VlAlertDialog` + `vlShowDialog` из design_system.dart.
- * Кнопки-действия собираются через [VlDialogButton] и передаются в [actions].
- *
- * Пример:
- * ```
- * VlAlertDialog(
- *     appTheme = appTheme,
- *     onDismissRequest = { showDialog = false },
- *     title = { Text("Удалить чат?") },
- *     text = { Text("Это действие необратимо.") },
- *     actions = {
- *         VlDialogButton(appTheme = appTheme, onClick = { showDialog = false }) { Text("Отмена") }
- *         VlDialogButton(appTheme = appTheme, onClick = { onDelete() }, isPrimary = true, isDestructive = true) { Text("Удалить") }
- *     }
- * )
- * ```
- */
 @Composable
 fun VlAlertDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
-    appTheme: AppTheme = AppTheme.BIOLUME,
     title: (@Composable () -> Unit)? = null,
     text: (@Composable () -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
     dismissible: Boolean = true,
 ) {
-    val style = rememberExthruStyle(appTheme)
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
 
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(dismissOnBackPress = dismissible, dismissOnClickOutside = dismissible),
     ) {
-        VlSurface(
-            appTheme = appTheme,
-            modifier = modifier,
-            isInput = false,
-            customRadius = if (style.isForge) 0.dp else 28.dp,
-            overrideColor = cs.surface.copy(alpha = 0.96f),
-        ) {
+        val body: @Composable () -> Unit = {
             Column(Modifier.padding(start = 24.dp, top = 24.dp, end = 20.dp, bottom = 12.dp)) {
                 title?.let {
                     CompositionLocalProvider(
                         LocalTextStyle provides TextStyle(
-                            fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = cs.onSurface,
-                            fontFamily = if (style.isForge) FontFamily.Monospace else null,
+                            fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = cs.onSurface
                         )
                     ) { it() }
                 }
@@ -85,8 +51,7 @@ fun VlAlertDialog(
                 text?.let {
                     CompositionLocalProvider(
                         LocalTextStyle provides TextStyle(
-                            fontSize = 15.sp, color = cs.onSurfaceVariant, lineHeight = 21.sp,
-                            fontFamily = if (style.isForge) FontFamily.Monospace else null,
+                            fontSize = 15.sp, color = cs.onSurfaceVariant, lineHeight = 21.sp
                         )
                     ) { it() }
                 }
@@ -94,34 +59,52 @@ fun VlAlertDialog(
                     Spacer(Modifier.height(24.dp))
                     Row(
                         Modifier,
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End,
+                        horizontalArrangement = Arrangement.End,
                         content = actions,
                     )
                 }
             }
         }
+
+        if (tokens.structure.enabled) {
+            // §3.1: диалоги и sheet сидят на surfaceContainerHigh; рельеф raised
+            // + нейтральная грань, никакого свечения (§10).
+            // Форма берётся из токенов напрямую: прибавка к cardRadius давала бы
+            // в Forge скругление 8dp вместо прямого угла.
+            val shape = tokens.shapes.card
+            Box(
+                modifier = modifier
+                    .vlRaised(tokens.structure, shape)
+                    .clip(shape)
+                    .background(cs.surfaceContainerHigh, shape)
+                    .vlHairline(cs.outlineVariant, shape)
+            ) { body() }
+        } else {
+            VlSurface(
+                modifier = modifier,
+                isInput = false,
+                overrideColor = cs.surface,
+            ) { body() }
+        }
     }
 }
 
-/** Кнопка внутри [VlAlertDialog] — порт `VlDialogButton`. */
 @Composable
 fun VlDialogButton(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
-    appTheme: AppTheme = AppTheme.BIOLUME,
     isPrimary: Boolean = false,
     isDestructive: Boolean = false,
     isLoading: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val style = rememberExthruStyle(appTheme)
     val cs = MaterialTheme.colorScheme
     val active = onClick != null && !isLoading
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val color = if (isDestructive) style.destructive else if (isPrimary) style.accent else cs.onSurfaceVariant
+    val color = if (isDestructive) cs.error else if (isPrimary) cs.primary else cs.onSurfaceVariant
     val opacity = if (!active) 0.4f else if (isPressed) 0.55f else 1f
 
     Row(
@@ -144,8 +127,7 @@ fun VlDialogButton(
                 LocalTextStyle provides TextStyle(
                     color = color,
                     fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
-                    fontSize = 15.sp,
-                    fontFamily = if (style.isForge) FontFamily.Monospace else null,
+                    fontSize = 15.sp
                 )
             ) { content() }
         }

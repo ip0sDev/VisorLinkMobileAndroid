@@ -11,14 +11,18 @@ import by.iposdev.visorlink.data.repository.AuthState
 import by.iposdev.visorlink.ui.screens.diary.DiaryScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryEntryScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
+import by.iposdev.visorlink.ui.aegis.AegisDebugScreen
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
+import by.iposdev.visorlink.ui.screens.status.StatusScreen
 import by.iposdev.visorlink.ui.screens.settings.CustomizationScreen
+import by.iposdev.visorlink.ui.screens.settings.FlagFlipperScreen
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
 import by.iposdev.visorlink.ui.screens.auth.VerifyEmailScreen
+import by.iposdev.visorlink.ui.screens.auth.TfaScreen
 import by.iposdev.visorlink.ui.screens.chat.ChatScreen
 import by.iposdev.visorlink.ui.screens.chat.ImageViewerScreen
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
@@ -31,15 +35,15 @@ import by.iposdev.visorlink.ui.screens.profile.OtherProfileScreen
 import by.iposdev.visorlink.ui.screens.profile.ProfileScreen
 import by.iposdev.visorlink.ui.screens.search.SearchScreen
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.ui.update.AppUpdateViewModel
 import by.iposdev.visorlink.utils.StealthManager
+import by.iposdev.visorlink.ui.screens.topics.TopicListScreen
+import by.iposdev.visorlink.ui.screens.topics.TaskTrackerScreen
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
 fun VisorLinkNavGraph(
     authViewModel: AuthViewModel,
-    themeViewModel: ThemeViewModel,
-    appUpdateViewModel: AppUpdateViewModel
+    themeViewModel: ThemeViewModel
 ) {
     val navController = rememberNavController()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -70,15 +74,24 @@ fun VisorLinkNavGraph(
 
     val authState by authViewModel.authState.collectAsState()
     val showOnboarding by themeViewModel.showOnboarding.collectAsState()
+    val isTfaRequired by authViewModel.isTfaRequired.collectAsState()
+    val isSessionReady by authViewModel.isSessionReady.collectAsState()
 
-    // ── Three-state auth guard + Onboarding ──────────────────────────────────
-    LaunchedEffect(authState, isStealthUnlocked, showOnboarding) {
+    // ── Three-state auth guard + Onboarding + 2FA ─────────────────────────────
+    LaunchedEffect(authState, isStealthUnlocked, showOnboarding, isTfaRequired, isSessionReady) {
         if (stealthManager.isEnabled() && !isStealthUnlocked) {
             return@LaunchedEffect
         }
 
         if (showOnboarding) {
             navController.navigate(Screen.Onboarding.route) {
+                popUpTo(0) { inclusive = true }
+            }
+            return@LaunchedEffect
+        }
+
+        if (isTfaRequired) {
+            navController.navigate(Screen.Tfa.route) {
                 popUpTo(0) { inclusive = true }
             }
             return@LaunchedEffect
@@ -91,8 +104,13 @@ fun VisorLinkNavGraph(
             is AuthState.Unverified -> navController.navigate(Screen.VerifyEmail.route) {
                 popUpTo(0) { inclusive = true }
             }
-            is AuthState.Verified   -> navController.navigate(Screen.ChatList.route) {
-                popUpTo(0) { inclusive = true }
+            is AuthState.Verified   -> {
+                if (isSessionReady) {
+                    authViewModel.onSessionReadyAfter2FA()
+                    navController.navigate(Screen.ChatList.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             }
         }
     }
@@ -101,7 +119,8 @@ fun VisorLinkNavGraph(
     val start = when {
         stealthManager.isEnabled() && !isStealthUnlocked -> "decoy"
         showOnboarding                    -> Screen.Onboarding.route
-        authState is AuthState.Verified   -> Screen.ChatList.route
+        isTfaRequired                     -> Screen.Tfa.route
+        isSessionReady                    -> Screen.ChatList.route
         authState is AuthState.Unverified -> Screen.VerifyEmail.route
         else                              -> Screen.Login.route
     }
@@ -124,7 +143,8 @@ fun VisorLinkNavGraph(
             OnboardingScreen(
                 onFinish = {
                     // Reactive guard will handle navigation to ChatList/Login
-                }
+                },
+                authViewModel = authViewModel
             )
         }
 
@@ -157,6 +177,13 @@ fun VisorLinkNavGraph(
             )
         }
 
+        composable(Screen.Tfa.route) {
+            TfaScreen(
+                onTfaPassed = { /* handled by authState/tfa guard */ },
+                viewModel = authViewModel
+            )
+        }
+
         // ── Main app ──────────────────────────────────────────────────────────
         composable(Screen.ChatList.route) {
             MainScreen(
@@ -166,6 +193,9 @@ fun VisorLinkNavGraph(
                     } else {
                         navController.navigate(Screen.Chat.createRoute(chatId, otherUid))
                     }
+                },
+                onOpenTopicList = { chatId ->
+                    navController.navigate(Screen.TopicList.createRoute(chatId))
                 },
                 onOpenSearch        = { navController.navigate(Screen.Search.createRoute(null)) },
                 onOpenProfile       = { navController.navigate(Screen.Profile.route) },
@@ -179,6 +209,9 @@ fun VisorLinkNavGraph(
                 onOpenComments      = { chatId, messageId ->
                     navController.navigate(Screen.Comments.createRoute(chatId, messageId))
                 },
+                onOpenImageViewer = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
+                },
                 onAddDiaryEntry = {
                     navController.navigate(Screen.DiaryEntry.createRoute(null))
                 },
@@ -189,18 +222,72 @@ fun VisorLinkNavGraph(
         }
 
         composable(
+            route = Screen.TopicList.route,
+            arguments = listOf(
+                navArgument("chatId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val chatId = backStackEntry.arguments?.getString("chatId") ?: return@composable
+            TopicListScreen(
+                chatId = chatId,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenTopicChat = { cId, tId ->
+                    navController.navigate(Screen.Chat.createRoute(cId, cId, tId))
+                },
+                onOpenTaskTracker = { cId, tId ->
+                    navController.navigate(Screen.TaskTracker.createRoute(cId, tId))
+                },
+                onOpenSettings = { cId ->
+                    navController.navigate(Screen.ChatSettings.createRoute(cId))
+                }
+            )
+        }
+
+        composable(
+            route = Screen.TaskTracker.route,
+            arguments = listOf(
+                navArgument("chatId")  { type = NavType.StringType },
+                navArgument("topicId") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val chatId  = backStackEntry.arguments?.getString("chatId")  ?: return@composable
+            val topicId = backStackEntry.arguments?.getString("topicId") ?: return@composable
+            TaskTrackerScreen(
+                chatId = chatId,
+                topicId = topicId,
+                onNavigateBack = { navController.popBackStack() },
+                onOpenOtherProfile = { uid ->
+                    navController.navigate(Screen.OtherProfile.createRoute(uid))
+                },
+                onOpenImageViewer = { url, type ->
+                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
+                },
+                onOpenChatSettings = { cId ->
+                    navController.navigate(Screen.ChatSettings.createRoute(cId))
+                }
+            )
+        }
+
+        composable(
             route = Screen.Chat.route,
             arguments = listOf(
                 navArgument("chatId")   { type = NavType.StringType },
-                navArgument("otherUid") { type = NavType.StringType }
+                navArgument("otherUid") { type = NavType.StringType },
+                navArgument("topicId")  {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
             )
         ) { backStackEntry ->
             val chatId   = backStackEntry.arguments?.getString("chatId")   ?: return@composable
             val otherUid = backStackEntry.arguments?.getString("otherUid") ?: return@composable
+            val topicId  = backStackEntry.arguments?.getString("topicId")
 
             ChatScreen(
                 chatId             = chatId,
                 otherUid           = otherUid,
+                topicId            = topicId,
                 onNavigateBack     = { navController.popBackStack() },
                 onOpenOtherProfile = { uid ->
                     navController.navigate(Screen.OtherProfile.createRoute(uid))
@@ -217,6 +304,11 @@ fun VisorLinkNavGraph(
                 },
                 onOpenComments     = { msgId ->
                     navController.navigate(Screen.Comments.createRoute(chatId, msgId))
+                },
+                onOpenTopicList = { cId ->
+                    navController.navigate(Screen.TopicList.createRoute(cId)) {
+                        popUpTo(Screen.Chat.route) { inclusive = true }
+                    }
                 },
                 hapticEnabled = hapticEnabled
             )
@@ -300,10 +392,20 @@ fun VisorLinkNavGraph(
                 onNavigateBack      = { navController.popBackStack() },
                 onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
                 onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
+                onOpenStatus = { navController.navigate(Screen.Status.route) },
                 onOpenCustomization = { navController.navigate(Screen.Customization.route) },
-                themeViewModel      = themeViewModel,
-                appUpdateViewModel  = appUpdateViewModel
+                onOpenAegisDebug    = { navController.navigate(Screen.AegisDebug.route) },
+                onOpenFlagFlipper   = { navController.navigate(Screen.FlagFlipper.route) },
+                themeViewModel      = themeViewModel
             )
+        }
+
+        composable(Screen.AegisDebug.route) {
+            AegisDebugScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.FlagFlipper.route) {
+            FlagFlipperScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Screen.Customization.route) {
@@ -321,6 +423,10 @@ fun VisorLinkNavGraph(
                     navController.navigate(Screen.ImageViewer.createRoute(url, type))
                 }
             )
+        }
+
+        composable(Screen.Status.route) {
+            StatusScreen(onNavigateBack = { navController.popBackStack() })
         }
 
         // Diary route removed to prevent duplicate PIN entry since it's displayed in MainScreen

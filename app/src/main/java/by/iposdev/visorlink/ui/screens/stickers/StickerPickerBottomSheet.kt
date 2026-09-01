@@ -32,12 +32,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.StickerItem
 import by.iposdev.visorlink.data.model.StickerPack
 import by.iposdev.visorlink.ui.components.VlAlertDialog
 import by.iposdev.visorlink.ui.components.VlButton
 import by.iposdev.visorlink.ui.components.VlDialogButton
+import by.iposdev.visorlink.ui.components.VlTextField
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
@@ -60,7 +60,6 @@ fun StickerPickerBottomSheet(
     val uiState by viewModel.uiState.collectAsState()
     val appTheme by themeVm.appTheme.collectAsState()
 
-    val isExthru = appTheme == AppTheme.EXTHRU || appTheme == AppTheme.BIOLUME
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -76,9 +75,6 @@ fun StickerPickerBottomSheet(
             packs = uiState.packs,
             isLoading = uiState.isLoading,
             currentUid = viewModel.currentUid,
-            appTheme = appTheme,
-            isExthru = isExthru,
-            isDark = isDark,
             onStickerSelected = { packId, sticker ->
                 onStickerSelected(packId, sticker)
             },
@@ -105,9 +101,6 @@ private fun StickerPickerContent(
     packs: List<StickerPack>,
     isLoading: Boolean,
     currentUid: String,
-    appTheme: AppTheme,
-    isExthru: Boolean,
-    isDark: Boolean,
     onStickerSelected: (packId: String, sticker: StickerItem) -> Unit,
     onCreatePack: (name: String, emoji: String) -> Unit,
     onDeletePack: (packId: String, isOwner: Boolean) -> Unit,
@@ -139,24 +132,15 @@ private fun StickerPickerContent(
                 .padding(top = 10.dp, bottom = 6.dp),
             contentAlignment = Alignment.Center
         ) {
-            if (isExthru) {
-                Box(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(6.dp)
-                        .nmInsetShadow(isDark, cornerRadius = 3.dp)
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .width(36.dp)
-                        .height(4.dp)
-                        .background(
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                            RoundedCornerShape(2.dp)
-                        )
-                )
-            }
+            Box(
+                modifier = Modifier
+                    .width(36.dp)
+                    .height(4.dp)
+                    .background(
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        VlTheme.tokens.shapes.indicator
+                    )
+            )
         }
 
         // ── Заголовок строки с кнопками ───────────────────────────────────────
@@ -167,7 +151,9 @@ private fun StickerPickerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (selectedPackIndex >= 0 && packs.isNotEmpty()) {
-                ThemedIconButton(Icons.AutoMirrored.Filled.ArrowBack, MaterialTheme.colorScheme.onSurface, isExthru, isDark) { selectedPackIndex = -1 }
+                IconButton(onClick = { selectedPackIndex = -1 }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                }
                 Spacer(Modifier.width(12.dp))
                 Text(
                     selectedPack?.let { "${it.emoji} ${it.name}" } ?: "",
@@ -178,33 +164,37 @@ private fun StickerPickerContent(
                 )
 
                 if (selectedPack?.authorId == currentUid) {
-                    ThemedIconButton(Icons.Default.Add, MaterialTheme.colorScheme.primary, isExthru, isDark) { showAddStickerSheet = selectedPack }
+                    IconButton(onClick = { showAddStickerSheet = selectedPack }) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
                     Spacer(Modifier.width(10.dp))
                 }
                 // Кнопка удаления доступна всегда (для своих - удалить, для чужих - убрать из библиотеки)
-                ThemedIconButton(Icons.Default.Delete, MaterialTheme.colorScheme.error, isExthru, isDark) { showDeleteConfirm = selectedPack }
+                IconButton(onClick = { showDeleteConfirm = selectedPack }) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                }
             } else {
                 Text(
                     "Стикеры",
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                ThemedIconButton(Icons.Default.Add, MaterialTheme.colorScheme.primary, isExthru, isDark) { showCreateDialog = true }
+                IconButton(onClick = { showCreateDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                }
             }
         }
 
-        ThemedDivider(isExthru, isDark)
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 
         // ── Нижняя полоса с иконками паков ────────────────────────────────────
         PackTabBar(
             packs = packs,
             selectedIndex = selectedPackIndex,
-            isExthru = isExthru,
-            isDark = isDark,
             onSelect = { selectedPackIndex = it }
         )
 
-        ThemedDivider(isExthru, isDark)
+        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
 
         // ── Контент ────────────────────────────────────────────────────────────
         Box(modifier = Modifier.weight(1f)) {
@@ -212,21 +202,16 @@ private fun StickerPickerContent(
                 isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
-                packs.isEmpty() -> EmptyPacksPlaceholder(appTheme = appTheme, onCreatePack = { showCreateDialog = true }, isExthru = isExthru, isDark = isDark)
+                packs.isEmpty() -> EmptyPacksPlaceholder(onCreatePack = { showCreateDialog = true })
                 selectedPackIndex == -1 -> PackListView(
                     packs = packs,
                     currentUid = currentUid,
-                    isExthru = isExthru,
-                    isDark = isDark,
                     onSelectPack = { idx -> selectedPackIndex = idx },
                     onDeletePack = { showDeleteConfirm = it }
                 )
                 selectedPack != null -> PackContentGrid(
                     pack = selectedPack,
                     currentUid = currentUid,
-                    appTheme = appTheme,
-                    isExthru = isExthru,
-                    isDark = isDark,
                     onStickerTap = { sticker -> onStickerSelected(selectedPack.id, sticker) },
                     onDeleteSticker = { sticker -> onDeleteSticker(selectedPack.id, sticker) }
                 )
@@ -238,7 +223,6 @@ private fun StickerPickerContent(
 
     if (showCreateDialog) {
         CreatePackDialog(
-            appTheme = appTheme, isExthru = isExthru, isDark = isDark,
             onDismiss = { showCreateDialog = false },
             onCreate = { name, emoji ->
                 onCreatePack(name, emoji)
@@ -250,13 +234,12 @@ private fun StickerPickerContent(
     showDeleteConfirm?.let { pack ->
         val isOwner = pack.authorId == currentUid
         VlAlertDialog(
-            appTheme = appTheme,
             onDismissRequest = { showDeleteConfirm = null },
             title = { Text(if (isOwner) "Удалить пак?" else "Удалить из моих?") },
             text = { Text(if (isOwner) "Пак «${pack.emoji} ${pack.name}» и все его стикеры будут удалены безвозвратно." else "Пак «${pack.emoji} ${pack.name}» будет удален из вашей библиотеки.") },
             actions = {
                 VlDialogButton(onClick = { showDeleteConfirm = null }) { Text("Отмена") }
-                VlDialogButton(appTheme = appTheme, isDestructive = true, onClick = {
+                VlDialogButton(isDestructive = true, onClick = {
                     onDeletePack(pack.id, isOwner)
                     showDeleteConfirm = null
                     if (selectedPack?.id == pack.id) selectedPackIndex = -1
@@ -267,7 +250,7 @@ private fun StickerPickerContent(
 
     showAddStickerSheet?.let { pack ->
         AddStickerSheet(
-            pack = pack, appTheme = appTheme, isExthru = isExthru, isDark = isDark,
+            pack = pack,
             onDismiss = { showAddStickerSheet = null },
             onUpload = { uri, emoji ->
                 onUploadSticker(pack.id, uri, emoji)
@@ -285,8 +268,6 @@ private fun StickerPickerContent(
 private fun PackTabBar(
     packs: List<StickerPack>,
     selectedIndex: Int,
-    isExthru: Boolean,
-    isDark: Boolean,
     onSelect: (Int) -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -309,17 +290,10 @@ private fun PackTabBar(
                 .padding(horizontal = 4.dp)
                 .size(46.dp)
                 .scale(scale)
-                .then(
-                    if (isExthru) {
-                        if (isSelected) Modifier.nmInsetShadow(isDark, cornerRadius = 14.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-                        else Modifier.exthruSmallRaisedShadow(isDark)
-                    } else {
-                        Modifier.clip(RoundedCornerShape(10.dp)).background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                    }
-                )
-                .background(if (isExthru && isSelected) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-                .border(1.dp, if (isExthru && !isSelected) Color.White.copy(alpha = if (isDark) 0.05f else 0.3f) else Color.Transparent, RoundedCornerShape(14.dp))
-                .clip(RoundedCornerShape(14.dp))
+                .clip(VlTheme.tokens.shapes.chip)
+                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.chip)
+                .clip(VlTheme.tokens.shapes.chip)
                 .clickable {
                     haptic.perform(HapticType.SELECTION, true)
                     onSelect(index)
@@ -346,17 +320,10 @@ private fun PackTabBar(
             .padding(horizontal = 4.dp)
             .size(46.dp)
             .scale(addScale)
-            .then(
-                if (isExthru) {
-                    if (isAddSelected) Modifier.nmInsetShadow(isDark, cornerRadius = 14.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-                    else Modifier.exthruSmallRaisedShadow(isDark)
-                } else {
-                    Modifier.clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-                }
-            )
-            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(14.dp))
-            .border(1.dp, if (isExthru && !isAddSelected) Color.White.copy(alpha = if (isDark) 0.05f else 0.3f) else Color.Transparent, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
+            .clip(VlTheme.tokens.shapes.chip)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.chip)
+            .clip(VlTheme.tokens.shapes.chip)
             .clickable {
                 haptic.perform(HapticType.SELECTION, true)
                 onSelect(-1)
@@ -379,8 +346,6 @@ private fun PackTabBar(
 private fun PackListView(
     packs: List<StickerPack>,
     currentUid: String,
-    isExthru: Boolean,
-    isDark: Boolean,
     onSelectPack: (Int) -> Unit,
     onDeletePack: (StickerPack) -> Unit
 ) {
@@ -390,7 +355,6 @@ private fun PackListView(
             PackListRow(
                 pack = pack,
                 isOwner = pack.authorId == currentUid,
-                isExthru = isExthru, isDark = isDark,
                 onClick = { onSelectPack(index) },
                 onDelete = { onDeletePack(pack) }
             )
@@ -402,8 +366,6 @@ private fun PackListView(
 private fun PackListRow(
     pack: StickerPack,
     isOwner: Boolean,
-    isExthru: Boolean,
-    isDark: Boolean,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -428,10 +390,8 @@ private fun PackListRow(
         // Аватарка пака
         val avatarMod = Modifier
             .size(58.dp)
-            .then(
-                if (isExthru) Modifier.exthruSmallRaisedShadow(isDark).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                else Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+            .clip(VlTheme.tokens.shapes.chip)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
 
         Box(modifier = avatarMod, contentAlignment = Alignment.Center) {
             if (pack.stickers.isNotEmpty()) {
@@ -448,7 +408,7 @@ private fun PackListRow(
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 pack.stickers.take(4).forEach { sticker ->
-                    AsyncImage(model = sticker.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp)))
+                    AsyncImage(model = sticker.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(VlTheme.tokens.shapes.indicator))
                 }
                 if (pack.stickers.isEmpty()) {
                     Text("Стикеров нет", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -461,7 +421,9 @@ private fun PackListRow(
 
         Spacer(Modifier.width(8.dp))
         Box {
-            ThemedIconButton(Icons.Default.MoreVert, MaterialTheme.colorScheme.onSurfaceVariant, isExthru, isDark) { showMenu = true }
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Default.MoreVert, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
                     text = { Text(if (isOwner) "Удалить пак" else "Удалить из моих", color = MaterialTheme.colorScheme.error) },
@@ -482,9 +444,6 @@ private fun PackListRow(
 private fun PackContentGrid(
     pack: StickerPack,
     currentUid: String,
-    appTheme: AppTheme,
-    isExthru: Boolean,
-    isDark: Boolean,
     onStickerTap: (StickerItem) -> Unit,
     onDeleteSticker: (StickerItem) -> Unit
 ) {
@@ -512,7 +471,7 @@ private fun PackContentGrid(
     ) {
         items(pack.stickers, key = { it.id }) { sticker ->
             StickerCell(
-                sticker = sticker, isOwner = isOwner, isExthru = isExthru, isDark = isDark,
+                sticker = sticker, isOwner = isOwner,
                 onTap = {
                     haptic.perform(HapticType.CLICK, true)
                     onStickerTap(sticker)
@@ -527,7 +486,6 @@ private fun PackContentGrid(
 
     longPressTarget?.let { sticker ->
         VlAlertDialog(
-            appTheme = appTheme,
             onDismissRequest = { longPressTarget = null },
             title = { Text("Удалить стикер?") },
             text = {
@@ -536,8 +494,8 @@ private fun PackContentGrid(
                 }
             },
             actions = {
-                VlDialogButton(appTheme = appTheme, onClick = { longPressTarget = null }) { Text("Отмена") }
-                VlDialogButton(appTheme = appTheme, isDestructive = true, onClick = {
+                VlDialogButton(onClick = { longPressTarget = null }) { Text("Отмена") }
+                VlDialogButton(isDestructive = true, onClick = {
                     onDeleteSticker(sticker)
                     longPressTarget = null
                 }) { Text("Удалить") }
@@ -551,8 +509,6 @@ private fun PackContentGrid(
 private fun StickerCell(
     sticker: StickerItem,
     isOwner: Boolean,
-    isExthru: Boolean,
-    isDark: Boolean,
     onTap: () -> Unit,
     onLongPress: () -> Unit
 ) {
@@ -560,21 +516,12 @@ private fun StickerCell(
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.85f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f))
 
-    val shadow = if (isExthru) {
-        if (isPressed) Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f)
-        else Modifier.exthruSmallRaisedShadow(isDark)
-    } else {
-        Modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-    }
-
     Box(
         modifier = Modifier
             .aspectRatio(1f)
             .scale(scale)
-            .then(shadow)
-            .background(if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent, RoundedCornerShape(16.dp))
-            .border(1.dp, if(isExthru && !isPressed) Color.White.copy(if(isDark) 0.05f else 0.3f) else Color.Transparent, RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
+            .clip(VlTheme.tokens.shapes.chip)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
             .combinedClickable(interactionSource = interactionSource, indication = null, onClick = onTap, onLongClick = { if(isOwner) onLongPress() }),
         contentAlignment = Alignment.Center
     ) {
@@ -586,10 +533,7 @@ private fun StickerCell(
         val emojiMod = Modifier
             .align(Alignment.BottomEnd)
             .padding(6.dp)
-            .then(
-                if(isExthru) Modifier.exthruSmallRaisedShadow(isDark).background(MaterialTheme.colorScheme.surface, CircleShape)
-                else Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f), CircleShape)
-            )
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f), VlTheme.tokens.shapes.indicator)
             .padding(3.dp)
 
         Text(sticker.emoji, fontSize = 12.sp, modifier = emojiMod)
@@ -606,9 +550,6 @@ fun CreatePackDialog(
     initialEmoji: String = "📦",
     title: String = "Создать пак",
     confirmLabel: String = "Создать",
-    appTheme: AppTheme,
-    isExthru: Boolean,
-    isDark: Boolean,
     onDismiss: () -> Unit,
     onCreate: (name: String, emoji: String) -> Unit
 ) {
@@ -616,26 +557,25 @@ fun CreatePackDialog(
     var emoji by remember { mutableStateOf(initialEmoji) }
 
     VlAlertDialog(
-        appTheme = appTheme,
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                ThemedOutlinedTextField(
+                VlTextField(
                     value = emoji, onValueChange = { if (it.length <= 2) emoji = it },
-                    label = { Text("Эмодзи") }, isExthru = isExthru, isDark = isDark,
+                    label = "Эмодзи",
                     textStyle = LocalTextStyle.current.copy(fontSize = 28.sp, textAlign = TextAlign.Center)
                 )
-                ThemedOutlinedTextField(
+                VlTextField(
                     value = name, onValueChange = { if (it.length <= 32) name = it },
-                    label = { Text("Название пака") }, isExthru = isExthru, isDark = isDark,
-                    supportingText = { Text("${name.length}/32", textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth()) }
+                    label = "Название пака",
+                    supportingText = "${name.length}/32"
                 )
             }
         },
         actions = {
-            VlDialogButton(appTheme = appTheme, onClick = onDismiss) { Text("Отмена") }
-            VlDialogButton(appTheme = appTheme, isPrimary = true, onClick = {
+            VlDialogButton(onClick = onDismiss) { Text("Отмена") }
+            VlDialogButton(isPrimary = true, onClick = {
                 if (name.isNotBlank()) onCreate(name.trim(), emoji.ifBlank { "📦" })
             }) { Text(confirmLabel) }
         }
@@ -646,9 +586,6 @@ fun CreatePackDialog(
 @Composable
 fun AddStickerSheet(
     pack: StickerPack,
-    appTheme: AppTheme,
-    isExthru: Boolean,
-    isDark: Boolean,
     onDismiss: () -> Unit,
     onUpload: (uri: Uri, emoji: String) -> Unit
 ) {
@@ -679,10 +616,8 @@ fun AddStickerSheet(
             val previewMod = Modifier
                 .fillMaxWidth()
                 .height(180.dp)
-                .then(
-                    if (isExthru) Modifier.nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
-                    else Modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surfaceVariant)
-                )
+                .clip(VlTheme.tokens.shapes.card)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
                 .clickable {
                     haptic.perform(HapticType.CLICK, true)
                     picker.launch("image/*")
@@ -700,26 +635,27 @@ fun AddStickerSheet(
                 }
             }
 
-            ThemedOutlinedTextField(
+            VlTextField(
                 value = emojiInput, onValueChange = { if (it.length <= 2) emojiInput = it },
-                label = { Text("Эмодзи для стикера") }, isExthru = isExthru, isDark = isDark,
+                label = "Эмодзи для стикера",
                 textStyle = LocalTextStyle.current.copy(fontSize = 24.sp)
             )
 
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.weight(1f)) {
-                    VlButton(appTheme = appTheme, isDestructive = true, onClick = onDismiss) { Text("Отмена") }
+                    VlButton(isDestructive = true, onClick = onDismiss) { Text("Отмена") }
                 }
                 Box(Modifier.weight(1f)) {
                     if (pendingUri != null) {
-                        VlButton(appTheme = appTheme, onClick = { pendingUri?.let { uri -> onUpload(uri, emojiInput.ifBlank { "🎭" }) } }) { Text("Добавить") }
+                        VlButton(onClick = { pendingUri?.let { uri -> onUpload(uri, emojiInput.ifBlank { "🎭" }) } }) { Text("Добавить") }
                     } else {
-                        // Фейковая задизейбленная кнопка для Exthru (так как VlButton не поддерживает enabled из коробки пока что)
-                        Box(
-                            modifier = Modifier.fillMaxWidth().height(56.dp).nmInsetShadow(isDark, cornerRadius = 16.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = VlTheme.tokens.shapes.button
                         ) {
-                            Text("Добавить", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                            Text("Добавить")
                         }
                     }
                 }
@@ -733,75 +669,7 @@ fun AddStickerSheet(
 // ════════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun ThemedIconButton(
-    icon: ImageVector,
-    tint: Color,
-    isExthru: Boolean,
-    isDark: Boolean,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.85f else 1f, spring(dampingRatio = 0.5f))
-
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .scale(scale)
-            .then(if (isExthru) Modifier.exthruSmallRaisedShadow(isDark) else Modifier)
-            .background(if (isExthru) MaterialTheme.colorScheme.surface else Color.Transparent, CircleShape)
-            .clip(CircleShape)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
-    }
-}
-
-@Composable
-private fun ThemedOutlinedTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: @Composable (() -> Unit)?,
-    isExthru: Boolean,
-    isDark: Boolean,
-    supportingText: @Composable (() -> Unit)? = null,
-    textStyle: TextStyle = LocalTextStyle.current
-) {
-    if (isExthru) {
-        Box(modifier = Modifier.fillMaxWidth().nmInsetShadow(isDark, cornerRadius = 16.dp, darkAlpha = if(isDark) 0.6f else 0.35f).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))) {
-            OutlinedTextField(
-                value = value, onValueChange = onValueChange, label = label,
-                singleLine = true, modifier = Modifier.fillMaxWidth(), textStyle = textStyle,
-                supportingText = supportingText, shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent
-                )
-            )
-        }
-    } else {
-        OutlinedTextField(
-            value = value, onValueChange = onValueChange, label = label,
-            singleLine = true, modifier = Modifier.fillMaxWidth(),
-            textStyle = textStyle, supportingText = supportingText
-        )
-    }
-}
-
-@Composable
-private fun ThemedDivider(isExthru: Boolean, isDark: Boolean) {
-    if (isExthru) {
-        Box(Modifier.fillMaxWidth().height(2.dp).nmDividerBottom(isDark))
-    } else {
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
-    }
-}
-
-@Composable
-private fun EmptyPacksPlaceholder(appTheme: AppTheme, onCreatePack: () -> Unit, isExthru: Boolean, isDark: Boolean) {
+private fun EmptyPacksPlaceholder(onCreatePack: () -> Unit) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("🎭", fontSize = 64.sp)
@@ -809,7 +677,7 @@ private fun EmptyPacksPlaceholder(appTheme: AppTheme, onCreatePack: () -> Unit, 
             Text("Создайте свой первый пак или получите\nстикер-пак в чате", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f), textAlign = TextAlign.Center)
             Spacer(Modifier.height(8.dp))
             Box(Modifier.width(200.dp)) {
-                VlButton(appTheme = appTheme, onClick = onCreatePack) { Text("Создать пак") }
+                VlButton(onClick = onCreatePack) { Text("Создать пак") }
             }
         }
     }

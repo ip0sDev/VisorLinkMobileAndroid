@@ -19,12 +19,15 @@ data class ProfileUiState(
     val error: String? = null,
     val successMessage: String? = null,
     val usernameAvailable: Boolean? = null,
-    val checkingUsername: Boolean = false
+    val checkingUsername: Boolean = false,
+    val tgCode: String? = null,
+    val isGeneratingCode: Boolean = false
 )
 
 class ProfileViewModel(
     private val userRepository: UserRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val fcmManager: by.iposdev.visorlink.utils.FcmManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -113,9 +116,35 @@ class ProfileViewModel(
     }
 
     fun logout() {
-        // PresenceManager.detach() вызывается в VisorLinkApp через AuthStateListener
-        authRepository.logout()
+        viewModelScope.launch {
+            runCatching { fcmManager.revokeToken() }
+            authRepository.logout()
+        }
     }
 
-    fun clearMessages() = _uiState.update { it.copy(error = null, successMessage = null) }
+    fun clearMessages() = _uiState.update { it.copy(error = null, successMessage = null, tgCode = null) }
+
+    fun generateTgCode() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isGeneratingCode = true, error = null) }
+            try {
+                val code = userRepository.generateTgCode()
+                _uiState.update { it.copy(tgCode = code, isGeneratingCode = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message, isGeneratingCode = false) }
+            }
+        }
+    }
+
+    fun unbindTelegram() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            try {
+                userRepository.unbindTelegram()
+                _uiState.update { it.copy(isLoading = false, successMessage = "Telegram unlinked!") }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
+            }
+        }
+    }
 }

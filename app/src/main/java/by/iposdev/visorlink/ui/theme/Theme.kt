@@ -1,30 +1,27 @@
 package by.iposdev.visorlink.ui.theme
 
 import android.app.Activity
+import android.content.ContextWrapper
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import by.iposdev.visorlink.BuildConfig
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.data.model.ThemeMode
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.utils.CustomizationHelper
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import org.koin.compose.viewmodel.koinViewModel
+import java.util.concurrent.atomic.AtomicInteger
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
 
@@ -84,143 +81,40 @@ private val DarkM3 = darkColorScheme(
     surfaceContainerHighest = Color(0xFF353347),
 )
 
-// ── OneUI 8.5 ─────────────────────────────────────────────────────────────────
+private val Material3ShapeScale = Shapes(medium = RoundedCornerShape(16.dp))
 
-private val LightOneUI = lightColorScheme(
-    primary = Color(0xFF006FFD),
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFFD6E4FF),
-    onPrimaryContainer = Color(0xFF001C45),
-    secondary = Color(0xFF0381FE),
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFFCCDFFF),
-    onSecondaryContainer = Color(0xFF00174A),
-    tertiary = Color(0xFF5B5EA6),
-    onTertiary = Color(0xFFFFFFFF),
-    tertiaryContainer = Color(0xFFE2E0FF),
-    onTertiaryContainer = Color(0xFF17175E),
-    error = Color(0xFFFF3B30),
-    onError = Color(0xFFFFFFFF),
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFF4F4F4),
-    onBackground = Color(0xFF1A1A1A),
-    surface = Color(0xFFFFFFFF),
-    onSurface = Color(0xFF1A1A1A),
-    surfaceVariant = Color(0xFFEEEEEE),
-    onSurfaceVariant = Color(0xFF49454F),
-    outline = Color(0xFFE0E0E0),
-    outlineVariant = Color(0xFFCAC4D0),
-    surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F7F7),
-    surfaceContainer = Color(0xFFF2F2F2),
-    surfaceContainerHigh = Color(0xFFECECEC),
-    surfaceContainerHighest = Color(0xFFE6E6E6),
-)
-
-private val DarkOneUI = darkColorScheme(
-    primary = Color(0xFF5B9BFF),
-    onPrimary = Color(0xFF00285C),
-    primaryContainer = Color(0xFF003E8D),
-    onPrimaryContainer = Color(0xFFD6E4FF),
-    secondary = Color(0xFF63A0FF),
-    onSecondary = Color(0xFF002D6A),
-    secondaryContainer = Color(0xFF004498),
-    onSecondaryContainer = Color(0xFFCCDFFF),
-    tertiary = Color(0xFFC3C2FF),
-    onTertiary = Color(0xFF2D2D75),
-    tertiaryContainer = Color(0xFF44448D),
-    onTertiaryContainer = Color(0xFFE2E0FF),
-    error = Color(0xFFFF453A),
-    onError = Color(0xFF690005),
-    errorContainer = Color(0xFF93000A),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF161616),
-    onBackground = Color(0xFFE8E8E8),
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFE8E8E8),
-    surfaceVariant = Color(0xFF2A2A2A),
-    onSurfaceVariant = Color(0xFFCAC4D0),
-    outline = Color(0xFF3A3A3A),
-    outlineVariant = Color(0xFF49454F),
-    surfaceContainerLowest = Color(0xFF0E0E0E),
-    surfaceContainerLow = Color(0xFF1A1A1A),
-    surfaceContainer = Color(0xFF212121),
-    surfaceContainerHigh = Color(0xFF2C2C2C),
-    surfaceContainerHighest = Color(0xFF373737),
-)
-
-// ── Shapes ────────────────────────────────────────────────────────────────────
-
-val ShapesM3 = Shapes(
+/** Сетка 4dp (§8): 8 · 16 · 24 · 28. */
+private val BiolumeShapeScale = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(28.dp),
-    extraLarge = RoundedCornerShape(36.dp)
-)
-
-val ShapesOneUI = Shapes(
-    extraSmall = RoundedCornerShape(6.dp),
-    small = RoundedCornerShape(10.dp),
-    medium = RoundedCornerShape(20.dp),
-    large = RoundedCornerShape(26.dp),
-    extraLarge = RoundedCornerShape(32.dp)
-)
-
-val ShapesExthru = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(18.dp),
+    medium = RoundedCornerShape(16.dp),
     large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp)
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
-// Forge — neo-brutalist, острые углы везде (радиус = 0 во Flutter-версии)
-val ShapesForge = Shapes(
+/**
+ * Forge: ни одного скругления, включая M3-компоненты со своей шкалой форм.
+ * `Shapes` принимает только `CornerBasedShape`, поэтому здесь нулевой радиус,
+ * а не `RectangleShape`.
+ */
+private val ForgeShapeScale = Shapes(
     extraSmall = RoundedCornerShape(0.dp),
     small = RoundedCornerShape(0.dp),
     medium = RoundedCornerShape(0.dp),
     large = RoundedCornerShape(0.dp),
-    extraLarge = RoundedCornerShape(0.dp)
-)
-
-// ── Typography ────────────────────────────────────────────────────────────────
-
-val TypographyM3 = Typography(
-    displayLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 57.sp, lineHeight = 64.sp),
-    headlineLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 32.sp, lineHeight = 40.sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 28.sp, lineHeight = 36.sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 24.sp),
-    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp),
-)
-
-val TypographyOneUI = Typography(
-    displayLarge = TextStyle(fontWeight = FontWeight.Light, fontSize = 57.sp, lineHeight = 64.sp, letterSpacing = (-0.25).sp),
-    headlineLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 32.sp, lineHeight = 40.sp, letterSpacing = 0.sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 28.sp, lineHeight = 36.sp, letterSpacing = 0.sp),
-    headlineSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 24.sp, lineHeight = 32.sp, letterSpacing = 0.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = 0.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
-    titleSmall = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp, letterSpacing = 0.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    bodySmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp, lineHeight = 20.sp, letterSpacing = 0.sp),
-    labelMedium = TextStyle(fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
-    labelSmall = TextStyle(fontWeight = FontWeight.Normal, fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.sp),
+    extraLarge = RoundedCornerShape(0.dp),
 )
 
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
+/**
+ * Оформление, применяемое при просмотре чужого профиля или чата.
+ *
+ * PRO-пользователь может задать свои акцент, шрифт и тему; они применяются
+ * зрителю, только если [CustomizationHelper.shouldApplyCustomization] это
+ * разрешает (владелец — PRO, и зритель не отключил у себя чужие кастомизации).
+ * Иначе показываются глобальные настройки зрителя.
+ */
 @Composable
 fun UserProfileTheme(
     profile: UserProfile?,
@@ -228,50 +122,60 @@ fun UserProfileTheme(
     content: @Composable () -> Unit
 ) {
     val themeVm: ThemeViewModel = koinViewModel()
-    val globalAppTheme by themeVm.appTheme.collectAsState()
-    val globalPreset by themeVm.colorPreset.collectAsState()
+    val currentTheme by themeVm.appTheme.collectAsState()
     val currentThemeMode by themeVm.themeMode.collectAsState()
+    val globalPreset by themeVm.colorPreset.collectAsState()
 
-    val applyCust = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
-    val cust = if (applyCust) profile?.customization ?: emptyMap() else emptyMap()
+    val applyCustom = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
+    val cust = if (applyCustom) profile?.customization.orEmpty() else emptyMap()
 
-    val customAppTheme = if (cust["style"] != null && cust["style"] != "default") {
-        CustomizationHelper.parseStyle(cust["style"] as String)
-    } else globalAppTheme
+    val theme = (cust["theme"] as? String)
+        ?.let { CustomizationHelper.parseStyle(it) }
+        ?: currentTheme
 
-    val customPreset = if (cust["accent"] != null && cust["accent"] != "default") {
-        CustomizationHelper.parseAccent(cust["accent"] as String)
-    } else globalPreset
+    val preset = (cust["accent"] as? String)
+        ?.let { CustomizationHelper.parseAccent(it) }
+        ?: globalPreset
 
-    val fontStr = cust["font"] as? String ?: "default"
+    val fontKey = cust["font"] as? String
 
     VisorLinkTheme(
-        appTheme = customAppTheme,
+        appTheme = theme,
         themeMode = currentThemeMode,
-        colorPreset = customPreset
-    ) {
-        val currentTypography = MaterialTheme.typography
-        val customizedTypography = if (fontStr != "default") {
-            CustomizationHelper.getTypography(fontStr, currentTypography)
-        } else currentTypography
-
-        MaterialTheme(
-            colorScheme = MaterialTheme.colorScheme,
-            shapes = MaterialTheme.shapes,
-            typography = customizedTypography,
-            content = content
-        )
-    }
+        colorPreset = preset,
+        setStatusBarColor = false,
+        typographyOverride = fontKey?.let { key ->
+            CustomizationHelper.getTypography(
+                fontStr = key,
+                base = when (theme) {
+                    AppTheme.BIOLUME -> BiolumeTypography
+                    AppTheme.FORGE -> ForgeTypography
+                    AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
+                },
+            )
+        },
+        content = content,
+    )
 }
 
 // ── VisorLink Theme Composable ────────────────────────────────────────────────
 
+/**
+ * Единственная точка, где решается «как выглядит приложение».
+ *
+ * Помимо [MaterialTheme] раздаёт [LocalVlTokens] — расширение токенов, которого в
+ * M3 нет (неоморфный рельеф, сигнальное свечение, success/warning, data-роли).
+ * Благодаря этому компоненты в `ui/components` сами подстраиваются под тему, а
+ * экраны остаются тема-независимыми и НЕ получают `appTheme` параметром.
+ */
 @Composable
-@Suppress("DEPRECATION")
 fun VisorLinkTheme(
-    appTheme: AppTheme = AppTheme.BIOLUME,
+    appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
+    setStatusBarColor: Boolean = true,
+    /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
+    typographyOverride: androidx.compose.material3.Typography? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -281,55 +185,130 @@ fun VisorLinkTheme(
         ThemeMode.SYSTEM -> systemDark
     }
 
-    // EXTHRU оставлен как алиас BIOLUME для экранов, которые ещё не мигрировали на новое имя.
-    val resolvedTheme = if (appTheme == AppTheme.EXTHRU) AppTheme.BIOLUME else appTheme
+    val context = LocalContext.current
 
-    val baseColorScheme = when (resolvedTheme) {
+    // Системная настройка «убрать анимации» (§6, §8): читаем один раз и раздаём
+    // вниз через токены, чтобы каждый компонент не лез в Settings сам.
+    val reduceMotion = remember(context) {
+        Settings.Global.getFloat(
+            context.contentResolver,
+            Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        ) == 0f
+    }
+
+    val colorScheme = when (appTheme) {
+        AppTheme.BIOLUME -> {
+            val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
+            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+        }
+
+        AppTheme.FORGE -> {
+            val base = if (darkTheme) ForgeSteelColorScheme else ForgeConcreteColorScheme
+            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+        }
+
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT -> {
-                val ctx = LocalContext.current
-                if (darkTheme) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-            }
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT ->
+                if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             darkTheme -> DarkM3
             else      -> LightM3
         }
-        AppTheme.ONE_UI -> if (darkTheme) DarkOneUI else LightOneUI
-        AppTheme.BIOLUME -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme
-        AppTheme.FORGE, AppTheme.FORGE_TERMINAL -> if (darkTheme) ForgeDarkColorScheme else ForgeLightColorScheme
-        AppTheme.EXTHRU -> if (darkTheme) BiolumeDarkColorScheme else BiolumeLightColorScheme // недостижимо, resolvedTheme выше уже разрешил
     }
 
-    // Кастомный акцентный цвет (пресет) перекрашивает схему поверх любой из 3 тем.
-    // Для M3 с включённым Material You (preset == DEFAULT) пресет не применяется — используется системный динамический цвет.
-    val colorScheme = baseColorScheme.withColorPreset(resolvedTheme, darkTheme, colorPreset)
+    val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme) {
+        when (appTheme) {
+            AppTheme.BIOLUME -> VlTokens(
+                style = VlStyle.BIOLUME,
+                isDark = darkTheme,
+                structure = biolumeStructure(darkTheme),
+                signal = biolumeSignal(darkTheme),
+                shapes = BiolumeShapes,
+                motion = BiolumeMotion,
+                status = biolumeStatus(darkTheme),
+                selectionFill = biolumeSelectionFill(darkTheme, colorScheme.primary),
+                bubbles = biolumeBubbles(darkTheme, colorScheme.primary),
+                data = BiolumeDataTypography,
+                reduceMotion = reduceMotion,
+            )
+
+            AppTheme.FORGE -> VlTokens(
+                style = VlStyle.FORGE,
+                isDark = darkTheme,
+                structure = forgeStructure(darkTheme),
+                signal = forgeSignal(darkTheme),
+                shapes = ForgeShapes,
+                motion = ForgeMotion,
+                status = forgeStatus(darkTheme),
+                selectionFill = forgeSelectionFill(darkTheme, colorScheme.primary),
+                bubbles = forgeBubbles(darkTheme, colorScheme.primary),
+                data = ForgeDataTypography,
+                reduceMotion = reduceMotion,
+            )
+
+            AppTheme.MATERIAL3_EXPRESSIVE -> VlTokens(
+                style = VlStyle.MATERIAL3,
+                isDark = darkTheme,
+                structure = VlStructureTokens.Disabled,
+                signal = VlSignalTokens.Disabled,
+                shapes = Material3Shapes,
+                motion = Material3Motion,
+                status = VlStatusTokens(
+                    success = if (darkTheme) Color(0xFF7BD88F) else Color(0xFF2E7D32),
+                    onSuccess = if (darkTheme) Color(0xFF0A2E12) else Color.White,
+                    warning = if (darkTheme) Color(0xFFFFC24E) else Color(0xFF8F6200),
+                    onWarning = if (darkTheme) Color(0xFF2B1B00) else Color.White,
+                ),
+                // M3E: непрозрачный secondaryContainer — штатный цвет active
+                // indicator в M3 Navigation Bar, ничего изобретать не нужно.
+                selectionFill = colorScheme.secondaryContainer,
+                bubbles = VlBubbleTokens(
+                    mineBg = colorScheme.primaryContainer,
+                    mineFg = colorScheme.onSurface,
+                    otherBg = colorScheme.surfaceVariant,
+                    otherFg = colorScheme.onSurface,
+                ),
+                data = Material3DataTypography,
+                reduceMotion = reduceMotion,
+            )
+        }
+    }
 
     val view = LocalView.current
-    if (!view.isInEditMode) {
+    if (!view.isInEditMode && setStatusBarColor) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = Color.Transparent.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            var ctx = view.context
+            while (ctx is ContextWrapper) {
+                if (ctx is Activity) break
+                ctx = ctx.baseContext
+            }
+            val window = (ctx as? Activity)?.window
+            if (window != null) {
+                window.statusBarColor = Color.Transparent.toArgb()
+                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            }
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        shapes = when (resolvedTheme) {
-            AppTheme.ONE_UI  -> ShapesOneUI
-            AppTheme.BIOLUME -> ShapesExthru
-            AppTheme.FORGE   -> ShapesForge
-            else             -> ShapesM3
-        },
-        typography = when (resolvedTheme) {
-            AppTheme.ONE_UI  -> TypographyOneUI
-            AppTheme.BIOLUME -> ExthruTypography
-            AppTheme.FORGE   -> ForgeTypography
-            else             -> TypographyM3
-        },
-        content = {
-            CompositionLocalProvider(LocalAppThemeOverride provides resolvedTheme) {
-                content()
-            }
-        }
-    )
+    CompositionLocalProvider(
+        LocalVlTokens provides tokens,
+        LocalSignalCounter provides remember { AtomicInteger(0) }
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            // Шкала форм для M3-компонентов, которые берут форму из темы, а не из
+            // наших токенов (BottomSheet, Menu, Snackbar и т.п.).
+            shapes = when (appTheme) {
+                AppTheme.BIOLUME -> BiolumeShapeScale
+                AppTheme.FORGE -> ForgeShapeScale
+                AppTheme.MATERIAL3_EXPRESSIVE -> Material3ShapeScale
+            },
+            typography = typographyOverride ?: when (appTheme) {
+                AppTheme.BIOLUME -> BiolumeTypography
+                AppTheme.FORGE -> ForgeTypography
+                AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
+            },
+            content = content
+        )
+    }
 }

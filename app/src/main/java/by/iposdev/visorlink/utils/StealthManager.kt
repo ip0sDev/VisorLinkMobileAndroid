@@ -2,14 +2,27 @@ package by.iposdev.visorlink.utils
 
 import android.content.Context
 import android.util.Base64
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 class StealthManager(context: Context) {
-    private val prefs = context.getSharedPreferences("visorlink_stealth_prefs", Context.MODE_PRIVATE)
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
+    private val prefs = EncryptedSharedPreferences.create(
+        context,
+        "visorlink_stealth_prefs",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
     companion object {
         private const val KEY_ENABLED = "stealth_mode_enabled"
+        private const val KEY_BIOMETRIC_UNLOCK = "stealth_biometric_unlock_enabled"
         private const val KEY_PIN_HASH = "stealth_pin_hash"
         private const val KEY_SALT = "stealth_pin_salt"
     }
@@ -19,6 +32,13 @@ class StealthManager(context: Context) {
 
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+    }
+
+    /** Открывать режим скрытия по отпечатку (в дополнение к PIN). */
+    fun isBiometricUnlockEnabled(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK, false)
+
+    fun setBiometricUnlockEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_BIOMETRIC_UNLOCK, enabled).apply()
     }
 
     fun setPin(pin: String) {

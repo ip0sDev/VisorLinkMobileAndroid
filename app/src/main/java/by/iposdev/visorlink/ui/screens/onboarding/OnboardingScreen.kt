@@ -28,10 +28,13 @@ import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.AppTheme
 import by.iposdev.visorlink.data.model.ColorPreset
 import by.iposdev.visorlink.ui.components.*
+import by.iposdev.visorlink.ui.components.settings.VlThemeSelector
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.ui.screens.auth.AuthCard
+import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -43,6 +46,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun OnboardingScreen(
     onFinish: () -> Unit,
     themeViewModel: ThemeViewModel = koinViewModel(),
+    authViewModel: AuthViewModel = koinViewModel(),
     auth: FirebaseAuth = koinInject(),
     db: FirebaseFirestore = koinInject()
 ) {
@@ -53,20 +57,49 @@ fun OnboardingScreen(
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
-    val scaffoldBg = if (appTheme == AppTheme.BIOLUME || appTheme == AppTheme.FORGE) MaterialTheme.colorScheme.background else MaterialTheme.colorScheme.surface
+    val scaffoldBg = MaterialTheme.colorScheme.surface
 
     Scaffold(
         containerColor = scaffoldBg,
-        bottomBar = {
+        topBar = {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .padding(24.dp)
-                    .navigationBarsPadding()
+                    .statusBarsPadding()
+                    .padding(top = 16.dp, bottom = 12.dp),
+                contentAlignment = Alignment.Center
             ) {
-                if (pagerState.currentPage < 3) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(4) { i ->
+                        val isCurrent = pagerState.currentPage == i
+                        val color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                        val width by animateDpAsState(
+                            targetValue = if (isCurrent) 24.dp else 8.dp,
+                            animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+                            label = "onboarding_indicator_width"
+                        )
+                        Box(
+                            Modifier
+                                .size(width = width, height = 8.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                        )
+                    }
+                }
+            }
+        },
+        bottomBar = {
+            if (pagerState.currentPage < 3) {
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                        .navigationBarsPadding()
+                ) {
                     VlButton(
-                        appTheme = appTheme,
                         onClick = {
                             scope.launch {
                                 pagerState.animateScrollToPage(pagerState.currentPage + 1)
@@ -75,22 +108,16 @@ fun OnboardingScreen(
                     ) {
                         Text(stringResource(R.string.action_next), fontWeight = FontWeight.Bold)
                     }
-                } else {
-                    VlButton(
-                        appTheme = appTheme,
-                        onClick = {
-                            themeViewModel.completeOnboarding()
-                            onFinish()
-                        }
-                    ) {
-                        Text(stringResource(R.string.intro_start_btn), fontWeight = FontWeight.Bold)
-                    }
                 }
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            VlAmbientGlow(appTheme = appTheme)
+        Box(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            VlAmbientGlow()
 
             HorizontalPager(
                 state = pagerState,
@@ -101,24 +128,12 @@ fun OnboardingScreen(
                     0 -> WelcomePage(themeViewModel)
                     1 -> AppearancePage(themeViewModel)
                     2 -> FeaturesPage(themeViewModel, auth, db)
-                    3 -> FinalPage(appTheme)
-                }
-            }
-
-            // Indicator
-            Row(
-                Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                repeat(4) { i ->
-                    val color = if (pagerState.currentPage == i) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
-                    Box(
-                        Modifier
-                            .size(if (pagerState.currentPage == i) 24.dp else 8.dp, 8.dp)
-                            .clip(CircleShape)
-                            .background(color)
+                    3 -> AuthPage(
+                        authViewModel = authViewModel,
+                        onSuccess = {
+                            themeViewModel.completeOnboarding()
+                            onFinish()
+                        }
                     )
                 }
             }
@@ -156,10 +171,10 @@ fun WelcomePage(themeViewModel: ThemeViewModel) {
         )
         Spacer(Modifier.height(48.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.settings_section_language)) {
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
+        VlSettingsSection(title = stringResource(R.string.settings_section_language)) {
+            VlOptionRow(icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
+            VlOptionRow(icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
+            VlOptionRow(icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
         }
     }
 }
@@ -167,6 +182,7 @@ fun WelcomePage(themeViewModel: ThemeViewModel) {
 @Composable
 fun AppearancePage(themeViewModel: ThemeViewModel) {
     val appTheme by themeViewModel.appTheme.collectAsState()
+    val currentMode by themeViewModel.themeMode.collectAsState()
     val currentPreset by themeViewModel.colorPreset.collectAsState()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
@@ -188,15 +204,19 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
         )
         Spacer(Modifier.height(32.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.settings_section_appearance)) {
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Layers, label = "Biolume", desc = "Органичный неоморфизм", selected = appTheme == AppTheme.BIOLUME, index = 0, total = 3, onClick = { themeViewModel.setTheme(AppTheme.BIOLUME) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.AutoAwesome, label = "Expressive", desc = "Material 3 Next", selected = appTheme == AppTheme.MATERIAL3_EXPRESSIVE, index = 1, total = 3, onClick = { themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE) })
-            VlOptionRow(appTheme = appTheme, icon = Icons.Default.Shield, label = "Forge", desc = "Cyberpunk / Industrial", selected = appTheme == AppTheme.FORGE, index = 2, total = 3, onClick = { themeViewModel.setTheme(AppTheme.FORGE) })
+        VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
+            VlThemeSelector(
+                selected = appTheme,
+                onSelect = { themeViewModel.setTheme(it) },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                themeMode = currentMode,
+                colorPreset = currentPreset,
+            )
         }
 
         Spacer(Modifier.height(16.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.settings_section_accent)) {
+        VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -205,7 +225,6 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
                     ColorPresetCircle(
                         preset = preset,
                         isSelected = currentPreset == preset,
-                        appTheme = appTheme,
                         isDark = isDark,
                         onClick = { themeViewModel.setColorPreset(preset) }
                     )
@@ -244,9 +263,8 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
         )
         Spacer(Modifier.height(32.dp))
 
-        VlSettingsSection(appTheme = appTheme, title = stringResource(R.string.intro_features_section)) {
+        VlSettingsSection(title = stringResource(R.string.intro_features_section)) {
             VlSettingsItem(
-                appTheme = appTheme,
                 icon = Icons.Default.Explore,
                 iconColor = MaterialTheme.colorScheme.primary,
                 title = stringResource(R.string.feed_title),
@@ -254,14 +272,12 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                 index = 0, total = 2,
                 trailing = {
                     VlSwitch(
-                        appTheme = appTheme,
                         checked = discoverEnabled,
                         onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }
                     )
                 }
             )
             VlSettingsItem(
-                appTheme = appTheme,
                 icon = Icons.Default.Book,
                 iconColor = Color(0xFF10B981),
                 title = stringResource(R.string.diary_title),
@@ -269,7 +285,6 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                 index = 1, total = 2,
                 trailing = {
                     VlSwitch(
-                        appTheme = appTheme,
                         checked = diaryEnabledLocal,
                         onCheckedChange = { v ->
                             diaryEnabledLocal = v
@@ -287,28 +302,20 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
 }
 
 @Composable
-fun FinalPage(appTheme: AppTheme) {
-    Column(
-        Modifier
+fun AuthPage(
+    authViewModel: AuthViewModel,
+    onSuccess: () -> Unit
+) {
+    Box(
+        modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text("✨", fontSize = 80.sp)
-        Spacer(Modifier.height(24.dp))
-        Text(
-            stringResource(R.string.intro_final_title),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Black,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(16.dp))
-        Text(
-            stringResource(R.string.intro_final_desc),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+        AuthCard(
+            viewModel = authViewModel,
+            onLoginSuccess = onSuccess,
+            onRegistrationComplete = onSuccess
         )
     }
 }
