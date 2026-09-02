@@ -101,9 +101,12 @@ data class Chat(
     val settings: ChatSettings = ChatSettings(),
     val lastMessage: Any? = null,
     val lastMessageAt: Timestamp? = null,
-    val createdAt: Timestamp? = null
+    val createdAt: Timestamp? = null,
+    val unreadCount: Map<String, Int> = emptyMap()
 ) {
     val isForumActive: Boolean get() = isForum || is_forum || settings.isForum || settings.is_forum
+
+    fun unreadCountFor(currentUid: String): Int = unreadCount[currentUid] ?: unreadCount[""] ?: 0
 
     fun lastMessageText(): String {
         return when (lastMessage) {
@@ -157,11 +160,27 @@ fun DocumentSnapshot.toChatOrNull(): Chat? {
             is_forum = isForum
         )
 
+        val rawUnread = this.get("unreadCount")
+        val unreadMap: Map<String, Int> = when (rawUnread) {
+            is Map<*, *> -> rawUnread.entries.mapNotNull { (k, v) ->
+                val uid = k as? String ?: return@mapNotNull null
+                val count = when (v) {
+                    is Number -> v.toInt()
+                    is String -> v.toIntOrNull() ?: 0
+                    else -> 0
+                }
+                uid to count
+            }.toMap()
+            is Number -> mapOf("" to rawUnread.toInt())
+            else -> chat?.unreadCount ?: emptyMap()
+        }
+
         return (chat ?: Chat(id = this.id)).copy(
             id = this.id,
             isForum = isForum,
             is_forum = isForum,
-            settings = finalSettings
+            settings = finalSettings,
+            unreadCount = unreadMap
         )
     } catch (e: Exception) {
         android.util.Log.e("ChatParser", "Error parsing chat doc $id", e)

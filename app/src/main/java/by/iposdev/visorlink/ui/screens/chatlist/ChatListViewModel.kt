@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.ui.screens.chatlist
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,8 @@ import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
 import by.iposdev.visorlink.utils.DraftManager
 import by.iposdev.visorlink.data.repository.BackendFallbackManager
+import by.iposdev.visorlink.utils.NotificationHelper
+import by.iposdev.visorlink.utils.PresenceManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,7 +20,8 @@ class ChatListViewModel(
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
     private val draftManager: DraftManager,
-    private val fallbackManager: BackendFallbackManager? = null
+    private val fallbackManager: BackendFallbackManager? = null,
+    private val context: Context? = null
 ) : ViewModel() {
 
     val isManualFallbackActive: StateFlow<Boolean> = fallbackManager?.manualFallbackActive
@@ -50,26 +54,52 @@ class ChatListViewModel(
         lastMessage = "Нажмите, чтобы открыть",
     )
 
+    private val observedPresenceUids = mutableSetOf<String>()
+
     init {
         viewModelScope.launch {
             chats.collect { list ->
-                val knownUids = _profileCache.value.keys
+                list.forEach { chat ->
+                    if (chat.unreadCountFor(currentUid) == 0) {
+                        context?.let { NotificationHelper.clearNotification(it, chat.id) }
+                    }
+                }
 
-                list.filter { it.chatType() == ChatType.DIRECT }
+                val directUids = list.filter { it.chatType() == ChatType.DIRECT }
                     .map { it.otherParticipantId(currentUid) }
-                    .filter { it.isNotEmpty() && it !in knownUids }
+                    .filter { it.isNotEmpty() }
                     .distinct()
-                    .forEach { uid ->
+
+                directUids.forEach { uid ->
+                    if (uid !in _profileCache.value.keys) {
                         launch {
                             try {
                                 userRepository.getUserProfile(uid)?.let { profile ->
-                                    _profileCache.value = _profileCache.value + (uid to profile)
+                                    _profileCache.update { it + (uid to profile) }
                                 }
                             } catch (e: Exception) {
                                 Log.e("ChatListVM", "Failed to fetch profile for $uid: ${e.message}")
                             }
                         }
                     }
+
+                    if (observedPresenceUids.add(uid)) {
+                        launch {
+                            PresenceManager.observePresence(uid).collect { presence ->
+                                if (presence != null) {
+                                    _profileCache.update { currentMap ->
+                                        val existing = currentMap[uid]
+                                        if (existing != null && existing.online != presence.online) {
+                                            currentMap + (uid to existing.copy(online = presence.online))
+                                        } else {
+                                            currentMap
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

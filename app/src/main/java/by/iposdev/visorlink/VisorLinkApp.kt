@@ -127,13 +127,22 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             }
         })
 
-        // Автоматически управляем presence при смене auth state
+        // Автоматически управляем presence и FCM-токеном при смене auth state
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             val uid = auth.currentUser?.uid
             if (uid != null) {
-                presenceManager?.detach()
-                presenceManager = PresenceManager(uid).also {
-                    it.attach(ProcessLifecycleOwner.get().lifecycle)
+                if (presenceManager?.uid != uid) {
+                    presenceManager?.detach()
+                    presenceManager = PresenceManager(uid).also {
+                        it.attach(ProcessLifecycleOwner.get().lifecycle)
+                    }
+                }
+                MainScope().launch {
+                    try {
+                        GlobalContext.get().get<by.iposdev.visorlink.utils.FcmManager>().syncTokenAfter2FA()
+                    } catch (e: Exception) {
+                        Log.e("VisorLinkApp", "FCM token sync failed on auth state change", e)
+                    }
                 }
             } else {
                 presenceManager?.detach()

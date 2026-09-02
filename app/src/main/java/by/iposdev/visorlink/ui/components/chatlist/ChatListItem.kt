@@ -48,6 +48,7 @@ fun ChatListItem(
     currentUid: String,
     otherProfile: UserProfile?,
     draftText: String?,
+    unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
     isCompactList: Boolean = false,
     onClick: () -> Unit
@@ -151,31 +152,42 @@ fun ChatListItem(
                     }
                 }
                 Spacer(Modifier.height(3.dp))
-                if (!draftText.isNullOrEmpty()) {
-                    Row {
-                        Text(
-                            stringResource(R.string.chatlist_draft_prefix),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = cs.error,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = draftText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = subColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        if (!draftText.isNullOrEmpty()) {
+                            Row {
+                                Text(
+                                    stringResource(R.string.chatlist_draft_prefix),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cs.error,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = draftText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = subColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        } else {
+                            val messageText = chat.lastMessageText()
+                            Text(
+                                text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = subColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                } else {
-                    val messageText = chat.lastMessageText()
-                    Text(
-                        text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (unreadCount > 0) {
+                        Spacer(Modifier.width(8.dp))
+                        ChatUnreadBadge(count = unreadCount)
+                    }
                 }
             }
         }
@@ -189,6 +201,7 @@ fun ChatListItemCompact(
     currentUid: String,
     otherProfile: UserProfile?,
     draftText: String?,
+    unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
     onClick: () -> Unit
 ) {
@@ -262,32 +275,78 @@ fun ChatListItemCompact(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            if (!draftText.isNullOrEmpty()) {
-                Row {
-                    Text(
-                        stringResource(R.string.chatlist_draft_prefix),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = draftText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = subColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    if (!draftText.isNullOrEmpty()) {
+                        Row {
+                            Text(
+                                stringResource(R.string.chatlist_draft_prefix),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = draftText,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = subColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    } else {
+                        val messageText = chat.lastMessageText()
+                        Text(
+                            text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = subColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            } else {
-                val messageText = chat.lastMessageText()
-                Text(
-                    text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = subColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (unreadCount > 0) {
+                    Spacer(Modifier.width(8.dp))
+                    ChatUnreadBadge(count = unreadCount)
+                }
             }
+        }
+    }
+}
+
+@Composable
+fun ChatUnreadBadge(
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    if (count <= 0) return
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val text = if (count > 99) "99+" else count.toString()
+
+    Surface(
+        modifier = modifier
+            .height(20.dp)
+            .widthIn(min = 20.dp),
+        shape = tokens.shapes.pill,
+        color = cs.primary,
+        contentColor = cs.onPrimary
+    ) {
+        Box(
+            modifier = Modifier.padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
+                color = cs.onPrimary,
+                maxLines = 1
+            )
         }
     }
 }

@@ -17,6 +17,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.koin.android.ext.android.inject
 
+import com.google.firebase.firestore.Source
+import kotlinx.coroutines.withTimeoutOrNull
+
 class FcmService : FirebaseMessagingService() {
 
     private val userRepository: by.iposdev.visorlink.data.repository.UserRepository by inject()
@@ -55,6 +58,17 @@ class FcmService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         Log.d("FCM", "Message received: ${message.data}")
 
+        val chatId = message.data["chatId"] ?: run {
+            Log.w("FCM", "No chatId in data payload")
+            return
+        }
+
+        val type = message.data["type"]
+        if (type == "read" || type == "clear_notification") {
+            NotificationHelper.clearNotification(applicationContext, chatId)
+            return
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
                     applicationContext,
@@ -73,17 +87,14 @@ class FcmService : FirebaseMessagingService() {
             return
         }
 
-        val chatId = message.data["chatId"] ?: run {
-            Log.w("FCM", "No chatId in data payload")
-            return
-        }
-
         val title = message.notification?.title
             ?: message.data["senderName"]
+            ?: message.data["title"]
             ?: "New message"
 
         val body = message.notification?.body
             ?: message.data["body"]
+            ?: message.data["message"]
             ?: "You have a new message"
 
         // Если чат открыт на экране прямо сейчас и приложение на переднем плане — скрываем уведомление
@@ -95,20 +106,22 @@ class FcmService : FirebaseMessagingService() {
 
         scope.launch {
             val uid = FirebaseAuth.getInstance().currentUser?.uid
-            if (uid != null) {
-                // ── Проверка на Mute (заглушенный чат) ──
-                try {
-                    val userDoc = FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
-                    if (userDoc.exists()) {
+            val isMuted = if (uid != null) {
+                withTimeoutOrNull(1000L) {
+                    try {
+                        val userDoc = FirebaseFirestore.getInstance().collection("users")
+                            .document(uid).get(Source.CACHE).await()
                         val mutedChatIds = userDoc.get("mutedChatIds") as? List<String> ?: emptyList()
-                        if (mutedChatIds.contains(chatId)) {
-                            Log.d("FCM", "Suppressed notification: chat $chatId is muted")
-                            return@launch
-                        }
+                        mutedChatIds.contains(chatId)
+                    } catch (_: Exception) {
+                        false
                     }
-                } catch (e: Exception) {
-                    Log.e("FCM", "Failed to check mute status", e)
-                }
+                } ?: false
+            } else false
+
+            if (isMuted) {
+                Log.d("FCM", "Suppressed notification: chat $chatId is muted")
+                return@launch
             }
 
             NotificationHelper.showMessageNotification(

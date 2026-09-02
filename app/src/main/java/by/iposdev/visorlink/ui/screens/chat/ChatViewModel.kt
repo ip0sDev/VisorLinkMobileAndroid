@@ -106,6 +106,7 @@ class ChatViewModel(
     private var onlineCountListener: ValueEventListener? = null
     private var wallpaperListener: ListenerRegistration? = null
     private var rawMessages = listOf<Message>()
+    private val lastOtherActiveTimeFlow = MutableStateFlow(0L)
 
     private fun filterByTopic(msgs: List<Message>, topic: Topic?, topicId: String?): List<Message> {
         val tid = topicId ?: topic?.id
@@ -228,29 +229,61 @@ class ChatViewModel(
                     }
                 }
 
-                var lastOtherActiveTime = 0L
+                val tickerFlow = flow {
+                    while (true) {
+                        emit(System.currentTimeMillis())
+                        kotlinx.coroutines.delay(5000L)
+                    }
+                }
+
                 launch {
                     combine(
-                        PresenceManager.observePresence(otherUid).filterNotNull(),
-                        TypingManager.observeTyping(chatId, currentUid)
-                    ) { presence, typing ->
-                        val now = System.currentTimeMillis()
+                        PresenceManager.observePresence(otherUid).onStart { emit(PresenceData(online = false, lastSeen = null)) },
+                        TypingManager.observeTyping(chatId, currentUid).onStart { emit(false) },
+                        lastOtherActiveTimeFlow,
+                        tickerFlow
+                    ) { presence, typing, activeTime, now ->
                         if (typing) {
-                            lastOtherActiveTime = now
+                            lastOtherActiveTimeFlow.update { maxOf(it, now) }
                             TopbarStatus.Typing
-                        } else if (presence.online || (lastOtherActiveTime > 0L && now - lastOtherActiveTime < 10_000L)) {
-                            TopbarStatus.Online
                         } else {
-                            TopbarStatus.LastSeen(presence.lastSeen)
+                            val isPresenceOnline = presence?.online == true
+                            if (isPresenceOnline) {
+                                lastOtherActiveTimeFlow.update { maxOf(it, now) }
+                            }
+                            val effectiveActiveTime = maxOf(activeTime, if (isPresenceOnline) now else 0L)
+                            val isRecentlyActive = effectiveActiveTime > 0L && (now - effectiveActiveTime < 60_000L)
+
+                            if (isPresenceOnline || isRecentlyActive) {
+                                TopbarStatus.Online
+                            } else {
+                                val effectiveLastSeen = when {
+                                    presence?.lastSeen != null && effectiveActiveTime > 0L -> maxOf(presence.lastSeen, effectiveActiveTime)
+                                    presence?.lastSeen != null -> presence.lastSeen
+                                    effectiveActiveTime > 0L -> effectiveActiveTime
+                                    else -> null
+                                }
+                                TopbarStatus.LastSeen(effectiveLastSeen)
+                            }
                         }
                     }
-                        .catch { emit(TopbarStatus.Offline) }
+                        .catch { e ->
+                            Log.e("ChatViewModel", "Error in presence flow: ${e.message}", e)
+                            emit(TopbarStatus.Offline)
+                        }
                         .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
                 }
             }
 
             launch {
                 chatRepository.latestMessagesFlow(chatId) { latestMessages, latestLastDoc ->
+                    if (otherUid != chatId) {
+                        val otherLatestMsg = latestMessages.filter { it.senderId == otherUid }
+                            .maxOfOrNull { (it.createdAt?.seconds ?: 0L) * 1000L } ?: 0L
+                        if (otherLatestMsg > 0L) {
+                            lastOtherActiveTimeFlow.update { maxOf(it, otherLatestMsg) }
+                        }
+                    }
                     _uiState.update { state ->
                         val latestMap = latestMessages.associateBy { it.id }
                         val olderMessages = rawMessages.filter { it.id !in latestMap }
@@ -276,12 +309,20 @@ class ChatViewModel(
                         viewModelScope.launch {
                             try {
                                 chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
+                                chatRepository.resetUnreadCount(chatId, currentUid)
                                 NotificationHelper.clearNotification(context, chatId)
                             }
                             catch (_: Exception) {}
                         }
                     }
                 }.catch { }.collect()
+            }
+
+            launch {
+                try {
+                    chatRepository.resetUnreadCount(chatId, currentUid)
+                    NotificationHelper.clearNotification(context, chatId)
+                } catch (_: Exception) {}
             }
         }
     }

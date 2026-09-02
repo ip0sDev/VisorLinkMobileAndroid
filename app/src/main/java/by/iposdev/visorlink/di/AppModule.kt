@@ -122,7 +122,7 @@ val appModule = module {
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
     viewModel { MainViewModel(get(), get(), get()) }
-    viewModel { ChatListViewModel(get(), get(), get(), get(), get()) }
+    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication()) }
 
     viewModel { parameters ->
         ChatViewModel(

@@ -89,6 +89,8 @@ object NotificationHelper {
             }
         }
 
+        createChannels(context)
+
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("openChatId", chatId)
@@ -113,6 +115,9 @@ object NotificationHelper {
         }
         prefs.edit().putString(historyKey, history.joinToString("|||")).apply()
 
+        val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
+        activeChatsPrefs.edit().putBoolean(chatId, true).apply()
+
         val inboxStyle = NotificationCompat.InboxStyle()
             .setBigContentTitle(senderName)
 
@@ -136,17 +141,29 @@ object NotificationHelper {
             .setGroup(GROUP_KEY) // ГРУППИРОВКА
             .setVibrate(longArrayOf(0, 150, 80, 150))
             .setSound(soundUri)
-            .setFullScreenIntent(pendingIntent, true)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
 
-        // Сводное уведомление для группы (чтобы Android не удалял все чаты разом)
+        // Сводное уведомление для группы (чтобы Android корректно группировал чаты в шторке)
+        val summaryIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val summaryPendingIntent = PendingIntent.getActivity(
+            context,
+            SUMMARY_ID,
+            summaryIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         val summaryNotification = NotificationCompat.Builder(context, CHANNEL_MESSAGES)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("VisorLink")
+            .setContentText("Новые сообщения")
             .setStyle(NotificationCompat.InboxStyle().setSummaryText("Новые сообщения"))
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setGroup(GROUP_KEY)
             .setGroupSummary(true)
+            .setContentIntent(summaryPendingIntent)
             .setAutoCancel(true)
             .build()
 
@@ -156,13 +173,48 @@ object NotificationHelper {
         }
     }
 
+    fun getUnreadCount(context: Context, chatId: String): Int {
+        return try {
+            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            val historyStr = prefs.getString("unread_msgs_$chatId", "") ?: ""
+            if (historyStr.isEmpty()) 0 else historyStr.split("|||").size
+        } catch (_: Exception) {
+            0
+        }
+    }
+
     fun clearNotification(context: Context, chatId: String) {
         try {
             val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
             prefs.edit().remove("unread_msgs_$chatId").apply()
-            NotificationManagerCompat.from(context).cancel(chatId.hashCode())
+
+            val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
+            activeChatsPrefs.edit().remove(chatId).apply()
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.cancel(chatId.hashCode())
+
+            val remainingChats = activeChatsPrefs.all.keys
+            if (remainingChats.isEmpty()) {
+                notificationManager.cancel(SUMMARY_ID)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear notification", e)
+        }
+    }
+
+    fun clearAllNotifications(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            prefs.edit().clear().apply()
+
+            val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
+            activeChatsPrefs.edit().clear().apply()
+
+            val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.cancelAll()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear all notifications", e)
         }
     }
 }

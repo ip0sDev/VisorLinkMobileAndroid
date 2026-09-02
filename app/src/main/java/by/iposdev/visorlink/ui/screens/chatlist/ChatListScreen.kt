@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -32,6 +33,7 @@ import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.components.chatlist.*
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -62,11 +64,20 @@ fun ChatListScreen(
     val compactList by themeViewModel.compactChatList.collectAsState()
 
     val haptic = rememberHaptic()
+    val context = LocalContext.current
 
     var showFabMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+
+    LaunchedEffect(chats) {
+        chats.forEach { chat ->
+            if (chat.unreadCountFor(viewModel.currentUid) == 0) {
+                NotificationHelper.clearNotification(context, chat.id)
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -257,6 +268,7 @@ fun ChatListScreen(
                                             currentUid = viewModel.currentUid,
                                             otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                             draftText = drafts[chat.id],
+                                            unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                             onClick = {
                                                 if (chat.isForumActive) onOpenTopicList(chat.id)
                                                 else onOpenChat(chat.id, otherUid)
@@ -284,6 +296,7 @@ fun ChatListScreen(
                                     currentUid = viewModel.currentUid,
                                     otherProfile = null,
                                     draftText = drafts[savedChat.id],
+                                    unreadCount = 0,
                                     isSavedMessages = true,
                                     isCompactList = false,
                                     onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
@@ -303,6 +316,7 @@ fun ChatListScreen(
                                     currentUid = viewModel.currentUid,
                                     otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                     draftText = drafts[chat.id],
+                                    unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                     isCompactList = compactList,
                                     onClick = {
                                         if (chat.isForumActive) onOpenTopicList(chat.id)

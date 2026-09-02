@@ -1144,7 +1144,15 @@ class ChatRepository(
             val ref = db.collection("chats").document(chatId).collection("messages").document(msg.id)
             batch.update(ref, "readBy", FieldValue.arrayUnion(uid))
         }
+        batch.update(db.collection("chats").document(chatId), "unreadCount.$uid", 0)
         batch.commit().await()
+    }
+
+    suspend fun resetUnreadCount(chatId: String, uid: String) {
+        if (isFirestoreDisabled() || uid.isEmpty() || chatId.isEmpty()) return
+        try {
+            db.collection("chats").document(chatId).update("unreadCount.$uid", 0).await()
+        } catch (_: Exception) {}
     }
 
     suspend fun deleteMessage(chatId: String, messageId: String) {

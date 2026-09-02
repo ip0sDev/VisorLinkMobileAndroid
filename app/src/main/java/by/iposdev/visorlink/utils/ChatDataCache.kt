@@ -425,6 +425,9 @@ object ChatDataCache {
         put("lastMessage", lastMessage?.toString() ?: JSONObject.NULL)
         put("lastMessageAt", lastMessageAt?.seconds ?: JSONObject.NULL)
         put("createdAt", createdAt?.seconds ?: JSONObject.NULL)
+        val uData = JSONObject()
+        unreadCount.forEach { (k, v) -> uData.put(k, v) }
+        put("unreadCount", uData)
     }
 
     private fun JSONObject.toChat(): Chat {
@@ -457,6 +460,10 @@ object ChatDataCache {
             isForum = isForumFinal
         )
 
+        val uObj = optJSONObject("unreadCount")
+        val uMap = mutableMapOf<String, Int>()
+        uObj?.keys()?.forEach { k -> uMap[k] = uObj.optInt(k, 0) }
+
         return Chat(
             id = getString("id"),
             type = getString("type"),
@@ -473,7 +480,8 @@ object ChatDataCache {
             settings = settings,
             lastMessage = if (isNull("lastMessage")) null else getString("lastMessage"),
             lastMessageAt = if (isNull("lastMessageAt")) null else com.google.firebase.Timestamp(getLong("lastMessageAt"), 0),
-            createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0)
+            createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0),
+            unreadCount = uMap
         )
     }
 

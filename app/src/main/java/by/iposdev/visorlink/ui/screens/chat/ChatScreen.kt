@@ -188,6 +188,7 @@ fun ChatScreen(
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             ActiveChatTracker.activeChatId = null
+            NotificationHelper.clearNotification(context, chatId)
         }
     }
 
