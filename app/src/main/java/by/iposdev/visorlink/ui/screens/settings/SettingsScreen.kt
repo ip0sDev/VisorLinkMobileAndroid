@@ -47,6 +47,7 @@ import by.iposdev.visorlink.ui.components.settings.*
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import com.ipos.store.sdk.IposStoreUpdates
+import com.ipos.store.sdk.UpdateChannel
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.StealthManager
@@ -125,6 +126,19 @@ fun SettingsScreen(
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showLegalDialog by remember { mutableStateOf(false) }
+
+    val visorSettingsPrefs = remember { context.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE) }
+    var updateChannelStr by remember {
+        mutableStateOf(visorSettingsPrefs.getString("update_channel", "release") ?: "release")
+    }
+    val currentUpdateChannel = remember(updateChannelStr) {
+        try {
+            UpdateChannel.fromString(updateChannelStr)
+        } catch (_: IllegalArgumentException) {
+            UpdateChannel.RELEASE
+        }
+    }
+    var showChannelDialog by remember { mutableStateOf(false) }
 
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
@@ -356,6 +370,20 @@ fun SettingsScreen(
                             }
                         }
                     )
+                    val channelSubtitle = when (currentUpdateChannel) {
+                        UpdateChannel.RELEASE -> stringResource(R.string.settings_update_channel_release)
+                        UpdateChannel.BETA -> stringResource(R.string.settings_update_channel_beta)
+                        UpdateChannel.NIGHTLY -> stringResource(R.string.settings_update_channel_nightly)
+                    }
+                    VlSettingsItem(
+                        icon = Icons.Default.Tune,
+                        iconColor = colorUpdateChan,
+                        title = stringResource(R.string.settings_update_channel),
+                        subtitle = channelSubtitle,
+                        onClick = {
+                            showChannelDialog = true
+                        }
+                    )
                     VlSettingsItem(
                         icon = Icons.Default.Sync,
                         iconColor = colorUpdateCheck,
@@ -366,7 +394,7 @@ fun SettingsScreen(
                             Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
                             scope.launch {
                                 try {
-                                    val update = IposStoreUpdates.checkUpdate()
+                                    val update = IposStoreUpdates.checkUpdate(channel = currentUpdateChannel)
                                     if (update == null && IposStoreUpdates.isStoreInstalled()) {
                                         Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
                                     }
@@ -562,6 +590,64 @@ fun SettingsScreen(
             legalRepository = legalRepo,
             isReadOnly = true,
             onDismissReadOnly = { showLegalDialog = false }
+        )
+    }
+
+    if (showChannelDialog) {
+        val channels = listOf(
+            Triple(UpdateChannel.RELEASE, "release", stringResource(R.string.settings_update_channel_release)),
+            Triple(UpdateChannel.BETA, "beta", stringResource(R.string.settings_update_channel_beta)),
+            Triple(UpdateChannel.NIGHTLY, "nightly", stringResource(R.string.settings_update_channel_nightly))
+        )
+
+        VlAlertDialog(
+            onDismissRequest = { showChannelDialog = false },
+            title = { Text(stringResource(R.string.settings_update_channel_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    channels.forEach { (channel, chKey, label) ->
+                        val isSelected = currentUpdateChannel == channel
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    updateChannelStr = chKey
+                                    visorSettingsPrefs.edit().putString("update_channel", chKey).apply()
+                                    IposStoreUpdates.init(context, channel = channel)
+                                    showChannelDialog = false
+                                    Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            actions = {
+                VlDialogButton(onClick = { showChannelDialog = false }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            }
         )
     }
 }

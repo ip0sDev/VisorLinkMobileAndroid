@@ -43,6 +43,8 @@ class MainActivity : AppCompatActivity() {
     private val userRepository: UserRepository by inject()
     private val functions: FirebaseFunctions by inject()
 
+    private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
+
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -52,6 +54,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        extractOpenChatId(intent)
 
         // ── FIX: Check auth state BEFORE setting content to avoid login flash ──────
         val firebaseAuth = FirebaseAuth.getInstance()
@@ -76,7 +80,13 @@ class MainActivity : AppCompatActivity() {
             val colorPreset by themeViewModel.colorPreset.collectAsState()
 
             LaunchedEffect(Unit) {
-                IposStoreUpdates.checkUpdate()
+                val prefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
+                val channel = try {
+                    com.ipos.store.sdk.UpdateChannel.fromString(prefs.getString("update_channel", "release"))
+                } catch (_: IllegalArgumentException) {
+                    com.ipos.store.sdk.UpdateChannel.RELEASE
+                }
+                IposStoreUpdates.checkUpdate(channel = channel)
             }
 
             VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
@@ -86,7 +96,9 @@ class MainActivity : AppCompatActivity() {
                             Box {
                                 VisorLinkNavGraph(
                                     authViewModel = authViewModel,
-                                    themeViewModel = themeViewModel
+                                    themeViewModel = themeViewModel,
+                                    pendingChatId = pendingOpenChatId.value,
+                                    onPendingChatOpened = { pendingOpenChatId.value = null }
                                 )
                                 FlagsOverlay()
                                 IposStoreUpdates.IposUpdateHost()
@@ -95,6 +107,20 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractOpenChatId(intent)
+    }
+
+    private fun extractOpenChatId(intent: android.content.Intent?) {
+        val chatId = intent?.getStringExtra("openChatId")
+            ?: intent?.getStringExtra("chatId")
+        if (!chatId.isNullOrBlank()) {
+            pendingOpenChatId.value = chatId
         }
     }
 

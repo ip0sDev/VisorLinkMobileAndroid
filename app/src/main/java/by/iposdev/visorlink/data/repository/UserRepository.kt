@@ -376,6 +376,16 @@ class UserRepository(
     }
 
     suspend fun saveFcmToken(token: String) {
+        val uid = currentUid
+        if (uid.isNotEmpty() && !isFirestoreDisabled()) {
+            try {
+                db.collection("users").document(uid)
+                    .update("fcmTokens", FieldValue.arrayUnion(token)).await()
+            } catch (e: Exception) {
+                android.util.Log.w("UserRepository", "Direct Firestore FCM token sync skipped or failed: ${e.message}")
+            }
+        }
+
         if (isProfileBackendEnabled()) {
             try {
                 api.saveFcmToken(by.iposdev.visorlink.data.remote.chat.FcmTokenRequest(token = token))
@@ -384,8 +394,13 @@ class UserRepository(
             }
             return
         }
-        functions.getHttpsCallable("saveFcmToken")
-            .call(mapOf("token" to token)).await()
+
+        try {
+            functions.getHttpsCallable("saveFcmToken")
+                .call(mapOf("token" to token)).await()
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Failed to save FCM token via Cloud Functions", e)
+        }
     }
 
     suspend fun removeFcmToken(token: String) {

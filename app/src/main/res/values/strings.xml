@@ -582,6 +582,11 @@
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Update Channel</string>
+    <string name="settings_update_channel_sub">Select branch for receiving updates</string>
+    <string name="settings_update_channel_dialog_title">Select update channel</string>
+    <string name="settings_update_channel_release">Release (Stable)</string>
+    <string name="settings_update_channel_beta">Beta (Public betas)</string>
+    <string name="settings_update_channel_nightly">Nightly (Fresh builds)</string>
     <string name="settings_update_channel_current">Current: %1$s</string>
 
     <!-- Settings — Account -->

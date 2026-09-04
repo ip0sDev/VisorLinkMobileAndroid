@@ -584,6 +584,11 @@
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Канал обновлений</string>
+    <string name="settings_update_channel_sub">Выберите ветку получения версий</string>
+    <string name="settings_update_channel_dialog_title">Выбор канала обновлений</string>
+    <string name="settings_update_channel_release">Release (стабильные версии)</string>
+    <string name="settings_update_channel_beta">Beta (публичные бета-версии)</string>
+    <string name="settings_update_channel_nightly">Nightly (ночные сборки)</string>
     <string name="settings_update_channel_current">Текущий: %1$s</string>
 
     <!-- Settings — Account -->

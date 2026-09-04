@@ -43,7 +43,9 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun VisorLinkNavGraph(
     authViewModel: AuthViewModel,
-    themeViewModel: ThemeViewModel
+    themeViewModel: ThemeViewModel,
+    pendingChatId: String? = null,
+    onPendingChatOpened: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -112,6 +114,14 @@ fun VisorLinkNavGraph(
                     }
                 }
             }
+        }
+    }
+
+    // Обработка перехода в чат из Push-уведомления
+    LaunchedEffect(isSessionReady, pendingChatId) {
+        if (isSessionReady && !pendingChatId.isNullOrBlank()) {
+            navController.navigate(Screen.Chat.createRoute(pendingChatId, pendingChatId))
+            onPendingChatOpened()
         }
     }
 

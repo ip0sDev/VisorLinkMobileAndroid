@@ -54,7 +54,14 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         }
 
         NotificationHelper.createChannels(this)
-        com.ipos.store.sdk.IposStoreUpdates.init(this)
+        val updatePrefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
+        val savedChannelStr = updatePrefs.getString("update_channel", "release")
+        val initialChannel = try {
+            com.ipos.store.sdk.UpdateChannel.fromString(savedChannelStr)
+        } catch (_: IllegalArgumentException) {
+            com.ipos.store.sdk.UpdateChannel.RELEASE
+        }
+        com.ipos.store.sdk.IposStoreUpdates.init(this, channel = initialChannel)
 
         // ─── Firebase App Check ───────────────────────────────────────────────
         if (BuildConfig.DEBUG) {
