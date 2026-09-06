@@ -625,7 +625,21 @@ class ChatViewModel(
     }
 
     fun playVoice(messageId: String, url: String, durationSec: Int) {
-        voicePlayer.play(messageId, url, durationSec)
+        viewModelScope.launch {
+            val effectiveUrl = if (url.isNotBlank()) {
+                url
+            } else {
+                val msg = _uiState.value.messages.firstOrNull { it.id == messageId }
+                if (!msg?.cdnMediaId.isNullOrEmpty()) {
+                    CdnService.getFileUrl(msg!!.cdnMediaId!!)
+                } else {
+                    msg?.url ?: ""
+                }
+            }
+            if (effectiveUrl.isNotBlank()) {
+                voicePlayer.play(messageId, effectiveUrl, durationSec)
+            }
+        }
     }
 
     fun toggleVoice() {
@@ -735,7 +749,9 @@ class ChatViewModel(
     fun onTextChanged(text: String) {
         if (text.isNotEmpty()) typingManager?.onTyping()
         else typingManager?.stopTyping()
-        draftManager.saveDraft(chatId, text)
+        if (_uiState.value.editingMessage == null) {
+            draftManager.saveDraft(chatId, text)
+        }
     }
 
     fun sendText(text: String) {
@@ -854,7 +870,7 @@ class ChatViewModel(
             clearReply()
             try { chatRepository.sendVoice(chatId, file, duration, currentUsername, reply, activeTopicId) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
-            finally { _uiState.update { it.copy(isUploading = false) }; file.delete() }
+            finally { _uiState.update { it.copy(isUploading = false) } }
         }
     }
 
@@ -979,6 +995,7 @@ class ChatViewModel(
     }
 
     fun cancelEditing() {
+        draftManager.clearDraft(chatId)
         _uiState.update { it.copy(editingMessage = null, initialDraft = "") }
     }
 
@@ -987,6 +1004,7 @@ class ChatViewModel(
         val isCaption = msg.type != MessageType.TEXT
         val oldText = if (isCaption) msg.caption ?: "" else msg.text ?: ""
         
+        draftManager.clearDraft(chatId)
         if (newText.trim() == oldText.trim()) {
             cancelEditing()
             return
@@ -1005,7 +1023,8 @@ class ChatViewModel(
                     state.copy(
                         messages = updated,
                         messageListItems = buildMessageList(updated + state.tempMessages),
-                        editingMessage = null
+                        editingMessage = null,
+                        initialDraft = ""
                     )
                 }
             } catch (e: Exception) {

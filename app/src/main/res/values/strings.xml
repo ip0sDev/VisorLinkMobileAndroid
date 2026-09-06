@@ -650,9 +650,9 @@
     <string name="topics_delete_confirm">Delete topic?</string>
     <string name="topics_delete_warning">All messages and tasks in this topic will be deleted</string>
     <string name="tasks_title">Tasks</string>
-    <string name="tasks_tab_kanban">📋 Kanban</string>
-    <string name="tasks_tab_list">📄 Task List</string>
-    <string name="tasks_tab_chat">💬 Discussion</string>
+    <string name="tasks_tab_kanban">Kanban</string>
+    <string name="tasks_tab_list">List</string>
+    <string name="tasks_tab_chat">Chat</string>
     <string name="tasks_all_topics">All topics</string>
     <string name="tasks_progress_format">%1$d/%2$d completed (%3$d%%)</string>
     <string name="tasks_create_title">New Task</string>

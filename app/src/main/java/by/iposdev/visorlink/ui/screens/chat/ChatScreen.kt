@@ -118,6 +118,14 @@ fun ChatScreen(
         }
     }
 
+    LaunchedEffect(uiState.editingMessage) {
+        if (uiState.editingMessage != null) {
+            inputText = uiState.initialDraft
+            inputFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
     var showStickerSheet by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }

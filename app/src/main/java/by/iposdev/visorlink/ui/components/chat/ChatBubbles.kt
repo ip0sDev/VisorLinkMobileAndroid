@@ -460,7 +460,7 @@ internal fun TextBubble(
                         val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
                         VoiceBubble(
                             messageId = message.id,
-                            url = resolvedUrl ?: "",
+                            url = resolvedUrl ?: message.url ?: "",
                             durationSec = message.duration ?: 0,
                             tint = textColor,
                             playback = voicePlayback,

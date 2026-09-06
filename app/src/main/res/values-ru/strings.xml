@@ -652,9 +652,9 @@
     <string name="topics_delete_confirm">Удалить тему?</string>
     <string name="topics_delete_warning">Все сообщения и задачи в этой теме будут удалены</string>
     <string name="tasks_title">Задачи</string>
-    <string name="tasks_tab_kanban">📋 Канбан-доска</string>
-    <string name="tasks_tab_list">📄 Список задач</string>
-    <string name="tasks_tab_chat">💬 Обсуждение</string>
+    <string name="tasks_tab_kanban">Канбан</string>
+    <string name="tasks_tab_list">Список</string>
+    <string name="tasks_tab_chat">Чат</string>
     <string name="tasks_all_topics">Все темы</string>
     <string name="tasks_progress_format">%1$d/%2$d выполнено (%3$d%%)</string>
     <string name="tasks_create_title">Новая задача</string>
