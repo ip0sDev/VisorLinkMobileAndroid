@@ -8,6 +8,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -44,6 +45,10 @@ import by.iposdev.visorlink.utils.ImageCache
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
+import java.io.File
+import java.io.FileOutputStream
+import android.media.MediaMetadataRetriever
+import android.util.Log
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -165,6 +170,48 @@ fun ChatScreen(
         uri?.let { viewModel.setWallpaper(it) }
     }
 
+    var showAttachOptions by remember { mutableStateOf(false) }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            val tempFile = File(context.cacheDir, "audio_send_${System.currentTimeMillis()}.mp3")
+            try {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+                }
+                val mmr = MediaMetadataRetriever()
+                var title = ""
+                var artist = ""
+                var durationSec = 0
+                var coverFile: File? = null
+                try {
+                    mmr.setDataSource(tempFile.absolutePath)
+                    title = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE) ?: ""
+                    artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+                    val durStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    durationSec = (durStr?.toIntOrNull() ?: 0) / 1000
+                    val pic = mmr.embeddedPicture
+                    if (pic != null && pic.isNotEmpty()) {
+                        val cf = File(context.cacheDir, "cover_${System.currentTimeMillis()}.jpg")
+                        FileOutputStream(cf).use { it.write(pic) }
+                        coverFile = cf
+                    }
+                } catch (_: Exception) {}
+                finally {
+                    try { mmr.release() } catch (_: Exception) {}
+                }
+                if (title.isBlank()) {
+                    title = uri.lastPathSegment?.substringAfterLast('/')?.substringBeforeLast('.') ?: "Аудиозапись"
+                }
+                if (artist.isBlank()) {
+                    artist = "Неизвестный исполнитель"
+                }
+                viewModel.sendAudio(tempFile, title, artist, durationSec, coverFile)
+            } catch (e: Exception) {
+                Log.e("ChatScreen", "Failed to prepare audio", e)
+            }
+        }
+    }
+
     val onScrollToMessage: (String) -> Unit = { targetMsgId ->
         val index = uiState.messageListItems.asReversed().indexOfFirst {
             it is MessageListItem.MessageItem && it.message.id == targetMsgId
@@ -249,17 +296,25 @@ fun ChatScreen(
                 containerColor = MaterialTheme.colorScheme.surface,
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
-                    ChatTopBar(
-                        uiState = uiState, otherUid = viewModel.effectiveOtherUid, chatId = chatId,
-                        canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
-                        hapticEnabled = hapticEnabled,
-                        onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
-                        onOpenOtherProfile = { onOpenOtherProfile(viewModel.effectiveOtherUid) },
-                        onOpenChatSettings = onOpenChatSettings,
-                        onLeaveClick = { showLeaveDialog = true },
-                        onAegisClick = { aegisViewModel.onInteract() }, isAegisEnabled = isAegisEnabled,
-                        onOpenTopicList = if (onOpenTopicList != null) { { onOpenTopicList(chatId) } } else null
-                    )
+                    Column {
+                        ChatTopBar(
+                            uiState = uiState, otherUid = viewModel.effectiveOtherUid, chatId = chatId,
+                            canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
+                            hapticEnabled = hapticEnabled,
+                            onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
+                            onOpenOtherProfile = { onOpenOtherProfile(viewModel.effectiveOtherUid) },
+                            onOpenChatSettings = onOpenChatSettings,
+                            onLeaveClick = { showLeaveDialog = true },
+                            onAegisClick = { aegisViewModel.onInteract() }, isAegisEnabled = isAegisEnabled,
+                            onOpenTopicList = if (onOpenTopicList != null) { { onOpenTopicList(chatId) } } else null
+                        )
+                        AudioPlaybackDockBar(
+                            musicPlayback = uiState.musicPlayback,
+                            onTogglePlayPause = { viewModel.toggleAudioPlayback() },
+                            onClose = { viewModel.stopAudio() },
+                            onOpenFullscreen = { viewModel.openFullscreenAudio() }
+                        )
+                    }
                 },
                 bottomBar = {
                     ChatBottomBar(
@@ -268,7 +323,7 @@ fun ChatScreen(
                         hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                         audioPermission = audioPermission, focusRequester = inputFocusRequester,
                         onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                        onAttach = { mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                        onAttach = { showAttachOptions = true },
                         onStickerClick = { showStickerSheet = true },
                         onSend = {
                             val t = inputText
@@ -334,8 +389,16 @@ fun ChatScreen(
                                                 chatType = uiState.chatType, hapticEnabled = hapticEnabled,
                                                 showSenderName = uiState.chatType != ChatType.DIRECT,
                                                 voicePlayback = uiState.voicePlayback,
+                                                musicPlayback = uiState.musicPlayback,
+                                                musicDownloadProgress = uiState.musicDownloadProgress,
                                                 onPlayVoice = { url, dur -> viewModel.playVoice(item.message.id, url, dur) },
                                                 onSeekVoice = { viewModel.seekVoice(it) },
+                                                onPlayAudio = { viewModel.playAudio(it) },
+                                                onToggleAudioPlayback = { viewModel.toggleAudioPlayback() },
+                                                onSeekAudio = { viewModel.seekAudio(it) },
+                                                onCycleAudioSpeed = { viewModel.cycleAudioSpeed() },
+                                                onSaveTrackToLibrary = { viewModel.saveTrackToLibrary(it) },
+                                                onOpenFullscreenAudio = { viewModel.openFullscreenAudio() },
                                                 onLongPressStart = { offset ->
                                                     keyboardController?.hide()
                                                     contextMenuData = ContextMenuData(item.message, isMine, offset)
@@ -527,5 +590,28 @@ fun ChatScreen(
             fallbackPackEmoji = emoji,
             onDismiss = { selectedStickerPack = null }
         )
+    }
+
+    if (showAttachOptions) {
+        ModalBottomSheet(onDismissRequest = { showAttachOptions = false }) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                ListItem(
+                    headlineContent = { Text("Фото или видео") },
+                    leadingContent = { Icon(Icons.Default.Image, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        showAttachOptions = false
+                        mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.music_send_audio)) },
+                    leadingContent = { Icon(Icons.Default.Audiotrack, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        showAttachOptions = false
+                        audioPicker.launch("audio/*")
+                    }
+                )
+            }
+        }
     }
 }

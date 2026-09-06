@@ -58,6 +58,7 @@ import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.MusicPlayerState
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
@@ -305,8 +306,16 @@ fun MessageBubble(
     hapticEnabled: Boolean,
     showSenderName: Boolean,
     voicePlayback: VoicePlaybackState,
+    musicPlayback: MusicPlayerState = MusicPlayerState(),
+    musicDownloadProgress: Map<String, Float> = emptyMap(),
     onPlayVoice: (url: String, durationSec: Int) -> Unit,
     onSeekVoice: (Float) -> Unit,
+    onPlayAudio: ((Message) -> Unit)? = null,
+    onToggleAudioPlayback: (() -> Unit)? = null,
+    onSeekAudio: ((Float) -> Unit)? = null,
+    onCycleAudioSpeed: (() -> Unit)? = null,
+    onSaveTrackToLibrary: ((MusicTrack) -> Unit)? = null,
+    onOpenFullscreenAudio: (() -> Unit)? = null,
     onLongPressStart: (Offset) -> Unit,
     onLongPressDrag: (Offset) -> Unit,
     onLongPressEnd: () -> Unit,
@@ -384,8 +393,13 @@ fun MessageBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled, showSenderName = showSenderName,
                         voicePlayback = voicePlayback,
+                        musicPlayback = musicPlayback,
+                        musicDownloadProgress = musicDownloadProgress,
                         isReadByOther = isReadByOther,
                         onPlayVoice = onPlayVoice, onSeekVoice = onSeekVoice,
+                        onPlayAudio = onPlayAudio, onToggleAudioPlayback = onToggleAudioPlayback,
+                        onSeekAudio = onSeekAudio, onCycleAudioSpeed = onCycleAudioSpeed,
+                        onSaveTrackToLibrary = onSaveTrackToLibrary, onOpenFullscreenAudio = onOpenFullscreenAudio,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onMentionClick = onMentionClick,
@@ -400,8 +414,17 @@ fun MessageBubble(
 @Composable
 internal fun TextBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
-    showSenderName: Boolean, voicePlayback: VoicePlaybackState, isReadByOther: Boolean = false,
+    showSenderName: Boolean, voicePlayback: VoicePlaybackState,
+    musicPlayback: MusicPlayerState = MusicPlayerState(),
+    musicDownloadProgress: Map<String, Float> = emptyMap(),
+    isReadByOther: Boolean = false,
     onPlayVoice: (String, Int) -> Unit, onSeekVoice: (Float) -> Unit,
+    onPlayAudio: ((Message) -> Unit)? = null,
+    onToggleAudioPlayback: (() -> Unit)? = null,
+    onSeekAudio: ((Float) -> Unit)? = null,
+    onCycleAudioSpeed: (() -> Unit)? = null,
+    onSaveTrackToLibrary: ((MusicTrack) -> Unit)? = null,
+    onOpenFullscreenAudio: (() -> Unit)? = null,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {}, chat: Chat? = null,
@@ -467,6 +490,22 @@ internal fun TextBubble(
                             uploadProgress = message.uploadProgress,
                             onPlay = onPlayVoice,
                             onSeek = onSeekVoice
+                        )
+                    }
+                    MessageType.AUDIO -> {
+                        AudioMessageBubble(
+                            message = message,
+                            isMine = isMine,
+                            tint = textColor,
+                            musicPlayback = musicPlayback,
+                            uploadProgress = message.uploadProgress,
+                            downloadProgress = musicDownloadProgress[message.id],
+                            onPlay = { onPlayAudio?.invoke(it) },
+                            onTogglePlayPause = { onToggleAudioPlayback?.invoke() },
+                            onSeek = { onSeekAudio?.invoke(it) },
+                            onCycleSpeed = { onCycleAudioSpeed?.invoke() },
+                            onSaveToLibrary = { onSaveTrackToLibrary?.invoke(it) },
+                            onOpenFullscreen = { onOpenFullscreenAudio?.invoke() }
                         )
                     }
                 }

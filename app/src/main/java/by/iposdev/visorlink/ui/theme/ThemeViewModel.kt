@@ -17,6 +17,8 @@ class ThemeViewModel(private val repository: SettingsRepository) : ViewModel() {
     val dynamicChatInput: StateFlow<Boolean> = repository.dynamicChatInput
     val compactChatList: StateFlow<Boolean> = repository.compactChatList
     val discoverEnabled: StateFlow<Boolean> = repository.discoverEnabled
+    val musicEnabled: StateFlow<Boolean> = repository.musicEnabled
+    val showMusicOnboarding: StateFlow<Boolean> = repository.showMusicOnboarding
     val showOnboarding: StateFlow<Boolean> = repository.showOnboarding
     val language: StateFlow<AppLanguage> = repository.language
 
@@ -28,6 +30,8 @@ class ThemeViewModel(private val repository: SettingsRepository) : ViewModel() {
     fun setDynamicChatInput(enabled: Boolean) = repository.setDynamicChatInput(enabled)
     fun setCompactChatList(enabled: Boolean) = repository.setCompactChatList(enabled)
     fun setDiscoverEnabled(enabled: Boolean) = repository.setDiscoverEnabled(enabled)
+    fun setMusicEnabled(enabled: Boolean) = repository.setMusicEnabled(enabled)
+    fun completeMusicOnboarding(enableMusic: Boolean) = repository.completeMusicOnboarding(enableMusic)
     fun completeOnboarding() = repository.completeOnboarding()
     fun setLanguage(language: AppLanguage) = repository.setLanguage(language)
 }

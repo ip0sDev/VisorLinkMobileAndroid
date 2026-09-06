@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private val functions: FirebaseFunctions by inject()
     private val authViewModel: AuthViewModel by inject()
     private val fcmManager: by.iposdev.visorlink.utils.FcmManager by inject()
+    private val musicPlayerManager: by.iposdev.visorlink.utils.MusicPlayerManager by inject()
 
     private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val pendingOpenSenderUid = androidx.compose.runtime.mutableStateOf<String?>(null)
@@ -60,6 +61,9 @@ class MainActivity : AppCompatActivity() {
 
         extractOpenChatId(intent)
         extractInviteCode(intent)
+        if (intent?.getBooleanExtra("open_music_player", false) == true) {
+            musicPlayerManager.openFullscreenPlayer()
+        }
 
         // ── FIX: Check auth state BEFORE setting content to avoid login flash ──────
         val firebaseAuth = FirebaseAuth.getInstance()
@@ -130,6 +134,9 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         extractOpenChatId(intent)
         extractInviteCode(intent)
+        if (intent.getBooleanExtra("open_music_player", false)) {
+            musicPlayerManager.openFullscreenPlayer()
+        }
     }
 
     private fun extractInviteCode(intent: android.content.Intent?) {

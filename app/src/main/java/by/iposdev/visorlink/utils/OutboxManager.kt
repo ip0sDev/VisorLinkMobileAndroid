@@ -241,6 +241,45 @@ class OutboxManager(
                         lastProgressUpdate.remove(action.id)
                     }
                 }
+                "audio" -> {
+                    val localPath = data.getString("localPath")
+                    val title = data.optString("title", "")
+                    val performer = data.optString("performer", "")
+                    val duration = data.optInt("duration", 0)
+                    val coverLocalPath = data.optString("coverLocalPath", "")
+                    val file = File(localPath)
+                    if (file.exists()) {
+                        var coverMediaId: String? = null
+                        if (coverLocalPath.isNotBlank()) {
+                            val coverFile = File(coverLocalPath)
+                            if (coverFile.exists()) {
+                                try {
+                                    coverMediaId = cdnUploader.uploadFile(coverFile, "image/jpeg") {}
+                                    coverFile.delete()
+                                } catch (_: Exception) {}
+                            }
+                        }
+                        val mediaId = cdnUploader.uploadFile(file, "audio/mpeg") { progress ->
+                            scope.launch { updateProgressThrottled(action.id, progress) }
+                        }
+                        chatRepository.sendAudioNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            mediaId = mediaId,
+                            fileName = file.name,
+                            fileSize = file.length(),
+                            title = title,
+                            performer = performer,
+                            durationSec = duration,
+                            coverMediaId = coverMediaId,
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo,
+                            topicId = topicId
+                        )
+                        file.delete()
+                        lastProgressUpdate.remove(action.id)
+                    }
+                }
                 "video" -> {
                     val localPath = data.getString("localPath")
                     val file = File(localPath)

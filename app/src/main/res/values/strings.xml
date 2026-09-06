@@ -714,4 +714,34 @@
     <string name="forward_from_user">↩ Forwarded from @%1$s</string>
     <string name="forward_from_user_chat">↩ Forwarded from @%1$s · %2$s</string>
     <string name="forwarding_disabled_channel">Forwarding messages from this chat is restricted</string>
+
+    <!-- Music & Audio Player -->
+    <string name="nav_tab_music">Music</string>
+    <string name="music_title">Music</string>
+    <string name="music_tab_playlists">Playlists</string>
+    <string name="music_tab_all_tracks">All tracks</string>
+    <string name="music_tab_device">Device</string>
+    <string name="music_playlist_favorites">Favorites</string>
+    <string name="music_playlist_create">Create playlist</string>
+    <string name="music_playlist_name">Playlist name</string>
+    <string name="music_add_to_playlist">To playlist</string>
+    <string name="music_added_to_favorites">Added to Favorites</string>
+    <string name="music_removed_from_favorites">Removed from Favorites</string>
+    <string name="music_track_unknown">Untitled</string>
+    <string name="music_artist_unknown">Unknown artist</string>
+    <string name="music_empty_tracks">No tracks here yet</string>
+    <string name="music_empty_playlists">No playlists created</string>
+    <string name="music_device_permission_needed">Allow access to device audio files to play local tracks</string>
+    <string name="music_grant_permission">Grant access</string>
+    <string name="music_settings_title">Music</string>
+    <string name="music_settings_desc">Show Music tab in bottom navigation and integrated music player</string>
+    <string name="music_onboarding_title">Introducing Music in VisorLink!</string>
+    <string name="music_onboarding_desc">Listen to tracks right in chats, save your favorite music into the Favorites playlist, and play tracks from your device.</string>
+    <string name="music_onboarding_enable">Enable Music</string>
+    <string name="music_onboarding_disable">Not now</string>
+    <string name="music_send_audio">Audio track</string>
+    <string name="music_edit_metadata">Edit audio info</string>
+    <string name="music_save_to_library">Save to library</string>
+    <string name="music_downloading">Downloading track…</string>
+    <string name="music_download_complete">Track saved to library</string>
 </resources>

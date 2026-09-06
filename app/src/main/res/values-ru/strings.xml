@@ -716,4 +716,34 @@
     <string name="forward_from_user">↩ Переслано от @%1$s</string>
     <string name="forward_from_user_chat">↩ Переслано от @%1$s · %2$s</string>
     <string name="forwarding_disabled_channel">Пересылка сообщений из этого чата запрещена</string>
+
+    <!-- Music & Audio Player -->
+    <string name="nav_tab_music">Музыка</string>
+    <string name="music_title">Музыка</string>
+    <string name="music_tab_playlists">Плейлисты</string>
+    <string name="music_tab_all_tracks">Все треки</string>
+    <string name="music_tab_device">Устройство</string>
+    <string name="music_playlist_favorites">Понравившиеся</string>
+    <string name="music_playlist_create">Создать плейлист</string>
+    <string name="music_playlist_name">Название плейлиста</string>
+    <string name="music_add_to_playlist">В плейлист</string>
+    <string name="music_added_to_favorites">Добавлено в Понравившиеся</string>
+    <string name="music_removed_from_favorites">Удалено из Понравившихся</string>
+    <string name="music_track_unknown">Без названия</string>
+    <string name="music_artist_unknown">Неизвестный исполнитель</string>
+    <string name="music_empty_tracks">Здесь пока нет треков</string>
+    <string name="music_empty_playlists">Нет созданных плейлистов</string>
+    <string name="music_device_permission_needed">Для воспроизведения треков предоставьте доступ к аудиофайлам устройства</string>
+    <string name="music_grant_permission">Предоставить доступ</string>
+    <string name="music_settings_title">Музыка</string>
+    <string name="music_settings_desc">Отображать вкладку Музыка в нижней панели и встроенный плеер</string>
+    <string name="music_onboarding_title">Встречайте Музыку в VisorLink!</string>
+    <string name="music_onboarding_desc">Слушайте треки прямо в чатах, сохраняйте любимую музыку в плейлист «Понравившиеся» и импортируйте треки с устройства.</string>
+    <string name="music_onboarding_enable">Включить музыку</string>
+    <string name="music_onboarding_disable">Не сейчас</string>
+    <string name="music_send_audio">Аудиозапись</string>
+    <string name="music_edit_metadata">Редактировать аудио</string>
+    <string name="music_save_to_library">Сохранить в медиатеку</string>
+    <string name="music_downloading">Скачивание трека…</string>
+    <string name="music_download_complete">Трек сохранен в медиатеку</string>
 </resources>

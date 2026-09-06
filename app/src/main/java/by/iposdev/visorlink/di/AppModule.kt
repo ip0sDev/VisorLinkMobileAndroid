@@ -15,6 +15,7 @@ import by.iposdev.visorlink.ui.aegis.LinkDebugViewModel
 import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
+import by.iposdev.visorlink.ui.screens.music.MusicViewModel
 import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
 import by.iposdev.visorlink.ui.screens.main.MainViewModel
@@ -114,6 +115,9 @@ val appModule = module {
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
+    single { by.iposdev.visorlink.utils.MusicPlayerManager(androidContext()) }
+    single { MusicDatabase(androidContext()) }
+    single { MusicRepository(androidContext()) }
     single { NetworkMonitor(androidContext()) }
     single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), fallbackManager = get()) }
     single { DraftManager(androidContext()) }
@@ -127,6 +131,7 @@ val appModule = module {
     viewModel { ThemeViewModel(get()) }
     viewModel { MainViewModel(get(), get(), get()) }
     viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication()) }
+    viewModel { MusicViewModel(get(), get()) }
 
     viewModel { parameters ->
         ChatViewModel(
@@ -139,7 +144,9 @@ val appModule = module {
             chatId         = parameters[0],
             otherUid       = parameters[1],
             initialTopicId = if (parameters.size() > 2) parameters[2] else null,
-            typingRepository = get()
+            typingRepository = get(),
+            musicPlayerManager = get(),
+            musicRepository = get()
         )
     }
 

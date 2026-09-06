@@ -404,6 +404,13 @@ data class Message(
     val redeemedByUsername: String? = null,
     val giftType: String? = null,
 
+    // Аудио и музыка
+    val coverCdnMediaId: String? = null,
+    val coverUrl: String? = null,
+    val title: String? = null,
+    val performer: String? = null,
+    val fileSize: Long? = null,
+
     // CDN / Временные файлы
     val cdnMediaId: String? = null,
     val mimeType: String? = null,
@@ -453,6 +460,7 @@ object MessageType {
     const val TEXT    = "text"
     const val IMAGE   = "image"
     const val VOICE   = "voice"
+    const val AUDIO   = "audio"
     const val STICKER = "sticker"
     const val ALBUM   = "album"
     const val GIFT    = "gift"

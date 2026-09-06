@@ -248,6 +248,19 @@ fun SettingsScreen(
                     VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
                     VlSettingsItem(icon = Icons.Default.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
                     VlSettingsItem(icon = Icons.Default.Explore, iconColor = Color(0xFF10B981), title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsState().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
+                    val musicEnabled by themeViewModel.musicEnabled.collectAsState()
+                    VlSettingsItem(
+                        icon = Icons.Default.MusicNote,
+                        iconColor = Color(0xFFEC4899),
+                        title = stringResource(R.string.music_settings_title),
+                        subtitle = stringResource(R.string.music_settings_desc),
+                        trailing = {
+                            VlSwitch(
+                                checked = musicEnabled,
+                                onCheckedChange = { themeViewModel.setMusicEnabled(it) }
+                            )
+                        }
+                    )
                 }
 
                 VlSettingsSection(title = stringResource(R.string.diary_title)) {

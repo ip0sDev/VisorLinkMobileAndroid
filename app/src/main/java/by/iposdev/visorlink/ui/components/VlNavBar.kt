@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
@@ -47,7 +49,9 @@ fun VlNavigationBar(
     onTabSelected: (Int) -> Unit,
     diaryEnabled: Boolean,
     discoverEnabled: Boolean,
+    musicEnabled: Boolean = false,
     onOpenDiary: () -> Unit,
+    onOpenMusic: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -101,6 +105,15 @@ fun VlNavigationBar(
                     icon = Icons.Outlined.Explore,
                     selectedIcon = Icons.Filled.Explore,
                     label = stringResource(R.string.feed_title),
+                )
+            }
+            if (musicEnabled) {
+                VlTabItem(
+                    selected = selectedTab == 3,
+                    onClick = onOpenMusic,
+                    icon = Icons.Default.Audiotrack,
+                    selectedIcon = Icons.Default.Audiotrack,
+                    label = stringResource(R.string.nav_tab_music),
                 )
             }
             if (diaryEnabled) {

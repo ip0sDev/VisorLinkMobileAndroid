@@ -21,6 +21,11 @@ data class MessageDto(
     @SerializedName("packId") val packId: String? = null,
     @SerializedName("packName") val packName: String? = null,
     @SerializedName("packEmoji") val packEmoji: String? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("performer") val performer: String? = null,
+    @SerializedName("fileSize") val fileSize: Long? = null,
+    @SerializedName("coverCdnMediaId") val coverCdnMediaId: String? = null,
+    @SerializedName("coverUrl") val coverUrl: String? = null,
     @SerializedName("images") val images: List<AlbumImageDto>? = null,
     @SerializedName("replyTo") val replyTo: ReplyDto? = null,
     @SerializedName("forwardFrom") val forwardFrom: ForwardDto? = null,
@@ -374,7 +379,11 @@ data class SendMessageRequest(
     @SerializedName("images") val images: List<AlbumImageDto>? = null,
     @SerializedName("forwardFrom") val forwardFrom: ForwardDto? = null,
     @SerializedName("giftType") val giftType: String? = null,
-    @SerializedName("topicId") val topicId: String? = null
+    @SerializedName("topicId") val topicId: String? = null,
+    @SerializedName("title") val title: String? = null,
+    @SerializedName("performer") val performer: String? = null,
+    @SerializedName("fileSize") val fileSize: Long? = null,
+    @SerializedName("coverCdnMediaId") val coverCdnMediaId: String? = null
 )
 
 data class SendAlbumRequest(

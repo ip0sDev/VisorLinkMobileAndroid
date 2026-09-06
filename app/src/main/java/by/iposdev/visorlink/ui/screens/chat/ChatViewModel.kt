@@ -19,6 +19,9 @@ import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.TypingManager
 import by.iposdev.visorlink.utils.VoicePlayerManager
 import by.iposdev.visorlink.utils.VoicePlaybackState
+import by.iposdev.visorlink.data.repository.MusicRepository
+import by.iposdev.visorlink.utils.MusicPlayerManager
+import by.iposdev.visorlink.utils.MusicPlayerState
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -61,6 +64,8 @@ data class ChatUiState(
     val isRecording: Boolean = false,
     val stickers: List<Sticker> = emptyList(),
     val voicePlayback: VoicePlaybackState = VoicePlaybackState(),
+    val musicPlayback: MusicPlayerState = MusicPlayerState(),
+    val musicDownloadProgress: Map<String, Float> = emptyMap(),
     val wallpaperUrl: String? = null,
     val showUnofficialClientWarning: Boolean = false,
     val hasDismissedUnofficialWarning: Boolean = false,
@@ -96,7 +101,9 @@ class ChatViewModel(
     val chatId: String,
     val otherUid: String,
     val initialTopicId: String? = null,
-    private val typingRepository: by.iposdev.visorlink.data.repository.TypingRepository? = null
+    private val typingRepository: by.iposdev.visorlink.data.repository.TypingRepository? = null,
+    val musicPlayerManager: MusicPlayerManager,
+    val musicRepository: MusicRepository
 ) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -229,6 +236,18 @@ class ChatViewModel(
         viewModelScope.launch {
             voicePlayer.state.collect { playbackState ->
                 _uiState.update { it.copy(voicePlayback = playbackState) }
+            }
+        }
+
+        viewModelScope.launch {
+            musicPlayerManager.state.collect { musicState ->
+                _uiState.update { it.copy(musicPlayback = musicState) }
+            }
+        }
+
+        viewModelScope.launch {
+            musicRepository.downloadProgress.collect { progressMap ->
+                _uiState.update { it.copy(musicDownloadProgress = progressMap) }
             }
         }
 
@@ -874,6 +893,32 @@ class ChatViewModel(
         }
     }
 
+    fun sendAudio(file: File, title: String, performer: String, durationSec: Int, coverFile: File?) {
+        val reply = _uiState.value.replyingTo?.toReplyData()
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUploading = true) }
+            clearReply()
+            try {
+                chatRepository.sendAudio(
+                    chatId = chatId,
+                    file = file,
+                    title = title,
+                    performer = performer,
+                    durationSec = durationSec,
+                    coverFile = coverFile,
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    topicId = activeTopicId
+                )
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            } finally {
+                _uiState.update { it.copy(isUploading = false) }
+            }
+        }
+    }
+
     fun cancelRecording() {
         try { recorder?.apply { stop(); release() } } catch (_: Exception) {}
         recorder = null
@@ -1062,6 +1107,62 @@ class ChatViewModel(
                 showUnofficialClientWarning = false,
                 hasDismissedUnofficialWarning = true
             )
+        }
+    }
+
+    fun playAudio(message: Message) {
+        viewModelScope.launch {
+            val resolvedUrl = if (!message.cdnMediaId.isNullOrEmpty()) {
+                CdnService.getFileUrl(message.cdnMediaId)
+            } else {
+                message.url ?: ""
+            }
+            val resolvedCoverUrl = if (!message.coverCdnMediaId.isNullOrEmpty()) {
+                CdnService.getFileUrl(message.coverCdnMediaId)
+            } else {
+                message.coverUrl
+            }
+            val track = MusicTrack(
+                id = message.id,
+                title = message.title?.ifBlank { message.fileName ?: "Аудиозапись" } ?: message.fileName ?: "Аудиозапись",
+                performer = message.performer?.ifBlank { "Неизвестный исполнитель" } ?: "Неизвестный исполнитель",
+                duration = message.duration ?: 0,
+                fileSize = message.fileSize ?: 0L,
+                url = resolvedUrl,
+                cdnMediaId = message.cdnMediaId,
+                coverUrl = resolvedCoverUrl,
+                coverCdnMediaId = message.coverCdnMediaId,
+                sourceType = MusicTrack.SOURCE_CHAT,
+                chatId = chatId,
+                messageId = message.id
+            )
+            musicPlayerManager.playTrack(track)
+        }
+    }
+
+    fun toggleAudioPlayback() {
+        musicPlayerManager.togglePlayPause()
+    }
+
+    fun seekAudio(fraction: Float) {
+        musicPlayerManager.seekTo(fraction)
+    }
+
+    fun cycleAudioSpeed() {
+        musicPlayerManager.cycleSpeed()
+    }
+
+    fun stopAudio() {
+        musicPlayerManager.stop()
+    }
+
+    fun openFullscreenAudio() {
+        musicPlayerManager.openFullscreenPlayer()
+    }
+
+    fun saveTrackToLibrary(track: MusicTrack) {
+        viewModelScope.launch {
+            musicRepository.saveTrack(track)
         }
     }
 }

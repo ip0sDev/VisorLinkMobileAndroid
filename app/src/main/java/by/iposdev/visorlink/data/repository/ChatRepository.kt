@@ -92,6 +92,11 @@ class ChatRepository(
             readBy = readBy ?: emptyList(),
             spoiler = spoiler,
             caption = caption,
+            title = title,
+            performer = performer,
+            fileSize = fileSize ?: 0L,
+            coverCdnMediaId = coverCdnMediaId,
+            coverUrl = coverUrl,
             images = images?.map { 
                 val imgCdnId = it.cdnMediaId
                     ?: it.url?.substringAfter("/f/", "")?.substringBefore("?")?.takeIf { u -> u.isNotEmpty() && !u.contains("/") }
@@ -964,6 +969,106 @@ class ChatRepository(
             val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
             batch.update(topicRef, mapOf(
                 "lastMessage" to mapOf("text" to "🎤 Voice message", "senderUsername" to senderUsername),
+                "lastMessageAt" to FieldValue.serverTimestamp()
+            ))
+        }
+        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.commit().await()
+    }
+
+    suspend fun sendAudio(
+        chatId: String,
+        file: File,
+        title: String,
+        performer: String,
+        durationSec: Int,
+        coverFile: File?,
+        senderUsername: String,
+        replyTo: ReplyData?,
+        topicId: String? = null
+    ) = withContext(Dispatchers.IO) {
+        val data = JSONObject().apply {
+            put("localPath", file.absolutePath)
+            put("title", title)
+            put("performer", performer)
+            put("duration", durationSec)
+            coverFile?.let { put("coverLocalPath", it.absolutePath) }
+            put("senderUsername", senderUsername)
+            if (topicId != null) put("topicId", topicId)
+            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
+        }
+        ChatDataCache.addToOutbox(context, chatId, "audio", data)
+    }
+
+    suspend fun sendAudioNow(
+        id: String,
+        chatId: String,
+        mediaId: String,
+        fileName: String,
+        fileSize: Long,
+        title: String,
+        performer: String,
+        durationSec: Int,
+        coverMediaId: String?,
+        senderUsername: String,
+        replyTo: ReplyData?,
+        topicId: String? = null
+    ) {
+        if (isBackendEnabled()) {
+            api.sendMessage(SendMessageRequest(
+                chatId = chatId,
+                type = MessageType.AUDIO,
+                cdnMediaId = mediaId,
+                fileName = fileName,
+                fileSize = fileSize,
+                title = title,
+                performer = performer,
+                duration = durationSec,
+                coverCdnMediaId = coverMediaId,
+                replyToId = replyTo?.id,
+                topicId = topicId
+            ))
+            return
+        }
+        val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
+        val userRef = db.collection("users").document(currentUid)
+
+        val extra = mutableMapOf<String, Any?>(
+            "type" to MessageType.AUDIO,
+            "cdnMediaId" to mediaId,
+            "fileName" to fileName,
+            "fileSize" to fileSize,
+            "title" to title,
+            "performer" to performer,
+            "duration" to durationSec
+        )
+        if (coverMediaId != null) {
+            extra["coverCdnMediaId"] = coverMediaId
+        }
+
+        val msg = mutableMapOf<String, Any?>(
+            "senderId" to currentUid,
+            "senderUsername" to senderUsername,
+            "createdAt" to FieldValue.serverTimestamp(),
+            "deleted" to false,
+            "reactions" to emptyList<Any>(),
+            "readBy" to listOf(currentUid),
+            "replyTo" to replyTo?.toMap()
+        )
+        if (topicId != null) msg["topicId"] = topicId
+        msg.putAll(extra)
+
+        val batch = db.batch()
+        batch.set(msgRef, msg)
+        val snippet = if (title.isNotBlank()) "🎵 $title" else "🎵 Аудиозапись"
+        batch.update(db.collection("chats").document(chatId), mapOf(
+            "lastMessage" to snippet,
+            "lastMessageAt" to FieldValue.serverTimestamp()
+        ))
+        if (topicId != null) {
+            val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+            batch.update(topicRef, mapOf(
+                "lastMessage" to mapOf("text" to snippet, "senderUsername" to senderUsername),
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }

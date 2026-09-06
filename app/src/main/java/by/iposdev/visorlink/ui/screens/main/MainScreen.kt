@@ -37,9 +37,16 @@ import by.iposdev.visorlink.ui.components.VlNavigationBar
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryScreen
-import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
 import by.iposdev.visorlink.ui.screens.feed.FeedScreen
+import by.iposdev.visorlink.ui.screens.music.MusicLibraryScreen
+import by.iposdev.visorlink.ui.screens.music.MusicViewModel
+import by.iposdev.visorlink.ui.components.music.FullscreenPlayerDialog
+import by.iposdev.visorlink.ui.components.music.MusicOnboardingDialog
+import by.iposdev.visorlink.ui.components.chat.AudioPlaybackDockBar
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
+import by.iposdev.visorlink.utils.MusicPlayerManager
+import by.iposdev.visorlink.data.repository.MusicRepository
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -74,8 +81,14 @@ fun MainScreen(
     val userProfile by mainViewModel.userProfile.collectAsState()
     val diaryEnabled = userProfile?.diaryEnabled ?: false
     val discoverEnabled by themeViewModel.discoverEnabled.collectAsState()
+    val musicEnabled by themeViewModel.musicEnabled.collectAsState()
+    val showMusicOnboarding by themeViewModel.showMusicOnboarding.collectAsState()
 
-    val showNavbar = diaryEnabled || discoverEnabled
+    val musicPlayerManager: MusicPlayerManager = koinInject()
+    val musicRepository: MusicRepository = koinInject()
+    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsState()
+
+    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled
     val isOnline by mainViewModel.isOnline.collectAsState()
     val showFallbackPrompt by mainViewModel.showFallbackPrompt.collectAsState()
 
@@ -83,6 +96,21 @@ fun MainScreen(
         by.iposdev.visorlink.ui.components.BackendFallbackOfferDialog(
             onDismissRequest = { mainViewModel.dismissFallbackPrompt() },
             onConfirmFallback = { mainViewModel.confirmFallback() }
+        )
+    }
+
+    if (showMusicOnboarding) {
+        MusicOnboardingDialog(
+            onEnable = { themeViewModel.completeMusicOnboarding(true) },
+            onDisable = { themeViewModel.completeMusicOnboarding(false) }
+        )
+    }
+
+    if (showFullscreenPlayer) {
+        FullscreenPlayerDialog(
+            playerManager = musicPlayerManager,
+            musicRepository = musicRepository,
+            onDismiss = { musicPlayerManager.closeFullscreenPlayer() }
         )
     }
 
@@ -150,7 +178,7 @@ fun MainScreen(
                         }
                         2 -> if (diaryEnabled) {
                             val chatListEntry = LocalViewModelStoreOwner.current
-                            val diaryVm: DiaryViewModel = if (chatListEntry != null) {
+                            val diaryVm: by.iposdev.visorlink.ui.screens.diary.DiaryViewModel = if (chatListEntry != null) {
                                 koinViewModel(viewModelStoreOwner = chatListEntry)
                             } else {
                                 koinViewModel()
@@ -164,21 +192,62 @@ fun MainScreen(
                         } else {
                             selectedTab = 0
                         }
+                        3 -> if (musicEnabled) {
+                            val musicVm: MusicViewModel = koinViewModel()
+                            MusicLibraryScreen(
+                                viewModel = musicVm,
+                                onNavigateBack = { selectedTab = 0 }
+                            )
+                        } else {
+                            selectedTab = 0
+                        }
                     }
                 }
 
                 if (showNavbar) {
-                    Box(
+                    val musicPlayback by musicPlayerManager.state.collectAsState()
+                    Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = innerPadding.calculateBottomPadding())
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // "Выдувание" мини-плеера из навбара на вкладке музыки или при активном треке
+                        AnimatedVisibility(
+                            visible = selectedTab == 3 && musicPlayback.currentTrack != null,
+                            enter = slideInVertically(
+                                initialOffsetY = { it },
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            ) + expandVertically(
+                                expandFrom = Alignment.Bottom,
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+                            ) + fadeIn(animationSpec = tween(250)),
+                            exit = slideOutVertically(
+                                targetOffsetY = { it },
+                                animationSpec = tween(200)
+                            ) + shrinkVertically(
+                                shrinkTowards = Alignment.Bottom,
+                                animationSpec = tween(200)
+                            ) + fadeOut(animationSpec = tween(150))
+                        ) {
+                            AudioPlaybackDockBar(
+                                musicPlayback = musicPlayback,
+                                onTogglePlayPause = { musicPlayerManager.togglePlayPause() },
+                                onClose = { musicPlayerManager.stop() },
+                                onOpenFullscreen = { musicPlayerManager.openFullscreenPlayer() },
+                                isFloating = true
+                            )
+                        }
+
                         VlNavigationBar(
                             selectedTab = selectedTab,
                             onTabSelected = { selectedTab = it },
                             diaryEnabled = diaryEnabled,
                             discoverEnabled = discoverEnabled,
-                            onOpenDiary = { selectedTab = 2 }
+                            musicEnabled = musicEnabled,
+                            onOpenDiary = { selectedTab = 2 },
+                            onOpenMusic = { selectedTab = 3 }
                         )
                     }
                 }
