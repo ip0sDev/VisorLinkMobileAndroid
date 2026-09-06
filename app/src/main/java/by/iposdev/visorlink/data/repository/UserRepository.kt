@@ -6,6 +6,7 @@ import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.functions.FirebaseFunctions
 import by.iposdev.visorlink.data.model.Sticker
 import by.iposdev.visorlink.data.model.UserProfile
@@ -380,9 +381,10 @@ class UserRepository(
         if (uid.isNotEmpty() && !isFirestoreDisabled()) {
             try {
                 db.collection("users").document(uid)
-                    .update("fcmTokens", FieldValue.arrayUnion(token)).await()
+                    .set(mapOf("fcmTokens" to FieldValue.arrayUnion(token)), SetOptions.merge()).await()
+                android.util.Log.d("UserRepository", "FCM token synced to Firestore for $uid")
             } catch (e: Exception) {
-                android.util.Log.w("UserRepository", "Direct Firestore FCM token sync skipped or failed: ${e.message}")
+                android.util.Log.w("UserRepository", "Direct Firestore FCM token sync failed: ${e.message}")
             }
         }
 
@@ -392,14 +394,6 @@ class UserRepository(
             } catch (e: Exception) {
                 android.util.Log.e("UserRepository", "Failed to save FCM token to backend", e)
             }
-            return
-        }
-
-        try {
-            functions.getHttpsCallable("saveFcmToken")
-                .call(mapOf("token" to token)).await()
-        } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Failed to save FCM token via Cloud Functions", e)
         }
     }
 

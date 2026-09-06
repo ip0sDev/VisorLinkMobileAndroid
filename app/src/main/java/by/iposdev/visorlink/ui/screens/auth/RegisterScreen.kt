@@ -35,6 +35,23 @@ fun RegisterScreen(
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
 
+    val pendingCode by viewModel.pendingInviteCode.collectAsState()
+    var inviteCode by remember { mutableStateOf(pendingCode ?: "") }
+    LaunchedEffect(pendingCode) {
+        if (!pendingCode.isNullOrBlank() && inviteCode.isBlank()) {
+            inviteCode = pendingCode!!
+        }
+    }
+
+    var showRequestAccessDialog by remember { mutableStateOf(false) }
+    var requestEmail by remember { mutableStateOf("") }
+    var requestUsername by remember { mutableStateOf("") }
+    var requestNote by remember { mutableStateOf("") }
+    var isSubmittingRequest by remember { mutableStateOf(false) }
+    var requestSuccessMessage by remember { mutableStateOf<String?>(null) }
+    var requestErrorMessage by remember { mutableStateOf<String?>(null) }
+
+    val inviteFocus   = remember { FocusRequester() }
     val emailFocus    = remember { FocusRequester() }
     val passwordFocus = remember { FocusRequester() }
     val confirmFocus  = remember { FocusRequester() }
@@ -62,7 +79,7 @@ fun RegisterScreen(
         passwordLengthError   = password.length < MIN_PASSWORD_LENGTH
         passwordMismatchError = password != confirm
         if (passwordLengthError || passwordMismatchError) return
-        viewModel.register(email.trim(), password, username.trim())
+        viewModel.register(email.trim(), password, username.trim(), inviteCode.trim().ifBlank { null })
     }
 
     Scaffold(
@@ -105,8 +122,28 @@ fun RegisterScreen(
                 singleLine = true,
                 supportingText = stringResource(R.string.register_username_hint),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
+                keyboardActions = KeyboardActions(onNext = { inviteFocus.requestFocus() }),
                 modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── Invite code (Optional / Required per server rules) ───────────
+            VlTextField(
+                value = inviteCode,
+                onValueChange = {
+                    inviteCode = it.trim()
+                    viewModel.clearError()
+                },
+                label = stringResource(R.string.register_invite_code),
+                placeholder = stringResource(R.string.register_invite_code_hint),
+                leading = { Icon(Icons.Default.VpnKey, contentDescription = null) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                keyboardActions = KeyboardActions(onNext = { emailFocus.requestFocus() }),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(inviteFocus)
             )
 
             Spacer(Modifier.height(12.dp))
@@ -245,7 +282,139 @@ fun RegisterScreen(
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+
+            // ── Request access button ─────────────────────────────────────────
+            OutlinedButton(
+                onClick = {
+                    requestEmail = email.trim()
+                    requestUsername = username.trim()
+                    requestSuccessMessage = null
+                    requestErrorMessage = null
+                    showRequestAccessDialog = true
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = MaterialTheme.shapes.large
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = null,
+                    modifier = Modifier.size(ButtonDefaults.IconSize)
+                )
+                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                Text(
+                    text = stringResource(R.string.register_request_access_button),
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+
             Spacer(Modifier.height(24.dp))
+        }
+
+        if (showRequestAccessDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!isSubmittingRequest) {
+                        showRequestAccessDialog = false
+                    }
+                },
+                title = { Text(stringResource(R.string.register_request_access_title)) },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            stringResource(R.string.register_request_access_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        VlTextField(
+                            value = requestEmail,
+                            onValueChange = { requestEmail = it; requestErrorMessage = null },
+                            label = stringResource(R.string.login_field_email),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        VlTextField(
+                            value = requestUsername,
+                            onValueChange = { requestUsername = it; requestErrorMessage = null },
+                            label = stringResource(R.string.register_field_username),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        VlTextField(
+                            value = requestNote,
+                            onValueChange = { requestNote = it },
+                            label = stringResource(R.string.register_request_note_label),
+                            maxLines = 3,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        if (requestSuccessMessage != null) {
+                            Text(
+                                text = requestSuccessMessage!!,
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+
+                        if (requestErrorMessage != null) {
+                            Text(
+                                text = requestErrorMessage!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            isSubmittingRequest = true
+                            requestErrorMessage = null
+                            viewModel.requestAccess(
+                                email = requestEmail,
+                                username = requestUsername,
+                                note = requestNote
+                            ) { success, err ->
+                                isSubmittingRequest = false
+                                if (success) {
+                                    requestSuccessMessage = "Заявка успешно отправлена! Мы свяжемся с вами."
+                                } else {
+                                    requestErrorMessage = err ?: "Ошибка отправки заявки"
+                                }
+                            }
+                        },
+                        enabled = !isSubmittingRequest && requestEmail.isNotBlank() && requestUsername.isNotBlank()
+                    ) {
+                        if (isSubmittingRequest) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text(stringResource(R.string.register_request_submit))
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showRequestAccessDialog = false },
+                        enabled = !isSubmittingRequest
+                    ) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+            )
         }
     }
 }

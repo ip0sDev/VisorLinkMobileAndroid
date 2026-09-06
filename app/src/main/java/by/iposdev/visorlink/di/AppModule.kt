@@ -69,6 +69,10 @@ val appModule = module {
     }
     single { Firebase.auth }
     single { Firebase.functions("europe-west1") }
+    single {
+        com.google.firebase.database.FirebaseDatabase.getInstance("https://visorlink-f9484-default-rtdb.europe-west1.firebasedatabase.app")
+    }
+    single { by.iposdev.visorlink.data.repository.TypingRepository(get()) }
 
     single {
         Retrofit.Builder()
@@ -134,7 +138,8 @@ val appModule = module {
             draftManager   = get(),
             chatId         = parameters[0],
             otherUid       = parameters[1],
-            initialTopicId = if (parameters.size() > 2) parameters[2] else null
+            initialTopicId = if (parameters.size() > 2) parameters[2] else null,
+            typingRepository = get()
         )
     }
 

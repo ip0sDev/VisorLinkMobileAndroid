@@ -7,7 +7,6 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -16,9 +15,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.koin.android.ext.android.inject
-
-import com.google.firebase.firestore.Source
-import kotlinx.coroutines.withTimeoutOrNull
 
 class FcmService : FirebaseMessagingService() {
 
@@ -42,11 +38,11 @@ class FcmService : FirebaseMessagingService() {
                 val authTime = authRepository.getAuthTime()
                 val isTfaPassed = authTime != null && tfaManager.isTfaPassed(authTime)
                 val profile = userRepository.getUserProfile(uid)
-                if (profile != null && (!profile.tfaEnabled || isTfaPassed)) {
+                if (profile == null || !profile.tfaEnabled || isTfaPassed) {
                     userRepository.saveFcmToken(token)
-                    Log.d("FCM", "New token saved post-2FA")
+                    Log.d("FCM", "New token saved: $token")
                 } else {
-                    Log.d("FCM", "2FA pending or profile loading: deferring new token registration")
+                    Log.d("FCM", "2FA pending: deferring token registration")
                 }
             } catch (e: Exception) {
                 Log.e("FCM", "Failed to save new token", e)
@@ -97,6 +93,10 @@ class FcmService : FirebaseMessagingService() {
             ?: message.data["message"]
             ?: "You have a new message"
 
+        val senderUid = message.data["senderUid"]
+            ?: message.data["senderId"]
+            ?: message.data["fromUid"]
+
         // Если чат открыт на экране прямо сейчас и приложение на переднем плане — скрываем уведомление
         val isCurrentChat = ActiveChatTracker.isChatActive(chatId)
         if (isCurrentChat) {
@@ -104,32 +104,13 @@ class FcmService : FirebaseMessagingService() {
             return
         }
 
-        scope.launch {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid
-            val isMuted = if (uid != null) {
-                withTimeoutOrNull(1000L) {
-                    try {
-                        val userDoc = FirebaseFirestore.getInstance().collection("users")
-                            .document(uid).get(Source.CACHE).await()
-                        val mutedChatIds = userDoc.get("mutedChatIds") as? List<String> ?: emptyList()
-                        mutedChatIds.contains(chatId)
-                    } catch (_: Exception) {
-                        false
-                    }
-                } ?: false
-            } else false
-
-            if (isMuted) {
-                Log.d("FCM", "Suppressed notification: chat $chatId is muted")
-                return@launch
-            }
-
-            NotificationHelper.showMessageNotification(
-                context = applicationContext,
-                chatId = chatId,
-                senderName = title,
-                messagePreview = body
-            )
-        }
+        // Синхронный показ уведомления во избежание сброса фонового сервиса операционной системой
+        NotificationHelper.showMessageNotification(
+            context = applicationContext,
+            chatId = chatId,
+            senderName = title,
+            messagePreview = body,
+            senderUid = senderUid
+        )
     }
 }

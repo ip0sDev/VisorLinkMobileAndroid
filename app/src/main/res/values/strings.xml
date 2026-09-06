@@ -432,8 +432,9 @@
     <string name="forward_from">Переслано от @%1$s</string>
     <string name="forward_from_saved">Переслано из Избранного</string>
     <string name="forward_not_allowed">Пересылка запрещена</string>
-    <string name="forward_picker_title">Переслать в…</string>
-    <string name="settings_no_forwards">No forwards allowed</string>
+    <string name="forward_picker_title">Forward to…</string>
+    <string name="toast_message_forwarded">Message forwarded</string>
+    <string name="settings_no_forwards">Restrict forwarding</string>
     <string name="saved_messages_title">Saved Messages</string>
 
     <!-- Discover Feed -->
@@ -688,4 +689,29 @@
     <string name="backend_fallback_banner_desc">Backup backend is currently active. Please report any critical issues to help us improve the service.</string>
     <string name="backend_fallback_banner_action_retry">Try New Backend</string>
     <string name="backend_fallback_banner_action_report">Report Issue</string>
+
+    <!-- ANDROID_FEATURES_INTEGRATION_SPEC additions -->
+    <string name="channel_subscribe">📢 Subscribe</string>
+    <string name="channel_subscribing">Subscribing…</string>
+    <string name="channel_subscribers_count">%1$d subscribers</string>
+    <string name="channel_only_admins_post">📢 Only admins can post</string>
+    <string name="bot_generating_banner">The bot is generating a response... Please wait for completion.</string>
+    <string name="bot_generating_placeholder">⏳ Bot is generating a response... Please wait.</string>
+    <string name="register_invite_code">Invite code</string>
+    <string name="register_invite_code_hint">Enter your invite code</string>
+    <string name="register_invite_invalid">Invalid or already used invite code</string>
+    <string name="register_request_access_button">Request access</string>
+    <string name="register_request_access_title">Access Request</string>
+    <string name="register_request_access_desc">VisorLink is invite-only. Fill out this form and an administrator will review your request.</string>
+    <string name="register_request_note_label">Note / Purpose</string>
+    <string name="register_request_submit">Submit request</string>
+    <string name="register_request_success">Request submitted successfully! We will contact you via email.</string>
+    <string name="secret_token_warning">⚠️ Copy and save this token right now. It is shown only once and cannot be recovered!</string>
+    <string name="secret_token_copy">Copy token</string>
+    <string name="secret_token_copied">Copied to clipboard!</string>
+    <string name="secret_token_done">Done, I saved the token</string>
+    <string name="forward_from_saved_banner">↩ Forwarded from Saved Messages</string>
+    <string name="forward_from_user">↩ Forwarded from @%1$s</string>
+    <string name="forward_from_user_chat">↩ Forwarded from @%1$s · %2$s</string>
+    <string name="forwarding_disabled_channel">Forwarding messages from this chat is restricted</string>
 </resources>

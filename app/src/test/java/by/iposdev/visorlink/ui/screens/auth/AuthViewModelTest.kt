@@ -103,7 +103,7 @@ class AuthViewModelTest {
 
     @Test
     fun `register success sets success state`() = runTest {
-        whenever(authRepository.register(any(), any(), any())).thenReturn(Unit)
+        whenever(authRepository.register(any(), any(), any(), anyOrNull())).thenReturn(Unit)
 
         viewModel.register("user@example.com", "password123", "alice")
         advanceUntilIdle()
@@ -114,7 +114,7 @@ class AuthViewModelTest {
 
     @Test
     fun `register failure sets error`() = runTest {
-        whenever(authRepository.register(any(), any(), any()))
+        whenever(authRepository.register(any(), any(), any(), anyOrNull()))
             .thenThrow(RuntimeException("Email already in use"))
 
         viewModel.register("user@example.com", "password123", "alice")

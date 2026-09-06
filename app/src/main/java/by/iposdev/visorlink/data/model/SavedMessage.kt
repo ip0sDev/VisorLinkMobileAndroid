@@ -71,25 +71,31 @@ data class ForwardFrom(
     val chatName: String? = null,
     val messageId: String = ""
 ) {
-    fun toMap(): Map<String, Any?> = mapOf(
-        "senderId"       to senderId,
-        "senderUsername" to senderUsername,
-        "chatId"         to chatId,
-        "chatName"       to chatName,
-        "messageId"      to messageId
-    )
+    fun toMap(): Map<String, Any> = buildMap {
+        put("senderId", senderId)
+        put("senderUsername", senderUsername)
+        chatId?.takeIf { it.isNotBlank() }?.let { put("chatId", it) }
+        chatName?.takeIf { it.isNotBlank() }?.let { put("chatName", it) }
+        messageId.takeIf { it.isNotBlank() }?.let { put("messageId", it) }
+    }
 }
 
-// ─── Расширение Message для пересылки ─────────────────────────────────────────
-
-val Message.parsedForwardFrom: ForwardFrom?
-    get() {
-        val map = (this as? Any)?.let {
-            // forwardFrom не входит в базовую модель Message — добавляем через расширение
-            null
-        }
-        return null
-    }
+// Правило одноуровневой пересылки (как в Telegram):
+// При пересылке уже пересланного сообщения сохраняется оригинальный forwardFrom.
+fun buildForwardFrom(
+    message: Message,
+    sourceChatId: String?,
+    sourceChatName: String?
+): ForwardFrom {
+    message.parsedForwardFrom?.let { return it }
+    return ForwardFrom(
+        senderId = message.senderId,
+        senderUsername = message.senderUsername.ifEmpty { "user" },
+        chatId = sourceChatId?.takeIf { it.isNotBlank() },
+        chatName = sourceChatName?.takeIf { it.isNotBlank() },
+        messageId = message.id.takeIf { it.isNotBlank() } ?: ""
+    )
+}
 
 // Вспомогательная модель для пересылаемого сообщения (объединяет Message и SavedMessage)
 data class ForwardableMessage(

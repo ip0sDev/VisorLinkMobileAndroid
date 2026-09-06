@@ -435,6 +435,7 @@
     <string name="forward_from_saved">Переслано из Избранного</string>
     <string name="forward_not_allowed">Пересылка запрещена</string>
     <string name="forward_picker_title">Переслать в…</string>
+    <string name="toast_message_forwarded">Сообщение переслано</string>
     <string name="settings_no_forwards">Запретить пересылку</string>
     <string name="saved_messages_title">Избранное</string>
 
@@ -690,4 +691,29 @@
     <string name="backend_fallback_banner_desc">Включен старый бэкенд. Пожалуйста, сообщайте о критических ошибках в работе сервиса разработчикам.</string>
     <string name="backend_fallback_banner_action_retry">Попробовать новый бэкенд</string>
     <string name="backend_fallback_banner_action_report">Сообщить об ошибке</string>
+
+    <!-- ANDROID_FEATURES_INTEGRATION_SPEC additions -->
+    <string name="channel_subscribe">📢 Подписаться</string>
+    <string name="channel_subscribing">Подписка…</string>
+    <string name="channel_subscribers_count">%1$d подписчиков</string>
+    <string name="channel_only_admins_post">📢 Только администраторы могут писать</string>
+    <string name="bot_generating_banner">Бот генерирует ответ... Пожалуйста, дождитесь завершения.</string>
+    <string name="bot_generating_placeholder">⏳ Бот генерирует ответ... Пожалуйста, подождите.</string>
+    <string name="register_invite_code">Инвайт-код</string>
+    <string name="register_invite_code_hint">Введите код приглашения</string>
+    <string name="register_invite_invalid">Недействительный или уже использованный инвайт-код</string>
+    <string name="register_request_access_button">Запросить доступ</string>
+    <string name="register_request_access_title">Заявка на доступ</string>
+    <string name="register_request_access_desc">VisorLink работает по инвайтам. Заполните форму, и администратор рассмотрит вашу заявку.</string>
+    <string name="register_request_note_label">Цель регистрации / Примечание</string>
+    <string name="register_request_submit">Отправить заявку</string>
+    <string name="register_request_success">Заявка успешно отправлена! Мы свяжемся с вами по email.</string>
+    <string name="secret_token_warning">⚠️ Скопируйте и сохраните токен прямо сейчас. Он отображается один раз и не может быть восстановлен!</string>
+    <string name="secret_token_copy">Скопировать токен</string>
+    <string name="secret_token_copied">Скопировано в буфер!</string>
+    <string name="secret_token_done">Готово, я сохранил токен</string>
+    <string name="forward_from_saved_banner">↩ Переслано из Избранного</string>
+    <string name="forward_from_user">↩ Переслано от @%1$s</string>
+    <string name="forward_from_user_chat">↩ Переслано от @%1$s · %2$s</string>
+    <string name="forwarding_disabled_channel">Пересылка сообщений из этого чата запрещена</string>
 </resources>

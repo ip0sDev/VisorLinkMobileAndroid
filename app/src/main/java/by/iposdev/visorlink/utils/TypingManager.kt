@@ -51,10 +51,11 @@ class TypingManager(private val chatId: String, private val uid: String) {
                 override fun onDataChange(snap: DataSnapshot) {
                     val now = System.currentTimeMillis()
                     val someoneTyping = snap.children.any { child ->
-                        val uid = child.child("uid").getValue(String::class.java)
+                        val uid = child.child("uid").getValue(String::class.java) ?: child.key
+                        val isTyping = child.child("isTyping").getValue(Boolean::class.java) ?: true
                         val ts = child.child("ts").getValue(Long::class.java) ?: 0L
                         // Логика проверки остается той же, но теперь 'ts' надежный
-                        uid != currentUid && (now - ts) < 4000
+                        uid != currentUid && isTyping && (now - ts) < 4000
                     }
                     trySend(someoneTyping)
                 }

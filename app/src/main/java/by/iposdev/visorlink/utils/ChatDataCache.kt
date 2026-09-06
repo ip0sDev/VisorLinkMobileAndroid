@@ -288,6 +288,19 @@ object ChatDataCache {
             list
         }
 
+    suspend fun loadChat(context: Context, chatId: String): Chat? =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).readableDatabase
+                db.rawQuery("SELECT data FROM chats WHERE chat_id=? LIMIT 1", arrayOf(chatId)).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        try { return@withContext JSONObject(cursor.getString(0)).toChat() } catch (_: Exception) {}
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "Failed to load chat from cache", e) }
+            null
+        }
+
     // ── Сообщения ─────────────────────────────────────────────────────────────
 
     suspend fun saveMessages(context: Context, chatId: String, messages: List<Message>) =

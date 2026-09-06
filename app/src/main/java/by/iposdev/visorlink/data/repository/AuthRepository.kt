@@ -68,7 +68,7 @@ class AuthRepository(
     }
 
     // ── Registration ──────────────────────────────────────────────────────────
-    suspend fun register(email: String, password: String, username: String) {
+    suspend fun register(email: String, password: String, username: String, inviteCode: String? = null) {
         val clean = username.lowercase().trim()
         require(clean.length in 3..32) { "Username must be 3–32 characters" }
         require(Regex("^[a-zA-Z0-9_]+\$").matches(clean)) {
@@ -89,9 +89,13 @@ class AuthRepository(
             }
         } else {
             try {
+                val profileParams = mutableMapOf<String, Any>("username" to username.trim())
+                if (!inviteCode.isNullOrBlank()) {
+                    profileParams["inviteCode"] = inviteCode.trim()
+                }
                 functions
                     .getHttpsCallable("createUserProfile")
-                    .call(mapOf("username" to username.trim()))
+                    .call(profileParams)
                     .await()
             } catch (e: Exception) {
                 // CF already deleted the Auth account if username is taken.
@@ -163,6 +167,71 @@ class AuthRepository(
         return result.claims["auth_time"]?.toString()
     }
 
+    // ── Invite-Only Registration ─────────────────────────────────────────────
+
+    suspend fun checkRegistrationCode(code: String): Boolean {
+        val res = functions
+            .getHttpsCallable("checkRegistrationCode")
+            .call(mapOf("code" to code.trim()))
+            .await()
+        val data = res.data as? Map<*, *> ?: return false
+        return data["valid"] == true
+    }
+
+    suspend fun requestAccess(email: String, username: String, note: String): String {
+        val res = functions
+            .getHttpsCallable("requestAccess")
+            .call(mapOf(
+                "email" to email.trim(),
+                "username" to username.trim(),
+                "note" to note.trim()
+            ))
+            .await()
+        val data = res.data as? Map<*, *> ?: return ""
+        return (data["requestId"] as? String) ?: ""
+    }
+
+    suspend fun adminListAccessRequests(status: String = "pending"): List<by.iposdev.visorlink.data.model.AccessRequest> {
+        val res = functions
+            .getHttpsCallable("adminListAccessRequests")
+            .call(mapOf("status" to status))
+            .await()
+        val data = res.data as? Map<*, *> ?: return emptyList()
+        val list = data["requests"] as? List<Map<String, Any?>> ?: return emptyList()
+        return list.map { item ->
+            by.iposdev.visorlink.data.model.AccessRequest(
+                requestId = item["requestId"] as? String ?: "",
+                email = item["email"] as? String ?: "",
+                username = item["username"] as? String ?: "",
+                note = item["note"] as? String ?: "",
+                status = item["status"] as? String ?: "pending"
+            )
+        }
+    }
+
+    suspend fun adminApproveAccessRequest(requestId: String) {
+        functions
+            .getHttpsCallable("adminApproveAccessRequest")
+            .call(mapOf("requestId" to requestId))
+            .await()
+    }
+
+    suspend fun adminRejectAccessRequest(requestId: String) {
+        functions
+            .getHttpsCallable("adminRejectAccessRequest")
+            .call(mapOf("requestId" to requestId))
+            .await()
+    }
+
+    suspend fun adminCreateRegistrationCode(note: String = ""): String {
+        val res = functions
+            .getHttpsCallable("adminCreateRegistrationCode")
+            .call(mapOf("note" to note))
+            .await()
+        val data = res.data as? Map<*, *> ?: return ""
+        return (data["code"] as? String) ?: ""
+    }
+
     // ── Logout ────────────────────────────────────────────────────────────────
     fun logout() = auth.signOut()
 
@@ -178,6 +247,8 @@ class AuthRepository(
             "weak-password"               in msg -> Exception("Password is too short (minimum 6 characters).")
             "too-many-requests"           in msg -> Exception("Too many attempts. Please wait a moment and try again.")
             "network-request-failed"      in msg -> Exception("Network error. Check your connection and try again.")
+            "invalid-invite"              in msg -> Exception("Invalid or already used invite code.")
+            "invite-required"             in msg -> Exception("A valid invite code is required to register.")
             else                                 -> e
         }
     }

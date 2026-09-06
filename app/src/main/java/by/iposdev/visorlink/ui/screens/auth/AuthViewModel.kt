@@ -176,6 +176,13 @@ class AuthViewModel(
     private val _uiState = MutableStateFlow(AuthUiState())
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
 
+    private val _pendingInviteCode = MutableStateFlow<String?>(null)
+    val pendingInviteCode: StateFlow<String?> = _pendingInviteCode.asStateFlow()
+
+    fun setPendingInviteCode(code: String?) {
+        _pendingInviteCode.value = code
+    }
+
     fun login(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
             _uiState.value = AuthUiState(error = "Please fill in all fields")
@@ -196,16 +203,38 @@ class AuthViewModel(
      * On success → success = true signals UI to navigate to VerifyEmailScreen.
      * The Auth account exists but email_verified == false; main app is still gated.
      */
-    fun register(email: String, password: String, username: String) {
+    fun register(email: String, password: String, username: String, inviteCode: String? = null) {
         if (email.isBlank() || password.isBlank() || username.isBlank()) {
             _uiState.value = AuthUiState(error = "Please fill in all fields")
             return
         }
         viewModelScope.launch {
             _uiState.value = AuthUiState(isLoading = true)
-            runCatching { authRepository.register(email.trim(), password, username.trim()) }
+            val codeToUse = inviteCode?.trim()?.ifBlank { null } ?: _pendingInviteCode.value?.trim()?.ifBlank { null }
+            runCatching { authRepository.register(email.trim(), password, username.trim(), codeToUse) }
                 .onSuccess { _uiState.value = AuthUiState(success = true) }
                 .onFailure { _uiState.value = AuthUiState(error = friendlyMessage(it)) }
+        }
+    }
+
+    suspend fun checkRegistrationCode(code: String): Boolean {
+        return runCatching { authRepository.checkRegistrationCode(code) }.getOrDefault(false)
+    }
+
+    fun requestAccess(
+        email: String,
+        username: String,
+        note: String,
+        onResult: (Boolean, String?) -> Unit
+    ) {
+        if (email.isBlank() || username.isBlank()) {
+            onResult(false, "Пожалуйста, заполните email и имя пользователя")
+            return
+        }
+        viewModelScope.launch {
+            runCatching { authRepository.requestAccess(email, username, note) }
+                .onSuccess { onResult(true, null) }
+                .onFailure { onResult(false, friendlyMessage(it)) }
         }
     }
 

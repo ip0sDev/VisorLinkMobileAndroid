@@ -77,6 +77,40 @@ fun AdminPanelSheet(onDismiss: () -> Unit) {
             VlTextField(value = userUid, onValueChange = { userUid = it }, label = "UID пользователя (пусто = себе)", modifier = Modifier.fillMaxWidth(), singleLine = true)
             Spacer(Modifier.height(8.dp))
             Button(onClick = { scope.launch { isSaving=true; try { Firebase.functions("europe-west1").getHttpsCallable("adminGrantEternalPro").call(mapOf("targetUid" to userUid)).await(); Toast.makeText(context, "Вечный PRO выдан", Toast.LENGTH_SHORT).show() } catch(e:Exception){} finally{isSaving=false} } }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC5A059))) { Text("Выдать Вечный PRO") }
+
+            HorizontalDivider(Modifier.padding(vertical = 24.dp))
+
+            Text("🎟️ Инвайт-коды", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(8.dp))
+            var inviteNote by remember { mutableStateOf("") }
+            val authRepository: by.iposdev.visorlink.data.repository.AuthRepository = koinInject()
+            var adminSecretTokenData by remember { mutableStateOf<Pair<String, String>?>(null) }
+            VlTextField(value = inviteNote, onValueChange = { inviteNote = it }, label = "Примечание к коду", modifier = Modifier.fillMaxWidth(), singleLine = true)
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    scope.launch {
+                        isSaving = true
+                        try {
+                            val code = authRepository.adminCreateRegistrationCode(inviteNote)
+                            adminSecretTokenData = "Инвайт-код" to code
+                            inviteNote = ""
+                        } catch(e: Exception) {
+                            Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show()
+                        } finally {
+                            isSaving = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Сгенерировать инвайт-код")
+            }
+
+            adminSecretTokenData?.let { (title, token) ->
+                SecretTokenDialog(title = title, token = token, onDismiss = { adminSecretTokenData = null })
+            }
+
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -95,6 +129,7 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
 
     var botName by remember { mutableStateOf("") }
     var botUsername by remember { mutableStateOf("") }
+    var secretTokenDialogData by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     fun refresh() {
         scope.launch {
@@ -107,6 +142,14 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
     }
 
     LaunchedEffect(Unit) { refresh() }
+
+    secretTokenDialogData?.let { (title, token) ->
+        SecretTokenDialog(
+            title = title,
+            token = token,
+            onDismiss = { secretTokenDialogData = null }
+        )
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).navigationBarsPadding().verticalScroll(rememberScrollState())) {
@@ -130,10 +173,7 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
                                 scope.launch {
                                     try {
                                         val newToken = botRepository.regenerateToken(bot.uid)
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("bot token", newToken)
-                                        clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(context, context.getString(R.string.settings_bots_token_copied), Toast.LENGTH_LONG).show()
+                                        secretTokenDialogData = "Токен бота @${bot.username}" to newToken
                                         refresh()
                                     } catch (e: Exception) {
                                         Toast.makeText(context, "${context.getString(R.string.toast_save_failed)}: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -170,7 +210,7 @@ fun BotsManagerSheet(onDismiss: () -> Unit) {
                             isSaving = true
                             try {
                                 val token = botRepository.createBot(botName, botUsername)
-                                Toast.makeText(context, "${context.getString(R.string.settings_info_saved)} Token: $token", Toast.LENGTH_LONG).show()
+                                secretTokenDialogData = "Токен бота @$botUsername" to token
                                 botName = ""; botUsername = ""
                                 refresh()
                             } catch(e: Exception) {

@@ -29,9 +29,11 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import by.iposdev.visorlink.utils.ChatDataCache
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
@@ -70,10 +72,15 @@ data class ChatUiState(
     val editingMessage: Message? = null,
     val currentUser: UserProfile? = null,
     val currentTopic: Topic? = null,
-    val topicId: String? = null
+    val topicId: String? = null,
+    val isBotGenerating: Boolean = false,
+    val isJoiningChannel: Boolean = false,
+    val availableChats: List<Chat> = emptyList()
 ) {
-    val canSendMessage get() = canSendMessage(myMember, chatType)
-    val canSendMedia get() = canSendMedia(myMember, chatType)
+    val isChannelMember get() = chat?.let { isChannelMember(it, myMember?.role, currentUser?.uid ?: "") } ?: true
+    val canPostToChannel get() = chat?.let { canPostToChannel(it, myMember?.role, currentUser?.uid ?: "") } ?: true
+    val canSendMessage get() = if (chatType == ChatType.CHANNEL) canPostToChannel else canSendMessage(myMember, chatType)
+    val canSendMedia get() = if (chatType == ChatType.CHANNEL) canPostToChannel else canSendMedia(myMember, chatType)
     val canReact get() = chat?.let { canReact(it, chatType) } ?: true
     val isAdmin get() = myMember?.isAdmin() ?: false
     val isOwner get() = myMember?.isOwner() ?: false
@@ -88,7 +95,8 @@ class ChatViewModel(
     private val draftManager: DraftManager,
     val chatId: String,
     val otherUid: String,
-    val initialTopicId: String? = null
+    val initialTopicId: String? = null,
+    private val typingRepository: by.iposdev.visorlink.data.repository.TypingRepository? = null
 ) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -107,6 +115,102 @@ class ChatViewModel(
     private var wallpaperListener: ListenerRegistration? = null
     private var rawMessages = listOf<Message>()
     private val lastOtherActiveTimeFlow = MutableStateFlow(0L)
+    private var otherUserObservationJob: Job? = null
+    private var observedOtherUid: String? = null
+
+    val effectiveOtherUid: String
+        get() = observedOtherUid
+            ?: (if (otherUid != chatId && otherUid.isNotBlank()) otherUid else null)
+            ?: _uiState.value.chat?.otherParticipantId(currentUid)
+            ?: otherUid
+
+    fun startObservingOtherUser(targetUid: String) {
+        if (targetUid.isBlank() || targetUid == currentUid || observedOtherUid == targetUid) return
+        observedOtherUid = targetUid
+        otherUserObservationJob?.cancel()
+        otherUserObservationJob = viewModelScope.launch {
+            _uiState.update { it.copy(chatType = ChatType.DIRECT) }
+
+            launch {
+                userRepository.userProfileFlow(targetUid).collect { profile ->
+                    _uiState.update { it.copy(otherUser = profile) }
+                }
+            }
+
+            launch {
+                userRepository.clientStatusFlow(targetUid).collect { isOfficial ->
+                    val state = _uiState.value
+                    if (!isOfficial && !state.hasDismissedUnofficialWarning) {
+                        _uiState.update { it.copy(showUnofficialClientWarning = true) }
+                    } else if (isOfficial) {
+                        _uiState.update { it.copy(showUnofficialClientWarning = false) }
+                    }
+                }
+            }
+
+            if (typingRepository != null) {
+                launch {
+                    typingRepository.observeBotTyping(chatId, targetUid).collect { isTyping ->
+                        _uiState.update { state ->
+                            if (state.otherUser?.isBot == true) {
+                                state.copy(
+                                    isBotGenerating = isTyping,
+                                    topbarStatus = if (isTyping) TopbarStatus.Typing else state.topbarStatus
+                                )
+                            } else {
+                                state
+                            }
+                        }
+                    }
+                }
+            }
+
+            val tickerFlow = flow {
+                while (true) {
+                    emit(System.currentTimeMillis())
+                    kotlinx.coroutines.delay(5000L)
+                }
+            }
+
+            launch {
+                combine(
+                    PresenceManager.observePresence(targetUid).onStart { emit(PresenceData(online = false, lastSeen = null)) },
+                    TypingManager.observeTyping(chatId, currentUid).onStart { emit(false) },
+                    lastOtherActiveTimeFlow,
+                    tickerFlow
+                ) { presence, typing, activeTime, now ->
+                    if (typing) {
+                        lastOtherActiveTimeFlow.update { maxOf(it, now) }
+                        TopbarStatus.Typing
+                    } else {
+                        val isPresenceOnline = presence?.online == true
+                        if (isPresenceOnline) {
+                            lastOtherActiveTimeFlow.update { maxOf(it, now) }
+                        }
+                        val effectiveActiveTime = maxOf(activeTime, if (isPresenceOnline) now else 0L)
+                        val isRecentlyActive = effectiveActiveTime > 0L && (now - effectiveActiveTime < 60_000L)
+
+                        if (isPresenceOnline || isRecentlyActive) {
+                            TopbarStatus.Online
+                        } else {
+                            val effectiveLastSeen = when {
+                                presence?.lastSeen != null && effectiveActiveTime > 0L -> maxOf(presence.lastSeen, effectiveActiveTime)
+                                presence?.lastSeen != null -> presence.lastSeen
+                                effectiveActiveTime > 0L -> effectiveActiveTime
+                                else -> null
+                            }
+                            TopbarStatus.LastSeen(effectiveLastSeen)
+                        }
+                    }
+                }
+                    .catch { e ->
+                        Log.e("ChatViewModel", "Error in presence flow: ${e.message}", e)
+                        emit(TopbarStatus.Offline)
+                    }
+                    .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
+            }
+        }
+    }
 
     private fun filterByTopic(msgs: List<Message>, topic: Topic?, topicId: String?): List<Message> {
         val tid = topicId ?: topic?.id
@@ -147,6 +251,12 @@ class ChatViewModel(
             }
         }
 
+        viewModelScope.launch {
+            chatRepository.chatsFlow(currentUid).collect { chats ->
+                _uiState.update { it.copy(availableChats = chats) }
+            }
+        }
+
         if (initialTopicId != null) {
             _uiState.update { it.copy(topicId = initialTopicId) }
             viewModelScope.launch {
@@ -162,6 +272,24 @@ class ChatViewModel(
                         }
                     }
             }
+        }
+
+        viewModelScope.launch {
+            val cachedChat = ChatDataCache.loadChat(context, chatId)
+            if (cachedChat != null) {
+                val type = cachedChat.chatType()
+                _uiState.update { it.copy(chat = cachedChat, chatType = type) }
+                if (type == ChatType.DIRECT) {
+                    val resolvedUid = cachedChat.otherParticipantId(currentUid)
+                    if (resolvedUid.isNotBlank()) {
+                        startObservingOtherUser(resolvedUid)
+                    }
+                }
+            }
+        }
+
+        if (otherUid != chatId && otherUid.isNotBlank()) {
+            startObservingOtherUser(otherUid)
         }
 
         viewModelScope.launch {
@@ -188,7 +316,12 @@ class ChatViewModel(
                         val type = chat.chatType()
                         _uiState.update { it.copy(chat = chat, chatType = type) }
 
-                        if (type != ChatType.DIRECT) {
+                        if (type == ChatType.DIRECT) {
+                            val resolvedUid = chat.otherParticipantId(currentUid)
+                            if (resolvedUid.isNotBlank()) {
+                                startObservingOtherUser(resolvedUid)
+                            }
+                        } else {
                             startGroupOnlineCount(chat.memberIds)
                         }
                     }
@@ -209,76 +342,16 @@ class ChatViewModel(
                 } catch (_: Exception) {}
             }
 
-            if (otherUid != chatId) {
-                _uiState.update { it.copy(chatType = ChatType.DIRECT) }
-
-                launch {
-                    userRepository.userProfileFlow(otherUid).collect { profile ->
-                        _uiState.update { it.copy(otherUser = profile) }
-                    }
-                }
-
-                launch {
-                    userRepository.clientStatusFlow(otherUid).collect { isOfficial ->
-                        val state = _uiState.value
-                        if (!isOfficial && !state.hasDismissedUnofficialWarning) {
-                            _uiState.update { it.copy(showUnofficialClientWarning = true) }
-                        } else if (isOfficial) {
-                            _uiState.update { it.copy(showUnofficialClientWarning = false) }
-                        }
-                    }
-                }
-
-                val tickerFlow = flow {
-                    while (true) {
-                        emit(System.currentTimeMillis())
-                        kotlinx.coroutines.delay(5000L)
-                    }
-                }
-
-                launch {
-                    combine(
-                        PresenceManager.observePresence(otherUid).onStart { emit(PresenceData(online = false, lastSeen = null)) },
-                        TypingManager.observeTyping(chatId, currentUid).onStart { emit(false) },
-                        lastOtherActiveTimeFlow,
-                        tickerFlow
-                    ) { presence, typing, activeTime, now ->
-                        if (typing) {
-                            lastOtherActiveTimeFlow.update { maxOf(it, now) }
-                            TopbarStatus.Typing
-                        } else {
-                            val isPresenceOnline = presence?.online == true
-                            if (isPresenceOnline) {
-                                lastOtherActiveTimeFlow.update { maxOf(it, now) }
-                            }
-                            val effectiveActiveTime = maxOf(activeTime, if (isPresenceOnline) now else 0L)
-                            val isRecentlyActive = effectiveActiveTime > 0L && (now - effectiveActiveTime < 60_000L)
-
-                            if (isPresenceOnline || isRecentlyActive) {
-                                TopbarStatus.Online
-                            } else {
-                                val effectiveLastSeen = when {
-                                    presence?.lastSeen != null && effectiveActiveTime > 0L -> maxOf(presence.lastSeen, effectiveActiveTime)
-                                    presence?.lastSeen != null -> presence.lastSeen
-                                    effectiveActiveTime > 0L -> effectiveActiveTime
-                                    else -> null
-                                }
-                                TopbarStatus.LastSeen(effectiveLastSeen)
-                            }
-                        }
-                    }
-                        .catch { e ->
-                            Log.e("ChatViewModel", "Error in presence flow: ${e.message}", e)
-                            emit(TopbarStatus.Offline)
-                        }
-                        .collect { status -> _uiState.update { it.copy(topbarStatus = status) } }
-                }
+            val currentTarget = effectiveOtherUid
+            if (currentTarget != chatId && currentTarget.isNotBlank()) {
+                startObservingOtherUser(currentTarget)
             }
 
             launch {
                 chatRepository.latestMessagesFlow(chatId) { latestMessages, latestLastDoc ->
-                    if (otherUid != chatId) {
-                        val otherLatestMsg = latestMessages.filter { it.senderId == otherUid }
+                    val targetOtherUid = effectiveOtherUid
+                    if (targetOtherUid != chatId && targetOtherUid.isNotBlank()) {
+                        val otherLatestMsg = latestMessages.filter { it.senderId == targetOtherUid }
                             .maxOfOrNull { (it.createdAt?.seconds ?: 0L) * 1000L } ?: 0L
                         if (otherLatestMsg > 0L) {
                             lastOtherActiveTimeFlow.update { maxOf(it, otherLatestMsg) }
@@ -882,6 +955,21 @@ class ChatViewModel(
         }
     }
 
+    fun joinChannel(onJoined: (() -> Unit)? = null) {
+        val chat = _uiState.value.chat ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isJoiningChannel = true) }
+            try {
+                chatRepository.joinChannel(chat.id, chat.tag)
+                onJoined?.invoke()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            } finally {
+                _uiState.update { it.copy(isJoiningChannel = false) }
+            }
+        }
+    }
+
     fun setReplyTo(message: Message) = _uiState.update { it.copy(replyingTo = message, editingMessage = null) }
     fun clearReply() = _uiState.update { it.copy(replyingTo = null) }
 
@@ -929,6 +1017,7 @@ class ChatViewModel(
     fun clearError() = _uiState.update { it.copy(error = null) }
 
     override fun onCleared() {
+        otherUserObservationJob?.cancel()
         typingManager?.cleanup()
         onlineCountListener?.let {
             FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)

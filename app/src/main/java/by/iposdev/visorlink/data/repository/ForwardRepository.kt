@@ -53,13 +53,13 @@ class ForwardRepository(
             originalMsg.albumItems?.let     { put("images",        it.map { img -> img.toMap() }) }
         }
 
-        val preview = when (originalMsg.type) {
-            MessageType.TEXT    -> "↩ ${(originalMsg.text ?: "🔒 …").take(60)}"
-            MessageType.IMAGE   -> "↩ 🖼 Фото"
-            MessageType.VOICE   -> "↩ 🎙 Голосовое"
-            MessageType.STICKER -> "↩ ${originalMsg.packEmoji ?: "😊"} Стикер"
-            MessageType.ALBUM   -> "↩ 📷 ${originalMsg.albumItems?.size ?: ""} фото"
-            else                -> "↩ Переслано"
+        val preview = "↩ " + when (originalMsg.type) {
+            MessageType.TEXT    -> (originalMsg.text ?: "").take(60)
+            MessageType.IMAGE   -> "🖼 Фото"
+            MessageType.VOICE   -> "🎙 Голосовое сообщение"
+            MessageType.STICKER -> "${originalMsg.packEmoji ?: "😊"} Стикер"
+            MessageType.ALBUM   -> "📷 ${originalMsg.albumItems?.size ?: ""} фото"
+            else                -> "Пересланное сообщение"
         }
 
         val batch = db.batch()
@@ -67,7 +67,11 @@ class ForwardRepository(
         batch.update(
             db.collection("chats").document(targetChat.id),
             mapOf(
-                "lastMessage"   to preview,
+                "lastMessage" to mapOf(
+                    "text" to preview,
+                    "senderId" to currentUser.uid,
+                    "senderUsername" to currentUser.username
+                ),
                 "lastMessageAt" to FieldValue.serverTimestamp()
             )
         )

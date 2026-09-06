@@ -76,6 +76,7 @@ object NotificationHelper {
         chatId: String,
         senderName: String,
         messagePreview: String,
+        senderUid: String? = null,
         notificationId: Int = chatId.hashCode()
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -94,6 +95,9 @@ object NotificationHelper {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("openChatId", chatId)
+            if (!senderUid.isNullOrBlank()) {
+                putExtra("senderUid", senderUid)
+            }
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -160,7 +164,7 @@ object NotificationHelper {
             .setContentTitle("VisorLink")
             .setContentText("Новые сообщения")
             .setStyle(NotificationCompat.InboxStyle().setSummaryText("Новые сообщения"))
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setGroup(GROUP_KEY)
             .setGroupSummary(true)
             .setContentIntent(summaryPendingIntent)

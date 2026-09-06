@@ -643,6 +643,37 @@ class ChatRepository(
         )
     }
 
+    suspend fun joinChannel(chatId: String, tag: String? = null): Boolean {
+        if (isBackendEnabled()) {
+            return try {
+                val cleanTag = tag?.removePrefix("@")?.trim()
+                if (!cleanTag.isNullOrBlank()) {
+                    api.joinByTag(JoinByTagRequest(tag = cleanTag))
+                }
+                true
+            } catch (e: Exception) {
+                false
+            }
+        }
+        return try {
+            val res = functions.getHttpsCallable("joinChannel").call(mapOf("chatId" to chatId)).await()
+            val data = res.data as? Map<*, *>
+            (data?.get("success") as? Boolean) == true || (data?.get("alreadyMember") as? Boolean) == true
+        } catch (e: Exception) {
+            val cleanTag = tag?.removePrefix("@")?.trim()
+            if (!cleanTag.isNullOrBlank()) {
+                try {
+                    joinByTag(cleanTag)
+                    true
+                } catch (_: Exception) {
+                    throw e
+                }
+            } else {
+                throw e
+            }
+        }
+    }
+
     suspend fun joinByTag(tag: String): String {
         if (isBackendEnabled()) {
             val res = api.joinByTag(JoinByTagRequest(tag = tag))

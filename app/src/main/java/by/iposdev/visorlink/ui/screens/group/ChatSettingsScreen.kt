@@ -65,8 +65,11 @@ data class ChatSettingsUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val successMessage: Int? = null, // Изменили String на Int (ID ресурса)
-    val selectedTab: Int = 0  // 0=Info, 1=Members, 2=Moderation
+    val selectedTab: Int = 0,  // 0=Info, 1=Members, 2=Moderation
+    val currentUid: String = "",
+    val isJoining: Boolean = false
 ) {
+    val isMember get() = if (chat?.type == "channel") isChannelMember(chat, myMember?.role, currentUid) else (myMember != null || chat?.memberIds?.contains(currentUid) == true)
     val isAdmin get() = myMember?.isAdmin() ?: false
     val isOwner get() = myMember?.isOwner() ?: false
     val bannedMembers get() = members.filter { it.banned }
@@ -92,7 +95,7 @@ class ChatSettingsViewModel(
 
     val currentUid: String get() = auth.currentUser!!.uid
 
-    private val _uiState = MutableStateFlow(ChatSettingsUiState())
+    private val _uiState = MutableStateFlow(ChatSettingsUiState(currentUid = currentUid))
     val uiState: StateFlow<ChatSettingsUiState> = _uiState.asStateFlow()
 
     init {
@@ -246,6 +249,19 @@ class ChatSettingsViewModel(
         }
     }
 
+    fun joinChannel() {
+        val chat = _uiState.value.chat ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isJoining = true) }
+            try {
+                chatRepository.joinChannel(chat.id, chat.tag)
+                _uiState.update { it.copy(isJoining = false) }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isJoining = false, error = e.message) }
+            }
+        }
+    }
+
     fun clearMessages() = _uiState.update { it.copy(error = null, successMessage = null) }
 }
 
@@ -362,6 +378,7 @@ fun ChatSettingsScreen(
                         clipboard.setText(AnnotatedString(link))
                         scope.launch { snackbar.showSnackbar(copiedMessage) }
                     },
+                    onJoinChannel = { viewModel.joinChannel() },
                     onLeave = onNavigateBack
                 )
                 1 -> MembersTab(
@@ -393,6 +410,7 @@ private fun InfoTab(
     onToggleForumMode: (Boolean) -> Unit,
     onRegenerateLink: () -> Unit,
     onCopyLink: (String) -> Unit,
+    onJoinChannel: () -> Unit,
     onLeave: () -> Unit
 ) {
     val chat = uiState.chat ?: return
@@ -494,20 +512,23 @@ private fun InfoTab(
             }
             item {
                 Card(
+                    modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                        if (uiState.inviteLink.isNotBlank()) {
+                    Column(Modifier.padding(16.dp)) {
+                        val link = uiState.inviteLink.ifEmpty { chat.settings.inviteLink }
+                        if (!link.isNullOrEmpty()) {
                             Text(
-                                uiState.inviteLink,
+                                link,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(
-                                    onClick = { onCopyLink(uiState.inviteLink) },
+                                Button(
+                                    onClick = { onCopyLink(link) },
                                     modifier = Modifier.weight(1f),
                                     shape = MaterialTheme.shapes.medium
                                 ) {
@@ -589,7 +610,31 @@ private fun InfoTab(
             }
         }
 
-        if (!uiState.isOwner) {
+        if (isChannel && !uiState.isMember) {
+            // Для гостя канала показываем кнопку "Подписаться"
+            item { Spacer(Modifier.height(8.dp)) }
+            item {
+                Button(
+                    onClick = onJoinChannel,
+                    enabled = !uiState.isJoining,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = MaterialTheme.shapes.large
+                ) {
+                    if (uiState.isJoining) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            stringResource(R.string.channel_subscribe),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        } else if (!uiState.isOwner) {
             item { Spacer(Modifier.height(8.dp)) }
             item {
                 OutlinedButton(

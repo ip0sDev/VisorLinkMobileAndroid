@@ -78,7 +78,8 @@ data class ChatSettings(
     val allowComments: Boolean = true,
     val inviteLink: String = "",
     val isForum: Boolean = false,
-    val is_forum: Boolean = false
+    val is_forum: Boolean = false,
+    val noForwards: Boolean = false
 ) {
     val isForumEnabled: Boolean get() = isForum || is_forum
 }
@@ -235,11 +236,48 @@ fun canReact(chat: Chat, chatType: ChatType): Boolean {
     return chat.settings.allowReactions
 }
 
+fun isChannelMember(chat: Chat, myMemberRole: String?, currentUid: String): Boolean {
+    if (chat.type != "channel") return true
+    if (myMemberRole != null) return true
+    if (chat.createdBy == currentUid) return true
+    return chat.memberIds.contains(currentUid)
+}
+
+fun canPostToChannel(chat: Chat, myMemberRole: String?, currentUid: String): Boolean {
+    if (chat.type != "channel") return true
+    if (chat.createdBy == currentUid) return true
+    return myMemberRole == "admin" || myMemberRole == "owner"
+}
+
 fun commentsAllowed(channel: Chat, post: Message): Boolean {
     if (channel.settings.allowComments == false) return false
     if (post.commentsEnabled == false) return false
     return true
 }
+
+// ─── Registration & Invites ──────────────────────────────────────────────────
+
+@IgnoreExtraProperties
+data class RegistrationInvite(
+    val code: String = "",
+    val createdAt: Timestamp? = null,
+    val createdBy: String = "",
+    val isUsed: Boolean = false,
+    val usedBy: String? = null,
+    val usedAt: Timestamp? = null
+)
+
+@IgnoreExtraProperties
+data class AccessRequest(
+    val requestId: String = "",
+    val email: String = "",
+    val username: String = "",
+    val note: String = "",
+    val status: String = "pending", // "pending", "approved", "rejected"
+    val createdAt: Timestamp? = null,
+    val processedAt: Timestamp? = null,
+    val processedBy: String? = null
+)
 
 // ─── Invites ──────────────────────────────────────────────────────────────────
 

@@ -125,6 +125,7 @@ fun ChatScreen(
 
     var contextMenuData by remember { mutableStateOf<ContextMenuData?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var forwardingMessage by remember { mutableStateOf<ForwardableMessage?>(null) }
 
     var lightboxImages by remember { mutableStateOf<List<AlbumImage>>(emptyList()) }
     var lightboxStartIndex by remember { mutableIntStateOf(0) }
@@ -241,11 +242,12 @@ fun ChatScreen(
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
                     ChatTopBar(
-                        uiState = uiState, otherUid = otherUid, chatId = chatId,
+                        uiState = uiState, otherUid = viewModel.effectiveOtherUid, chatId = chatId,
                         canSetWallpaper = canSetWallpaper, isAdmin = isAdmin, isOwner = isOwner,
                         hapticEnabled = hapticEnabled,
                         onWallpaperClick = { showWallpaperSheet = true }, onNavigateBack = onNavigateBack,
-                        onOpenOtherProfile = onOpenOtherProfile, onOpenChatSettings = onOpenChatSettings,
+                        onOpenOtherProfile = { onOpenOtherProfile(viewModel.effectiveOtherUid) },
+                        onOpenChatSettings = onOpenChatSettings,
                         onLeaveClick = { showLeaveDialog = true },
                         onAegisClick = { aegisViewModel.onInteract() }, isAegisEnabled = isAegisEnabled,
                         onOpenTopicList = if (onOpenTopicList != null) { { onOpenTopicList(chatId) } } else null
@@ -271,7 +273,8 @@ fun ChatScreen(
                         onCancelRecord = { viewModel.cancelRecording() },
                         onSendRecord = { viewModel.stopRecordingAndSend() },
                         onClearReply = { viewModel.clearReply() },
-                        onCancelEdit = { viewModel.cancelEditing(); inputText = "" }
+                        onCancelEdit = { viewModel.cancelEditing(); inputText = "" },
+                        onJoinChannel = { viewModel.joinChannel() }
                     )
                 }
             ) { innerPadding ->
@@ -382,6 +385,17 @@ fun ChatScreen(
                     onSaveImage = { scope.launch { ImageCache.saveImageToGallery(context, menuData.message.url ?: "") } },
                     onSaveVoice = { /* implement save voice */ },
                     onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it, menuData.message.type) } },
+                    onForward = if (uiState.chat?.settings?.noForwards != true) {
+                        {
+                            val fwd = ForwardableMessage.fromMessage(
+                                msg = menuData.message,
+                                chatId = chatId,
+                                chatName = uiState.chat?.name
+                            )
+                            forwardingMessage = fwd
+                            contextMenuData = null
+                        }
+                    } else null,
                     onReact = { emoji -> viewModel.toggleReaction(menuData.message.id, emoji, menuData.message.parsedReactions) }
                 )
             }
@@ -482,6 +496,19 @@ fun ChatScreen(
             message = aegisUiState.message, onDismiss = { aegisViewModel.onDismiss(it) },
             onBoop = { aegisViewModel.processIntent(LinkIntent.Boop) },
             onPet = { aegisViewModel.processIntent(LinkIntent.Pet) }
+        )
+    }
+
+    forwardingMessage?.let { fwdMsg ->
+        ForwardPickerDialog(
+            message = fwdMsg,
+            chats = uiState.availableChats,
+            currentUid = viewModel.currentUid,
+            onDismiss = { forwardingMessage = null },
+            onForwarded = {
+                forwardingMessage = null
+                Toast.makeText(context, context.getString(R.string.toast_message_forwarded), Toast.LENGTH_SHORT).show()
+            }
         )
     }
 

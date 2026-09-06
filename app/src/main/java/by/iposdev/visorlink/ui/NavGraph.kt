@@ -7,7 +7,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.navigation.*
 import androidx.navigation.compose.*
+import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.repository.AuthState
+import by.iposdev.visorlink.utils.ChatDataCache
 import by.iposdev.visorlink.ui.screens.diary.DiaryScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryEntryScreen
 import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
@@ -45,6 +47,7 @@ fun VisorLinkNavGraph(
     authViewModel: AuthViewModel,
     themeViewModel: ThemeViewModel,
     pendingChatId: String? = null,
+    pendingSenderUid: String? = null,
     onPendingChatOpened: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -118,9 +121,20 @@ fun VisorLinkNavGraph(
     }
 
     // Обработка перехода в чат из Push-уведомления
-    LaunchedEffect(isSessionReady, pendingChatId) {
+    LaunchedEffect(isSessionReady, pendingChatId, pendingSenderUid) {
         if (isSessionReady && !pendingChatId.isNullOrBlank()) {
-            navController.navigate(Screen.Chat.createRoute(pendingChatId, pendingChatId))
+            val myUid = (authState as? AuthState.Verified)?.user?.uid ?: ""
+            val otherUid = if (!pendingSenderUid.isNullOrBlank() && pendingSenderUid != pendingChatId) {
+                pendingSenderUid
+            } else {
+                val cached = ChatDataCache.loadChat(context, pendingChatId)
+                if (cached != null && cached.chatType() == ChatType.DIRECT) {
+                    cached.otherParticipantId(myUid).takeIf { it.isNotBlank() } ?: pendingChatId
+                } else {
+                    pendingChatId
+                }
+            }
+            navController.navigate(Screen.Chat.createRoute(pendingChatId, otherUid))
             onPendingChatOpened()
         }
     }

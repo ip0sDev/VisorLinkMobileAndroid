@@ -70,10 +70,18 @@ fun ChatTopBar(
                     }
                 },
             ) {
+                val currentUid = uiState.currentUser?.uid ?: ""
+                val directName = uiState.otherUser?.displayName?.ifEmpty { null }
+                    ?: uiState.chat?.displayName(currentUid)?.ifEmpty { null }
+                    ?: uiState.chat?.name?.ifEmpty { null }
+                    ?: ""
+                val directAvatarUrl = uiState.otherUser?.avatarUrl
+                    ?: uiState.chat?.avatarUrl
+
                 when (uiState.chatType) {
                     ChatType.DIRECT -> AvatarWithPresence(
-                        avatarUrl = uiState.otherUser?.avatarUrl,
-                        displayName = uiState.otherUser?.displayName ?: "",
+                        avatarUrl = directAvatarUrl,
+                        displayName = directName,
                         isOnline = uiState.topbarStatus is TopbarStatus.Online ||
                                 uiState.topbarStatus is TopbarStatus.Typing,
                         size = 36.dp,
@@ -104,7 +112,7 @@ fun ChatTopBar(
                     } else {
                         Text(
                             when (uiState.chatType) {
-                                ChatType.DIRECT -> uiState.otherUser?.displayName ?: ""
+                                ChatType.DIRECT -> directName
                                 else -> uiState.chat?.name ?: ""
                             },
                             fontSize = 18.sp,
@@ -176,7 +184,7 @@ fun ChatTopBar(
                     Icon(Icons.Default.Settings, stringResource(R.string.settings))
                 }
             }
-            if (uiState.chatType != ChatType.DIRECT && !isOwner) {
+            if (uiState.chatType != ChatType.DIRECT && !isOwner && (uiState.chatType != ChatType.CHANNEL || uiState.isChannelMember)) {
                 IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLeaveClick() }) {
                     Icon(Icons.Default.ExitToApp, stringResource(R.string.leave),
                         tint = MaterialTheme.colorScheme.error)
