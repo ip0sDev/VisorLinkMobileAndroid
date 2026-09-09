@@ -27,6 +27,7 @@ interface OutboxDataSource {
     suspend fun updateStatus(context: Context, id: String, status: Int)
     suspend fun updateRetry(context: Context, id: String, retryCount: Int, error: String?)
     suspend fun updateProgress(context: Context, id: String, progress: Float)
+    suspend fun retryOutbox(context: Context, id: String)
 }
 
 class ChatDataOutboxSource : OutboxDataSource {
@@ -40,15 +41,23 @@ class ChatDataOutboxSource : OutboxDataSource {
     override suspend fun updateProgress(context: Context, id: String, progress: Float) {
         ChatDataCache.updateOutboxProgress(context, id, progress)
     }
+    override suspend fun retryOutbox(context: Context, id: String) {
+        ChatDataCache.retryOutbox(context, id)
+    }
 }
 
 interface CdnUploader {
     suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String
+    suspend fun uploadFileWithDetails(file: File, mimeType: String, onProgress: (Float) -> Unit): CdnUploadResult =
+        CdnService.uploadFileWithDetails(file, mimeType, onProgress = onProgress)
 }
 
 class DefaultCdnUploader : CdnUploader {
     override suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String =
         CdnService.uploadFile(file, mimeType, onProgress = onProgress)
+
+    override suspend fun uploadFileWithDetails(file: File, mimeType: String, onProgress: (Float) -> Unit): CdnUploadResult =
+        CdnService.uploadFileWithDetails(file, mimeType, onProgress = onProgress)
 }
 
 class OutboxManager(
@@ -67,8 +76,32 @@ class OutboxManager(
     private var processingJob: Job? = null
     
     private val inFlightIds = ConcurrentHashMap.newKeySet<String>()
+    private val inFlightChatIds = ConcurrentHashMap.newKeySet<String>()
     private val lastProgressUpdate = ConcurrentHashMap<String, Long>()
     private val mediaSemaphore = Semaphore(MEDIA_CONCURRENCY)
+
+    companion object {
+        private val inFlightJobs = ConcurrentHashMap<String, Job>()
+        @Volatile
+        private var instance: OutboxManager? = null
+
+        fun cancelInFlight(actionId: String): Boolean {
+            val job = inFlightJobs.remove(actionId)
+            job?.cancel()
+            return job != null
+        }
+
+        fun retry(actionId: String) {
+            instance?.let { mgr ->
+                mgr.scope.launch { mgr.retryAction(actionId) }
+            }
+        }
+    }
+
+    suspend fun retryAction(actionId: String) {
+        outboxDataSource.retryOutbox(context, actionId)
+        if (networkMonitor.isOnline.value) startProcessing()
+    }
 
     private suspend fun updateProgressThrottled(actionId: String, progress: Float) {
         val now = System.currentTimeMillis()
@@ -80,6 +113,7 @@ class OutboxManager(
     }
 
     init {
+        instance = this
         scope.launch {
             networkMonitor.isOnline.collectLatest { online ->
                 if (online) {
@@ -107,62 +141,72 @@ class OutboxManager(
                     action.status == 0 &&
                             !inFlightIds.contains(action.id) &&
                             action.retryCount < MAX_RETRIES &&
-                            (now - action.lastAttempt) > (action.retryCount * 10000L)
+                            (now - action.lastAttempt) >= (action.retryCount * 5000L)
                 }
 
                 if (toProcess.isEmpty()) {
-                    // Если нечего делать и ничего не летит — можем поспать подольше или выйти
-                    if (inFlightIds.isEmpty()) {
-                        // Выходим из цикла, он перезапустится по сигналу
+                    if (inFlightIds.isEmpty() && inFlightChatIds.isEmpty()) {
                         break
                     }
-                    delay(2000)
+                    delay(1500)
                     continue
                 }
 
-                // Группируем по чатам для последовательной отправки внутри каждого чата
+                // Группируем по чатам для строго последовательной отправки внутри каждого чата
                 val groups = toProcess.groupBy { it.chatId }
 
-                for ((_, actions) in groups) {
-                    launch {
-                        for (action in actions) {
-                            if (!networkMonitor.isOnline.value || !isActive) break
-                            // Двойная проверка, так как другой цикл мог подхватить (хотя groupBy это исключает)
-                            if (inFlightIds.contains(action.id)) continue
+                for ((chatId, actions) in groups) {
+                    // Если чат уже обрабатывается активной корутиной — не запускаем параллельную отправку
+                    if (!inFlightChatIds.add(chatId)) continue
 
-                            inFlightIds.add(action.id)
-                            try {
-                                withTimeout(120_000) {
-                                    if (action.type == "image" || action.type == "voice" || action.type == "video") {
-                                        mediaSemaphore.withPermit { processAction(action) }
-                                    } else {
-                                        processAction(action)
+                    launch {
+                        try {
+                            for (action in actions) {
+                                if (!networkMonitor.isOnline.value || !isActive) break
+                                if (inFlightIds.contains(action.id)) continue
+
+                                inFlightIds.add(action.id)
+                                val job = coroutineContext[Job]
+                                if (job != null) inFlightJobs[action.id] = job
+                                try {
+                                    withTimeout(120_000) {
+                                        if (action.type == "image" || action.type == "voice" || action.type == "video") {
+                                            mediaSemaphore.withPermit { processAction(action) }
+                                        } else {
+                                            processAction(action)
+                                        }
                                     }
+                                    outboxDataSource.updateStatus(context, action.id, 1)
+                                } catch (e: Exception) {
+                                    val nextRetry = action.retryCount + 1
+                                    outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
+                                    if (nextRetry >= MAX_RETRIES) {
+                                        outboxDataSource.updateStatus(context, action.id, 2)
+                                    }
+                                    // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
+                                    break
+                                } finally {
+                                    inFlightJobs.remove(action.id)
+                                    inFlightIds.remove(action.id)
                                 }
-                                outboxDataSource.updateStatus(context, action.id, 1)
-                            } catch (e: Exception) {
-                                val nextRetry = action.retryCount + 1
-                                outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
-                                if (nextRetry >= MAX_RETRIES) {
-                                    outboxDataSource.updateStatus(context, action.id, 2)
-                                }
-                                // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить порядок сообщений
-                                break
-                            } finally {
-                                inFlightIds.remove(action.id)
                             }
+                        } finally {
+                            inFlightChatIds.remove(chatId)
                         }
                     }
                 }
-                delay(2000)
+                delay(1500)
             }
         }
     }
 
     fun stopProcessing() {
         processingJob?.cancel()
+        processingJob = null
+        inFlightJobs.values.forEach { it.cancel() }
+        inFlightJobs.clear()
         inFlightIds.clear()
-        scope.cancel() // Cancel the whole scope to stop any background launches
+        inFlightChatIds.clear()
     }
 
     private suspend fun processAction(action: ChatDataCache.QueuedAction) {
@@ -183,8 +227,30 @@ class OutboxManager(
             }
         } else null
         val topicId = if (data.has("topicId") && !data.isNull("topicId")) data.getString("topicId") else null
+        val nextSeq = if (data.has("nextSeq") && !data.isNull("nextSeq")) data.optLong("nextSeq") else null
+        val isDirect = data.optBoolean("isDirect", false)
+        val otherUserId = if (data.has("otherUserId") && !data.isNull("otherUserId")) data.optString("otherUserId") else null
 
         try {
+            // Идемпотентность: если это повторная попытка, проверяем, не было ли сообщение уже сохранено в Firestore
+            if (action.retryCount > 0) {
+                try {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    val existing = db.collection("chats").document(action.chatId)
+                        .collection("messages").document(action.id).get().await()
+                    if (existing.exists()) {
+                        Log.d(TAG, "Message ${action.id} already committed in Firestore in earlier attempt, skipping duplicate send")
+                        val localPath = data.optString("localPath")
+                        if (localPath.isNotEmpty()) {
+                            try { File(localPath).delete() } catch (_: Exception) {}
+                        }
+                        return
+                    }
+                } catch (_: Exception) {
+                    // Игнорируем сетевые ошибки при проверке
+                }
+            }
+
             when (action.type) {
                 "text" -> {
                     withTimeout(20_000) {
@@ -194,7 +260,10 @@ class OutboxManager(
                             text = data.getString("text"),
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
-                            topicId = topicId
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
                         )
                     }
                 }
@@ -214,7 +283,10 @@ class OutboxManager(
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
                             isSpoiler = isSpoiler,
-                            topicId = topicId
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -235,7 +307,10 @@ class OutboxManager(
                             durationSec = duration,
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
-                            topicId = topicId
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -274,7 +349,10 @@ class OutboxManager(
                             coverMediaId = coverMediaId,
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
-                            topicId = topicId
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -284,17 +362,24 @@ class OutboxManager(
                     val localPath = data.getString("localPath")
                     val file = File(localPath)
                     if (file.exists()) {
-                        val mediaId = cdnUploader.uploadFile(file, "video/mp4") { progress ->
+                        val uploadResult = cdnUploader.uploadFileWithDetails(file, "video/mp4") { progress ->
                             scope.launch { updateProgressThrottled(action.id, progress) }
                         }
                         chatRepository.sendVideoNow(
                             id = action.id,
                             chatId = action.chatId,
-                            mediaId = mediaId,
+                            mediaId = uploadResult.mediaId,
                             fileName = file.name,
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
-                            topicId = topicId
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId,
+                            duration = uploadResult.duration,
+                            width = uploadResult.width,
+                            height = uploadResult.height,
+                            thumbUrl = uploadResult.thumbUrl
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)
@@ -312,7 +397,10 @@ class OutboxManager(
                             packEmoji = data.getString("packEmoji"),
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
-                            topicId = topicId
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
                         )
                     }
                 }

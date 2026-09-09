@@ -47,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -65,10 +66,32 @@ import kotlinx.coroutines.launch
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.vlInset
 import by.iposdev.visorlink.ui.theme.vlRaised
+import by.iposdev.visorlink.ui.theme.LocalShowDebugIds
 import java.text.SimpleDateFormat
 import java.util.*
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+@Composable
+internal fun DebugMessageBadge(
+    message: Message,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    if (LocalShowDebugIds.current) {
+        val seqText = message.seq?.toString() ?: "legacy"
+        Text(
+            text = "ID: ${message.id.take(8)} | seq: $seqText",
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
+            color = textColor.copy(alpha = 0.65f),
+            maxLines = 1,
+            softWrap = false,
+            modifier = modifier.padding(vertical = 1.dp)
+        )
+    }
+}
 
 // Цвета бабблов идут через VlTokens: в Biolume полупрозрачный primaryContainer
 // (alpha .12) для баббла слишком бледный, нужен плотный подмешанный тон.
@@ -277,7 +300,7 @@ private fun AlbumImageItem(
     modifier: Modifier = Modifier,
     useCardShape: Boolean = true
 ) {
-    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url)
+    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url) ?: image.url
     val showBlur = image.spoiler && !isRevealed
 
     Box(modifier
@@ -327,6 +350,7 @@ fun MessageBubble(
     onOpenComments: () -> Unit = {},
     chat: Chat? = null,
     onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
@@ -352,11 +376,12 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onMediaTap = onMediaTap,
-                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat
+                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                     return@Box
                 }
-                message.type == MessageType.ALBUM && !message.deleted -> {
+                message.type.equals(MessageType.ALBUM, ignoreCase = true) && !message.deleted -> {
                     AlbumBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled,
@@ -364,6 +389,7 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                     return@Box
                 }
@@ -375,6 +401,7 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                     return@Box
                 }
@@ -404,6 +431,7 @@ fun MessageBubble(
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onMentionClick = onMentionClick,
                         onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                 }
             }
@@ -428,6 +456,7 @@ internal fun TextBubble(
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val bubbleColor = resolveBubbleColor(isMine)
     val textColor   = resolveBubbleTextColor(isMine)
@@ -505,10 +534,17 @@ internal fun TextBubble(
                             onSeek = { onSeekAudio?.invoke(it) },
                             onCycleSpeed = { onCycleAudioSpeed?.invoke() },
                             onSaveToLibrary = { onSaveTrackToLibrary?.invoke(it) },
-                            onOpenFullscreen = { onOpenFullscreenAudio?.invoke() }
+                            onOpenFullscreen = { onOpenFullscreenAudio?.invoke() },
+                            onCancelUpload = onCancelUpload?.let { { it(message.id) } }
                         )
                     }
                 }
+
+                DebugMessageBadge(
+                    message = message,
+                    textColor = textColor,
+                    modifier = Modifier.align(Alignment.Start)
+                )
 
                 Row(
                     modifier = Modifier.align(Alignment.End),
@@ -570,6 +606,7 @@ internal fun VideoBubble(
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onMediaTap: (String, String) -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
@@ -592,6 +629,7 @@ internal fun VideoBubble(
                     mediaId = message.cdnMediaId,
                     type = message.type,
                     localFile = message.localFile,
+                    thumbUrl = message.thumbUrl,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
                     onClick = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onMediaTap(it, message.type) } }
                 )
@@ -604,12 +642,17 @@ internal fun VideoBubble(
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                            )
-                            if (isMine) ReadReceipt(isRead = isReadByOther)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            DebugMessageBadge(message = message, textColor = Color.White)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                                    )
+                                }
+                                if (isMine) ReadReceipt(isRead = isReadByOther)
+                            }
                         }
                     }
                 }
@@ -618,7 +661,8 @@ internal fun VideoBubble(
                     Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
                     UploadProgressOverlay(
                         progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier.matchParentSize(),
+                        onCancel = onCancelUpload?.let { { it(message.id) } }
                     )
                 }
             }
@@ -637,6 +681,7 @@ internal fun ImageBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, 
     onTap: (String) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
@@ -671,12 +716,17 @@ internal fun ImageBubble(
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                            )
-                            if (isMine) ReadReceipt(isRead = isReadByOther)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            DebugMessageBadge(message = message, textColor = Color.White)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                                    )
+                                }
+                                if (isMine) ReadReceipt(isRead = isReadByOther)
+                            }
                         }
                     }
                 }
@@ -685,7 +735,8 @@ internal fun ImageBubble(
                     Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
                     UploadProgressOverlay(
                         progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier.matchParentSize(),
+                        onCancel = onCancelUpload?.let { { it(message.id) } }
                     )
                 }
             }
@@ -704,6 +755,7 @@ internal fun AlbumBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
     onAlbumTap: (List<AlbumImage>, Int) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val revealedIndices = remember { mutableStateOf(setOf<Int>()) }
@@ -736,21 +788,34 @@ internal fun AlbumBubble(
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End, // Время справа
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                            )
-                            if (isMine) {
-                                Spacer(Modifier.width(3.dp))
-                                ReadReceipt(isRead = isReadByOther)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            DebugMessageBadge(message = message, textColor = Color.White)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                                    )
+                                    if (isMine) {
+                                        Spacer(Modifier.width(3.dp))
+                                        ReadReceipt(isRead = isReadByOther)
+                                    }
+                                }
                             }
                         }
                     }
+                }
+
+                if (message.uploadProgress != null) {
+                    UploadProgressOverlay(
+                        progress = message.uploadProgress!!,
+                        modifier = Modifier.matchParentSize(),
+                        onCancel = onCancelUpload?.let { { it(message.id) } }
+                    )
                 }
             }
         }
@@ -787,6 +852,12 @@ internal fun StickerBubble(
         ) {
             CachedImage(model = message.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         }
+
+        DebugMessageBadge(
+            message = message,
+            textColor = resolveBubbleTextColor(isMine),
+            modifier = Modifier.align(if (isMine) Alignment.End else Alignment.Start)
+        )
 
         InlinedReactionRow(
             reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,

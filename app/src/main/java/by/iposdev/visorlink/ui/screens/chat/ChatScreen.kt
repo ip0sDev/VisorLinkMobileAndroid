@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -37,6 +38,7 @@ import by.iposdev.visorlink.ui.aegis.AegisLifeViewModel
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlFab
 import by.iposdev.visorlink.ui.components.chat.*
+import by.iposdev.visorlink.ui.components.mediapicker.VlMediaPickerSheet
 import by.iposdev.visorlink.ui.screens.stickers.StickerPickerBottomSheet
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.ActiveChatTracker
@@ -84,6 +86,7 @@ fun ChatScreen(
     val haptic = rememberHaptic()
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val inputFocusRequester = remember { FocusRequester() }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -150,27 +153,11 @@ fun ChatScreen(
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
 
-    val mediaPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val firstUri = uris.first()
-        val mimeType = context.contentResolver.getType(firstUri) ?: ""
-        if (uris.size == 1) {
-            if (mimeType.startsWith("video/")) viewModel.sendVideo(firstUri)
-            else editorUri = firstUri
-        } else {
-            val photosOnly = uris.filter { context.contentResolver.getType(it)?.startsWith("image/") == true }
-            if (photosOnly.isNotEmpty()) viewModel.onImagesPicked(photosOnly)
-            else {
-                val firstVideo = uris.find { context.contentResolver.getType(it)?.startsWith("video/") == true }
-                firstVideo?.let { viewModel.sendVideo(it) }
-            }
-        }
-    }
+    var showMediaPicker by remember { mutableStateOf(false) }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.setWallpaper(it) }
     }
 
-    var showAttachOptions by remember { mutableStateOf(false) }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) {
             val tempFile = File(context.cacheDir, "audio_send_${System.currentTimeMillis()}.mp3")
@@ -323,7 +310,11 @@ fun ChatScreen(
                         hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
                         audioPermission = audioPermission, focusRequester = inputFocusRequester,
                         onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                        onAttach = { showAttachOptions = true },
+                        onAttach = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus(force = true)
+                            showMediaPicker = true
+                        },
                         onStickerClick = { showStickerSheet = true },
                         onSend = {
                             val t = inputText
@@ -417,7 +408,8 @@ fun ChatScreen(
                                                     if (!packId.isNullOrEmpty()) {
                                                         selectedStickerPack = Triple(packId, item.message.packName, item.message.packEmoji)
                                                     }
-                                                }
+                                                },
+                                                onCancelUpload = { viewModel.cancelSending(it) }
                                             )
                                         }
                                     }
@@ -453,6 +445,7 @@ fun ChatScreen(
                     onEdit = { viewModel.startEditing(menuData.message); contextMenuData = null },
                     onDelete = { showDeleteConfirm = menuData.message.id; contextMenuData = null },
                     onCancelSending = { viewModel.cancelSending(menuData.message.id); contextMenuData = null },
+                    onRetry = { viewModel.retryMessage(menuData.message.id); contextMenuData = null },
                     onSaveImage = { scope.launch { ImageCache.saveImageToGallery(context, menuData.message.url ?: "") } },
                     onSaveVoice = { /* implement save voice */ },
                     onOpenImage = { menuData.message.url?.let { onOpenImageViewer(it, menuData.message.type) } },
@@ -592,26 +585,59 @@ fun ChatScreen(
         )
     }
 
-    if (showAttachOptions) {
-        ModalBottomSheet(onDismissRequest = { showAttachOptions = false }) {
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                ListItem(
-                    headlineContent = { Text("Фото или видео") },
-                    leadingContent = { Icon(Icons.Default.Image, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        showAttachOptions = false
-                        mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+    if (showMediaPicker) {
+        VlMediaPickerSheet(
+            onDismiss = {
+                showMediaPicker = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+            },
+            onOpenAudioPicker = {
+                showMediaPicker = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                audioPicker.launch("audio/*")
+            },
+            onOpenEditor = { uri ->
+                showMediaPicker = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                editorUri = uri
+            },
+            onMediaSelected = { items ->
+                showMediaPicker = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                if (items.isEmpty()) return@VlMediaPickerSheet
+                if (items.size == 1) {
+                    val item = items.first()
+                    if (item.type == MediaType.VIDEO) {
+                        viewModel.sendVideo(item.uri)
+                    } else {
+                        viewModel.sendImage(item.uri)
                     }
-                )
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.music_send_audio)) },
-                    leadingContent = { Icon(Icons.Default.Audiotrack, contentDescription = null) },
-                    modifier = Modifier.clickable {
-                        showAttachOptions = false
-                        audioPicker.launch("audio/*")
+                } else {
+                    val photosOnly = items.filter { it.type == MediaType.IMAGE }.map { it.uri }
+                    if (photosOnly.isNotEmpty()) {
+                        viewModel.onImagesPicked(photosOnly)
+                    } else {
+                        val firstVideo = items.firstOrNull { it.type == MediaType.VIDEO }
+                        firstVideo?.let { viewModel.sendVideo(it.uri) }
                     }
-                )
+                }
+            },
+            onPhotoTaken = { uri ->
+                showMediaPicker = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                editorUri = uri
+            },
+            onVideoRecorded = { uri ->
+                showMediaPicker = false
+                keyboardController?.hide()
+                focusManager.clearFocus(force = true)
+                viewModel.sendVideo(uri)
             }
-        }
+        )
     }
 }

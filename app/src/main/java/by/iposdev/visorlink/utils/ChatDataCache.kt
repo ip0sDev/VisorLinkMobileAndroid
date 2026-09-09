@@ -189,6 +189,17 @@ object ChatDataCache {
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox status", e) }
         }
 
+    suspend fun retryOutbox(context: Context, id: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("UPDATE outbox SET status=0, retry_count=0, last_attempt=0, last_error=NULL WHERE id=?")
+                stmt.bindString(1, id)
+                stmt.executeUpdateDelete()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to retry outbox action", e) }
+        }
+
     suspend fun cleanupOutbox(context: Context, confirmedIds: List<String>) =
         withContext(Dispatchers.IO) {
             if (confirmedIds.isEmpty()) return@withContext
@@ -435,7 +446,13 @@ object ChatDataCache {
         }
         put("isForum", isForumActive)
         put("settings", sData)
-        put("lastMessage", lastMessage?.toString() ?: JSONObject.NULL)
+        when (val lm = lastMessage) {
+            is Map<*, *> -> put("lastMessage", JSONObject(lm))
+            is String -> put("lastMessage", lm)
+            else -> put("lastMessage", JSONObject.NULL)
+        }
+        put("lastMessageSenderId", lastMessageSenderId ?: JSONObject.NULL)
+        put("lastSeq", lastSeq)
         put("lastMessageAt", lastMessageAt?.seconds ?: JSONObject.NULL)
         put("createdAt", createdAt?.seconds ?: JSONObject.NULL)
         val uData = JSONObject()
@@ -477,6 +494,24 @@ object ChatDataCache {
         val uMap = mutableMapOf<String, Int>()
         uObj?.keys()?.forEach { k -> uMap[k] = uObj.optInt(k, 0) }
 
+        val lastMessageParsed: Any? = when {
+            isNull("lastMessage") -> null
+            optJSONObject("lastMessage") != null -> {
+                val o = getJSONObject("lastMessage")
+                val map = mutableMapOf<String, Any>()
+                o.keys().forEach { k ->
+                    if (k == "readBy") {
+                        val arr = o.optJSONArray(k)
+                        map[k] = (0 until (arr?.length() ?: 0)).map { arr!!.getString(it) }
+                    } else {
+                        map[k] = o.get(k)
+                    }
+                }
+                map
+            }
+            else -> optString("lastMessage")
+        }
+
         return Chat(
             id = getString("id"),
             type = getString("type"),
@@ -491,7 +526,9 @@ object ChatDataCache {
             memberIds = mList,
             isForum = isForumFinal,
             settings = settings,
-            lastMessage = if (isNull("lastMessage")) null else getString("lastMessage"),
+            lastMessage = lastMessageParsed,
+            lastMessageSenderId = if (isNull("lastMessageSenderId")) null else optString("lastMessageSenderId"),
+            lastSeq = optLong("lastSeq", 0L),
             lastMessageAt = if (isNull("lastMessageAt")) null else com.google.firebase.Timestamp(getLong("lastMessageAt"), 0),
             createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0),
             unreadCount = uMap
@@ -500,6 +537,7 @@ object ChatDataCache {
 
     private fun Message.toJson(): JSONObject = JSONObject().apply {
         put("id", id)
+        put("seq", seq ?: JSONObject.NULL)
         put("senderId", senderId)
         put("senderUsername", senderUsername)
         put("type", type)
@@ -535,6 +573,10 @@ object ChatDataCache {
         val rArr = JSONArray()
         reactions.forEach { rMap -> rArr.put(JSONObject(rMap)) }
         put("reactions", rArr)
+
+        put("thumbUrl", thumbUrl ?: JSONObject.NULL)
+        put("width", width ?: JSONObject.NULL)
+        put("height", height ?: JSONObject.NULL)
     }
 
     private fun JSONObject.toMessage(): Message {
@@ -583,6 +625,7 @@ object ChatDataCache {
 
         return Message(
             id = getString("id"),
+            seq = if (has("seq") && !isNull("seq")) optLong("seq") else null,
             senderId = getString("senderId"),
             senderUsername = optString("senderUsername"),
             type = optString("type", "text"),
@@ -590,6 +633,9 @@ object ChatDataCache {
             url = if (isNull("url")) null else optString("url"),
             fileName = if (isNull("fileName")) null else optString("fileName"),
             duration = if (isNull("duration")) null else optInt("duration"),
+            thumbUrl = if (has("thumbUrl") && !isNull("thumbUrl")) optString("thumbUrl") else null,
+            width = if (has("width") && !isNull("width")) optInt("width") else null,
+            height = if (has("height") && !isNull("height")) optInt("height") else null,
             stickerId = if (isNull("stickerId")) null else optString("stickerId"),
             packId = if (isNull("packId")) null else optString("packId"),
             packName = if (isNull("packName")) null else optString("packName"),

@@ -54,7 +54,8 @@ fun AudioMessageBubble(
     onSeek: (Float) -> Unit,
     onCycleSpeed: () -> Unit,
     onSaveToLibrary: (MusicTrack) -> Unit,
-    onOpenFullscreen: () -> Unit
+    onOpenFullscreen: () -> Unit,
+    onCancelUpload: (() -> Unit)? = null
 ) {
     val isThisTrack = musicPlayback.currentTrack?.id == message.id
     val isPlaying = isThisTrack && musicPlayback.isPlaying
@@ -326,7 +327,8 @@ fun AudioMessageBubble(
         if (uploadProgress != null) {
             UploadProgressOverlay(
                 progress = uploadProgress,
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier.matchParentSize(),
+                onCancel = onCancelUpload
             )
         }
     }

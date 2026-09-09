@@ -83,6 +83,7 @@ fun MessageActionOverlay(
     onOpenImage: () -> Unit,
     onForward: (() -> Unit)? = null,
     onReact: (String) -> Unit,
+    onRetry: (() -> Unit)? = null,
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
@@ -133,7 +134,8 @@ fun MessageActionOverlay(
                 onSaveVoice = onSaveVoice,
                 onOpenImage = onOpenImage,
                 onForward = onForward,
-                onReact = onReact
+                onReact = onReact,
+                onRetry = onRetry
             )
         }
     }
@@ -153,7 +155,8 @@ private fun NormalMessageMenu(
     onSaveVoice: () -> Unit,
     onOpenImage: () -> Unit,
     onForward: (() -> Unit)?,
-    onReact: (String) -> Unit
+    onReact: (String) -> Unit,
+    onRetry: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val haptic = rememberHaptic()
@@ -223,6 +226,13 @@ private fun NormalMessageMenu(
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (isSending) {
+                if (data.message.status == SendStatus.ERROR) {
+                    ActionItem(Icons.Default.Refresh, "Повторить отправку") {
+                        haptic.perform(HapticType.CLICK, true)
+                        onDismiss()
+                        onRetry?.invoke()
+                    }
+                }
                 ActionItem(Icons.Default.Close, "Отменить отправку", destructive = true) {
                     haptic.perform(HapticType.CLICK, true); onDismiss(); onCancelSending()
                 }

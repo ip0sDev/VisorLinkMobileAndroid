@@ -89,6 +89,7 @@ fun SettingsScreen(
     val currentLang by themeViewModel.language.collectAsState()
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
     val compactChatList by themeViewModel.compactChatList.collectAsState()
+    val showDebugIds by themeViewModel.showDebugIds.collectAsState()
 
     val profileFlow = remember(userRepository) { userRepository.currentUserFlow() }
     val profile by profileFlow.collectAsState(initial = null)
@@ -467,6 +468,18 @@ fun SettingsScreen(
                 VlSettingsSection(title = "О приложении") {
                     if (flags.isEnabled("aegis_debug_mode_enabled")) VlSettingsItem(icon = Icons.Default.Terminal, title = "Aegis Project Debug", onClick = onOpenAegisDebug)
                     if (flags.isFlipperEnabled) VlSettingsItem(icon = Icons.Default.ToggleOn, title = "Flag Flipper", onClick = onOpenFlagFlipper)
+                    VlSettingsItem(
+                        icon = Icons.Default.BugReport,
+                        iconColor = MaterialTheme.colorScheme.tertiary,
+                        title = stringResource(R.string.settings_debug_show_ids_title),
+                        subtitle = stringResource(R.string.settings_debug_show_ids_desc),
+                        trailing = {
+                            VlSwitch(
+                                checked = showDebugIds,
+                                onCheckedChange = { themeViewModel.setShowDebugIds(it) }
+                            )
+                        }
+                    )
                     VlSettingsItem(
                         icon = Icons.Default.Info, 
                         title = "VisorLink", 

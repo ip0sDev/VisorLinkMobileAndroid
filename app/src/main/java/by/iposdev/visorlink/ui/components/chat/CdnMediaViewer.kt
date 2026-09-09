@@ -35,21 +35,43 @@ fun CdnMediaViewer(
     localFile: File? = null,
     modifier: Modifier = Modifier,
     isFullscreen: Boolean = false,
+    thumbUrl: String? = null,
     onClick: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
-    var resolvedUrl by remember { mutableStateOf<String?>(null) }
+    var resolvedUrl by remember(thumbUrl) { mutableStateOf<String?>(thumbUrl) }
 
-    // Резолвим URL для получения превью
-    LaunchedEffect(mediaId) {
+    // Резолвим URL для получения превью или файла через кэш
+    LaunchedEffect(mediaId, thumbUrl) {
+        val targetThumb = if (!thumbUrl.isNullOrBlank()) {
+            CdnService.authenticateUrl(thumbUrl)
+        } else if (type == MessageType.VIDEO && mediaId != null) {
+            CdnService.getFileUrl("thm_$mediaId")
+        } else null
+
+        if (targetThumb != null) {
+            val cached = ImageCache.getCachedPath(context, targetThumb)
+            if (cached != null) {
+                resolvedUrl = cached.absolutePath
+                return@LaunchedEffect
+            }
+            try {
+                val downloaded = ImageCache.getOrDownload(context, targetThumb)
+                resolvedUrl = downloaded.absolutePath
+                return@LaunchedEffect
+            } catch (_: Exception) {
+                // Фоллбэк на загрузку самого файла медиа ниже
+            }
+        }
+
         if (mediaId != null) {
             try {
                 val url = CdnService.getFileUrl(mediaId)
                 val cached = ImageCache.getCachedPath(context, url)
                 if (cached != null) {
                     resolvedUrl = cached.absolutePath
-                } else if (type == MessageType.VIDEO || type == MessageType.GIF || type == MessageType.IMAGE) {
-                    // Для всех медиа пытаемся подтянуть через наш кэш
+                } else if (type == MessageType.GIF || type == MessageType.IMAGE) {
+                    // Для картинок и гифок кэшируем через ImageCache
                     resolvedUrl = try {
                         ImageCache.getOrDownload(context, url).absolutePath
                     } catch (e: Exception) {
@@ -65,6 +87,7 @@ fun CdnMediaViewer(
     }
 
     val modelSource = localFile ?: resolvedUrl
+    val isUsingThumb = type == MessageType.VIDEO && localFile == null && (resolvedUrl != null && !resolvedUrl!!.endsWith(".mp4") && (mediaId == null || !resolvedUrl!!.endsWith("/$mediaId")))
 
     Box(
         modifier = if (isFullscreen) {
@@ -87,7 +110,7 @@ fun CdnMediaViewer(
                 model = ImageRequest.Builder(context)
                     .data(modelSource)
                     .apply {
-                        if (type == MessageType.VIDEO) {
+                        if (type == MessageType.VIDEO && !isUsingThumb) {
                             decoderFactory(VideoFrameDecoder.Factory())
                         }
                     }

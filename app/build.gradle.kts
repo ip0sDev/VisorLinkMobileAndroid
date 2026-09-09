@@ -28,8 +28,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 142
-        versionName = "3.6.00"
+        versionCode = 143
+        versionName = "3.6.01"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"BETA\"")
@@ -151,6 +151,10 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.jwt.decode)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.video)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

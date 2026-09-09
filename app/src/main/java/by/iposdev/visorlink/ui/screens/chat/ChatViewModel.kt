@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import by.iposdev.visorlink.utils.ChatDataCache
+import by.iposdev.visorlink.utils.OutboxManager
 import java.io.File
 import java.time.LocalDate
 import java.time.ZoneId
@@ -124,12 +125,26 @@ class ChatViewModel(
     private val lastOtherActiveTimeFlow = MutableStateFlow(0L)
     private var otherUserObservationJob: Job? = null
     private var observedOtherUid: String? = null
+    private val activeUploadJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
 
     val effectiveOtherUid: String
         get() = observedOtherUid
             ?: (if (otherUid != chatId && otherUid.isNotBlank()) otherUid else null)
             ?: _uiState.value.chat?.otherParticipantId(currentUid)
             ?: otherUid
+
+    private var pendingMaxSeq = 0L
+
+    private fun getSendMeta(): Triple<Long, Boolean, String?> {
+        val chat = _uiState.value.chat
+        val messages = if (rawMessages.isNotEmpty()) rawMessages else _uiState.value.messages
+        val calculated = calculateNextSeq(chat, messages)
+        val nextSeq = maxOf(calculated, pendingMaxSeq + 1L)
+        pendingMaxSeq = nextSeq
+        val isDirect = _uiState.value.chatType == ChatType.DIRECT || chat?.chatType() == ChatType.DIRECT
+        val targetUserId = if (isDirect) effectiveOtherUid.takeIf { it.isNotBlank() && it != chatId } else null
+        return Triple(nextSeq, isDirect, targetUserId)
+    }
 
     fun startObservingOtherUser(targetUid: String) {
         if (targetUid.isBlank() || targetUid == currentUid || observedOtherUid == targetUid) return
@@ -379,8 +394,9 @@ class ChatViewModel(
                     _uiState.update { state ->
                         val latestMap = latestMessages.associateBy { it.id }
                         val olderMessages = rawMessages.filter { it.id !in latestMap }
-                        val combined = (olderMessages + latestMessages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+                        val combined = sortMessages((olderMessages + latestMessages).distinctBy { it.id })
                         rawMessages = combined
+                        pendingMaxSeq = maxOf(pendingMaxSeq, combined.maxOfOrNull { it.seq ?: 0L } ?: 0L)
 
                         val filtered = filterByTopic(combined, state.currentTopic, state.topicId ?: initialTopicId)
                         val allMessages = filtered + filterByTopic(state.tempMessages, state.currentTopic, state.topicId ?: initialTopicId)
@@ -530,21 +546,70 @@ class ChatViewModel(
         if (draft.isEmpty() || !_uiState.value.canSendMedia) return
         if (!startCooldown()) return
 
-        _uiState.update { it.copy(isUploading = true, showAlbumPreview = false) }
+        val tempId = "temp_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
+        val activeTopicId = _uiState.value.topicId ?: initialTopicId
+
+        val tempMsg = Message(
+            id = tempId,
+            senderId = currentUid,
+            senderUsername = currentUsername,
+            type = MessageType.ALBUM,
+            topicId = activeTopicId,
+            caption = caption,
+            images = draft.map { AlbumImage(url = it.uri.toString(), spoiler = it.spoiler) },
+            uploadProgress = 0.01f,
+            createdAt = com.google.firebase.Timestamp.now(),
+            readBy = listOf(currentUid),
+            deleted = false,
+            replyTo = reply?.let { mapOf("id" to it.id, "type" to it.type, "text" to it.text, "url" to it.url, "senderUsername" to it.senderUsername) },
+            status = SendStatus.SENDING
+        )
+
+        _uiState.update { state ->
+            val newTemp = state.tempMessages + tempMsg
+            state.copy(
+                tempMessages = newTemp,
+                messageListItems = buildMessageList(state.messages + newTemp),
+                isUploading = true,
+                showAlbumPreview = false,
+                albumDraft = emptyList(),
+                albumCaption = ""
+            )
+        }
         clearReply()
 
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             try {
-                val uploaded = chatRepository.uploadAlbumImages(chatId, draft)
+                val uploaded = chatRepository.uploadAlbumImages(chatId, draft) { progress ->
+                    _uiState.update { state ->
+                        val updatedTemp = state.tempMessages.map {
+                            if (it.id == tempId) it.copy(uploadProgress = progress) else it
+                        }
+                        state.copy(
+                            tempMessages = updatedTemp,
+                            messageListItems = buildMessageList(state.messages + updatedTemp)
+                        )
+                    }
+                }
                 chatRepository.sendAlbum(chatId, uploaded, caption, reply)
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Failed to send album: ${e.message}") }
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    Log.e("ChatViewModel", "Failed to send album", e)
+                    _uiState.update { it.copy(error = "Ошибка отправки альбома: ${e.message}") }
+                }
             } finally {
-                _uiState.update {
-                    it.copy(isUploading = false, albumDraft = emptyList(), albumCaption = "")
+                activeUploadJobs.remove(tempId)
+                _uiState.update { state ->
+                    val cleanTemp = state.tempMessages.filter { it.id != tempId }
+                    state.copy(
+                        isUploading = false,
+                        tempMessages = cleanTemp,
+                        messageListItems = buildMessageList(state.messages + cleanTemp)
+                    )
                 }
             }
         }
+        activeUploadJobs[tempId] = job
     }
 
     fun sendVideoOrGif(file: java.io.File, isGif: Boolean) {
@@ -581,9 +646,9 @@ class ChatViewModel(
 
         clearReply()
 
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             try {
-                val mediaId = CdnService.uploadFile(file, if (isGif) "image/gif" else "video/mp4", isVault = false) { progress ->
+                val uploadResult = CdnService.uploadFileWithDetails(file, if (isGif) "image/gif" else "video/mp4", isVault = false) { progress ->
                     _uiState.update { state ->
                         val updatedTemp = state.tempMessages.map {
                             if (it.id == tempId) it.copy(uploadProgress = progress) else it
@@ -602,13 +667,17 @@ class ChatViewModel(
                     "senderId" to currentUid,
                     "senderUsername" to currentUsername,
                     "type" to type,
-                    "cdnMediaId" to mediaId,
+                    "cdnMediaId" to uploadResult.mediaId,
                     "fileName" to file.name,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "readBy" to listOf(currentUid),
                     "deleted" to false,
                     "replyTo" to tempMsg.replyTo
                 )
+                if (uploadResult.duration != null && uploadResult.duration > 0) msgMap["duration"] = uploadResult.duration
+                if (uploadResult.width != null && uploadResult.width > 0) msgMap["width"] = uploadResult.width
+                if (uploadResult.height != null && uploadResult.height > 0) msgMap["height"] = uploadResult.height
+                if (!uploadResult.thumbUrl.isNullOrBlank()) msgMap["thumbUrl"] = uploadResult.thumbUrl
                 if (activeTopicId != null) msgMap["topicId"] = activeTopicId
 
                 batch.set(msgRef, msgMap)
@@ -630,8 +699,11 @@ class ChatViewModel(
                 batch.commit().await()
 
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Ошибка CDN: ${e.message}") }
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    _uiState.update { it.copy(error = "Ошибка CDN: ${e.message}") }
+                }
             } finally {
+                activeUploadJobs.remove(tempId)
                 _uiState.update { state ->
                     val cleanTemp = state.tempMessages.filter { it.id != tempId }
                     state.copy(
@@ -641,6 +713,7 @@ class ChatViewModel(
                 }
             }
         }
+        activeUploadJobs[tempId] = job
     }
 
     fun playVoice(messageId: String, url: String, durationSec: Int) {
@@ -713,7 +786,7 @@ class ChatViewModel(
                     val olderFiltered = older.filter { oldMsg ->
                         rawMessages.none { it.id == oldMsg.id }
                     }
-                    val combined = (olderFiltered + rawMessages).sortedBy { it.createdAt?.seconds ?: Long.MAX_VALUE }
+                    val combined = sortMessages(olderFiltered + rawMessages)
                     rawMessages = combined
 
                     val filtered = filterByTopic(combined, currentState.currentTopic, currentState.topicId ?: initialTopicId)
@@ -743,12 +816,14 @@ class ChatViewModel(
     }
 
     private fun buildMessageList(allMessages: List<Message>): List<MessageListItem> {
+        val deduplicated = allMessages.distinctBy { it.id }
+        val sorted = sortMessages(deduplicated)
         val result = mutableListOf<MessageListItem>()
         var lastDate: LocalDate? = null
         val today = LocalDate.now()
         val yesterday = today.minusDays(1)
 
-        for (message in allMessages) {
+        for (message in sorted) {
             val msgDate = message.createdAt?.toDate()
                 ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: continue
             if (msgDate != lastDate) {
@@ -763,6 +838,12 @@ class ChatViewModel(
             result.add(MessageListItem.MessageItem(message))
         }
         return result
+    }
+
+    fun retryMessage(messageId: String) {
+        viewModelScope.launch {
+            OutboxManager.retry(messageId)
+        }
     }
 
     fun onTextChanged(text: String) {
@@ -782,17 +863,26 @@ class ChatViewModel(
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        val (nextSeq, isDirect, targetUserId) = getSendMeta()
         viewModelScope.launch {
             typingManager?.stopTyping()
             clearReply()
             draftManager.clearDraft(chatId)
             try { 
-                val sentMessage = chatRepository.sendText(chatId, trimmed, currentUsername, reply, activeTopicId)
+                val sentMessage = chatRepository.sendText(
+                    chatId = chatId,
+                    text = trimmed,
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    topicId = activeTopicId,
+                    nextSeq = nextSeq,
+                    isDirect = isDirect,
+                    otherUserId = targetUserId
+                )
                 if (sentMessage != null) {
                     // Optimistic UI update for custom backend
                     _uiState.update { state ->
-                        val newMessages = (state.messages.filter { it.id != sentMessage.id } + sentMessage)
-                            .sortedBy { it.createdAt?.seconds ?: 0L }
+                        val newMessages = sortMessages(state.messages.filter { it.id != sentMessage.id } + sentMessage)
                         state.copy(
                             messages = newMessages,
                             messageListItems = buildMessageList(newMessages + state.tempMessages)
@@ -810,10 +900,23 @@ class ChatViewModel(
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        val (nextSeq, isDirect, targetUserId) = getSendMeta()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendImage(chatId, uri, currentUsername, reply, isSpoiler, activeTopicId) }
+            try {
+                chatRepository.sendImage(
+                    chatId = chatId,
+                    uri = uri,
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    isSpoiler = isSpoiler,
+                    topicId = activeTopicId,
+                    nextSeq = nextSeq,
+                    isDirect = isDirect,
+                    otherUserId = targetUserId
+                )
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) } }
         }
@@ -825,10 +928,22 @@ class ChatViewModel(
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        val (nextSeq, isDirect, targetUserId) = getSendMeta()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendVideo(chatId, uri, currentUsername, reply, activeTopicId) }
+            try {
+                chatRepository.sendVideo(
+                    chatId = chatId,
+                    uri = uri,
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    topicId = activeTopicId,
+                    nextSeq = nextSeq,
+                    isDirect = isDirect,
+                    otherUserId = targetUserId
+                )
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) } }
         }
@@ -840,10 +955,23 @@ class ChatViewModel(
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        val (nextSeq, isDirect, targetUserId) = getSendMeta()
         viewModelScope.launch {
             clearReply()
             try {
-                chatRepository.sendSticker(chatId, sticker, packId, packName, packEmoji, currentUsername, reply, activeTopicId)
+                chatRepository.sendSticker(
+                    chatId = chatId,
+                    sticker = sticker,
+                    packId = packId,
+                    packName = packName,
+                    packEmoji = packEmoji,
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    topicId = activeTopicId,
+                    nextSeq = nextSeq,
+                    isDirect = isDirect,
+                    otherUserId = targetUserId
+                )
             } catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
@@ -884,10 +1012,23 @@ class ChatViewModel(
         if (!startCooldown()) return
 
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        val (nextSeq, isDirect, targetUserId) = getSendMeta()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
-            try { chatRepository.sendVoice(chatId, file, duration, currentUsername, reply, activeTopicId) }
+            try {
+                chatRepository.sendVoice(
+                    chatId = chatId,
+                    file = file,
+                    durationSec = duration,
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    topicId = activeTopicId,
+                    nextSeq = nextSeq,
+                    isDirect = isDirect,
+                    otherUserId = targetUserId
+                )
+            }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
             finally { _uiState.update { it.copy(isUploading = false) } }
         }
@@ -896,6 +1037,7 @@ class ChatViewModel(
     fun sendAudio(file: File, title: String, performer: String, durationSec: Int, coverFile: File?) {
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
+        val (nextSeq, isDirect, targetUserId) = getSendMeta()
         viewModelScope.launch {
             _uiState.update { it.copy(isUploading = true) }
             clearReply()
@@ -909,7 +1051,10 @@ class ChatViewModel(
                     coverFile = coverFile,
                     senderUsername = currentUsername,
                     replyTo = reply,
-                    topicId = activeTopicId
+                    topicId = activeTopicId,
+                    nextSeq = nextSeq,
+                    isDirect = isDirect,
+                    otherUserId = targetUserId
                 )
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = e.message) }
@@ -928,6 +1073,14 @@ class ChatViewModel(
     }
 
     fun cancelSending(messageId: String) {
+        activeUploadJobs.remove(messageId)?.cancel()
+        _uiState.update { state ->
+            val cleanTemp = state.tempMessages.filter { it.id != messageId }
+            state.copy(
+                tempMessages = cleanTemp,
+                messageListItems = buildMessageList(state.messages + cleanTemp)
+            )
+        }
         viewModelScope.launch {
             try {
                 chatRepository.cancelSending(messageId)

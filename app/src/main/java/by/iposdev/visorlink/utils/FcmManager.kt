@@ -46,6 +46,7 @@ class FcmManager(
      * 2. Вызывает deleteToken() в FirebaseMessaging для аннулирования токена на серверах FCM
      */
     suspend fun revokeToken() = withContext(Dispatchers.IO) {
+        Log.w(TAG, "revokeToken() CALLED!", Exception("revokeToken trace"))
         try {
             val token = runCatching { FirebaseMessaging.getInstance().token.await() }.getOrNull()
             if (!token.isNullOrBlank()) {

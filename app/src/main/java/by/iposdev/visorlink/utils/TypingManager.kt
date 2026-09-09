@@ -27,6 +27,7 @@ class TypingManager(private val chatId: String, private val uid: String) {
             "uid" to uid,
             "ts" to ServerValue.TIMESTAMP
         )
+        typingRef.onDisconnect().removeValue()
         typingRef.setValue(typingUpdate)
 
         // Эта логика с Handler абсолютно правильная, оставляем ее

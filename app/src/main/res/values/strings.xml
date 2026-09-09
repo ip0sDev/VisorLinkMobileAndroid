@@ -744,4 +744,9 @@
     <string name="music_save_to_library">Save to library</string>
     <string name="music_downloading">Downloading track…</string>
     <string name="music_download_complete">Track saved to library</string>
+
+    <!-- Debug Mode -->
+    <string name="settings_debug_show_ids_title">Debug Mode (IDs &amp; seq)</string>
+    <string name="settings_debug_show_ids_desc">Display message ID, monotonic seq, and user UID badge</string>
+    <string name="uid_copied_toast">UID copied</string>
 </resources>

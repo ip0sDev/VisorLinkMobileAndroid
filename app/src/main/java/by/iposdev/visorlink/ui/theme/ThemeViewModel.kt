@@ -21,6 +21,7 @@ class ThemeViewModel(private val repository: SettingsRepository) : ViewModel() {
     val showMusicOnboarding: StateFlow<Boolean> = repository.showMusicOnboarding
     val showOnboarding: StateFlow<Boolean> = repository.showOnboarding
     val language: StateFlow<AppLanguage> = repository.language
+    val showDebugIds: StateFlow<Boolean> = repository.showDebugIds
 
     fun setTheme(theme: AppTheme) = repository.setTheme(theme)
     fun setThemeMode(mode: ThemeMode) = repository.setThemeMode(mode)
@@ -31,6 +32,7 @@ class ThemeViewModel(private val repository: SettingsRepository) : ViewModel() {
     fun setCompactChatList(enabled: Boolean) = repository.setCompactChatList(enabled)
     fun setDiscoverEnabled(enabled: Boolean) = repository.setDiscoverEnabled(enabled)
     fun setMusicEnabled(enabled: Boolean) = repository.setMusicEnabled(enabled)
+    fun setShowDebugIds(enabled: Boolean) = repository.setShowDebugIds(enabled)
     fun completeMusicOnboarding(enableMusic: Boolean) = repository.completeMusicOnboarding(enableMusic)
     fun completeOnboarding() = repository.completeOnboarding()
     fun setLanguage(language: AppLanguage) = repository.setLanguage(language)

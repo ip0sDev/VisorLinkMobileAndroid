@@ -86,6 +86,7 @@ class MainActivity : AppCompatActivity() {
             val appTheme    by themeViewModel.appTheme.collectAsState()
             val themeMode   by themeViewModel.themeMode.collectAsState()
             val colorPreset by themeViewModel.colorPreset.collectAsState()
+            val showDebugIds by themeViewModel.showDebugIds.collectAsState()
 
             LaunchedEffect(Unit) {
                 if (firebaseAuth.currentUser != null) {
@@ -104,7 +105,12 @@ class MainActivity : AppCompatActivity() {
                 IposStoreUpdates.checkUpdate(channel = channel)
             }
 
-            VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
+            VisorLinkTheme(
+                appTheme = appTheme,
+                themeMode = themeMode,
+                colorPreset = colorPreset,
+                showDebugIds = showDebugIds
+            ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {
                         LegalConsentGuard(authViewModel = authViewModel) {

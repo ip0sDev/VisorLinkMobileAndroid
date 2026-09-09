@@ -35,6 +35,7 @@ import by.iposdev.visorlink.ui.screens.settings.FlagFlipperViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.screens.topics.TopicListViewModel
 import by.iposdev.visorlink.ui.screens.topics.TaskTrackerViewModel
+import by.iposdev.visorlink.ui.components.mediapicker.MediaPickerViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.CacheManager
 import by.iposdev.visorlink.utils.TfaManager
@@ -74,6 +75,7 @@ val appModule = module {
         com.google.firebase.database.FirebaseDatabase.getInstance("https://visorlink-f9484-default-rtdb.europe-west1.firebasedatabase.app")
     }
     single { by.iposdev.visorlink.data.repository.TypingRepository(get()) }
+    single { by.iposdev.visorlink.utils.SidebarTypingManager(get()) }
 
     single {
         Retrofit.Builder()
@@ -130,7 +132,7 @@ val appModule = module {
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
     viewModel { MainViewModel(get(), get(), get()) }
-    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication()) }
+    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication(), get()) }
     viewModel { MusicViewModel(get(), get()) }
 
     viewModel { parameters ->
@@ -217,6 +219,7 @@ val appModule = module {
     viewModel { ProViewModel(get()) }
     viewModel { CustomizationViewModel(get()) }
     viewModel { FlagFlipperViewModel(get()) }
+    viewModel { MediaPickerViewModel(androidApplication()) }
     
     // ── Aegis Project ──
     single { DictionaryRepository(androidContext()) }

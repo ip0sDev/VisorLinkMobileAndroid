@@ -3,6 +3,7 @@ package by.iposdev.visorlink.ui.components.chatlist
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,10 +38,35 @@ import by.iposdev.visorlink.ui.theme.vlRaised
 import by.iposdev.visorlink.data.model.Chat
 import by.iposdev.visorlink.data.model.ChatType
 import by.iposdev.visorlink.data.model.UserProfile
+import by.iposdev.visorlink.data.model.isLastMessageRead
 import by.iposdev.visorlink.ui.components.AvatarWithPresence
 import by.iposdev.visorlink.ui.components.CachedImage
 import java.text.SimpleDateFormat
 import java.util.*
+
+@Composable
+fun MessageStatusIcon(
+    isRead: Boolean,
+    modifier: Modifier = Modifier
+) {
+    if (isRead) {
+        // Двойная галочка (✓✓)
+        Icon(
+            painter = painterResource(id = R.drawable.ic_check_double),
+            contentDescription = "Прочитано",
+            tint = MaterialTheme.colorScheme.primary, // Акцентный цвет
+            modifier = modifier.size(16.dp, 11.dp)
+        )
+    } else {
+        // Одинарная галочка (✓)
+        Icon(
+            painter = painterResource(id = R.drawable.ic_check_single),
+            contentDescription = "Отправлено",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = modifier.size(13.dp, 11.dp)
+        )
+    }
+}
 
 @Composable
 fun ChatListItem(
@@ -51,6 +78,7 @@ fun ChatListItem(
     unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
     isCompactList: Boolean = false,
+    isTyping: Boolean = false,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -70,50 +98,57 @@ fun ChatListItem(
     val titleColor = cs.onSurface
     val subColor = cs.onSurfaceVariant
 
+    val isOwnLast = !isSavedMessages && (chat.lastMessageSenderId == currentUid ||
+            chat.lastMessageInfo()?.senderId == currentUid)
+    val isRead = remember(chat, currentUid) {
+        isLastMessageRead(chat, currentUid)
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
             .scale(itemScale)
-            // Рельеф требует воздуха вокруг элемента: в компактном режиме
-            // вертикальных отступов нет, тени соседних строк наложились бы друг
-            // на друга грязными полосами — там остаётся только грань.
             .then(
                 if (tokens.structure.enabled && !isCompactList) {
                     Modifier.vlRaised(tokens.structure, shape)
+                } else if (tokens.structure.enabled) {
+                    Modifier.vlHairline(cs.outlineVariant, shape)
                 } else {
                     Modifier
                 }
             )
-            .then(
-                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, shape) else Modifier
-            ),
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = shape,
-        color = if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
-        onClick = onClick,
-        interactionSource = interactionSource
+        color = if (isDark) cs.surfaceVariant.copy(alpha = 0.45f) else cs.surface,
+        border = BorderStroke(
+            1.dp,
+            if (isDark) cs.outlineVariant.copy(alpha = 0.15f) else cs.outlineVariant.copy(alpha = 0.35f)
+        )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(modifier = Modifier.size(54.dp)) {
+            Box(modifier = Modifier.size(52.dp)) {
                 if (isSavedMessages) {
-                    SavedMessagesIcon(size = 54.dp)
+                    SavedMessagesIcon(size = 52.dp)
                 } else {
                     when (chatType) {
                         ChatType.DIRECT -> AvatarWithPresence(
                             avatarUrl = otherProfile?.avatarUrl,
                             displayName = chat.otherDisplayName(currentUid),
                             isOnline = otherProfile?.online ?: false,
-                            size = 54.dp
+                            size = 52.dp
                         )
                         ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                             avatarUrl = chat.avatarUrl,
                             name = chat.name,
                             isChannel = chatType == ChatType.CHANNEL,
-                            size = 54.dp
+                            size = 52.dp
                         )
                     }
                 }
@@ -157,7 +192,20 @@ fun ChatListItem(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(modifier = Modifier.weight(1f)) {
-                        if (!draftText.isNullOrEmpty()) {
+                        if (isTyping) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(text = "✍️", fontSize = 12.sp)
+                                Text(
+                                    text = stringResource(R.string.chat_typing),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cs.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        } else if (!draftText.isNullOrEmpty()) {
                             Row {
                                 Text(
                                     stringResource(R.string.chatlist_draft_prefix),
@@ -174,14 +222,24 @@ fun ChatListItem(
                                 )
                             }
                         } else {
-                            val messageText = chat.lastMessageText()
-                            Text(
-                                text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = subColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (isOwnLast) {
+                                    MessageStatusIcon(isRead = isRead)
+                                    Spacer(Modifier.width(5.dp))
+                                }
+                                val messageText = chat.lastMessageText()
+                                Text(
+                                    text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = subColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false)
+                                )
+                            }
                         }
                     }
                     if (unreadCount > 0) {
@@ -203,6 +261,7 @@ fun ChatListItemCompact(
     draftText: String?,
     unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
+    isTyping: Boolean = false,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -212,6 +271,13 @@ fun ChatListItemCompact(
 
     val titleColor = MaterialTheme.colorScheme.onSurface
     val subColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val cs = MaterialTheme.colorScheme
+
+    val isOwnLast = !isSavedMessages && (chat.lastMessageSenderId == currentUid ||
+            chat.lastMessageInfo()?.senderId == currentUid)
+    val isRead = remember(chat, currentUid) {
+        isLastMessageRead(chat, currentUid)
+    }
 
     Row(
         modifier = Modifier
@@ -280,7 +346,20 @@ fun ChatListItemCompact(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(modifier = Modifier.weight(1f)) {
-                    if (!draftText.isNullOrEmpty()) {
+                    if (isTyping) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(text = "✍️", fontSize = 12.sp)
+                            Text(
+                                text = stringResource(R.string.chat_typing),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.primary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else if (!draftText.isNullOrEmpty()) {
                         Row {
                             Text(
                                 stringResource(R.string.chatlist_draft_prefix),
@@ -297,14 +376,24 @@ fun ChatListItemCompact(
                             )
                         }
                     } else {
-                        val messageText = chat.lastMessageText()
-                        Text(
-                            text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = subColor,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isOwnLast) {
+                                MessageStatusIcon(isRead = isRead)
+                                Spacer(Modifier.width(5.dp))
+                            }
+                            val messageText = chat.lastMessageText()
+                            Text(
+                                text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = subColor,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                        }
                     }
                 }
                 if (unreadCount > 0) {

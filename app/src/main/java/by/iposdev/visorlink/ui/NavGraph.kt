@@ -350,7 +350,11 @@ fun VisorLinkNavGraph(
                     nullable = true
                     defaultValue = "image"
                 }
-            )
+            ),
+            enterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)) },
+            exitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) },
+            popEnterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)) },
+            popExitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) }
         ) { backStackEntry ->
             val url = backStackEntry.arguments?.getString("url") ?: return@composable
             val type = backStackEntry.arguments?.getString("type") ?: "image"

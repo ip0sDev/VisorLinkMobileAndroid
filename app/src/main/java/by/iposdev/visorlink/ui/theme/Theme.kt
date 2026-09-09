@@ -125,6 +125,7 @@ fun UserProfileTheme(
     val currentTheme by themeVm.appTheme.collectAsState()
     val currentThemeMode by themeVm.themeMode.collectAsState()
     val globalPreset by themeVm.colorPreset.collectAsState()
+    val showDebugIds by themeVm.showDebugIds.collectAsState()
 
     val applyCustom = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
     val cust = if (applyCustom) profile?.customization.orEmpty() else emptyMap()
@@ -143,6 +144,7 @@ fun UserProfileTheme(
         appTheme = theme,
         themeMode = currentThemeMode,
         colorPreset = preset,
+        showDebugIds = showDebugIds,
         setStatusBarColor = false,
         typographyOverride = fontKey?.let { key ->
             CustomizationHelper.getTypography(
@@ -160,6 +162,8 @@ fun UserProfileTheme(
 
 // ── VisorLink Theme Composable ────────────────────────────────────────────────
 
+val LocalShowDebugIds = compositionLocalOf { false }
+
 /**
  * Единственная точка, где решается «как выглядит приложение».
  *
@@ -173,6 +177,7 @@ fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
+    showDebugIds: Boolean = LocalShowDebugIds.current,
     setStatusBarColor: Boolean = true,
     /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
     typographyOverride: androidx.compose.material3.Typography? = null,
@@ -292,7 +297,8 @@ fun VisorLinkTheme(
 
     CompositionLocalProvider(
         LocalVlTokens provides tokens,
-        LocalSignalCounter provides remember { AtomicInteger(0) }
+        LocalSignalCounter provides remember { AtomicInteger(0) },
+        LocalShowDebugIds provides showDebugIds
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

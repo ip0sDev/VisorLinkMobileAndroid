@@ -59,6 +59,7 @@ fun ChatListScreen(
     val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
     val drafts by viewModel.drafts.collectAsState()
     val isManualFallbackActive by viewModel.isManualFallbackActive.collectAsState()
+    val typingMap by viewModel.typingMap.collectAsState()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val compactList by themeViewModel.compactChatList.collectAsState()
@@ -269,6 +270,7 @@ fun ChatListScreen(
                                             otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                             draftText = drafts[chat.id],
                                             unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
+                                            isTyping = typingMap[chat.id] == true,
                                             onClick = {
                                                 if (chat.isForumActive) onOpenTopicList(chat.id)
                                                 else onOpenChat(chat.id, otherUid)
@@ -299,6 +301,7 @@ fun ChatListScreen(
                                     unreadCount = 0,
                                     isSavedMessages = true,
                                     isCompactList = false,
+                                    isTyping = false,
                                     onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
                                 )
                                 Spacer(Modifier.height(8.dp))
@@ -318,6 +321,7 @@ fun ChatListScreen(
                                     draftText = drafts[chat.id],
                                     unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                     isCompactList = compactList,
+                                    isTyping = typingMap[chat.id] == true,
                                     onClick = {
                                         if (chat.isForumActive) onOpenTopicList(chat.id)
                                         else onOpenChat(chat.id, otherUid)

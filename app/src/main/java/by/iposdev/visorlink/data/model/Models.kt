@@ -85,6 +85,15 @@ data class ChatSettings(
 }
 
 @IgnoreExtraProperties
+data class LastMessageInfo(
+    val text: String = "",
+    val senderId: String = "",
+    val senderUsername: String = "",
+    val readBy: List<String> = emptyList(),
+    val read: Boolean? = null
+)
+
+@IgnoreExtraProperties
 data class Chat(
     val id: String = "",
     val type: String = "direct",
@@ -101,6 +110,8 @@ data class Chat(
     val is_forum: Boolean = false,
     val settings: ChatSettings = ChatSettings(),
     val lastMessage: Any? = null,
+    val lastMessageSenderId: String? = null,
+    val lastSeq: Long = 0L,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null,
     val unreadCount: Map<String, Int> = emptyMap()
@@ -109,10 +120,40 @@ data class Chat(
 
     fun unreadCountFor(currentUid: String): Int = unreadCount[currentUid] ?: unreadCount[""] ?: 0
 
+    fun lastMessageInfo(): LastMessageInfo? {
+        return when (val lm = lastMessage) {
+            is Map<*, *> -> {
+                val text = (lm["text"] as? String) ?: ""
+                val senderId = (lm["senderId"] as? String) ?: ""
+                val senderUsername = (lm["senderUsername"] as? String) ?: ""
+                val readByRaw = lm["readBy"]
+                val readBy = when (readByRaw) {
+                    is List<*> -> readByRaw.filterIsInstance<String>()
+                    else -> emptyList()
+                }
+                val read = lm["read"] as? Boolean
+                LastMessageInfo(
+                    text = text,
+                    senderId = senderId,
+                    senderUsername = senderUsername,
+                    readBy = readBy,
+                    read = read
+                )
+            }
+            is String -> LastMessageInfo(
+                text = lm,
+                senderId = lastMessageSenderId ?: ""
+            )
+            else -> if (!lastMessageSenderId.isNullOrBlank()) {
+                LastMessageInfo(text = "", senderId = lastMessageSenderId)
+            } else null
+        }
+    }
+
     fun lastMessageText(): String {
-        return when (lastMessage) {
-            is String -> lastMessage
-            is Map<*, *> -> (lastMessage["text"] as? String) ?: ""
+        return when (val lm = lastMessage) {
+            is String -> lm
+            is Map<*, *> -> (lm["text"] as? String) ?: ""
             else -> ""
         }
     }
@@ -136,6 +177,50 @@ data class Chat(
 
     fun otherUsername(currentUid: String) =
         participantData[otherParticipantId(currentUid)]?.get("username") ?: ""
+}
+
+/**
+ * Логика определения статуса прочтения последнего сообщения в чате (Секция 3.1 спецификации).
+ * Гарантия 0 лишних чтений Firestore.
+ */
+fun isLastMessageRead(chat: Chat, currentUserId: String): Boolean {
+    val lastMsg = chat.lastMessageInfo()
+    val senderId = chat.lastMessageSenderId?.takeIf { it.isNotBlank() } ?: lastMsg?.senderId
+
+    if (lastMsg == null && senderId.isNullOrBlank()) return false
+
+    // Прямой флаг (для V2 backend или явного флага)
+    if (lastMsg?.read == true) return true
+
+    val isMine = senderId == currentUserId
+
+    return if (isMine) {
+        val otherUserId = if (chat.chatType() == ChatType.DIRECT) {
+            chat.participants.firstOrNull { it != currentUserId }
+        } else null
+
+        // 1. Собеседник присутствует в списке прочитавших readBy
+        if (otherUserId != null && lastMsg?.readBy?.contains(otherUserId) == true) {
+            return true
+        }
+
+        // 2. В readBy есть кто-либо кроме текущего пользователя
+        if (lastMsg?.readBy?.any { it != currentUserId && it.isNotBlank() } == true) {
+            return true
+        }
+
+        // 3. Счётчик непрочитанных у собеседника сброшен в 0
+        if (otherUserId != null && chat.unreadCount.containsKey(otherUserId) && (chat.unreadCount[otherUserId] ?: 0) == 0) {
+            return true
+        }
+
+        false
+    } else {
+        // Для входящих сообщений: прочитал ли текущий пользователь
+        if (lastMsg?.readBy?.contains(currentUserId) == true) return true
+        if (chat.unreadCountFor(currentUserId) == 0) return true
+        false
+    }
 }
 
 fun DocumentSnapshot.toChatOrNull(): Chat? {
@@ -176,12 +261,19 @@ fun DocumentSnapshot.toChatOrNull(): Chat? {
             else -> chat?.unreadCount ?: emptyMap()
         }
 
+        val lastSeq = chat?.lastSeq ?: (this.getLong("lastSeq") ?: 0L)
+        val lastSenderId = chat?.lastMessageSenderId ?: this.getString("lastMessageSenderId")
+        val lastMsg = chat?.lastMessage ?: this.get("lastMessage")
+
         return (chat ?: Chat(id = this.id)).copy(
             id = this.id,
             isForum = isForum,
             is_forum = isForum,
             settings = finalSettings,
-            unreadCount = unreadMap
+            unreadCount = unreadMap,
+            lastSeq = lastSeq,
+            lastMessageSenderId = lastSenderId,
+            lastMessage = lastMsg
         )
     } catch (e: Exception) {
         android.util.Log.e("ChatParser", "Error parsing chat doc $id", e)
@@ -315,6 +407,7 @@ data class TagSearchResult(
 
 // ─── Album Image ──────────────────────────────────────────────────────────────
 
+@IgnoreExtraProperties
 data class AlbumImage(
     val url: String? = null,
     val cdnMediaId: String? = null,
@@ -362,10 +455,14 @@ data class UserStickerData(
 
 // ─── Message ──────────────────────────────────────────────────────────────────
 
+@IgnoreExtraProperties
 data class Message(
     val id: String = "",
+    val seq: Long? = null,
     val senderId: String = "",
     val senderUsername: String = "",
+    val senderIsAdmin: Boolean? = null,
+    val tags: List<String> = emptyList(),
     val type: String = MessageType.TEXT,
     val text: String? = null,
     val url: String? = null,
@@ -413,6 +510,9 @@ data class Message(
 
     // CDN / Временные файлы
     val cdnMediaId: String? = null,
+    val thumbUrl: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
     val mimeType: String? = null,
     val uploadProgress: Float? = null,
     val localFile: java.io.File? = null,
@@ -454,6 +554,65 @@ data class Message(
                 )
             } catch (_: Exception) { null }
         }
+}
+
+/**
+ * Расчёт следующего seq при отправке сообщения (Секция 2.2 спецификации).
+ */
+fun calculateNextSeq(
+    chat: Chat?,
+    currentMessages: List<Message>
+): Long {
+    val chatLastSeq = chat?.lastSeq ?: 0L
+    val maxMsgSeq = currentMessages.maxOfOrNull { it.seq ?: 0L } ?: 0L
+    return maxOf(chatLastSeq, maxMsgSeq) + 1L
+}
+
+/**
+ * Алгоритм гибридной обратной совместимой сортировки (Секция 2.3 спецификации).
+ */
+fun sortMessages(messages: List<Message>): List<Message> {
+    return messages.sortedWith { a, b ->
+        val aTime = a.createdAt?.toDate()?.time ?: Long.MAX_VALUE
+        val bTime = b.createdAt?.toDate()?.time ?: Long.MAX_VALUE
+
+        val aSeq = a.seq
+        val bSeq = b.seq
+
+        when {
+            // 1. Оба сообщения имеют номер последовательности seq
+            aSeq != null && bSeq != null -> {
+                val seqComp = aSeq.compareTo(bSeq)
+                if (seqComp != 0) {
+                    seqComp
+                } else {
+                    val timeComp = aTime.compareTo(bTime)
+                    if (timeComp != 0) timeComp else a.id.compareTo(b.id)
+                }
+            }
+            // 2. Одно с seq, другое legacy (без seq)
+            aSeq != null && bSeq == null -> {
+                // Если разница по времени больше 2 секунд — ориентируемся на реальное время
+                if (kotlin.math.abs(aTime - bTime) > 2000) {
+                    aTime.compareTo(bTime)
+                } else {
+                    1 // Новое сообщение с seq ставится после legacy
+                }
+            }
+            aSeq == null && bSeq != null -> {
+                if (kotlin.math.abs(aTime - bTime) > 2000) {
+                    aTime.compareTo(bTime)
+                } else {
+                    -1
+                }
+            }
+            // 3. Оба сообщения старого формата (legacy без seq)
+            else -> {
+                val timeComp = aTime.compareTo(bTime)
+                if (timeComp != 0) timeComp else a.id.compareTo(b.id)
+            }
+        }
+    }
 }
 
 object MessageType {

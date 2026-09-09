@@ -21,8 +21,12 @@ class ChatListViewModel(
     private val auth: FirebaseAuth,
     private val draftManager: DraftManager,
     private val fallbackManager: BackendFallbackManager? = null,
-    private val context: Context? = null
+    private val context: Context? = null,
+    private val sidebarTypingManager: by.iposdev.visorlink.utils.SidebarTypingManager? = null
 ) : ViewModel() {
+
+    val typingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
+        ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
 
     val isManualFallbackActive: StateFlow<Boolean> = fallbackManager?.manualFallbackActive
         ?: MutableStateFlow(false).asStateFlow()
@@ -57,6 +61,7 @@ class ChatListViewModel(
     private val observedPresenceUids = mutableSetOf<String>()
 
     init {
+        sidebarTypingManager?.startListening(currentUid)
         viewModelScope.launch {
             chats.collect { list ->
                 list.forEach { chat ->
@@ -102,5 +107,10 @@ class ChatListViewModel(
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sidebarTypingManager?.stopListening()
     }
 }

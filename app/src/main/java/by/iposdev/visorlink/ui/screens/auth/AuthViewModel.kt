@@ -114,16 +114,6 @@ class AuthViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    init {
-        viewModelScope.launch {
-            authState.collect { state ->
-                if (state is AuthState.NoSession) {
-                    // При отсутствии сессии / выходе на экран логина токен FCM должен быть полностью аннулирован
-                    fcmManager.revokeToken()
-                }
-            }
-        }
-    }
 
     fun request2FA(method: String) {
         viewModelScope.launch {
