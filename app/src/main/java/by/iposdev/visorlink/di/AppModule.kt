@@ -116,6 +116,7 @@ val appModule = module {
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
+    single { by.iposdev.visorlink.utils.StealthManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
     single { by.iposdev.visorlink.utils.MusicPlayerManager(androidContext()) }
     single { MusicDatabase(androidContext()) }
@@ -207,13 +208,13 @@ val appModule = module {
     viewModel { StorageViewModel() }
     viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
 
-    // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }
     single { FeedRepository(get(), get(), androidContext(), get(), get(), get()) }
     single { ForwardRepository(get()) }
+    single { by.iposdev.visorlink.utils.BiometricPinManager(androidContext()) }
 
-    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get()) }
+    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get(), get()) }
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }

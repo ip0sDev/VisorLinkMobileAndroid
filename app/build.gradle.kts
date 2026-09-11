@@ -11,14 +11,12 @@ plugins {
 val commitId: String = if (project.hasProperty("commitId")) {
     project.property("commitId").toString()
 } else {
-    try {
-        val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--short", "HEAD"))
-        process.inputStream.bufferedReader().readLine()?.trim() ?: ""
-    } catch (_: Exception) {
-        ""
-    }
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.map { it.trim() }.getOrElse("")
 }
-val currentChannel = "BETA"
+val currentChannel = "CANARY"
 
 android {
     namespace = "by.iposdev.visorlink"
@@ -32,7 +30,7 @@ android {
         versionName = "3.6.01"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"BETA\"")
+        buildConfigField("String", "CHANNEL", "\"CANARY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }

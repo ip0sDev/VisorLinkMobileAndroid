@@ -93,6 +93,7 @@ fun SavedEmptyPlaceholder(modifier: Modifier, isEncrypted: Boolean) {
 fun PinInputDialog(
     pinError: Boolean,
     hasBiometric: Boolean,
+    keystoreSecurityLevel: by.iposdev.visorlink.utils.KeystoreSecurityLevel = by.iposdev.visorlink.utils.KeystoreSecurityLevel.UNKNOWN,
     onPinEntered: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
     onBiometric: () -> Unit,
@@ -123,6 +124,31 @@ fun PinInputDialog(
                 )
                 if (pinError) {
                     Text(stringResource(R.string.saved_pin_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 4.dp))
+                }
+
+                if (hasBiometric && keystoreSecurityLevel != by.iposdev.visorlink.utils.KeystoreSecurityLevel.UNKNOWN) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = keystoreSecurityLevel.title,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 if (!hasBiometric) {

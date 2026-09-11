@@ -399,14 +399,22 @@ class UserRepository(
 
     suspend fun removeFcmToken(token: String) {
         val uid = currentUid.ifEmpty { return }
-        if (isProfileBackendEnabled() || isFirestoreDisabled()) {
-            return
+        if (isProfileBackendEnabled()) {
+            try {
+                api.removeFcmToken(by.iposdev.visorlink.data.remote.chat.FcmTokenRequest(token = token))
+                android.util.Log.d("UserRepository", "FCM token removed from Backend v2")
+            } catch (e: Exception) {
+                android.util.Log.e("UserRepository", "Failed to remove FCM token from backend", e)
+            }
         }
-        try {
-            db.collection("users").document(uid)
-                .update("fcmTokens", FieldValue.arrayRemove(token)).await()
-        } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Failed to remove FCM token from Firestore", e)
+        if (!isFirestoreDisabled()) {
+            try {
+                db.collection("users").document(uid)
+                    .update("fcmTokens", FieldValue.arrayRemove(token)).await()
+                android.util.Log.d("UserRepository", "FCM token removed from Firestore")
+            } catch (e: Exception) {
+                android.util.Log.e("UserRepository", "Failed to remove FCM token from Firestore", e)
+            }
         }
     }
 

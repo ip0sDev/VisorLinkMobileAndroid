@@ -139,18 +139,26 @@ fun SavedMessagesScreen(
         }
     }
 
+    LaunchedEffect(uiState.infoMessage) {
+        uiState.infoMessage?.let { msg ->
+            snackbar.showSnackbar(msg, duration = SnackbarDuration.Short)
+            viewModel.clearInfoMessage()
+        }
+    }
+
     if (uiState.showPinInput) {
         PinInputDialog(
-            pinError     = uiState.pinError,
-            hasBiometric = viewModel.hasBiometricPinSaved(),
-            onPinEntered = { pin, useBio -> viewModel.onPinEntered(pin, useBio) },
-            onDismiss    = onNavigateBack,
-            onBiometric  = {
+            pinError              = uiState.pinError,
+            hasBiometric          = viewModel.hasBiometricPinSaved(),
+            keystoreSecurityLevel = viewModel.getKeystoreSecurityLevel(),
+            onPinEntered          = { pin, useBio -> viewModel.onPinEntered(pin, useBio) },
+            onDismiss             = onNavigateBack,
+            onBiometric           = {
                 (context as? FragmentActivity)?.let { activity ->
                     viewModel.launchBiometricUnlock(activity) {}
                 }
             },
-            clearError   = { viewModel.clearPinError() }
+            clearError            = { viewModel.clearPinError() }
         )
         return
     }

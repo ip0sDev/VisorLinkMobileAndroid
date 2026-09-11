@@ -27,11 +27,20 @@ class StealthManager(context: Context) {
         private const val KEY_SALT = "stealth_pin_salt"
     }
 
+    @Volatile
+    var isUnlocked: Boolean = false
+
     fun isEnabled(): Boolean = prefs.getBoolean(KEY_ENABLED, false)
     fun hasPin(): Boolean = prefs.getString(KEY_PIN_HASH, null) != null
 
+    /** Возвращает true, если режим скрытия включен и не разблокирован (приложение заблокировано / в фоне) */
+    fun isStealthActive(): Boolean = isEnabled() && !isUnlocked
+
     fun setEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+        if (!enabled) {
+            isUnlocked = false
+        }
     }
 
     /** Открывать режим скрытия по отпечатку (в дополнение к PIN). */
@@ -43,18 +52,29 @@ class StealthManager(context: Context) {
 
     fun setPin(pin: String) {
         val salt = generateSalt()
-        val hash = hashPin(pin, salt)
+        val hash = hashPinPbkdf2(pin, salt)
         prefs.edit()
             .putString(KEY_SALT, salt)
-            .putString(KEY_PIN_HASH, hash)
+            .putString(KEY_PIN_HASH, "pbkdf2:$hash")
             .apply()
     }
 
     fun verifyPin(pin: String): Boolean {
         val storedHash = prefs.getString(KEY_PIN_HASH, null) ?: return false
         val salt = prefs.getString(KEY_SALT, null) ?: return false
-        val hash = hashPin(pin, salt)
-        return hash == storedHash
+        if (storedHash.startsWith("pbkdf2:")) {
+            val actual = storedHash.removePrefix("pbkdf2:")
+            val computed = hashPinPbkdf2(pin, salt)
+            return MessageDigest.isEqual(computed.toByteArray(Charsets.UTF_8), actual.toByteArray(Charsets.UTF_8))
+        }
+        // Legacy fallback SHA-256
+        val legacyHash = hashPinLegacy(pin, salt)
+        val valid = legacyHash == storedHash
+        if (valid) {
+            // Прозрачная миграция
+            setPin(pin)
+        }
+        return valid
     }
 
     fun clearPin() {
@@ -67,7 +87,20 @@ class StealthManager(context: Context) {
         return Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
     }
 
-    private fun hashPin(pin: String, salt: String): String {
+    private fun hashPinPbkdf2(pin: String, salt: String): String {
+        val saltBytes = Base64.decode(salt, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
+        val password = "$pin::durka_stealth_v1"
+        val spec = javax.crypto.spec.PBEKeySpec(password.toCharArray(), saltBytes, 200_000, 256)
+        return try {
+            val factory = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            val hash = factory.generateSecret(spec).encoded
+            Base64.encodeToString(hash, Base64.NO_WRAP)
+        } finally {
+            spec.clearPassword()
+        }
+    }
+
+    private fun hashPinLegacy(pin: String, salt: String): String {
         val input = "$salt::$pin::durka_stealth_v1"
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))

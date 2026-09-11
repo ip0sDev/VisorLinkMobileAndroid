@@ -108,7 +108,7 @@ object NotificationHelper {
         )
 
         // ── Группировка уведомлений (Inbox Style) ──
-        val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        val prefs = getFcmPrefs(context)
         val historyKey = "unread_msgs_$chatId"
         val historyStr = prefs.getString(historyKey, "") ?: ""
         val history = if (historyStr.isEmpty()) mutableListOf() else historyStr.split("|||").toMutableList()
@@ -177,9 +177,26 @@ object NotificationHelper {
         }
     }
 
+    private fun getFcmPrefs(context: Context): android.content.SharedPreferences {
+        return try {
+            val masterKey = androidx.security.crypto.MasterKey.Builder(context)
+                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            androidx.security.crypto.EncryptedSharedPreferences.create(
+                context,
+                "fcm_prefs_encrypted",
+                masterKey,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        }
+    }
+
     fun getUnreadCount(context: Context, chatId: String): Int {
         return try {
-            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            val prefs = getFcmPrefs(context)
             val historyStr = prefs.getString("unread_msgs_$chatId", "") ?: ""
             if (historyStr.isEmpty()) 0 else historyStr.split("|||").size
         } catch (_: Exception) {
@@ -189,7 +206,7 @@ object NotificationHelper {
 
     fun clearNotification(context: Context, chatId: String) {
         try {
-            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            val prefs = getFcmPrefs(context)
             prefs.edit().remove("unread_msgs_$chatId").apply()
 
             val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
@@ -209,7 +226,7 @@ object NotificationHelper {
 
     fun clearAllNotifications(context: Context) {
         try {
-            val prefs = context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+            val prefs = getFcmPrefs(context)
             prefs.edit().clear().apply()
 
             val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)

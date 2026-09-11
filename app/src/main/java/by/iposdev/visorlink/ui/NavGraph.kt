@@ -54,7 +54,7 @@ fun VisorLinkNavGraph(
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
     val context = LocalContext.current
-    val stealthManager = remember { StealthManager(context) }
+    val stealthManager: StealthManager = org.koin.compose.koinInject()
 
     // Состояние разблокировки режима скрытия для текущей сессии
     var isStealthUnlocked by remember { mutableStateOf(false) }
@@ -67,6 +67,7 @@ fun VisorLinkNavGraph(
                 // Если приложение свернуто, и стелс включен — снова блокируем
                 if (stealthManager.isEnabled() && isStealthUnlocked) {
                     isStealthUnlocked = false
+                    stealthManager.isUnlocked = false
                     navController.navigate("decoy") {
                         popUpTo(0) { inclusive = true }
                     }
@@ -156,6 +157,7 @@ fun VisorLinkNavGraph(
             DecoyHomeScreen(
                 onUnlockSuccess = {
                     isStealthUnlocked = true
+                    stealthManager.isUnlocked = true
                     // При изменении isStealthUnlocked на true сработает LaunchedEffect
                     // и перенаправит юзера на нужный экран в зависимости от authState
                 }

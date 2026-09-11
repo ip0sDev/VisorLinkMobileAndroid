@@ -21,15 +21,24 @@ class FcmService : FirebaseMessagingService() {
     private val userRepository: by.iposdev.visorlink.data.repository.UserRepository by inject()
     private val tfaManager: TfaManager by inject()
     private val authRepository: by.iposdev.visorlink.data.repository.AuthRepository by inject()
+    private val stealthManager: StealthManager by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d("FCM", "New token received: $token")
+        if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+            Log.d("FCM", "New token received: $token")
+        }
+
+        // Сохраняем pending-токен локально для гарантии регистрации при 2FA / ретраях
+        val internalPrefs = applicationContext.getSharedPreferences("fcm_internal", Context.MODE_PRIVATE)
+        internalPrefs.edit().putString("pending_fcm_token", token).apply()
 
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null) {
-            Log.d("FCM", "User not logged in, skipping token save")
+            if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                Log.d("FCM", "User not logged in, token stored as pending")
+            }
             return
         }
 
@@ -40,9 +49,14 @@ class FcmService : FirebaseMessagingService() {
                 val profile = userRepository.getUserProfile(uid)
                 if (profile == null || !profile.tfaEnabled || isTfaPassed) {
                     userRepository.saveFcmToken(token)
-                    Log.d("FCM", "New token saved: $token")
+                    internalPrefs.edit().remove("pending_fcm_token").apply()
+                    if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                        Log.d("FCM", "New token saved: $token")
+                    }
                 } else {
-                    Log.d("FCM", "2FA pending: deferring token registration")
+                    if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                        Log.d("FCM", "2FA pending: deferred token in fcm_internal")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("FCM", "Failed to save new token", e)
@@ -52,7 +66,9 @@ class FcmService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        Log.d("FCM", "Message received: ${message.data}")
+        if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+            Log.d("FCM", "Message received: ${message.data}")
+        }
 
         val chatId = message.data["chatId"] ?: run {
             Log.w("FCM", "No chatId in data payload")
@@ -96,6 +112,12 @@ class FcmService : FirebaseMessagingService() {
         val senderUid = message.data["senderUid"]
             ?: message.data["senderId"]
             ?: message.data["fromUid"]
+
+        // Если активен режим скрытия (стелс включен и не разблокирован) — подавляем показ уведомления
+        if (stealthManager.isStealthActive()) {
+            Log.d("FCM", "Suppressed notification: stealth mode is active")
+            return
+        }
 
         // Если чат открыт на экране прямо сейчас и приложение на переднем плане — скрываем уведомление
         val isCurrentChat = ActiveChatTracker.isChatActive(chatId)

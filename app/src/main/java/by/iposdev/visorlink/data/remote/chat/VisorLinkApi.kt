@@ -41,6 +41,9 @@ interface VisorLinkApi {
     @POST("/api/users/me/fcm-token")
     suspend fun saveFcmToken(@Body request: FcmTokenRequest): SimpleSuccessResponse
 
+    @HTTP(method = "DELETE", path = "/api/users/me/fcm-token", hasBody = true)
+    suspend fun removeFcmToken(@Body request: FcmTokenRequest): SimpleSuccessResponse
+
     @POST("/api/users/me/streak")
     suspend fun claimStreak(): StreakResponse
 

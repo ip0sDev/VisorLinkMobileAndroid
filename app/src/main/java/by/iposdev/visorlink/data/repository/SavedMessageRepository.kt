@@ -49,7 +49,12 @@ class SavedMessagesRepository(
     suspend fun verifyPin(uid: String, enteredPin: String): Boolean = try {
         val snap = db.collection("savedMessagesSettings").document(uid).get().await()
         val storedHash = snap.getString("pinHash") ?: ""
-        hashPin(enteredPin, uid) == storedHash
+        val isValid = verifyPinHash(enteredPin, uid, storedHash)
+        if (isValid && !storedHash.startsWith("pbkdf2:")) {
+            // Прозрачная миграция старого SHA-256 хэша на стойкий PBKDF2
+            setPin(uid, enteredPin)
+        }
+        isValid
     } catch (e: Exception) { false }
 
     suspend fun disablePin(uid: String) {
@@ -315,6 +320,4 @@ class SavedMessagesRepository(
         val caption = msg.encryptedCaption?.let { decryptText(it, iv, key) }
         return msg.copy(text = plaintext ?: msg.text, caption = caption ?: msg.caption)
     }
-
-    suspend fun getBiometricPin(uid: String): String? = null
 }

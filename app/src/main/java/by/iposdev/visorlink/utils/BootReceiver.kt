@@ -19,13 +19,20 @@ class BootReceiver : BroadcastReceiver(), KoinComponent {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED || 
             intent.action == "android.intent.action.QUICKBOOT_POWERON") {
             
+            val pendingResult = goAsync()
             scope.launch {
-                val userRepository: UserRepository = get()
-                val reminderManager: DiaryReminderManager = get()
-                
-                val profile = userRepository.currentUserFlow().firstOrNull()
-                if (profile?.diaryEnabled == true && profile.diaryRemindersEnabled) {
-                    reminderManager.scheduleReminder(profile.diaryReminderTime)
+                try {
+                    val userRepository: UserRepository = get()
+                    val reminderManager: DiaryReminderManager = get()
+                    
+                    val profile = userRepository.currentUserFlow().firstOrNull()
+                    if (profile?.diaryEnabled == true && profile.diaryRemindersEnabled) {
+                        reminderManager.scheduleReminder(profile.diaryReminderTime)
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("BootReceiver", "Failed to reschedule reminders on boot", e)
+                } finally {
+                    pendingResult.finish()
                 }
             }
         }

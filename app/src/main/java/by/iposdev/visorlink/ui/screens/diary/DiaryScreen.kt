@@ -58,16 +58,28 @@ fun DiaryScreen(
         } else if (!uiState.showPinInput) { autoBioTriggered = false }
     }
 
-    LaunchedEffect(uiState.error) { uiState.error?.let { snackbarHostState.showSnackbar(it) } }
+    LaunchedEffect(uiState.error) { 
+        uiState.error?.let { 
+            snackbarHostState.showSnackbar(it) 
+        } 
+    }
+
+    LaunchedEffect(uiState.infoMessage) {
+        uiState.infoMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearInfoMessage()
+        }
+    }
 
     if (uiState.showPinInput) {
         DiaryPinDialog(
-            pinError = uiState.pinError,
-            hasBiometric = viewModel.hasBiometricPinSaved(),
-            onPinEntered = { pin, saveBio -> viewModel.onPinEntered(pin, saveBio) },
-            onBiometric = { (context as? FragmentActivity)?.let { viewModel.launchBiometricUnlock(it) } },
-            onDismiss = onNavigateBack,
-            clearError = { viewModel.clearPinError() }
+            pinError              = uiState.pinError,
+            hasBiometric          = viewModel.hasBiometricPinSaved(),
+            keystoreSecurityLevel = viewModel.getKeystoreSecurityLevel(),
+            onPinEntered          = { pin, saveBio -> viewModel.onPinEntered(pin, saveBio) },
+            onBiometric           = { (context as? FragmentActivity)?.let { viewModel.launchBiometricUnlock(it) } },
+            onDismiss             = onNavigateBack,
+            clearError            = { viewModel.clearPinError() }
         )
         return
     }

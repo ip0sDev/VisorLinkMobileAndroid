@@ -26,15 +26,24 @@ class FcmManager(
     suspend fun syncTokenAfter2FA() = withContext(Dispatchers.IO) {
         val uid = auth.currentUser?.uid
         if (uid == null) {
-            Log.d(TAG, "No authenticated user, skipping FCM setup")
+            if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                Log.d(TAG, "No authenticated user, skipping FCM setup")
+            }
             return@withContext
         }
 
         try {
-            val token = FirebaseMessaging.getInstance().token.await()
-            Log.d(TAG, "Configuring FCM token post-2FA for $uid: $token")
+            val internalPrefs = context.getSharedPreferences("fcm_internal", Context.MODE_PRIVATE)
+            val pendingToken = internalPrefs.getString("pending_fcm_token", null)
+            val token = pendingToken ?: FirebaseMessaging.getInstance().token.await()
+            if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                Log.d(TAG, "Configuring FCM token post-2FA for $uid")
+            }
             userRepository.saveFcmToken(token)
-            Log.d(TAG, "FCM token successfully registered post-2FA")
+            internalPrefs.edit().remove("pending_fcm_token").apply()
+            if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                Log.d(TAG, "FCM token successfully registered post-2FA")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register FCM token post-2FA", e)
         }
@@ -42,19 +51,26 @@ class FcmManager(
 
     /**
      * Автоматически отзывает FCM-токен при сбросе приложения / выходе из учетной записи:
-     * 1. Удаляет токен из профиля пользователя в Firestore
+     * 1. Удаляет токен из профиля пользователя в Firestore и Backend v2
      * 2. Вызывает deleteToken() в FirebaseMessaging для аннулирования токена на серверах FCM
+     * 3. Очищает локальный pending токен
      */
     suspend fun revokeToken() = withContext(Dispatchers.IO) {
-        Log.w(TAG, "revokeToken() CALLED!", Exception("revokeToken trace"))
         try {
+            val internalPrefs = context.getSharedPreferences("fcm_internal", Context.MODE_PRIVATE)
+            internalPrefs.edit().clear().apply()
+
             val token = runCatching { FirebaseMessaging.getInstance().token.await() }.getOrNull()
             if (!token.isNullOrBlank()) {
-                Log.d(TAG, "Removing FCM token from user profile...")
+                if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                    Log.d(TAG, "Removing FCM token from user profile...")
+                }
                 userRepository.removeFcmToken(token)
             }
             FirebaseMessaging.getInstance().deleteToken().await()
-            Log.d(TAG, "FCM token revoked and invalidated on FirebaseMessaging")
+            if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                Log.d(TAG, "FCM token revoked and invalidated on FirebaseMessaging")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error revoking FCM token", e)
         }
