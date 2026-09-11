@@ -104,7 +104,8 @@ class ChatViewModel(
     val initialTopicId: String? = null,
     private val typingRepository: by.iposdev.visorlink.data.repository.TypingRepository? = null,
     val musicPlayerManager: MusicPlayerManager,
-    val musicRepository: MusicRepository
+    val musicRepository: MusicRepository,
+    private val networkMonitor: by.iposdev.visorlink.utils.NetworkMonitor? = null
 ) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -197,13 +198,17 @@ class ChatViewModel(
             }
 
             launch {
+                val isOnlineFlow = networkMonitor?.isOnline ?: flowOf(true)
                 combine(
                     PresenceManager.observePresence(targetUid).onStart { emit(PresenceData(online = false, lastSeen = null)) },
                     TypingManager.observeTyping(chatId, currentUid).onStart { emit(false) },
                     lastOtherActiveTimeFlow,
-                    tickerFlow
-                ) { presence, typing, activeTime, now ->
-                    if (typing) {
+                    tickerFlow,
+                    isOnlineFlow
+                ) { presence, typing, activeTime, now, isDeviceOnline ->
+                    if (!isDeviceOnline) {
+                        TopbarStatus.WaitingForNetwork
+                    } else if (typing) {
                         lastOtherActiveTimeFlow.update { maxOf(it, now) }
                         TopbarStatus.Typing
                     } else {

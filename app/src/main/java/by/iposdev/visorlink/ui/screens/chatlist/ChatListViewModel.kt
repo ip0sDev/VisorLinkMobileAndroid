@@ -15,6 +15,8 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
+import by.iposdev.visorlink.utils.NetworkMonitor
+
 class ChatListViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
@@ -22,8 +24,16 @@ class ChatListViewModel(
     private val draftManager: DraftManager,
     private val fallbackManager: BackendFallbackManager? = null,
     private val context: Context? = null,
-    private val sidebarTypingManager: by.iposdev.visorlink.utils.SidebarTypingManager? = null
+    private val sidebarTypingManager: by.iposdev.visorlink.utils.SidebarTypingManager? = null,
+    private val networkMonitor: NetworkMonitor? = null
 ) : ViewModel() {
+
+    val isOnline: StateFlow<Boolean> = networkMonitor?.isOnline
+        ?: MutableStateFlow(true).asStateFlow()
+
+    val syncState: StateFlow<SyncState> = isOnline.map { online ->
+        if (!online) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, if (networkMonitor?.isOnline?.value == false) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED)
 
     val typingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
         ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()

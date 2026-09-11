@@ -855,8 +855,18 @@ sealed class TopbarStatus {
     object Online : TopbarStatus()
     object Typing : TopbarStatus()
     object Offline : TopbarStatus()
+    object Connecting : TopbarStatus()
+    object WaitingForNetwork : TopbarStatus()
+    object Updating : TopbarStatus()
     data class LastSeen(val ts: Long?) : TopbarStatus()
     data class MemberCount(val total: Int, val online: Int) : TopbarStatus()
+}
+
+enum class SyncState {
+    SYNCED,
+    CONNECTING,
+    UPDATING,
+    WAITING_FOR_NETWORK
 }
 
 sealed class MessageListItem {

@@ -99,14 +99,10 @@ fun ChatScreen(
     val aegisUiState by aegisViewModel.uiState.collectAsState()
     val isAegisEnabled by aegisViewModel.isAegisEnabled.collectAsState()
 
-    LaunchedEffect(uiState.messageListItems, isAegisEnabled) {
+    LaunchedEffect(uiState.messages.lastOrNull()?.id, isAegisEnabled) {
         if (!isAegisEnabled) return@LaunchedEffect
-        val messages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            uiState.messageListItems
-                .filterIsInstance<MessageListItem.MessageItem>()
-                .map { it.message }
-        }
-        aegisViewModel.analyzeMessages(messages)
+        val lastMsg = uiState.messages.lastOrNull() ?: return@LaunchedEffect
+        aegisViewModel.analyzeMessages(listOf(lastMsg))
     }
 
     LaunchedEffect(uiState.initialDraft) {

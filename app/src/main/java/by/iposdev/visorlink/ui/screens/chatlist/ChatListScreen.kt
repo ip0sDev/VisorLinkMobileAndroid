@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.ChatType
+import by.iposdev.visorlink.data.model.SyncState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlBrandText
 import by.iposdev.visorlink.ui.components.VlTopAppBar
@@ -60,6 +61,7 @@ fun ChatListScreen(
     val drafts by viewModel.drafts.collectAsState()
     val isManualFallbackActive by viewModel.isManualFallbackActive.collectAsState()
     val typingMap by viewModel.typingMap.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val compactList by themeViewModel.compactChatList.collectAsState()
@@ -107,18 +109,34 @@ fun ChatListScreen(
                             ) + fadeIn(tween(200)),
                             exit = shrinkVertically(tween(150)) + fadeOut(tween(100))
                         ) {
-                            Text(
-                                text = if (chats.isEmpty()) "" else {
-                                    val count = chats.size
-                                    pluralStringResource(
-                                        R.plurals.chatlist_chats_count,
-                                        count,
-                                        count
-                                    )
-                                },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            AnimatedContent(
+                                targetState = syncState,
+                                transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(150)) },
+                                label = "chatlist_sync_status"
+                            ) { state ->
+                                val (statusText, statusColor) = when (state) {
+                                    SyncState.WAITING_FOR_NETWORK -> stringResource(R.string.status_waiting_for_network) to MaterialTheme.colorScheme.error
+                                    SyncState.CONNECTING -> stringResource(R.string.status_connecting) to MaterialTheme.colorScheme.primary
+                                    SyncState.UPDATING -> stringResource(R.string.status_updating) to MaterialTheme.colorScheme.primary
+                                    SyncState.SYNCED -> {
+                                        val text = if (chats.isEmpty()) "" else {
+                                            val count = chats.size
+                                            pluralStringResource(
+                                                R.plurals.chatlist_chats_count,
+                                                count,
+                                                count
+                                            )
+                                        }
+                                        text to MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                }
+
+                                Text(
+                                    text = statusText,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = statusColor
+                                )
+                            }
                         }
                     }
                 },

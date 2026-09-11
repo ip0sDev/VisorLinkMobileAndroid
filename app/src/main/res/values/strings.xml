@@ -87,7 +87,10 @@
     <string name="chat_empty_title">No messages yet</string>
     <string name="chat_empty_subtitle">Say hi! 👋</string>
 
-    <!-- Chat Screen — Typing -->
+    <!-- Chat Screen — Network and Typing Status -->
+    <string name="status_waiting_for_network">Waiting for network…</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_updating">Updating…</string>
     <string name="chat_typing">typing</string>
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>

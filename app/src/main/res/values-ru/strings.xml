@@ -89,7 +89,10 @@
     <string name="chat_empty_title">Нет сообщений</string>
     <string name="chat_empty_subtitle">Поздоровайтесь! 👋</string>
 
-    <!-- Chat Screen — Typing -->
+    <!-- Chat Screen — Network and Typing Status -->
+    <string name="status_waiting_for_network">Ожидание сети…</string>
+    <string name="status_connecting">Соединение…</string>
+    <string name="status_updating">Обновление…</string>
     <string name="chat_typing">печатает</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>

@@ -44,9 +44,11 @@ class AuthViewModel(
     private val fcmManager: by.iposdev.visorlink.utils.FcmManager
 ) : ViewModel() {
 
+    private val initialAuthState = authRepository.getCurrentAuthState()
+
     // Three-state auth stream — consumed by the root nav guard
     val authState: StateFlow<AuthState> = authRepository.authState
-        .stateIn(viewModelScope, SharingStarted.Eagerly, AuthState.NoSession)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, initialAuthState)
 
     // Reactive user profile that updates when auth state changes
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -98,7 +100,10 @@ class AuthViewModel(
      * 2. Профиль пользователя загружен (profile != null).
      * 3. 2FA либо подтверждена, либо отключена.
      *
-     * Пока false — переход в чаты и регистрация FCM токена СТРОГО ЗАБЛОКИРОВАНЫ.
+     * Для мгновенного старта без flash-экрана логина:
+     * если пользователь уже авторизован в FirebaseAuth (initialAuthState is AuthState.Verified),
+     * то начальное значение сразу true. Если позже профиль покажет необходимость 2FA,
+     * сработает перенаправление на TfaScreen.
      */
     val isSessionReady: StateFlow<Boolean> = combine(
         authState,
@@ -106,13 +111,13 @@ class AuthViewModel(
         _tfaPassed
     ) { state, profile, passed ->
         if (state !is AuthState.Verified) return@combine false
-        if (profile == null) return@combine false
+        if (profile == null) return@combine true // Профиль грузится асинхронно из кэша/сети, не блокируем UI
         if (profile.tfaEnabled) {
             passed
         } else {
             true
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, initialAuthState is AuthState.Verified)
 
 
     fun request2FA(method: String) {

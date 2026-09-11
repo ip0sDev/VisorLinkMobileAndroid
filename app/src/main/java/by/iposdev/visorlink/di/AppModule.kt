@@ -134,7 +134,7 @@ val appModule = module {
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
     viewModel { MainViewModel(get(), get(), get()) }
-    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication(), get()) }
+    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication(), get(), get()) }
     viewModel { MusicViewModel(get(), get()) }
 
     viewModel { parameters ->
@@ -150,7 +150,8 @@ val appModule = module {
             initialTopicId = if (parameters.size() > 2) parameters[2] else null,
             typingRepository = get(),
             musicPlayerManager = get(),
-            musicRepository = get()
+            musicRepository = get(),
+            networkMonitor = get()
         )
     }
 

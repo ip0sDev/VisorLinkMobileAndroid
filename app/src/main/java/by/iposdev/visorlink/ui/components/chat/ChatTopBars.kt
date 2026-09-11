@@ -127,6 +127,15 @@ fun ChatTopBar(
                             label = "topbar_status",
                         ) { status ->
                             when (status) {
+                                is TopbarStatus.WaitingForNetwork -> Text(stringResource(R.string.status_waiting_for_network),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                is TopbarStatus.Connecting -> Text(stringResource(R.string.status_connecting),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                                is TopbarStatus.Updating -> Text(stringResource(R.string.status_updating),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                                 is TopbarStatus.Typing  -> TypingDots()
                                 is TopbarStatus.Online  -> Text(stringResource(R.string.chat_status_online),
                                     style = MaterialTheme.typography.labelSmall,
@@ -142,18 +151,32 @@ fun ChatTopBar(
                             }
                         }
                         ChatType.GROUP -> {
-                            val memberCount = uiState.chat?.memberCount ?: uiState.members.size
-                            val online = uiState.onlineCount
-                            Text(buildString {
-                                append(stringResource(R.string.members_topbar, memberCount))
-                                if (online > 0) append(stringResource(R.string.online_topbar, online))
-                            }, style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            if (uiState.topbarStatus is TopbarStatus.WaitingForNetwork) {
+                                Text(stringResource(R.string.status_waiting_for_network),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                            } else {
+                                val memberCount = uiState.chat?.memberCount ?: uiState.members.size
+                                val online = uiState.onlineCount
+                                Text(buildString {
+                                    append(stringResource(R.string.members_topbar, memberCount))
+                                    if (online > 0) append(stringResource(R.string.online_topbar, online))
+                                }, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            }
                         }
-                        ChatType.CHANNEL -> Text(
-                            stringResource(R.string.subscribers_topbar, uiState.chat?.memberCount ?: 0),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        ChatType.CHANNEL -> {
+                            if (uiState.topbarStatus is TopbarStatus.WaitingForNetwork) {
+                                Text(stringResource(R.string.status_waiting_for_network),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                            } else {
+                                Text(
+                                    stringResource(R.string.subscribers_topbar, uiState.chat?.memberCount ?: 0),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
             }

@@ -30,31 +30,31 @@ class AuthRepository(
     val currentUser: FirebaseUser? get() = auth.currentUser
     val currentUid: String? get() = auth.currentUser?.uid
 
+    fun getCurrentAuthState(): AuthState {
+        val user = auth.currentUser
+        return when {
+            user == null         -> AuthState.NoSession
+            user.isEmailVerified -> AuthState.Verified(user)
+            else                 -> AuthState.Unverified(user)
+        }
+    }
+
     // Emits on every auth state change AND on every ID token refresh.
     // AuthStateListener fires on login/logout but NOT when emailVerified flips.
     // IdTokenListener fires after user.reload() + getIdToken(true), catching
     // the verification case that AuthStateListener misses.
     val authState: Flow<AuthState> = callbackFlow {
-        fun currentState(): AuthState {
-            val user = auth.currentUser
-            return when {
-                user == null           -> AuthState.NoSession
-                user.isEmailVerified   -> AuthState.Verified(user)
-                else                   -> AuthState.Unverified(user)
-            }
-        }
-
         // ИСПРАВЛЕНИЕ: Используем классические анонимные классы (object : Interface)
         // вместо лямбд. Это обходит баг компилятора Kotlin с UnknownInitialization.
         val authListener = object : FirebaseAuth.AuthStateListener {
             override fun onAuthStateChanged(firebaseAuth: FirebaseAuth) {
-                trySend(currentState())
+                trySend(getCurrentAuthState())
             }
         }
 
         val tokenListener = object : FirebaseAuth.IdTokenListener {
             override fun onIdTokenChanged(firebaseAuth: FirebaseAuth) {
-                trySend(currentState())
+                trySend(getCurrentAuthState())
             }
         }
 
