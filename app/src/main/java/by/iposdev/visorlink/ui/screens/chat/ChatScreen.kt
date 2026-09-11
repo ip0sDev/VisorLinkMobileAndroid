@@ -358,6 +358,12 @@ fun ChatScreen(
                                         is MessageListItem.DateHeader  -> "date_${item.label}"
                                         is MessageListItem.MessageItem -> item.message.id
                                     }
+                                },
+                                contentType = { _, item ->
+                                    when (item) {
+                                        is MessageListItem.DateHeader  -> "date_header"
+                                        is MessageListItem.MessageItem -> item.message.type
+                                    }
                                 }
                             ) { index, item ->
                                 if (index >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {

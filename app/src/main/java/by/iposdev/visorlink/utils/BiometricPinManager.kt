@@ -109,24 +109,29 @@ class BiometricPinManager(private val context: Context) {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
             val alias = getAlias(uid)
 
-            if (!keyStore.containsAlias(alias)) {
-                val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-                val spec = KeyGenParameterSpec.Builder(
-                    alias,
-                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                )
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .build()
-                keyGenerator.init(spec)
-                keyGenerator.generateKey()
+            // Если ключ уже существовал, но сохраняется новый PIN,
+            // пересоздаем ключ для избежания невалидного состояния аппаратного TEE/Strongbox
+            if (keyStore.containsAlias(alias)) {
+                try { keyStore.deleteEntry(alias) } catch (_: Exception) {}
             }
+
+            val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+            val spec = KeyGenParameterSpec.Builder(
+                alias,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setRandomizedEncryptionRequired(true)
+                .setKeySize(256)
+                .build()
+            keyGenerator.init(spec)
+            keyGenerator.generateKey()
 
             val secretKey = keyStore.getKey(alias, null) as SecretKey
             val cipher = Cipher.getInstance(AES_GCM_NO_PADDING)
             cipher.init(Cipher.ENCRYPT_MODE, secretKey)
-            val iv = cipher.iv
+            val iv = cipher.iv ?: throw IllegalStateException("Cipher did not generate IV for GCM")
             val encrypted = cipher.doFinal(pin.toByteArray(Charsets.UTF_8))
 
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -141,6 +146,7 @@ class BiometricPinManager(private val context: Context) {
                 message = "Ключ защищен: ${secLevel.title}"
             )
         } catch (e: Exception) {
+            android.util.Log.e("BiometricPinManager", "Error saving biometric pin", e)
             BiometricSaveResult.Error(
                 message = "Ошибка Keystore при сохранении ключа: ${e.localizedMessage ?: e.javaClass.simpleName}",
                 cause = e

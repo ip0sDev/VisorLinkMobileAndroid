@@ -306,7 +306,11 @@ fun ChatListScreen(
                                 )
                                 Spacer(Modifier.height(8.dp))
                             }
-                            itemsIndexed(chats, key = { _, chat -> chat.id }) { index, chat ->
+                            itemsIndexed(
+                                items = chats,
+                                key = { _, chat -> chat.id },
+                                contentType = { _, _ -> "chat_item" }
+                            ) { index, chat ->
                                 val chatType = chat.chatType()
                                 val otherUid = when (chatType) {
                                     ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)

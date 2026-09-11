@@ -45,12 +45,12 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         super.onCreate()
         
         SentryAndroid.init(this) { options ->
-            // Performance monitoring
-            options.tracesSampleRate = 1.0
+            // Performance monitoring (10% samples in production to prevent overhead)
+            options.tracesSampleRate = 0.1
             // User feedback
-            options.isEnableUserInteractionTracing = true
-            // Profile sessions
-            options.profilesSampleRate = 1.0
+            options.isEnableUserInteractionTracing = false
+            // Profile sessions - disabled to eliminate thread profiling lag in release builds
+            options.profilesSampleRate = 0.0
         }
 
         NotificationHelper.createChannels(this)
