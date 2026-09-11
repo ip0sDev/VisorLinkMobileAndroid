@@ -46,12 +46,12 @@ class ChatWebSocketClient(
     private val _presenceEvents = MutableSharedFlow<PresencePayload>(extraBufferCapacity = 64)
     val presenceEvents = _presenceEvents.asSharedFlow()
 
-    suspend fun connect(baseUrl: String = "https://backend.visorlink.org") {
+    suspend fun connect(baseUrl: String = "https://backend.visorlink.org", forceRefreshToken: Boolean = false) {
         currentBaseUrl = baseUrl
         isExplicitDisconnect = false
 
         val token = try {
-            FirebaseAuth.getInstance().currentUser?.getIdToken(false)?.await()?.token
+            FirebaseAuth.getInstance().currentUser?.getIdToken(forceRefreshToken)?.await()?.token
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to fetch token: ${e.message}")
             null
@@ -100,10 +100,12 @@ class ChatWebSocketClient(
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "🔴 WebSocket Failure: ${t.message}")
-                fallbackManager?.recordFailure("WebSocket failure: ${t.message}")
+                val code = response?.code
+                Log.e(TAG, "🔴 WebSocket Failure: ${t.message}, HTTP code: $code")
+                fallbackManager?.recordFailure("WebSocket failure: ${t.message} (HTTP $code)")
                 stopPing()
-                scheduleReconnect()
+                val isAuthError = code == 401 || code == 403
+                scheduleReconnect(forceRefreshToken = isAuthError)
             }
         })
     }
@@ -225,14 +227,14 @@ class ChatWebSocketClient(
         pingJob = null
     }
 
-    private fun scheduleReconnect() {
+    private fun scheduleReconnect(forceRefreshToken: Boolean = false) {
         if (isExplicitDisconnect) return
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             delay(3_000)
             if (!isExplicitDisconnect && isActive) {
-                Log.d(TAG, "🔄 Attempting WebSocket reconnect...")
-                connect(currentBaseUrl)
+                Log.d(TAG, "🔄 Attempting WebSocket reconnect (forceRefresh=$forceRefreshToken)...")
+                connect(currentBaseUrl, forceRefreshToken = forceRefreshToken)
             }
         }
     }
@@ -244,6 +246,7 @@ class ChatWebSocketClient(
         webSocket?.close(1000, "App closed")
         webSocket = null
         activeChannels.clear()
+        scope.cancel()
     }
 }
 

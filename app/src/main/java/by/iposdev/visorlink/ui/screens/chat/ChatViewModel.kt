@@ -121,6 +121,8 @@ class ChatViewModel(
     private var typingManager: TypingManager? = null
     private var onlineCountListener: ValueEventListener? = null
     private var wallpaperListener: ListenerRegistration? = null
+    private var chatDocListener: ListenerRegistration? = null
+    private var topicListener: ListenerRegistration? = null
     private var rawMessages = listOf<Message>()
     private val lastOtherActiveTimeFlow = MutableStateFlow(0L)
     private var otherUserObservationJob: Job? = null
@@ -293,19 +295,18 @@ class ChatViewModel(
 
         if (initialTopicId != null) {
             _uiState.update { it.copy(topicId = initialTopicId) }
-            viewModelScope.launch {
-                db.collection("chats").document(chatId).collection("topics").document(initialTopicId)
-                    .addSnapshotListener { snap, _ ->
-                        if (snap != null && snap.exists()) {
-                            val topic = try { snap.toObject(Topic::class.java)?.copy(id = snap.id) } catch (_: Exception) { null }
-                            _uiState.update { state ->
-                                val filtered = filterByTopic(rawMessages, topic, initialTopicId)
-                                val items = buildMessageList(filtered + filterByTopic(state.tempMessages, topic, initialTopicId))
-                                state.copy(currentTopic = topic, messages = filtered, messageListItems = items)
-                            }
+            topicListener?.remove()
+            topicListener = db.collection("chats").document(chatId).collection("topics").document(initialTopicId)
+                .addSnapshotListener { snap, _ ->
+                    if (snap != null && snap.exists()) {
+                        val topic = try { snap.toObject(Topic::class.java)?.copy(id = snap.id) } catch (_: Exception) { null }
+                        _uiState.update { state ->
+                            val filtered = filterByTopic(rawMessages, topic, initialTopicId)
+                            val items = buildMessageList(filtered + filterByTopic(state.tempMessages, topic, initialTopicId))
+                            state.copy(currentTopic = topic, messages = filtered, messageListItems = items)
                         }
                     }
-            }
+                }
         }
 
         viewModelScope.launch {
@@ -341,25 +342,24 @@ class ChatViewModel(
                 }
             }
 
-            launch {
-                db.collection("chats").document(chatId)
-                    .addSnapshotListener { snap, error ->
-                        if (error != null || snap == null) return@addSnapshotListener
-                        val chat = snap.toChatOrNull() ?: return@addSnapshotListener
+            chatDocListener?.remove()
+            chatDocListener = db.collection("chats").document(chatId)
+                .addSnapshotListener { snap, error ->
+                    if (error != null || snap == null) return@addSnapshotListener
+                    val chat = snap.toChatOrNull() ?: return@addSnapshotListener
 
-                        val type = chat.chatType()
-                        _uiState.update { it.copy(chat = chat, chatType = type) }
+                    val type = chat.chatType()
+                    _uiState.update { it.copy(chat = chat, chatType = type) }
 
-                        if (type == ChatType.DIRECT) {
-                            val resolvedUid = chat.otherParticipantId(currentUid)
-                            if (resolvedUid.isNotBlank()) {
-                                startObservingOtherUser(resolvedUid)
-                            }
-                        } else {
-                            startGroupOnlineCount(chat.memberIds)
+                    if (type == ChatType.DIRECT) {
+                        val resolvedUid = chat.otherParticipantId(currentUid)
+                        if (resolvedUid.isNotBlank()) {
+                            startObservingOtherUser(resolvedUid)
                         }
+                    } else {
+                        startGroupOnlineCount(chat.memberIds)
                     }
-            }
+                }
 
             launch {
                 chatRepository.membersFlow(chatId).collect { members ->
@@ -1239,7 +1239,13 @@ class ChatViewModel(
         onlineCountListener?.let {
             FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
         }
+        onlineCountListener = null
         wallpaperListener?.remove()
+        wallpaperListener = null
+        topicListener?.remove()
+        topicListener = null
+        chatDocListener?.remove()
+        chatDocListener = null
         voicePlayer.release()
         super.onCleared()
     }

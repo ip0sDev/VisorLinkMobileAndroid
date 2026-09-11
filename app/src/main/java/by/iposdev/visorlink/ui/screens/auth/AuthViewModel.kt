@@ -117,16 +117,16 @@ class AuthViewModel(
 
     fun request2FA(method: String) {
         viewModelScope.launch {
-            _tfaUiState.value = TfaUiState(isLoading = true)
+            _tfaUiState.update { it.copy(isLoading = true, error = null) }
             runCatching { authRepository.request2FA(method) }
-                .onSuccess { _tfaUiState.value = TfaUiState(isLoading = false) }
-                .onFailure { _tfaUiState.value = TfaUiState(error = friendlyMessage(it)) }
+                .onSuccess { _tfaUiState.update { it.copy(isLoading = false) } }
+                .onFailure { error -> _tfaUiState.update { it.copy(isLoading = false, error = friendlyMessage(error)) } }
         }
     }
 
     fun verify2FA(code: String) {
         viewModelScope.launch {
-            _tfaUiState.value = TfaUiState(isLoading = true)
+            _tfaUiState.update { it.copy(isLoading = true, error = null) }
             runCatching { authRepository.verify2FA(code) }
                 .onSuccess {
                     val authTime = authRepository.getAuthTime()
@@ -134,12 +134,12 @@ class AuthViewModel(
                         tfaManager.setTfaPassed(authTime)
                     }
                     _tfaPassed.value = true
-                    _tfaUiState.value = TfaUiState(tfaPassed = true)
+                    _tfaUiState.update { it.copy(isLoading = false, tfaPassed = true) }
                     viewModelScope.launch {
                         fcmManager.syncTokenAfter2FA()
                     }
                 }
-                .onFailure { _tfaUiState.value = TfaUiState(error = "Invalid code or expired") }
+                .onFailure { _tfaUiState.update { it.copy(isLoading = false, error = "Invalid code or expired") } }
         }
     }
 
@@ -158,7 +158,7 @@ class AuthViewModel(
     }
 
     fun clearTfaError() {
-        _tfaUiState.value = _tfaUiState.value.copy(error = null)
+        _tfaUiState.update { it.copy(error = null) }
     }
 
     // ── Auth (login / register) ───────────────────────────────────────────────
@@ -175,17 +175,17 @@ class AuthViewModel(
 
     fun login(email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
-            _uiState.value = AuthUiState(error = "Please fill in all fields")
+            _uiState.update { it.copy(error = "Please fill in all fields", isLoading = false) }
             return
         }
         viewModelScope.launch {
-            _uiState.value = AuthUiState(isLoading = true)
+            _uiState.update { it.copy(isLoading = true, error = null) }
             // Перед логином убеждаемся, что старый FCM токен отозван,
             // чтобы 2FA код не пришёл в пуше на ещё не аутентифицированное устройство
             fcmManager.revokeToken()
             runCatching { authRepository.login(email.trim(), password) }
-                .onSuccess { _uiState.value = AuthUiState(success = true) }
-                .onFailure { _uiState.value = AuthUiState(error = friendlyMessage(it)) }
+                .onSuccess { _uiState.update { it.copy(isLoading = false, success = true) } }
+                .onFailure { error -> _uiState.update { it.copy(isLoading = false, error = friendlyMessage(error)) } }
         }
     }
 
@@ -195,15 +195,15 @@ class AuthViewModel(
      */
     fun register(email: String, password: String, username: String, inviteCode: String? = null) {
         if (email.isBlank() || password.isBlank() || username.isBlank()) {
-            _uiState.value = AuthUiState(error = "Please fill in all fields")
+            _uiState.update { it.copy(error = "Please fill in all fields", isLoading = false) }
             return
         }
         viewModelScope.launch {
-            _uiState.value = AuthUiState(isLoading = true)
+            _uiState.update { it.copy(isLoading = true, error = null) }
             val codeToUse = inviteCode?.trim()?.ifBlank { null } ?: _pendingInviteCode.value?.trim()?.ifBlank { null }
             runCatching { authRepository.register(email.trim(), password, username.trim(), codeToUse) }
-                .onSuccess { _uiState.value = AuthUiState(success = true) }
-                .onFailure { _uiState.value = AuthUiState(error = friendlyMessage(it)) }
+                .onSuccess { _uiState.update { it.copy(isLoading = false, success = true) } }
+                .onFailure { error -> _uiState.update { it.copy(isLoading = false, error = friendlyMessage(error)) } }
         }
     }
 
@@ -229,7 +229,7 @@ class AuthViewModel(
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+        _uiState.update { it.copy(error = null) }
     }
 
     fun sendPasswordReset(email: String, onResult: (Boolean, String?) -> Unit) {
@@ -255,17 +255,19 @@ class AuthViewModel(
     /** Start 5-second polling loop per guideline §5.1. Call from VerifyEmailScreen. */
     fun startVerificationPolling() {
         if (pollingJob?.isActive == true) return
-        _verifyState.value = _verifyState.value.copy(isPolling = true)
+        _verifyState.update { it.copy(isPolling = true) }
         pollingJob = viewModelScope.launch {
             while (true) {
                 delay(5_000)
                 runCatching { authRepository.reloadAndCheckVerified() }
                     .onSuccess { verified ->
                         if (verified) {
-                            _verifyState.value = _verifyState.value.copy(
-                                isPolling = false,
-                                verified = true
-                            )
+                            _verifyState.update {
+                                it.copy(
+                                    isPolling = false,
+                                    verified = true
+                                )
+                            }
                             return@launch
                         }
                     }
@@ -276,7 +278,7 @@ class AuthViewModel(
 
     fun stopVerificationPolling() {
         pollingJob?.cancel()
-        _verifyState.value = _verifyState.value.copy(isPolling = false)
+        _verifyState.update { it.copy(isPolling = false) }
     }
 
     /**
@@ -286,29 +288,33 @@ class AuthViewModel(
     fun resendVerificationEmail() {
         if (_verifyState.value.resendCooldown > 0) return
         viewModelScope.launch {
-            _verifyState.value = _verifyState.value.copy(resendLoading = true, error = null)
+            _verifyState.update { it.copy(resendLoading = true, error = null) }
             runCatching { authRepository.resendVerificationEmail() }
                 .onSuccess { startResendCooldown() }
                 .onFailure { e ->
                     val msg = friendlyMessage(e)
-                    _verifyState.value = _verifyState.value.copy(
-                        resendLoading = false,
-                        error = msg
-                    )
+                    _verifyState.update {
+                        it.copy(
+                            resendLoading = false,
+                            error = msg
+                        )
+                    }
                 }
         }
     }
 
     private fun startResendCooldown(seconds: Int = 60) {
-        _verifyState.value = _verifyState.value.copy(
-            resendLoading = false,
-            resendCooldown = seconds
-        )
+        _verifyState.update {
+            it.copy(
+                resendLoading = false,
+                resendCooldown = seconds
+            )
+        }
         cooldownJob?.cancel()
         cooldownJob = viewModelScope.launch {
             for (remaining in (seconds - 1) downTo 0) {
                 delay(1_000)
-                _verifyState.value = _verifyState.value.copy(resendCooldown = remaining)
+                _verifyState.update { it.copy(resendCooldown = remaining) }
             }
         }
     }

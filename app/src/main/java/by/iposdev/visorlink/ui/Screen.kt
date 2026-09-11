@@ -1,6 +1,7 @@
 package by.iposdev.visorlink.ui
 
 sealed class Screen(val route: String) {
+    object Decoy : Screen("decoy")
     object Login : Screen("login")
     object Register : Screen("register")
     object VerifyEmail : Screen("verify_email")

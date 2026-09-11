@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.repository.SavedMessagesRepository
@@ -270,9 +271,9 @@ class DiaryViewModel(
             }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Diary")
-            .setSubtitle("Unlock with biometrics")
-            .setNegativeButtonText("Cancel")
+            .setTitle(activity.getString(R.string.diary_title))
+            .setSubtitle(activity.getString(R.string.diary_bio_unlock))
+            .setNegativeButtonText(activity.getString(R.string.btn_cancel))
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             .build()
         prompt.authenticate(info)

@@ -148,8 +148,9 @@ fun VoiceBubble(
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
                     } else {
+                        val playDesc = if (isPlaying) stringResource(R.string.chat_voice_pause) else stringResource(R.string.chat_voice_play)
                         Icon(imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+                            contentDescription = playDesc, tint = tint, modifier = Modifier.size(22.dp))
                     }
                 }
                 Spacer(Modifier.width(8.dp))
@@ -472,12 +473,18 @@ fun MessageStatusIcon(status: String) {
         else               -> MaterialTheme.colorScheme.primary
     }
 
-    Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(13.dp), tint = tint)
+    val desc = when (status) {
+        SendStatus.SENDING, SendStatus.QUEUED -> "Sending"
+        SendStatus.ERROR -> "Error sending"
+        else -> stringResource(R.string.chat_sent)
+    }
+    Icon(imageVector = icon, contentDescription = desc, modifier = Modifier.size(13.dp), tint = tint)
 }
 
 @Composable
 fun ReadReceipt(isRead: Boolean) {
-    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = null, modifier = Modifier.size(15.dp), tint = if (isRead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+    val desc = if (isRead) stringResource(R.string.chat_read) else stringResource(R.string.chat_sent)
+    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = desc, modifier = Modifier.size(15.dp), tint = if (isRead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
 }
 
 @Composable

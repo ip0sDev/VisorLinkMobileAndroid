@@ -28,7 +28,7 @@ class SidebarTypingManager(
 
         typingListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                val now = System.currentTimeMillis()
+                val now = TypingManager.currentServerTime()
                 val resultMap = mutableMapOf<String, Boolean>()
 
                 for (chatSnap in snapshot.children) {
@@ -40,7 +40,7 @@ class SidebarTypingManager(
                         val ts = userSnap.child("ts").getValue(Long::class.java) ?: 0L
 
                         // Если печатает НЕ текущий пользователь и событие свежее (< 4 сек)
-                        if (uid != null && uid != currentUserId && (now - ts < 4000L)) {
+                        if (uid != null && uid != currentUserId && (now - ts) in 0..4000L) {
                             isSomeoneTyping = true
                             break
                         }

@@ -1,22 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
+    <!-- В Android 12+ (Data Extraction Rules) при указании <include> в секции
+         автоматически включаются ТОЛЬКО указанные элементы, а всё остальное
+         (базы данных, файлы, секреты) исключается по умолчанию.
+         Указание <exclude> для путей, не покрытых <include>, запрещено Lint. -->
     <cloud-backup>
         <include domain="sharedpref" path="visorlink_settings.xml" />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="biometric_prefs.xml" />
-        <exclude domain="sharedpref" path="fcm_prefs.xml" />
-        <exclude domain="sharedpref" path="fcm_prefs_encrypted.xml" />
-        <exclude domain="sharedpref" path="fcm_active_chats.xml" />
-        <exclude domain="sharedpref" path="visorlink_stealth_prefs.xml" />
-        <exclude domain="sharedpref" path="visorlink_backend_settings.xml" />
-        <exclude domain="sharedpref" path="fcm_internal.xml" />
-        <exclude domain="file" path="." />
-        <exclude domain="external" path="." />
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="visorlink_settings.xml" />
-        <exclude domain="database" path="." />
-        <exclude domain="sharedpref" path="biometric_prefs.xml" />
-        <exclude domain="sharedpref" path="visorlink_stealth_prefs.xml" />
     </device-transfer>
 </data-extraction-rules>

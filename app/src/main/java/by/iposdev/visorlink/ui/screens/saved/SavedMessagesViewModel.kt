@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.SavedMessage
 import by.iposdev.visorlink.data.model.SavedMessagesSettings
 import by.iposdev.visorlink.data.model.MessageType
@@ -201,9 +202,9 @@ class SavedMessagesViewModel(
             override fun onAuthenticationFailed() { onResult(false) }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Избранное")
-            .setSubtitle("Войдите с помощью биометрии")
-            .setNegativeButtonText("Отмена")
+            .setTitle(activity.getString(R.string.saved_biometric_title))
+            .setSubtitle(activity.getString(R.string.saved_biometric_subtitle))
+            .setNegativeButtonText(activity.getString(R.string.btn_cancel))
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
             .build()
         prompt.authenticate(info)

@@ -71,13 +71,17 @@ object NotificationHelper {
         manager.createNotificationChannel(diaryChannel)
     }
 
+    fun getChatNotificationId(chatId: String): Int {
+        return 10000 + (chatId.hashCode() and 0x7FFFFFFF) % 80000
+    }
+
     fun showMessageNotification(
         context: Context,
         chatId: String,
         senderName: String,
         messagePreview: String,
         senderUid: String? = null,
-        notificationId: Int = chatId.hashCode()
+        notificationId: Int = getChatNotificationId(chatId)
     ) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -213,6 +217,7 @@ object NotificationHelper {
             activeChatsPrefs.edit().remove(chatId).apply()
 
             val notificationManager = NotificationManagerCompat.from(context)
+            notificationManager.cancel(getChatNotificationId(chatId))
             notificationManager.cancel(chatId.hashCode())
 
             val remainingChats = activeChatsPrefs.all.keys

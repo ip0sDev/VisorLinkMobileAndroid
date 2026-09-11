@@ -39,6 +39,7 @@ class AegisLifeViewModel(
 
     // Блокировка движка на время реакции на тач
     private var touchLockJob: Job? = null
+    private val engineMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
         startProactiveLoop()
@@ -50,7 +51,11 @@ class AegisLifeViewModel(
         viewModelScope.launch {
             when (intent) {
                 is LinkIntent.ProcessText -> evaluateEngine(intent.text)
-                is LinkIntent.Tick -> if (touchLockJob?.isActive != true) evaluateEngine(null)
+                is LinkIntent.Tick -> {
+                    if (touchLockJob?.isActive != true && !engineMutex.isLocked) {
+                        evaluateEngine(null)
+                    }
+                }
                 is LinkIntent.Boop -> handleTouch(LinkEmotion.HAPPY, VisorIcon.HEART, "Бип!")
                 is LinkIntent.Pet -> handleTouch(LinkEmotion.SLEEPY, VisorIcon.SMILE, "Ммм... Бззззтт...")
             }
@@ -69,14 +74,19 @@ class AegisLifeViewModel(
     }
 
     private suspend fun evaluateEngine(text: String?) {
-        val (response, newMemory) = aegisBrain.evaluate(text, simulatedContext, linkMemory)
-        linkMemory = newMemory
+        if (!engineMutex.tryLock()) return
+        try {
+            val (response, newMemory) = aegisBrain.evaluate(text, simulatedContext, linkMemory)
+            linkMemory = newMemory
 
-        if (response != null && response.emotion != LinkEmotion.IDLE) {
-            showAegis(response.action, response.emotion, response.visorIcon, response.message)
-        } else if (response != null) {
-            // Если движок решил сменить позицию (Action), но эмоция IDLE
-            _uiState.update { it.copy(action = response.action, emotion = response.emotion, visorIcon = response.visorIcon, message = "") }
+            if (response != null && response.emotion != LinkEmotion.IDLE) {
+                showAegis(response.action, response.emotion, response.visorIcon, response.message)
+            } else if (response != null) {
+                // Если движок решил сменить позицию (Action), но эмоция IDLE
+                _uiState.update { it.copy(action = response.action, emotion = response.emotion, visorIcon = response.visorIcon, message = "") }
+            }
+        } finally {
+            engineMutex.unlock()
         }
     }
 

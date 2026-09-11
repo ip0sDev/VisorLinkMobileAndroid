@@ -57,7 +57,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
@@ -116,44 +116,21 @@ fun LinkifiedText(
         style = style,
         textAlign = textAlign,
         onTextLayout = { layoutResult.value = it },
-        modifier = modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var upEvent: PointerInputChange? = null
-                var isTap = true
-
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull() ?: break
-
-                    if (change.isConsumed) {
-                        isTap = false
-                    }
-
-                    if (!change.pressed) {
-                        upEvent = change
-                        break
-                    }
-                }
-
-                if (isTap && upEvent != null) {
-                    val pos = upEvent.position
-                    layoutResult.value?.let { layout ->
-                        if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
-                            val offset = layout.getOffsetForPosition(pos)
-                            annotatedString.getStringAnnotations("URL", offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
-                                    upEvent.consume()
-                                    return@awaitEachGesture
-                                }
-                            annotatedString.getStringAnnotations("MENTION", offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    onMentionClick(annotation.item.removePrefix("@"))
-                                    upEvent.consume()
-                                    return@awaitEachGesture
-                                }
-                        }
+        modifier = modifier.pointerInput(annotatedString) {
+            detectTapGestures { pos ->
+                layoutResult.value?.let { layout ->
+                    if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
+                        val offset = layout.getOffsetForPosition(pos)
+                        annotatedString.getStringAnnotations("URL", offset, offset)
+                            .firstOrNull()?.let { annotation ->
+                                try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
+                                return@detectTapGestures
+                            }
+                        annotatedString.getStringAnnotations("MENTION", offset, offset)
+                            .firstOrNull()?.let { annotation ->
+                                onMentionClick(annotation.item.removePrefix("@"))
+                                return@detectTapGestures
+                            }
                     }
                 }
             }
@@ -203,8 +180,8 @@ fun ColorPresetCircle(
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (isDefault) Icon(Icons.Default.Palette, null, tint = Color.White, modifier = Modifier.size(20.dp))
-        else if (isSelected) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(22.dp))
+        if (isDefault) Icon(Icons.Default.Palette, contentDescription = "Default theme palette", tint = Color.White, modifier = Modifier.size(20.dp))
+        else if (isSelected) Icon(Icons.Default.Check, contentDescription = "Selected preset", tint = Color.White, modifier = Modifier.size(22.dp))
     }
 }
 
@@ -458,6 +435,7 @@ fun VlSegmentedControl(
 fun VlIconTray(
     icon: ImageVector,
     modifier: Modifier = Modifier,
+    contentDescription: String? = null,
     selected: Boolean = false,
     isError: Boolean = false,
     iconColor: Color? = null,
@@ -480,7 +458,7 @@ fun VlIconTray(
             .background(if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerHigh, shape),
         contentAlignment = Alignment.Center
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
+        Icon(icon, contentDescription = contentDescription, tint = color, modifier = Modifier.size(20.dp))
     }
 }
 
@@ -628,7 +606,7 @@ fun VlSettingsItem(
             Box(
                 Modifier.size(40.dp).background(color.copy(alpha = 0.15f), CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp)) }
+            ) { Icon(icon, contentDescription = title, tint = color, modifier = Modifier.size(20.dp)) }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = if (isDestructive) color else cs.onSurface)
@@ -636,7 +614,7 @@ fun VlSettingsItem(
             }
             if (trailing != null) trailing()
             else if (onClick != null) Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null,
+                Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Open $title",
                 tint = cs.onSurfaceVariant.copy(alpha = 0.5f)
             )
         }
@@ -670,13 +648,13 @@ fun VlOptionRow(
                 Modifier.size(40.dp)
                     .background(if (selected) cs.primary.copy(alpha = 0.15f) else cs.surfaceContainerHigh, CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, contentDescription = null, tint = if (selected) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+            ) { Icon(icon, contentDescription = label, tint = if (selected) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = if (selected) cs.onPrimaryContainer else cs.onSurface)
                 desc?.let { Text(it, fontSize = 13.sp, color = if (selected) cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onSurfaceVariant) }
             }
-            if (selected) Icon(Icons.Default.CheckCircle, contentDescription = null, tint = cs.primary)
+            if (selected) Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = cs.primary)
         }
     }
 }
@@ -707,15 +685,15 @@ fun ProBadge(modifier: Modifier = Modifier) {
 
 @Composable
 fun AvatarContent(user: UserProfile, size: Dp) {
+    val name = user.displayName.ifEmpty { user.username }
     if (!user.avatarUrl.isNullOrEmpty()) {
         AsyncImage(
             model = user.avatarUrl,
-            contentDescription = null,
+            contentDescription = "$name avatar",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
         )
     } else {
-        val name = user.displayName.ifEmpty { user.username }
         val initial = name.firstOrNull()?.uppercase() ?: "?"
         Text(
             initial,
@@ -739,7 +717,7 @@ fun AdminBadge() {
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.AdminPanelSettings, null, tint = Color.White, modifier = Modifier.size(12.dp))
+            Icon(Icons.Default.AdminPanelSettings, contentDescription = "Admin badge", tint = Color.White, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(4.dp))
             Text(
                 "VISORLINK ADMIN",

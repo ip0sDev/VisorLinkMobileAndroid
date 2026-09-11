@@ -20,6 +20,8 @@ import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
 import by.iposdev.visorlink.ui.screens.status.StatusScreen
 import by.iposdev.visorlink.ui.screens.settings.CustomizationScreen
 import by.iposdev.visorlink.ui.screens.settings.FlagFlipperScreen
+import by.iposdev.visorlink.ui.navigation.authNavGraph
+import by.iposdev.visorlink.ui.navigation.settingsNavGraph
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.auth.LoginScreen
 import by.iposdev.visorlink.ui.screens.auth.RegisterScreen
@@ -66,9 +68,10 @@ fun VisorLinkNavGraph(
             if (event == Lifecycle.Event.ON_STOP) {
                 // Если приложение свернуто, и стелс включен — снова блокируем
                 if (stealthManager.isEnabled() && isStealthUnlocked) {
-                    isStealthUnlocked = false
                     stealthManager.isUnlocked = false
-                    navController.navigate("decoy") {
+                    isStealthUnlocked = false
+                    // Безопасный переход на экран маскировки при уходе в фон
+                    navController.navigate(Screen.Decoy.route) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
@@ -142,7 +145,7 @@ fun VisorLinkNavGraph(
 
     // Start destination resolution
     val start = when {
-        stealthManager.isEnabled() && !isStealthUnlocked -> "decoy"
+        stealthManager.isEnabled() && !isStealthUnlocked -> Screen.Decoy.route
         showOnboarding                    -> Screen.Onboarding.route
         isTfaRequired                     -> Screen.Tfa.route
         isSessionReady                    -> Screen.ChatList.route
@@ -153,11 +156,11 @@ fun VisorLinkNavGraph(
     NavHost(navController = navController, startDestination = start) {
 
         // ── Decoy (Stealth Mode) ──────────────────────────────────────────────
-        composable("decoy") {
+        composable(Screen.Decoy.route) {
             DecoyHomeScreen(
                 onUnlockSuccess = {
-                    isStealthUnlocked = true
                     stealthManager.isUnlocked = true
+                    isStealthUnlocked = true
                     // При изменении isStealthUnlocked на true сработает LaunchedEffect
                     // и перенаправит юзера на нужный экран в зависимости от authState
                 }
@@ -174,41 +177,11 @@ fun VisorLinkNavGraph(
             )
         }
 
-        // ── Auth ──────────────────────────────────────────────────────────────
-        composable(Screen.Login.route) {
-            LoginScreen(
-                onNavigateToRegister = { navController.navigate(Screen.Register.route) },
-                // Actual navigation happens reactively via LaunchedEffect(authState).
-                onLoginSuccess = { /* handled by authState guard */ },
-                viewModel = authViewModel
-            )
-        }
-
-        composable(Screen.Register.route) {
-            RegisterScreen(
-                onNavigateBack = { navController.popBackStack() },
-                // On success authState becomes Unverified → guard routes to VerifyEmail.
-                onRegistrationComplete = { /* handled by authState guard */ },
-                viewModel = authViewModel
-            )
-        }
-
-        // ── Email verification (guideline §5) ─────────────────────────────────
-        composable(Screen.VerifyEmail.route) {
-            VerifyEmailScreen(
-                // On verified authState becomes Verified → guard routes to ChatList.
-                onVerified = { /* handled by authState guard */ },
-                onLogout   = { authViewModel.logout() },
-                viewModel  = authViewModel
-            )
-        }
-
-        composable(Screen.Tfa.route) {
-            TfaScreen(
-                onTfaPassed = { /* handled by authState/tfa guard */ },
-                viewModel = authViewModel
-            )
-        }
+        // ── Auth Subgraph ────────────────────────────────────────────────────
+        authNavGraph(
+            navController = navController,
+            authViewModel = authViewModel
+        )
 
         // ── Main app ──────────────────────────────────────────────────────────
         composable(Screen.ChatList.route) {
@@ -417,47 +390,11 @@ fun VisorLinkNavGraph(
             )
         }
 
-        composable(Screen.Settings.route) {
-            SettingsScreen(
-                onNavigateBack      = { navController.popBackStack() },
-                onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
-                onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
-                onOpenStatus = { navController.navigate(Screen.Status.route) },
-                onOpenCustomization = { navController.navigate(Screen.Customization.route) },
-                onOpenAegisDebug    = { navController.navigate(Screen.AegisDebug.route) },
-                onOpenFlagFlipper   = { navController.navigate(Screen.FlagFlipper.route) },
-                themeViewModel      = themeViewModel
-            )
-        }
-
-        composable(Screen.AegisDebug.route) {
-            AegisDebugScreen(onBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.FlagFlipper.route) {
-            FlagFlipperScreen(onBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.Customization.route) {
-            CustomizationScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.CacheSettings.route) {
-            CacheSettingsScreen(onNavigateBack = { navController.popBackStack() })
-        }
-
-        composable(Screen.StorageManager.route) {
-            StorageManagerScreen(
-                onNavigateBack = { navController.popBackStack() },
-                onViewMedia = { url, type ->
-                    navController.navigate(Screen.ImageViewer.createRoute(url, type))
-                }
-            )
-        }
-
-        composable(Screen.Status.route) {
-            StatusScreen(onNavigateBack = { navController.popBackStack() })
-        }
+        // ── Settings Subgraph ────────────────────────────────────────────────
+        settingsNavGraph(
+            navController = navController,
+            themeViewModel = themeViewModel
+        )
 
         // Diary route removed to prevent duplicate PIN entry since it's displayed in MainScreen
 

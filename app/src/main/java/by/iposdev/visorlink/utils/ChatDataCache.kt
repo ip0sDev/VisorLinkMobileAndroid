@@ -19,6 +19,11 @@ private const val DB_VERSION = 5
 private const val TAG = "ChatDataCache"
 
 class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        db.enableWriteAheadLogging()
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         // Создаем таблицы. Используем составные первичные ключи для защиты от дублей.
         db.execSQL("CREATE TABLE chats (uid TEXT, chat_id TEXT, data TEXT, PRIMARY KEY(uid, chat_id))")
@@ -31,27 +36,57 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
-            db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
-            db.execSQL("CREATE TABLE likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
+            try {
+                db.execSQL("CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
+            } catch (e: Exception) {
+                Log.e(TAG, "Upgrade to v2 failed", e)
+            }
         }
         if (oldVersion == 2) {
-            db.execSQL("ALTER TABLE outbox ADD COLUMN status INTEGER DEFAULT 0")
+            ensureColumnExists(db, "outbox", "status", "INTEGER DEFAULT 0")
         }
         if (oldVersion < 4) {
-            try {
-                db.execSQL("ALTER TABLE outbox ADD COLUMN retry_count INTEGER DEFAULT 0")
-                db.execSQL("ALTER TABLE outbox ADD COLUMN last_attempt INTEGER DEFAULT 0")
-                db.execSQL("ALTER TABLE outbox ADD COLUMN last_error TEXT")
-            } catch (e: Exception) {
-                Log.e("ChatDataCache", "Upgrade to v4 failed", e)
-            }
+            ensureColumnExists(db, "outbox", "retry_count", "INTEGER DEFAULT 0")
+            ensureColumnExists(db, "outbox", "last_attempt", "INTEGER DEFAULT 0")
+            ensureColumnExists(db, "outbox", "last_error", "TEXT")
         }
         if (oldVersion < 5) {
-            try {
-                db.execSQL("ALTER TABLE outbox ADD COLUMN progress REAL DEFAULT 0.0")
-            } catch (e: Exception) {
-                Log.e("ChatDataCache", "Upgrade to v5 failed", e)
+            ensureColumnExists(db, "outbox", "progress", "REAL DEFAULT 0.0")
+        }
+    }
+
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        Log.w(TAG, "Downgrading database from $oldVersion to $newVersion. Recreating tables.")
+        db.execSQL("DROP TABLE IF EXISTS chats")
+        db.execSQL("DROP TABLE IF EXISTS messages")
+        db.execSQL("DROP TABLE IF EXISTS profiles")
+        db.execSQL("DROP TABLE IF EXISTS stickers")
+        db.execSQL("DROP TABLE IF EXISTS outbox")
+        db.execSQL("DROP TABLE IF EXISTS likes")
+        onCreate(db)
+    }
+
+    private fun ensureColumnExists(db: SQLiteDatabase, table: String, column: String, def: String) {
+        var cursor: android.database.Cursor? = null
+        try {
+            cursor = db.rawQuery("PRAGMA table_info($table)", null)
+            var exists = false
+            while (cursor.moveToNext()) {
+                val nameIndex = cursor.getColumnIndex("name")
+                if (nameIndex != -1 && cursor.getString(nameIndex) == column) {
+                    exists = true
+                    break
+                }
             }
+            if (!exists) {
+                db.execSQL("ALTER TABLE $table ADD COLUMN $column $def")
+                Log.d(TAG, "Added column $column to $table")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to ensure column $column in $table", e)
+        } finally {
+            cursor?.close()
         }
     }
 }

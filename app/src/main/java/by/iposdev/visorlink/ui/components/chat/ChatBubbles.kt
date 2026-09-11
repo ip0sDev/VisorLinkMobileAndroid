@@ -975,37 +975,21 @@ internal fun LinkifiedText(
     Text(
         text = annotatedString, color = color, style = MaterialTheme.typography.bodyMedium,
         onTextLayout = { layoutResult.value = it },
-        modifier = Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var upEvent: PointerInputChange? = null
-                var isTap = true
-
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull() ?: break
-                    if (change.isConsumed) { isTap = false }
-                    if (!change.pressed) { upEvent = change; break }
-                }
-
-                if (isTap && upEvent != null) {
-                    val pos = upEvent.position
-                    layoutResult.value?.let { layout ->
-                        if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
-                            val offset = layout.getOffsetForPosition(pos)
-                            annotatedString.getStringAnnotations("URL", offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
-                                    upEvent.consume()
-                                    return@awaitEachGesture
-                                }
-                            annotatedString.getStringAnnotations("MENTION", offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    onMentionClick(annotation.item.removePrefix("@"))
-                                    upEvent.consume()
-                                    return@awaitEachGesture
-                                }
-                        }
+        modifier = Modifier.pointerInput(annotatedString) {
+            detectTapGestures { pos ->
+                layoutResult.value?.let { layout ->
+                    if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
+                        val offset = layout.getOffsetForPosition(pos)
+                        annotatedString.getStringAnnotations("URL", offset, offset)
+                            .firstOrNull()?.let { annotation ->
+                                try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
+                                return@detectTapGestures
+                            }
+                        annotatedString.getStringAnnotations("MENTION", offset, offset)
+                            .firstOrNull()?.let { annotation ->
+                                onMentionClick(annotation.item.removePrefix("@"))
+                                return@detectTapGestures
+                            }
                     }
                 }
             }

@@ -55,6 +55,7 @@ import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -210,7 +211,7 @@ val appModule = module {
 
     single { SavedMessagesRepository(get(), androidContext()) }
     single { FeedRepository(get(), get(), androidContext(), get(), get(), get()) }
-    single { ForwardRepository(get()) }
+    single { ForwardRepository(get(), get(), get()) }
     single { by.iposdev.visorlink.utils.BiometricPinManager(androidContext()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get()) }

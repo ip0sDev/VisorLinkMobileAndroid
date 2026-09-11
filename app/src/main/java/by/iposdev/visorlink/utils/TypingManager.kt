@@ -46,17 +46,34 @@ class TypingManager(private val chatId: String, private val uid: String) {
     }
 
     companion object {
+        @Volatile
+        private var serverTimeOffset: Long = 0L
+
+        init {
+            try {
+                val offsetRef = Firebase.database.getReference(".info/serverTimeOffset")
+                offsetRef.addValueEventListener(object : ValueEventListener {
+                    override fun onDataChange(snapshot: DataSnapshot) {
+                        serverTimeOffset = snapshot.getValue(Long::class.java) ?: 0L
+                    }
+                    override fun onCancelled(error: DatabaseError) {}
+                })
+            } catch (_: Exception) {}
+        }
+
+        fun currentServerTime(): Long = System.currentTimeMillis() + serverTimeOffset
+
         fun observeTyping(chatId: String, currentUid: String): Flow<Boolean> = callbackFlow {
             val ref = Firebase.database.getReference("typing/$chatId")
             val listener = object : ValueEventListener {
                 override fun onDataChange(snap: DataSnapshot) {
-                    val now = System.currentTimeMillis()
+                    val now = currentServerTime()
                     val someoneTyping = snap.children.any { child ->
                         val uid = child.child("uid").getValue(String::class.java) ?: child.key
                         val isTyping = child.child("isTyping").getValue(Boolean::class.java) ?: true
                         val ts = child.child("ts").getValue(Long::class.java) ?: 0L
-                        // Логика проверки остается той же, но теперь 'ts' надежный
-                        uid != currentUid && isTyping && (now - ts) < 4000
+                        // Логика проверки с учетом serverTimeOffset надежна против расхождений локального времени
+                        uid != currentUid && isTyping && (now - ts) in 0..4000
                     }
                     trySend(someoneTyping)
                 }

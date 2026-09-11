@@ -1,21 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Безопасное сохранение только общих настроек интерфейса -->
+    <!-- Безопасное сохранение только общих настроек интерфейса.
+         В Android Auto Backup указание тега <include> автоматически исключает
+         все остальные файлы, БД, кэш и sharedpref. Добавление <exclude> для путей,
+         не входящих в <include>, запрещено правилом FullBackupContent в Android Lint. -->
     <include domain="sharedpref" path="visorlink_settings.xml" />
-
-    <!-- Исключаем базы данных переписки -->
-    <exclude domain="database" path="." />
-
-    <!-- Исключаем зашифрованные хранилища и секреты -->
-    <exclude domain="sharedpref" path="biometric_prefs.xml" />
-    <exclude domain="sharedpref" path="fcm_prefs.xml" />
-    <exclude domain="sharedpref" path="fcm_prefs_encrypted.xml" />
-    <exclude domain="sharedpref" path="fcm_active_chats.xml" />
-    <exclude domain="sharedpref" path="visorlink_stealth_prefs.xml" />
-    <exclude domain="sharedpref" path="visorlink_backend_settings.xml" />
-    <exclude domain="sharedpref" path="fcm_internal.xml" />
-
-    <!-- Исключаем файлы кэша и внешние хранилища -->
-    <exclude domain="file" path="." />
-    <exclude domain="external" path="." />
 </full-backup-content>

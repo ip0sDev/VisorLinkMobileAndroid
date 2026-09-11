@@ -79,6 +79,8 @@ class OutboxManager(
     private val inFlightChatIds = ConcurrentHashMap.newKeySet<String>()
     private val lastProgressUpdate = ConcurrentHashMap<String, Long>()
     private val mediaSemaphore = Semaphore(MEDIA_CONCURRENCY)
+    @Volatile
+    private var lastHealthCheckTimestamp: Long = 0L
 
     companion object {
         private val inFlightJobs = ConcurrentHashMap<String, Job>()
@@ -169,10 +171,14 @@ class OutboxManager(
                                 val job = coroutineContext[Job]
                                 if (job != null) inFlightJobs[action.id] = job
                                 try {
-                                    withTimeout(120_000) {
-                                        if (action.type == "image" || action.type == "voice" || action.type == "video") {
-                                            mediaSemaphore.withPermit { processAction(action) }
-                                        } else {
+                                    if (action.type == "image" || action.type == "voice" || action.type == "video") {
+                                        mediaSemaphore.withPermit {
+                                            withTimeout(120_000) {
+                                                processAction(action)
+                                            }
+                                        }
+                                    } else {
+                                        withTimeout(60_000) {
                                             processAction(action)
                                         }
                                     }
@@ -416,8 +422,12 @@ class OutboxManager(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing action ${action.id} of type ${action.type}", e)
-            scope.launch {
-                fallbackManager?.checkHealth()
+            val now = System.currentTimeMillis()
+            if (fallbackManager != null && (now - lastHealthCheckTimestamp > 30_000L)) {
+                lastHealthCheckTimestamp = now
+                scope.launch {
+                    fallbackManager.checkHealth()
+                }
             }
             throw e
         }

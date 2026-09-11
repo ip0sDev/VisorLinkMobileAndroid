@@ -3,12 +3,20 @@ package by.iposdev.visorlink.data.repository
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.data.remote.FirestoreCollections
 import by.iposdev.visorlink.utils.encryptText
 import kotlinx.coroutines.tasks.await
 import javax.crypto.SecretKey
 
+import by.iposdev.visorlink.data.remote.chat.AlbumImageDto
+import by.iposdev.visorlink.data.remote.chat.ForwardDto
+import by.iposdev.visorlink.data.remote.chat.SendMessageRequest
+import by.iposdev.visorlink.data.remote.chat.VisorLinkApi
+
 class ForwardRepository(
-    private val db: FirebaseFirestore
+    private val db: FirebaseFirestore,
+    private val flagsRepository: FlagsRepository? = null,
+    private val api: VisorLinkApi? = null
 ) {
 
     /**
@@ -29,8 +37,35 @@ class ForwardRepository(
             messageId      = originalMsg.id
         )
 
-        val msgRef = db.collection("chats").document(targetChat.id)
-            .collection("messages").document()
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            val req = SendMessageRequest(
+                chatId = targetChat.id,
+                type = originalMsg.type,
+                text = originalMsg.text,
+                caption = originalMsg.caption,
+                url = originalMsg.imageUrl ?: originalMsg.voiceUrl,
+                stickerId = originalMsg.stickerId,
+                packEmoji = originalMsg.packEmoji,
+                images = originalMsg.albumItems?.map {
+                    AlbumImageDto(
+                        url = it.url,
+                        cdnMediaId = it.cdnMediaId,
+                        fileName = it.fileName,
+                        spoiler = it.spoiler
+                    )
+                },
+                forwardFrom = ForwardDto(
+                    senderId = forwardFrom.senderId,
+                    senderUsername = forwardFrom.senderUsername,
+                    chatId = forwardFrom.chatId
+                )
+            )
+            api.sendMessage(req)
+            return
+        }
+
+        val msgRef = db.collection(FirestoreCollections.CHATS).document(targetChat.id)
+            .collection(FirestoreCollections.MESSAGES).document()
 
         val msgData = buildMap<String, Any?> {
             put("senderId",       currentUser.uid)
@@ -65,7 +100,7 @@ class ForwardRepository(
         val batch = db.batch()
         batch.set(msgRef, msgData)
         batch.update(
-            db.collection("chats").document(targetChat.id),
+            db.collection(FirestoreCollections.CHATS).document(targetChat.id),
             mapOf(
                 "lastMessage" to mapOf(
                     "text" to preview,
@@ -76,7 +111,7 @@ class ForwardRepository(
             )
         )
         batch.update(
-            db.collection("users").document(currentUser.uid),
+            db.collection(FirestoreCollections.USERS).document(currentUser.uid),
             "lastMessageAt", FieldValue.serverTimestamp()
         )
         batch.commit().await()
@@ -99,8 +134,8 @@ class ForwardRepository(
             messageId      = originalMsg.id
         )
 
-        val msgRef = db.collection("savedMessages").document(uid)
-            .collection("messages").document()
+        val msgRef = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid)
+            .collection(FirestoreCollections.MESSAGES).document()
 
         val msgData = buildMap<String, Any?> {
             put("senderId",    uid)
@@ -133,7 +168,7 @@ class ForwardRepository(
         batch.set(msgRef, msgData)
         // Синхронизируем кулдаун
         batch.update(
-            db.collection("users").document(uid),
+            db.collection(FirestoreCollections.USERS).document(uid),
             "lastMessageAt", FieldValue.serverTimestamp()
         )
         batch.commit().await()

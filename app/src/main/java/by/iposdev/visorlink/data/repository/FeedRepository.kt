@@ -9,6 +9,7 @@ import com.google.firebase.firestore.Query
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.Timestamp
 import by.iposdev.visorlink.data.model.FeedItem
+import by.iposdev.visorlink.data.remote.FirestoreCollections
 import by.iposdev.visorlink.data.remote.chat.FeedItemDto
 import by.iposdev.visorlink.data.remote.chat.VisorLinkApi
 import by.iposdev.visorlink.data.repository.FlagsRepository
@@ -136,7 +137,7 @@ class FeedRepository(
             return@channelFlow
         }
 
-        val reg = db.collection("discover_feed")
+        val reg = db.collection(FirestoreCollections.DISCOVER_FEED)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .limit(50)
             .addSnapshotListener { snap, _ ->
@@ -175,7 +176,7 @@ class FeedRepository(
     suspend fun incrementView(itemId: String) = withContext(Dispatchers.IO) {
         if (isFeedBackendEnabled()) return@withContext // Backend should handle views automatically or via another endpoint
         try {
-            db.collection("discover_feed").document(itemId)
+            db.collection(FirestoreCollections.DISCOVER_FEED).document(itemId)
                 .update("views_count", FieldValue.increment(1))
         } catch (_: Exception) {}
     }

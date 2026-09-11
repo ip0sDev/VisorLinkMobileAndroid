@@ -13,6 +13,7 @@ import by.iposdev.visorlink.data.model.TaskItem
 import by.iposdev.visorlink.data.model.Topic
 import by.iposdev.visorlink.data.model.toTopicOrNull
 import by.iposdev.visorlink.data.model.toTaskItemOrNull
+import by.iposdev.visorlink.data.remote.FirestoreCollections
 
 class TopicsRepository(
     private val auth: FirebaseAuth,
@@ -25,13 +26,13 @@ class TopicsRepository(
      * Закрепленная тема "Общий" (isGeneral == true) всегда отображается первой.
      */
     fun topicsFlow(chatId: String): Flow<List<Topic>> = callbackFlow {
-        val query = db.collection("chats").document(chatId).collection("topics")
+        val query = db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
 
         val registration = query.addSnapshotListener { snapshot, error ->
             if (error != null || snapshot == null) {
                 android.util.Log.w("TopicsRepo", "topicsFlow ordered query warning (falling back to get): ${error?.message}")
-                db.collection("chats").document(chatId).collection("topics")
+                db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS)
                     .get()
                     .addOnSuccessListener { fallbackSnap ->
                         val list = fallbackSnap.documents.mapNotNull { doc -> doc.toTopicOrNull() }
@@ -64,7 +65,7 @@ class TopicsRepository(
     }
 
     fun getTopicFlow(chatId: String, topicId: String): Flow<Topic?> = callbackFlow {
-        val registration = db.collection("chats").document(chatId).collection("topics").document(topicId)
+        val registration = db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .addSnapshotListener { snapshot, error ->
                 if (error != null || snapshot == null || !snapshot.exists()) {
                     trySend(null)
@@ -79,7 +80,7 @@ class TopicsRepository(
      * Создает тему по умолчанию "#Общий", если таковой еще нет в группе.
      */
     suspend fun ensureGeneralTopic(chatId: String): Topic {
-        val topicsRef = db.collection("chats").document(chatId).collection("topics")
+        val topicsRef = db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS)
         val generalQuery = topicsRef.whereEqualTo("isGeneral", true).limit(1).get().await()
         if (!generalQuery.isEmpty) {
             val doc = generalQuery.documents.first()
@@ -124,7 +125,7 @@ class TopicsRepository(
         color: String?,
         type: String = "chat"
     ): Result<String> = runCatching {
-        val docRef = db.collection("chats").document(chatId).collection("topics").document()
+        val docRef = db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document()
         val data = mapOf(
             "title" to title.trim().take(64),
             "icon" to (icon ?: if (type == "tasks") "📋" else "💬"),
@@ -146,7 +147,7 @@ class TopicsRepository(
         topicId: String,
         updates: Map<String, Any?>
     ): Result<Unit> = runCatching {
-        db.collection("chats").document(chatId).collection("topics").document(topicId)
+        db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .update(updates).await()
     }
 
@@ -155,21 +156,21 @@ class TopicsRepository(
         topicId: String
     ): Result<Unit> = runCatching {
         // Удаляем сам документ темы
-        db.collection("chats").document(chatId).collection("topics").document(topicId)
+        db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .delete().await()
     }
 
     // ─── Задачи (Tasks) ──────────────────────────────────────────────────────────
 
     fun tasksFlow(chatId: String, topicId: String): Flow<List<TaskItem>> = callbackFlow {
-        val query = db.collection("chats").document(chatId).collection("topics").document(topicId)
+        val query = db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .collection("tasks")
             .orderBy("createdAt", Query.Direction.DESCENDING)
 
         val registration = query.addSnapshotListener { snapshot, error ->
             if (error != null || snapshot == null) {
                 // Fallback без индекса
-                db.collection("chats").document(chatId).collection("topics").document(topicId)
+                db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
                     .collection("tasks")
                     .get()
                     .addOnSuccessListener { fallbackSnap ->
@@ -191,7 +192,7 @@ class TopicsRepository(
         topicId: String,
         task: TaskItem
     ): Result<String> = runCatching {
-        val docRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
+        val docRef = db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .collection("tasks").document()
 
         val data = hashMapOf<String, Any?>(
@@ -218,7 +219,7 @@ class TopicsRepository(
         taskId: String,
         newStatus: String
     ): Result<Unit> = runCatching {
-        db.collection("chats").document(chatId).collection("topics").document(topicId)
+        db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .collection("tasks").document(taskId)
             .update(
                 mapOf(
@@ -235,7 +236,7 @@ class TopicsRepository(
         updates: Map<String, Any?>
     ): Result<Unit> = runCatching {
         val fullUpdates = updates + mapOf("updatedAt" to FieldValue.serverTimestamp())
-        db.collection("chats").document(chatId).collection("topics").document(topicId)
+        db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .collection("tasks").document(taskId)
             .update(fullUpdates).await()
     }
@@ -245,7 +246,7 @@ class TopicsRepository(
         topicId: String,
         taskId: String
     ): Result<Unit> = runCatching {
-        db.collection("chats").document(chatId).collection("topics").document(topicId)
+        db.collection(FirestoreCollections.CHATS).document(chatId).collection(FirestoreCollections.TOPICS).document(topicId)
             .collection("tasks").document(taskId)
             .delete().await()
     }

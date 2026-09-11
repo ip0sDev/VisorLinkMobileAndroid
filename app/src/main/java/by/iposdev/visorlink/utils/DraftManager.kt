@@ -6,29 +6,36 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class DraftManager(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "visorlink_drafts",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
-    private val _draftsFlow = MutableStateFlow<Map<String, String>>(emptyMap())
-    val draftsFlow = _draftsFlow.asStateFlow()
-
-    init {
-        // При старте выгружаем все сохраненные черновики в память для мгновенного доступа в UI
-        val all = prefs.all.mapNotNull {
-            val value = it.value as? String
-            if (!value.isNullOrEmpty()) it.key to value else null
-        }.toMap()
-        _draftsFlow.value = all
+class DraftManager(private val context: Context) {
+    private val prefs by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                "visorlink_drafts",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            context.getSharedPreferences("visorlink_drafts_fallback", Context.MODE_PRIVATE)
+        }
     }
+
+    private val _draftsFlow by lazy {
+        val all = try {
+            prefs.all.mapNotNull {
+                val value = it.value as? String
+                if (!value.isNullOrEmpty()) it.key to value else null
+            }.toMap()
+        } catch (_: Exception) {
+            emptyMap()
+        }
+        MutableStateFlow(all)
+    }
+    val draftsFlow get() = _draftsFlow.asStateFlow()
 
     fun saveDraft(chatId: String, text: String) {
         if (text.isEmpty()) {

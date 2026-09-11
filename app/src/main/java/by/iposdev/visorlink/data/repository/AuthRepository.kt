@@ -80,11 +80,28 @@ class AuthRepository(
         val user = cred.user ?: error("Auth account creation returned null user")
 
         // Step 2 — create profile
+        suspend fun cleanupOrphanAccount() {
+            var deleted = false
+            for (attempt in 1..3) {
+                try {
+                    user.delete().await()
+                    deleted = true
+                    break
+                } catch (_: Exception) {
+                    kotlinx.coroutines.delay(500L * attempt)
+                }
+            }
+            if (!deleted) {
+                // If account deletion fails, sign out so the app doesn't stay in an orphaned uninitialized state
+                try { auth.signOut() } catch (_: Exception) {}
+            }
+        }
+
         if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
             try {
                 api.syncUser(SyncUserRequest(username = username.trim()))
             } catch (e: Exception) {
-                runCatching { user.delete().await() }
+                cleanupOrphanAccount()
                 throw e
             }
         } else {
@@ -100,7 +117,7 @@ class AuthRepository(
             } catch (e: Exception) {
                 // CF already deleted the Auth account if username is taken.
                 // Attempt local cleanup as a safety net for other errors.
-                runCatching { user.delete().await() }
+                cleanupOrphanAccount()
                 throw mapFunctionsError(e)
             }
         }

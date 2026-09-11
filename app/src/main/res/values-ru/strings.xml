@@ -28,6 +28,10 @@
     <string name="login_button">Войти</string>
     <string name="login_no_account">Нет аккаунта?\u0020</string>
     <string name="login_register_link">Регистрация</string>
+    <string name="error_fill_all_fields">Пожалуйста, заполните все поля</string>
+    <string name="error_fill_email_username">Пожалуйста, заполните email и имя пользователя</string>
+    <string name="error_specify_reset_email">Укажите email для сброса пароля</string>
+    <string name="error_generic">Произошла ошибка</string>
 
     <!-- Auth — 2FA -->
     <string name="tfa_title">Двухфакторная защита</string>
@@ -582,6 +586,10 @@
     <string name="settings_stealth_biometric">Разблокировка по отпечатку</string>
     <string name="settings_stealth_biometric_sub">Открывать режим скрытия отпечатком вместо PIN-кода</string>
     <string name="stealth_biometric_unavailable">Биометрия недоступна или не настроена на устройстве</string>
+    <string name="decoy_biometric_title">СЛУЖЕБНЫЙ ДОСТУП</string>
+    <string name="decoy_biometric_sub">Подтвердите вход отпечатком пальца</string>
+    <string name="decoy_biometric_negative">Ввести PIN</string>
+    <string name="btn_cancel">Отмена</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Канал обновлений</string>

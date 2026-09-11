@@ -28,6 +28,10 @@
     <string name="login_button">Sign In</string>
     <string name="login_no_account">Don\'t have an account?\u0020</string>
     <string name="login_register_link">Register</string>
+    <string name="error_fill_all_fields">Please fill in all fields</string>
+    <string name="error_fill_email_username">Please fill in email and username</string>
+    <string name="error_specify_reset_email">Specify email for password reset</string>
+    <string name="error_generic">Something went wrong</string>
 
     <!-- Auth — 2FA -->
     <string name="tfa_title">Two-Factor Protection</string>
@@ -580,6 +584,10 @@
     <string name="settings_stealth_biometric">Fingerprint Unlock</string>
     <string name="settings_stealth_biometric_sub">Open stealth mode with your fingerprint instead of the PIN</string>
     <string name="stealth_biometric_unavailable">Biometrics unavailable or not enrolled on this device</string>
+    <string name="decoy_biometric_title">Service Access</string>
+    <string name="decoy_biometric_sub">Confirm access with fingerprint</string>
+    <string name="decoy_biometric_negative">Enter PIN</string>
+    <string name="btn_cancel">Cancel</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Update Channel</string>
