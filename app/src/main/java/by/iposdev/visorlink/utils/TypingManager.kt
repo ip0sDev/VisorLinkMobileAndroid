@@ -20,15 +20,19 @@ class TypingManager(private val chatId: String, private val uid: String) {
 
     private val handler = Handler(Looper.getMainLooper())
     private val stopRunnable = Runnable { stopTyping() }
+    private var lastSentTypingTime = 0L
 
     fun onTyping() {
-        // ИЗМЕНЕНИЕ 2 (КЛЮЧЕВОЕ): Используем серверное время вместо системного
-        val typingUpdate = mapOf(
-            "uid" to uid,
-            "ts" to ServerValue.TIMESTAMP
-        )
-        typingRef.onDisconnect().removeValue()
-        typingRef.setValue(typingUpdate)
+        val now = System.currentTimeMillis()
+        if (now - lastSentTypingTime >= 2500L) {
+            lastSentTypingTime = now
+            val typingUpdate = mapOf(
+                "uid" to uid,
+                "ts" to ServerValue.TIMESTAMP
+            )
+            typingRef.onDisconnect().removeValue()
+            typingRef.setValue(typingUpdate)
+        }
 
         // Эта логика с Handler абсолютно правильная, оставляем ее
         handler.removeCallbacks(stopRunnable)
@@ -36,6 +40,7 @@ class TypingManager(private val chatId: String, private val uid: String) {
     }
 
     fun stopTyping() {
+        lastSentTypingTime = 0L
         handler.removeCallbacks(stopRunnable)
         typingRef.removeValue()
     }

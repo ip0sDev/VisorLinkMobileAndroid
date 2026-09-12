@@ -101,7 +101,7 @@ object ChatDataCache {
         fun reload() {
             launch(Dispatchers.IO) {
                 try {
-                    val outbox = loadOutbox(context).filter { it.chatId == chatId }
+                    val outbox = loadOutbox(context, chatId)
                     trySend(outbox)
                 } catch (_: Exception) {}
             }
@@ -161,12 +161,18 @@ object ChatDataCache {
             id
         }
 
-    suspend fun loadOutbox(context: Context): List<QueuedAction> =
+    suspend fun loadOutbox(context: Context, filterChatId: String? = null): List<QueuedAction> =
         withContext(Dispatchers.IO) {
             val list = mutableListOf<QueuedAction>()
             try {
                 val db = getDb(context).readableDatabase
-                db.rawQuery("SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC", null).use { cursor ->
+                val sql = if (filterChatId != null) {
+                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox WHERE chat_id = ? ORDER BY ts ASC"
+                } else {
+                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC"
+                }
+                val args = if (filterChatId != null) arrayOf(filterChatId) else null
+                db.rawQuery(sql, args).use { cursor ->
                     while (cursor.moveToNext()) {
                         list.add(QueuedAction(
                             id = cursor.getString(0),
@@ -251,7 +257,6 @@ object ChatDataCache {
                 } finally {
                     db.endTransaction()
                 }
-                _outboxSignal.emit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to cleanup outbox", e) }
         }
 

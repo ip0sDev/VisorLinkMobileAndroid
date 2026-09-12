@@ -12,6 +12,7 @@ import by.iposdev.visorlink.data.repository.BackendFallbackManager
 import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.PresenceManager
 import com.google.firebase.auth.FirebaseAuth
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -74,9 +75,11 @@ class ChatListViewModel(
         sidebarTypingManager?.startListening(currentUid)
         viewModelScope.launch {
             chats.collect { list ->
-                list.forEach { chat ->
-                    if (chat.unreadCountFor(currentUid) == 0) {
-                        context?.let { NotificationHelper.clearNotification(it, chat.id) }
+                launch(Dispatchers.IO) {
+                    list.forEach { chat ->
+                        if (chat.unreadCountFor(currentUid) == 0) {
+                            context?.let { NotificationHelper.clearNotification(it, chat.id) }
+                        }
                     }
                 }
 

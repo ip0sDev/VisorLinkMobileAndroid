@@ -75,9 +75,11 @@ fun ChatListScreen(
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     LaunchedEffect(chats) {
-        chats.forEach { chat ->
-            if (chat.unreadCountFor(viewModel.currentUid) == 0) {
-                NotificationHelper.clearNotification(context, chat.id)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            chats.forEach { chat ->
+                if (chat.unreadCountFor(viewModel.currentUid) == 0) {
+                    NotificationHelper.clearNotification(context, chat.id)
+                }
             }
         }
     }

@@ -32,6 +32,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -39,6 +40,7 @@ import kotlinx.coroutines.tasks.await
 import by.iposdev.visorlink.utils.ChatDataCache
 import by.iposdev.visorlink.utils.OutboxManager
 import java.io.File
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -105,7 +107,8 @@ class ChatViewModel(
     private val typingRepository: by.iposdev.visorlink.data.repository.TypingRepository? = null,
     val musicPlayerManager: MusicPlayerManager,
     val musicRepository: MusicRepository,
-    private val networkMonitor: by.iposdev.visorlink.utils.NetworkMonitor? = null
+    private val networkMonitor: by.iposdev.visorlink.utils.NetworkMonitor? = null,
+    private val usageRankManager: by.iposdev.visorlink.utils.UsageRankManager? = null
 ) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -386,7 +389,7 @@ class ChatViewModel(
                 startObservingOtherUser(currentTarget)
             }
 
-            launch {
+            launch(Dispatchers.Default) {
                 chatRepository.latestMessagesFlow(chatId) { latestMessages, latestLastDoc ->
                     val targetOtherUid = effectiveOtherUid
                     if (targetOtherUid != chatId && targetOtherUid.isNotBlank()) {
@@ -396,20 +399,21 @@ class ChatViewModel(
                             lastOtherActiveTimeFlow.update { maxOf(it, otherLatestMsg) }
                         }
                     }
+                    val latestMap = latestMessages.associateBy { it.id }
+                    val olderMessages = rawMessages.filter { it.id !in latestMap }
+                    val combined = sortMessages((olderMessages + latestMessages).distinctBy { it.id })
+                    rawMessages = combined
+                    pendingMaxSeq = maxOf(pendingMaxSeq, combined.maxOfOrNull { it.seq ?: 0L } ?: 0L)
+
+                    val currentState = _uiState.value
+                    val filtered = filterByTopic(combined, currentState.currentTopic, currentState.topicId ?: initialTopicId)
+                    val allMessages = filtered + filterByTopic(currentState.tempMessages, currentState.currentTopic, currentState.topicId ?: initialTopicId)
+                    val items = buildMessageList(allMessages, isAlreadySorted = false)
+
+                    val newLastDoc = if (olderMessages.isNotEmpty() && currentState.lastDoc != null) currentState.lastDoc else latestLastDoc
+                    val newHasMore = if (olderMessages.isNotEmpty() && currentState.lastDoc != null) currentState.hasMore else (latestLastDoc != null)
+
                     _uiState.update { state ->
-                        val latestMap = latestMessages.associateBy { it.id }
-                        val olderMessages = rawMessages.filter { it.id !in latestMap }
-                        val combined = sortMessages((olderMessages + latestMessages).distinctBy { it.id })
-                        rawMessages = combined
-                        pendingMaxSeq = maxOf(pendingMaxSeq, combined.maxOfOrNull { it.seq ?: 0L } ?: 0L)
-
-                        val filtered = filterByTopic(combined, state.currentTopic, state.topicId ?: initialTopicId)
-                        val allMessages = filtered + filterByTopic(state.tempMessages, state.currentTopic, state.topicId ?: initialTopicId)
-                        val items = buildMessageList(allMessages)
-
-                        val newLastDoc = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.lastDoc else latestLastDoc
-                        val newHasMore = if (olderMessages.isNotEmpty() && state.lastDoc != null) state.hasMore else (latestLastDoc != null)
-
                         state.copy(
                             messages = filtered,
                             messageListItems = items,
@@ -419,7 +423,7 @@ class ChatViewModel(
                     }
 
                     if (ActiveChatTracker.isChatActive(chatId)) {
-                        viewModelScope.launch {
+                        viewModelScope.launch(Dispatchers.IO) {
                             try {
                                 chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
                                 chatRepository.resetUnreadCount(chatId, currentUid)
@@ -820,22 +824,25 @@ class ChatViewModel(
         }
     }
 
-    private fun buildMessageList(allMessages: List<Message>): List<MessageListItem> {
+    private fun buildMessageList(allMessages: List<Message>, isAlreadySorted: Boolean = false): List<MessageListItem> {
         val deduplicated = allMessages.distinctBy { it.id }
-        val sorted = sortMessages(deduplicated)
-        val result = mutableListOf<MessageListItem>()
+        val sorted = if (isAlreadySorted) deduplicated else sortMessages(deduplicated)
+        val result = ArrayList<MessageListItem>(sorted.size + 10)
         var lastDate: LocalDate? = null
-        val today = LocalDate.now()
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
         val yesterday = today.minusDays(1)
+        val dateFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
 
         for (message in sorted) {
-            val msgDate = message.createdAt?.toDate()
-                ?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate() ?: continue
+            val createdAt = message.createdAt ?: continue
+            val epochMilli = (createdAt.seconds * 1000L) + (createdAt.nanoseconds / 1_000_000L)
+            val msgDate = Instant.ofEpochMilli(epochMilli).atZone(zone).toLocalDate()
             if (msgDate != lastDate) {
                 val label = when (msgDate) {
                     today -> "Today"
                     yesterday -> "Yesterday"
-                    else -> msgDate.format(DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault()))
+                    else -> msgDate.format(dateFormatter)
                 }
                 result.add(MessageListItem.DateHeader(label))
                 lastDate = msgDate
@@ -869,12 +876,13 @@ class ChatViewModel(
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
         val (nextSeq, isDirect, targetUserId) = getSendMeta()
+
         viewModelScope.launch {
             typingManager?.stopTyping()
             clearReply()
             draftManager.clearDraft(chatId)
-            try { 
-                val sentMessage = chatRepository.sendText(
+            try {
+                chatRepository.sendText(
                     chatId = chatId,
                     text = trimmed,
                     senderUsername = currentUsername,
@@ -884,18 +892,9 @@ class ChatViewModel(
                     isDirect = isDirect,
                     otherUserId = targetUserId
                 )
-                if (sentMessage != null) {
-                    // Optimistic UI update for custom backend
-                    _uiState.update { state ->
-                        val newMessages = sortMessages(state.messages.filter { it.id != sentMessage.id } + sentMessage)
-                        state.copy(
-                            messages = newMessages,
-                            messageListItems = buildMessageList(newMessages + state.tempMessages)
-                        )
-                    }
-                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
             }
-            catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
         }
     }
 
@@ -957,6 +956,8 @@ class ChatViewModel(
     fun sendSticker(sticker: StickerItem, packId: String, packName: String, packEmoji: String) {
         if (!_uiState.value.canSendMessage) return
         if (!startCooldown()) return
+
+        usageRankManager?.recordPackUsage(packId)
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
@@ -1117,6 +1118,11 @@ class ChatViewModel(
 
     fun toggleReaction(messageId: String, emoji: String, currentReactions: List<Reaction>) {
         if (!_uiState.value.canReact) return
+        val existingReaction = currentReactions.find { it.emoji == emoji }
+        val isAdding = existingReaction == null || currentUid !in existingReaction.uids
+        if (isAdding) {
+            usageRankManager?.recordReactionUsage(emoji)
+        }
         viewModelScope.launch {
             try {
                 chatRepository.toggleReaction(chatId, messageId, emoji, currentReactions)

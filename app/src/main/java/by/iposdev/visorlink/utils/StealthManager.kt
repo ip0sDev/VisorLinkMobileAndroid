@@ -8,17 +8,25 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 
 class StealthManager(context: Context) {
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val masterKey by lazy {
+        MasterKey.Builder(context.applicationContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
 
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "visorlink_stealth_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val prefs by lazy {
+        try {
+            EncryptedSharedPreferences.create(
+                context.applicationContext,
+                "visorlink_stealth_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            context.applicationContext.getSharedPreferences("visorlink_stealth_prefs_fallback", Context.MODE_PRIVATE)
+        }
+    }
 
     companion object {
         private const val KEY_ENABLED = "stealth_mode_enabled"

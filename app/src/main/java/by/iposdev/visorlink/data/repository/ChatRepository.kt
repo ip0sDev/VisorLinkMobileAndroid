@@ -361,7 +361,7 @@ class ChatRepository(
             }
             
             val combined = combinedMap.values.distinctBy { it.id }
-            onUpdate(sortMessages(combined), currentLastDoc)
+            onUpdate(combined, currentLastDoc)
             
             // Clean up outbox items that are now present in the Firestore snapshot
             val confirmedIds = currentOutbox.map { it.id }.filter { it in firestoreIds }
@@ -371,7 +371,7 @@ class ChatRepository(
         }
 
         // 1. Initial Outbox load and listener
-        launch {
+        launch(Dispatchers.Default) {
             ChatDataCache.outboxFlow(context, chatId).collect {
                 currentOutbox = it
                 rebuild()
@@ -812,9 +812,9 @@ class ChatRepository(
         return updates
     }
 
-    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? {
+    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? = withContext(Dispatchers.IO) {
         if (isBackendEnabled()) {
-            return try {
+            return@withContext try {
                 val response = api.sendMessage(SendMessageRequest(
                     chatId = chatId,
                     type = MessageType.TEXT,
@@ -828,7 +828,7 @@ class ChatRepository(
                 null
             }
         }
-        if (isFirestoreDisabled()) return null
+        if (isFirestoreDisabled()) return@withContext null
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
@@ -838,8 +838,8 @@ class ChatRepository(
             put("isDirect", isDirect)
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
-        ChatDataCache.addToOutbox(context, chatId, "text", data)
-        return null
+        val outboxId = ChatDataCache.addToOutbox(context, chatId, "text", data)
+        null
     }
 
     suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) {

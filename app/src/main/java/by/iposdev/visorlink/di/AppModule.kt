@@ -128,6 +128,7 @@ val appModule = module {
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
     single { by.iposdev.visorlink.utils.FcmManager(androidContext(), get(), get()) }
+    single { by.iposdev.visorlink.utils.UsageRankManager(androidContext()) }
 
     viewModel { AppCheckViewModel() }
 
@@ -151,7 +152,8 @@ val appModule = module {
             typingRepository = get(),
             musicPlayerManager = get(),
             musicRepository = get(),
-            networkMonitor = get()
+            networkMonitor = get(),
+            usageRankManager = get()
         )
     }
 
@@ -185,7 +187,8 @@ val appModule = module {
             chatRepository = get(),
             userRepository = get(),
             auth           = get(),
-            application    = androidApplication()
+            application    = androidApplication(),
+            usageRankManager = get()
         )
     }
 
@@ -193,7 +196,7 @@ val appModule = module {
     viewModel { ProfileViewModel(get(), get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
 
-    viewModel { StickerPackViewModel(get(), get()) }
+    viewModel { StickerPackViewModel(get(), get(), get()) }
 
     viewModel { params ->
         ChatSettingsViewModel(

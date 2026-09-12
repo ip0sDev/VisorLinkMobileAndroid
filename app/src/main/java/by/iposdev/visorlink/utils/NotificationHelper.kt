@@ -181,20 +181,30 @@ object NotificationHelper {
         }
     }
 
+    @Volatile
+    private var cachedFcmPrefs: android.content.SharedPreferences? = null
+
     private fun getFcmPrefs(context: Context): android.content.SharedPreferences {
-        return try {
-            val masterKey = androidx.security.crypto.MasterKey.Builder(context)
-                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            androidx.security.crypto.EncryptedSharedPreferences.create(
-                context,
-                "fcm_prefs_encrypted",
-                masterKey,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (_: Exception) {
-            context.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+        cachedFcmPrefs?.let { return it }
+        return synchronized(this) {
+            cachedFcmPrefs ?: run {
+                val prefs = try {
+                    val masterKey = androidx.security.crypto.MasterKey.Builder(context.applicationContext)
+                        .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+                        .build()
+                    androidx.security.crypto.EncryptedSharedPreferences.create(
+                        context.applicationContext,
+                        "fcm_prefs_encrypted",
+                        masterKey,
+                        androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                        androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                    )
+                } catch (_: Exception) {
+                    context.applicationContext.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
+                }
+                cachedFcmPrefs = prefs
+                prefs
+            }
         }
     }
 

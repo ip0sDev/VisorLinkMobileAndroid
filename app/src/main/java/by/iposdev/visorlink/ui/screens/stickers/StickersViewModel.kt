@@ -29,7 +29,8 @@ sealed class AddPackBannerState {
 
 class StickerPackViewModel(
     private val repo: StickerPackRepository,
-    private val auth: FirebaseAuth
+    private val auth: FirebaseAuth,
+    private val usageRankManager: by.iposdev.visorlink.utils.UsageRankManager? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StickerPackUiState(isLoading = true))
@@ -45,8 +46,19 @@ class StickerPackViewModel(
             repo.observeUserPacks()
                 .catch { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
                 .collect { packs ->
-                    _uiState.update { it.copy(packs = packs, isLoading = false) }
+                    val ranked = usageRankManager?.rankPacks(packs) ?: packs
+                    _uiState.update { it.copy(packs = ranked, isLoading = false) }
                 }
+        }
+    }
+
+    /**
+     * Зафиксировать выбор стикера из пака и мгновенно переранжировать паки.
+     */
+    fun recordPackUsage(packId: String) {
+        usageRankManager?.recordPackUsage(packId)
+        _uiState.update { state ->
+            state.copy(packs = usageRankManager?.rankPacks(state.packs) ?: state.packs)
         }
     }
 

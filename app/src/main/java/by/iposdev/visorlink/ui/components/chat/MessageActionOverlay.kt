@@ -50,8 +50,10 @@ import by.iposdev.visorlink.data.model.MessageType
 import by.iposdev.visorlink.data.model.SendStatus
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
+import by.iposdev.visorlink.utils.UsageRankManager
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.motionSpec
+import org.koin.compose.koinInject
 import kotlinx.coroutines.launch
 import kotlin.math.floor
 import kotlin.math.sqrt
@@ -90,6 +92,9 @@ fun MessageActionOverlay(
         keyboardController?.hide()
     }
 
+    val usageRankManager: UsageRankManager = koinInject()
+    val rankedReactions by usageRankManager.rankedReactionsFlow.collectAsState()
+
     val alpha by animateFloatAsState(
         targetValue = 1f,
         animationSpec = tween(200),
@@ -109,6 +114,7 @@ fun MessageActionOverlay(
                 data = contextMenuData,
                 currentDragOffset = currentDragOffset,
                 canReact = canReact,
+                rankedReactions = rankedReactions,
                 onAction = { action, emoji ->
                     when (action) {
                         "reply" -> onReply()
@@ -125,6 +131,7 @@ fun MessageActionOverlay(
                 data = contextMenuData,
                 canReact = canReact,
                 currentUid = currentUid,
+                rankedReactions = rankedReactions,
                 onDismiss = onDismiss,
                 onReply = onReply,
                 onEdit = onEdit,
@@ -146,6 +153,7 @@ private fun NormalMessageMenu(
     data: ContextMenuData,
     canReact: Boolean,
     currentUid: String,
+    rankedReactions: List<String> = QUICK_REACTIONS,
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onEdit: () -> Unit,
@@ -254,7 +262,7 @@ private fun NormalMessageMenu(
                             .padding(horizontal = 8.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        QUICK_REACTIONS.forEach { emoji ->
+                        rankedReactions.forEach { emoji ->
                             val alreadyReacted = data.message.parsedReactions.find { it.emoji == emoji }?.uids?.contains(currentUid) == true
                             EmojiReactionButton(
                                 emoji = emoji, isSelected = alreadyReacted,
@@ -327,6 +335,7 @@ private fun GestureMessageMenu(
     data: ContextMenuData,
     currentDragOffset: Offset,
     canReact: Boolean,
+    rankedReactions: List<String> = QUICK_REACTIONS,
     onAction: (action: String, emoji: String?) -> Unit
 ) {
     val haptic = rememberHaptic()
@@ -360,7 +369,7 @@ private fun GestureMessageMenu(
     val btnHalfW = with(density) { (cardWidth / 2).toPx() }
     val btnHalfH = with(density) { (cardHeight / 2).toPx() }
     val gridW = with(density) { (4 * 36 + 20).dp.toPx() }
-    val gridH = with(density) { (((QUICK_REACTIONS.size / 4) * 36) + 20).dp.toPx() }
+    val gridH = with(density) { (((rankedReactions.size / 4) * 36) + 20).dp.toPx() }
     val actionStep = with(density) { 52.dp.toPx() }
     val margin = with(density) { 16.dp.toPx() }
 
@@ -439,10 +448,10 @@ private fun GestureMessageMenu(
                 val dyInside = virtualFingerPos.y - gridBounds.top - with(density) { 10.dp.toPx() }
 
                 val col = floor(dxInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, 3)
-                val row = floor(dyInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, (QUICK_REACTIONS.size / 4) - 1)
+                val row = floor(dyInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, (rankedReactions.size / 4) - 1)
 
-                val idx = (row * 4 + col).toInt().coerceIn(0, QUICK_REACTIONS.size - 1)
-                newSel = "react_${QUICK_REACTIONS[idx]}"
+                val idx = (row * 4 + col).toInt().coerceIn(0, rankedReactions.size - 1)
+                newSel = "react_${rankedReactions[idx]}"
                 foundInGrid = true
             }
         }
@@ -601,7 +610,7 @@ private fun GestureMessageMenu(
                     border = borderStroke(cs)
                 ) {
                     Column(Modifier.padding(10.dp)) {
-                        QUICK_REACTIONS.chunked(4).forEach { row ->
+                        rankedReactions.chunked(4).forEach { row ->
                             Row {
                                 row.forEach { emoji ->
                                     val isSelected = currentSelection == "react_$emoji"

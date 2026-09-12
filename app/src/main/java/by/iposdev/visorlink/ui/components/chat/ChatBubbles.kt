@@ -118,12 +118,15 @@ fun Modifier.messageGestures(
     messageId: String,
     interactionSource: MutableInteractionSource,
     onTap: (() -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
+    hapticEnabled: Boolean = true,
     onLongPressStart: (Offset) -> Unit,
     onLongPressDrag: (Offset) -> Unit,
     onLongPressEnd: () -> Unit
 ) = composed {
     var globalPos by remember { mutableStateOf(Offset.Zero) }
     val scope = rememberCoroutineScope()
+    val haptic = rememberHaptic()
 
     this
         .onGloballyPositioned { globalPos = it.positionInWindow() }
@@ -136,6 +139,12 @@ fun Modifier.messageGestures(
                     scope.launch {
                         if (released) interactionSource.emit(PressInteraction.Release(press))
                         else interactionSource.emit(PressInteraction.Cancel(press))
+                    }
+                },
+                onDoubleTap = onDoubleTap?.let { action ->
+                    {
+                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                        action()
                     }
                 },
                 onTap = { onTap?.invoke() }
@@ -474,6 +483,8 @@ internal fun TextBubble(
                 messageId = message.id,
                 interactionSource = interactionSource,
                 onTap = null,
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart,
                 onLongPressDrag = onLongPressDrag,
                 onLongPressEnd = onLongPressEnd
@@ -619,6 +630,8 @@ internal fun VideoBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { resolvedUrl?.let { onMediaTap(it, message.type) } },
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
@@ -695,6 +708,8 @@ internal fun ImageBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onTap(it) } },
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
@@ -768,7 +783,10 @@ internal fun AlbumBubble(
         Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = null, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
+                onTap = null,
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
+                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
             color = Color.Transparent // Прозрачный, так как AlbumGrid сам рисует фон/рамку если нужно
@@ -846,6 +864,8 @@ internal fun StickerBubble(
             modifier = Modifier.size(160.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { onStickerClick?.invoke(message.packId, message.stickerId) },
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             contentAlignment = Alignment.Center

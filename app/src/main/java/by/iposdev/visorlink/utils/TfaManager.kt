@@ -10,17 +10,25 @@ import androidx.security.crypto.MasterKey
  */
 class TfaManager(context: Context) {
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
+    private val masterKey by lazy {
+        MasterKey.Builder(context.applicationContext)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
 
-    private val sharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "visorlink_tfa_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val sharedPreferences by lazy {
+        try {
+            EncryptedSharedPreferences.create(
+                context.applicationContext,
+                "visorlink_tfa_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            context.applicationContext.getSharedPreferences("visorlink_tfa_prefs_fallback", Context.MODE_PRIVATE)
+        }
+    }
 
     /**
      * Mark 2FA as passed for the given [authTime].

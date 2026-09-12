@@ -573,8 +573,8 @@ fun calculateNextSeq(
  */
 fun sortMessages(messages: List<Message>): List<Message> {
     return messages.sortedWith { a, b ->
-        val aTime = a.createdAt?.toDate()?.time ?: Long.MAX_VALUE
-        val bTime = b.createdAt?.toDate()?.time ?: Long.MAX_VALUE
+        val aTime = a.createdAt?.let { (it.seconds * 1000L) + (it.nanoseconds / 1_000_000L) } ?: Long.MAX_VALUE
+        val bTime = b.createdAt?.let { (it.seconds * 1000L) + (it.nanoseconds / 1_000_000L) } ?: Long.MAX_VALUE
 
         val aSeq = a.seq
         val bSeq = b.seq
