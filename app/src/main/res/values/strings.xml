@@ -791,4 +791,20 @@
     <string name="bug_report_submit">Send Report</string>
     <string name="bug_report_success_title">Ticket #%1$d submitted!</string>
     <string name="bug_report_success_desc">Your report has been sent to FaultyWire. The official FaultyWire Bot will notify you in direct messages when status updates.</string>
+    
+    <!-- Liquid Glass Animation Test -->
+    <string name="settings_animation_test_title">Liquid Glass Animations</string>
+    <string name="settings_animation_test_subtitle">Apple-style liquid morphing &amp; physics playground</string>
+    <string name="animation_test_title">Liquid Glass</string>
+    <string name="animation_test_toolbar_title">Visor Dynamic Bar</string>
+    <string name="animation_test_toolbar_subtitle">Tap to morph / flow</string>
+    <string name="animation_test_action_pour_card">Flow out Card</string>
+    <string name="animation_test_action_recall_card">Absorb into Bar</string>
+    <string name="animation_test_action_toggle_island">Morph Island / Bar</string>
+    <string name="animation_test_bubbles_title">Liquid Metaballs</string>
+    <string name="animation_test_bubbles_desc">Drag droplets to merge. Tap coalesced drop to split.</string>
+    <string name="animation_test_card_title">Liquid Glass Card</string>
+    <string name="animation_test_card_desc">Viscous connection snaps dynamically. Drag near bar to absorb.</string>
+    <string name="animation_test_controls_viscosity">Surface Tension: %1$.1f</string>
+    <string name="animation_test_controls_bounciness">Jelly Bounciness: %1$.1f</string>
 </resources>

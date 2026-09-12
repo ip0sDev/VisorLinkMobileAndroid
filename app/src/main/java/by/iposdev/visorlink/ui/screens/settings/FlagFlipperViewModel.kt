@@ -15,6 +15,7 @@ class FlagFlipperViewModel(
         
         // Ensure core flags are present
         keys.add("backend_v2_enabled")
+        keys.add("animation_test")
         if (flags.testFlag) keys.add("test_flag")
         if (flags.isAegisDebugMode) {
             keys.add("aegis_debug_mode_enabled")

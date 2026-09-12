@@ -46,6 +46,24 @@ class BackendV2SwitchTest {
     }
 
     @Test
+    fun `AppFlags animation_test reads from claims and overrides`() {
+        val flagsTrue = AppFlags(
+            localOverrides = mapOf("animation_test" to true)
+        )
+        assertTrue(flagsTrue.isEnabled("animation_test"))
+
+        val flagsFalse = AppFlags(
+            localOverrides = mapOf("animation_test" to false)
+        )
+        assertFalse(flagsFalse.isEnabled("animation_test"))
+
+        val flagsServer = AppFlags(
+            serverClaims = mapOf("animation_test" to true)
+        )
+        assertTrue(flagsServer.isEnabled("animation_test"))
+    }
+
+    @Test
     fun `MessageDto parses contract json correctly`() {
         val json = """
             {

@@ -793,4 +793,20 @@
     <string name="bug_report_submit">Отправить репорт</string>
     <string name="bug_report_success_title">Тикет #%1$d принят!</string>
     <string name="bug_report_success_desc">Баг-репорт отправлен в систему FaultyWire. Официальный FaultyWire Bot уведомит вас в личных сообщениях об изменении статуса.</string>
+    
+    <!-- Liquid Glass Animation Test -->
+    <string name="settings_animation_test_title">Анимации Liquid Glass</string>
+    <string name="settings_animation_test_subtitle">Органический морфинг, жидкое стекло и физика в стиле Apple</string>
+    <string name="animation_test_title">Liquid Glass</string>
+    <string name="animation_test_toolbar_title">Visor Dynamic Bar</string>
+    <string name="animation_test_toolbar_subtitle">Нажмите для морфинга</string>
+    <string name="animation_test_action_pour_card">Вылить карточку</string>
+    <string name="animation_test_action_recall_card">Втянуть в тулбар</string>
+    <string name="animation_test_action_toggle_island">Морфинг: Остров / Тулбар</string>
+    <string name="animation_test_bubbles_title">Жидкие метаболлы</string>
+    <string name="animation_test_bubbles_desc">Сближайте капли для слияния. Тапните по объединенной для деления.</string>
+    <string name="animation_test_card_title">Карточка жидкого стекла</string>
+    <string name="animation_test_card_desc">Вязкая перемычка динамически растягивается. Поднесите ближе для втягивания.</string>
+    <string name="animation_test_controls_viscosity">Натяжение жидкости: %1$.1f</string>
+    <string name="animation_test_controls_bounciness">Упругость желе: %1$.1f</string>
 </resources>

@@ -8,6 +8,7 @@ import by.iposdev.visorlink.ui.aegis.AegisDebugScreen
 import by.iposdev.visorlink.ui.screens.settings.CacheSettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.CustomizationScreen
 import by.iposdev.visorlink.ui.screens.settings.FlagFlipperScreen
+import by.iposdev.visorlink.ui.screens.settings.LiquidGlassTestScreen
 import by.iposdev.visorlink.ui.screens.settings.SettingsScreen
 import by.iposdev.visorlink.ui.screens.settings.StorageManagerScreen
 import by.iposdev.visorlink.ui.screens.status.StatusScreen
@@ -26,8 +27,13 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenCustomization = { navController.navigate(Screen.Customization.route) },
             onOpenAegisDebug = { navController.navigate(Screen.AegisDebug.route) },
             onOpenFlagFlipper = { navController.navigate(Screen.FlagFlipper.route) },
+            onOpenAnimationTest = { navController.navigate(Screen.AnimationTest.route) },
             themeViewModel = themeViewModel
         )
+    }
+
+    composable(Screen.AnimationTest.route) {
+        LiquidGlassTestScreen(onBack = { navController.popBackStack() })
     }
 
     composable(Screen.AegisDebug.route) {

@@ -74,6 +74,7 @@ fun SettingsScreen(
     onOpenCustomization: () -> Unit = {},
     onOpenAegisDebug: () -> Unit = {},
     onOpenFlagFlipper: () -> Unit = {},
+    onOpenAnimationTest: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     userRepository: UserRepository = koinInject(),
     authRepository: AuthRepository = koinInject(),
@@ -469,6 +470,15 @@ fun SettingsScreen(
                 VlSettingsSection(title = "О приложении") {
                     if (flags.isEnabled("aegis_debug_mode_enabled")) VlSettingsItem(icon = Icons.Default.Terminal, title = "Aegis Project Debug", onClick = onOpenAegisDebug)
                     if (flags.isFlipperEnabled) VlSettingsItem(icon = Icons.Default.ToggleOn, title = "Flag Flipper", onClick = onOpenFlagFlipper)
+                    if (flags.isEnabled("animation_test")) {
+                        VlSettingsItem(
+                            icon = Icons.Default.AutoAwesome,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            title = stringResource(R.string.settings_animation_test_title),
+                            subtitle = stringResource(R.string.settings_animation_test_subtitle),
+                            onClick = onOpenAnimationTest
+                        )
+                    }
                     VlSettingsItem(
                         icon = Icons.Default.Code,
                         iconColor = MaterialTheme.colorScheme.tertiary,
