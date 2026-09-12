@@ -46,10 +46,10 @@ fun ForwardPickerDialog(
     val savedVm: SavedMessagesViewModel = koinViewModel()
     val scope = rememberCoroutineScope()
 
-    // Фильтруем чаты: убираем noForwards=true и отдельно оставляем DIRECT vs group/channel
+    // Фильтруем чаты: убираем чаты с запретом пересылки noForwards == true
     val availableChats = remember(chats) {
         chats.filter { chat ->
-            chat.settings.let { true }  // noForwards проверяется в rules; на клиенте просто показываем все
+            chat.settings?.noForwards != true
         }
     }
 

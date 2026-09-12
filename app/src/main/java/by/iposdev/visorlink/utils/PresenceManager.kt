@@ -1,5 +1,6 @@
 package by.iposdev.visorlink.utils
 
+import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -13,43 +14,74 @@ import com.google.firebase.Firebase
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-
 import kotlinx.coroutines.*
 
-class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
+class PresenceManager(val uid: String) : DefaultLifecycleObserver {
 
     private val rtdb = Firebase.database
     private val presenceRef = rtdb.getReference("presence/$uid")
     private val connectedRef = rtdb.getReference(".info/connected")
     private var connectedListener: ValueEventListener? = null
+    private var attachedLifecycle: Lifecycle? = null
     private var isAppInForeground = false
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var heartbeatJob: Job? = null
 
+    init {
+        try {
+            presenceRef.keepSynced(true)
+        } catch (e: Exception) {
+            Log.w("PresenceManager", "Failed to keepSynced for $uid: ${e.message}")
+        }
+    }
+
     fun attach(lifecycle: Lifecycle) {
+        if (attachedLifecycle == lifecycle) return
+        attachedLifecycle?.removeObserver(this)
+        attachedLifecycle = lifecycle
         lifecycle.addObserver(this)
+
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+            isAppInForeground = true
+            markOnline()
+            startHeartbeat()
+        }
         startListening()
     }
 
+    private fun markOnline() {
+        presenceRef.updateChildren(
+            mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
+        )
+    }
+
+    private fun markOffline() {
+        presenceRef.updateChildren(
+            mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
+        )
+    }
+
     private fun startListening() {
+        if (connectedListener != null) return
         connectedListener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
-                if (snap.getValue(Boolean::class.java) != true) return
+                val isConnected = snap.getValue(Boolean::class.java) == true
+                if (!isConnected) return
 
                 // onDisconnect всегда регистрируем — это серверная гарантия offline при дропе
-                presenceRef.onDisconnect().setValue(
+                presenceRef.onDisconnect().updateChildren(
                     mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
                 )
 
                 // online: true пишем ТОЛЬКО если приложение на переднем плане.
                 if (isAppInForeground) {
-                    presenceRef.setValue(
-                        mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
-                    )
+                    markOnline()
                 }
             }
 
-            override fun onCancelled(e: DatabaseError) {}
+            override fun onCancelled(e: DatabaseError) {
+                Log.w("PresenceManager", "connectedListener cancelled: ${e.message}")
+            }
         }
         connectedRef.addValueEventListener(connectedListener!!)
     }
@@ -60,9 +92,7 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
             while (isActive && isAppInForeground) {
                 delay(30_000L) // регулярный пинг каждые 30 секунд
                 if (isAppInForeground) {
-                    presenceRef.updateChildren(
-                        mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
-                    )
+                    markOnline()
                 }
             }
         }
@@ -70,9 +100,7 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
 
     override fun onStart(owner: LifecycleOwner) {
         isAppInForeground = true
-        presenceRef.setValue(
-            mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
-        )
+        markOnline()
         startHeartbeat()
     }
 
@@ -80,23 +108,37 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
         isAppInForeground = false
         heartbeatJob?.cancel()
         // Явно пишем offline сразу при уходе в фон, не ждём дропа соединения
-        presenceRef.setValue(
-            mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
-        )
+        markOffline()
+    }
+
+    fun ping() {
+        if (isAppInForeground) {
+            markOnline()
+        }
     }
 
     fun detach() {
-        connectedListener?.let { connectedRef.removeEventListener(it) }
+        attachedLifecycle?.removeObserver(this)
+        attachedLifecycle = null
+        connectedListener?.let { 
+            try {
+                connectedRef.removeEventListener(it)
+            } catch (_: Exception) {}
+        }
+        connectedListener = null
         isAppInForeground = false
         heartbeatJob?.cancel()
-        presenceRef.setValue(
-            mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
-        )
+        markOffline()
+        scope.cancel()
     }
 
     companion object {
         fun observePresence(uid: String): Flow<PresenceData?> = callbackFlow {
             val ref = Firebase.database.getReference("presence/$uid")
+            try {
+                ref.keepSynced(true)
+            } catch (_: Exception) {}
+
             val listener = object : ValueEventListener {
                 override fun onDataChange(snap: DataSnapshot) {
                     if (!snap.exists()) {
@@ -104,7 +146,11 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
                         return
                     }
                     val online = snap.child("online").getValue(Boolean::class.java) ?: false
-                    val lastSeen = snap.child("lastSeen").getValue(Long::class.java)
+                    val lastSeen = when (val raw = snap.child("lastSeen").value) {
+                        is Number -> raw.toLong()
+                        is String -> raw.toLongOrNull()
+                        else -> null
+                    }
                     trySend(PresenceData(online, lastSeen))
                 }
                 override fun onCancelled(e: DatabaseError) {
@@ -112,7 +158,11 @@ class PresenceManager(private val uid: String) : DefaultLifecycleObserver {
                 }
             }
             ref.addValueEventListener(listener)
-            awaitClose { ref.removeEventListener(listener) }
+            awaitClose { 
+                try {
+                    ref.removeEventListener(listener)
+                } catch (_: Exception) {}
+            }
         }
     }
 }

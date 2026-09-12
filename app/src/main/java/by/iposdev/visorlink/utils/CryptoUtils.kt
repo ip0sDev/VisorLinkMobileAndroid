@@ -16,11 +16,60 @@ import javax.crypto.spec.SecretKeySpec
 
 // ─── PIN Hashing ──────────────────────────────────────────────────────────────
 
-fun hashPin(pin: String, uid: String): String {
+/**
+ * Создает криптографически стойкий хэш PIN-кода на базе PBKDF2WithHmacSHA256
+ * с уникальной случайной солью (200 000 итераций).
+ * Формат: "pbkdf2:iterations:saltBase64:hashBase64"
+ */
+fun hashPinSecure(pin: String, uid: String): String {
+    val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+    val password = "$pin:$uid"
+    val iterations = 200_000
+    val spec = PBEKeySpec(password.toCharArray(), salt, iterations, 256)
+    return try {
+        val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+        val hash = factory.generateSecret(spec).encoded
+        "pbkdf2:$iterations:${Base64.encodeToString(salt, Base64.NO_WRAP)}:${Base64.encodeToString(hash, Base64.NO_WRAP)}"
+    } finally {
+        spec.clearPassword()
+    }
+}
+
+fun hashPinLegacy(pin: String, uid: String): String {
     val input = "$pin:$uid"
     val digest = MessageDigest.getInstance("SHA-256")
     return digest.digest(input.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
+}
+
+fun hashPin(pin: String, uid: String): String = hashPinSecure(pin, uid)
+
+/**
+ * Проверяет введенный PIN против сохраненного хэша (поддерживает и новый pbkdf2, и legacy SHA-256).
+ */
+fun verifyPinHash(pin: String, uid: String, storedHash: String): Boolean {
+    if (storedHash.isBlank()) return false
+    if (storedHash.startsWith("pbkdf2:")) {
+        val parts = storedHash.split(":")
+        if (parts.size != 4) return false
+        val iterations = parts[1].toIntOrNull() ?: 200_000
+        val salt = Base64.decode(parts[2], Base64.NO_WRAP)
+        val expectedHash = Base64.decode(parts[3], Base64.NO_WRAP)
+        val password = "$pin:$uid"
+        val spec = PBEKeySpec(password.toCharArray(), salt, iterations, expectedHash.size * 8)
+        return try {
+            val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+            val computedHash = factory.generateSecret(spec).encoded
+            MessageDigest.isEqual(computedHash, expectedHash)
+        } catch (_: Exception) {
+            false
+        } finally {
+            spec.clearPassword()
+        }
+    }
+    // Legacy fallback: SHA-256
+    val legacyExpected = hashPinLegacy(pin, uid)
+    return legacyExpected == storedHash
 }
 
 // ─── Key Derivation (PBKDF2) ─────────────────────────────────────────────────

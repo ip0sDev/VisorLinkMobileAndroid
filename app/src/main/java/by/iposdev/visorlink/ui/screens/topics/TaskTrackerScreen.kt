@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -198,21 +201,89 @@ private fun KanbanBoardTab(
     onTaskClick: (TaskItem) -> Unit,
     onMoveStatus: (TaskItem, String) -> Unit
 ) {
-    val statuses = listOf(
-        TaskStatus.TODO,
-        TaskStatus.IN_PROGRESS,
-        TaskStatus.REVIEW,
-        TaskStatus.DONE
-    )
+    val statuses = remember {
+        listOf(
+            TaskStatus.TODO,
+            TaskStatus.IN_PROGRESS,
+            TaskStatus.REVIEW,
+            TaskStatus.DONE
+        )
+    }
+    val pagerState = rememberPagerState(pageCount = { statuses.size })
+    val coroutineScope = rememberCoroutineScope()
+    val cs = MaterialTheme.colorScheme
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .horizontalScroll(rememberScrollState())
-            .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        statuses.forEach { status ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Ряд чипов колонок со счетчиками и быстрой прокруткой
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            statuses.forEachIndexed { index, status ->
+                val isSelected = pagerState.currentPage == index
+                val count = state.tasksByStatus(status.id).size
+                val statusColor = when (status) {
+                    TaskStatus.TODO -> cs.outline
+                    TaskStatus.IN_PROGRESS -> cs.primary
+                    TaskStatus.REVIEW -> cs.tertiary
+                    TaskStatus.DONE -> Color(0xFF4CAF50)
+                }
+
+                Surface(
+                    onClick = {
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(index)
+                        }
+                    },
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isSelected) statusColor.copy(alpha = 0.18f) else cs.surfaceContainerLow,
+                    border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, statusColor) else null,
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(text = status.icon, fontSize = 14.sp)
+                        Text(
+                            text = status.title,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) cs.onSurface else cs.onSurfaceVariant
+                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(if (isSelected) statusColor else cs.surfaceContainerHigh)
+                                .padding(horizontal = 6.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "$count",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) Color.White else cs.onSurfaceVariant,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Полноэкранный пэйджер колонок с постраничным снаппингом
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            pageSpacing = 12.dp
+        ) { page ->
+            val status = statuses[page]
             val tasksInColumn = state.tasksByStatus(status.id)
             KanbanColumn(
                 status = status,
@@ -237,27 +308,26 @@ private fun KanbanColumn(
 
     Column(
         modifier = Modifier
-            .width(280.dp)
-            .fillMaxHeight()
+            .fillMaxSize()
             .clip(shape)
             .background(cs.surfaceContainerLow)
-            .padding(10.dp)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
+                .padding(bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(text = status.icon, fontSize = 16.sp)
+                Text(text = status.icon, fontSize = 18.sp)
                 Text(
                     text = status.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -265,7 +335,7 @@ private fun KanbanColumn(
                 modifier = Modifier
                     .clip(CircleShape)
                     .background(cs.surfaceContainerHigh)
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .padding(horizontal = 10.dp, vertical = 2.dp)
             ) {
                 Text(
                     text = "${tasks.size}",
@@ -283,16 +353,23 @@ private fun KanbanColumn(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = stringResource(R.string.tasks_empty),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cs.onSurfaceVariant.copy(alpha = 0.6f)
-                )
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(text = "✨", fontSize = 28.sp)
+                    Text(
+                        text = stringResource(R.string.tasks_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
+                }
             }
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
             ) {
                 items(tasks, key = { it.id }) { task ->
                     KanbanTaskCard(

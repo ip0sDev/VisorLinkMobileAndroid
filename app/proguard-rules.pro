@@ -25,3 +25,22 @@
 # Kotlin serialization
 -keepattributes RuntimeVisibleAnnotations
 -keepattributes RuntimeInvisibleAnnotations
+
+# Retrofit & OkHttp
+-dontnote retrofit2.Platform
+-dontwarn retrofit2.Platform$Java8
+-keepattributes Signature, InnerClasses, EnclosingMethod
+-keepclassmembers,allowshrinking,allowobfuscation interface * {
+    @retrofit2.http.* <methods>;
+}
+-dontwarn okhttp3.**
+-dontwarn okio.**
+
+# Gson & Remote DTOs
+-keep class com.google.gson.** { *; }
+-keepclassmembers enum * { *; }
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+-keep class by.iposdev.visorlink.data.remote.** { *; }
+-keepclassmembers class by.iposdev.visorlink.data.remote.** { *; }

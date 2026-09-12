@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import by.iposdev.visorlink.data.model.UserProfile
 import by.iposdev.visorlink.data.repository.ChatRepository
 import by.iposdev.visorlink.data.repository.UserRepository
+import by.iposdev.visorlink.utils.PresenceManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -21,7 +22,16 @@ class OtherProfileViewModel(
 
     init {
         viewModelScope.launch { 
-            userRepository.userProfileFlow(targetUid).collect { _user.value = it }
+            combine(
+                userRepository.userProfileFlow(targetUid),
+                PresenceManager.observePresence(targetUid)
+            ) { profile, presence ->
+                if (profile != null && presence != null) {
+                    profile.copy(online = presence.online)
+                } else {
+                    profile
+                }
+            }.collect { _user.value = it }
         }
     }
 

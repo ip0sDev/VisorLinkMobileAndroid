@@ -140,6 +140,7 @@ fun DiaryEntryCard(entry: SavedMessage, onClick: () -> Unit, onDelete: () -> Uni
 fun DiaryPinDialog(
     pinError: Boolean,
     hasBiometric: Boolean,
+    keystoreSecurityLevel: by.iposdev.visorlink.utils.KeystoreSecurityLevel = by.iposdev.visorlink.utils.KeystoreSecurityLevel.UNKNOWN,
     onPinEntered: (String, Boolean) -> Unit,
     onBiometric: () -> Unit,
     onDismiss: () -> Unit,
@@ -170,6 +171,30 @@ fun DiaryPinDialog(
                 )
                 if (pinError) {
                     Text(stringResource(R.string.saved_pin_wrong), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                }
+
+                if (hasBiometric && keystoreSecurityLevel != by.iposdev.visorlink.utils.KeystoreSecurityLevel.UNKNOWN) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = keystoreSecurityLevel.title,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { saveBio = !saveBio }) {

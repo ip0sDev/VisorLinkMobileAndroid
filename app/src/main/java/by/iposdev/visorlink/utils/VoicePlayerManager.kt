@@ -13,9 +13,18 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class VoicePlaybackState(
     val playingMessageId: String? = null,
@@ -32,6 +41,8 @@ class VoicePlayerManager(private val context: Context) {
     private var mediaPlayer: MediaPlayer? = null
     private var mediaSession: MediaSessionCompat? = null
     private val handler = Handler(Looper.getMainLooper())
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var playbackJob: Job? = null
 
     private val _state = MutableStateFlow(VoicePlaybackState())
     val state: StateFlow<VoicePlaybackState> = _state.asStateFlow()
@@ -64,7 +75,7 @@ class VoicePlayerManager(private val context: Context) {
             isLoading = true,
             durationMs = durationSec * 1000
         )
-        startPlayback(url, durationSec)
+        startPlayback(messageId, url, durationSec)
     }
 
     fun togglePlayPause() {
@@ -89,6 +100,9 @@ class VoicePlayerManager(private val context: Context) {
     }
 
     fun release() {
+        playbackJob?.cancel()
+        playbackJob = null
+        scope.cancel()
         stopProgressUpdates()
         mediaPlayer?.release()
         mediaPlayer = null
@@ -99,55 +113,69 @@ class VoicePlayerManager(private val context: Context) {
 
     // ── Playback ──────────────────────────────────────────────────────────────
 
-    private fun startPlayback(url: String, durationSec: Int) {
-        try {
-            val cached = VoiceCache.getCachedPath(context, url)
-            val sourceUri = cached?.let { Uri.fromFile(it) } ?: Uri.parse(url)
+    private fun startPlayback(messageId: String, url: String, durationSec: Int) {
+        playbackJob?.cancel()
+        playbackJob = scope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    VoiceCache.getOrDownload(context, url)
+                }
 
-            val player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .build()
-                )
-                setDataSource(context, sourceUri)
-                setOnPreparedListener { mp ->
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        isPlaying = true,
-                        durationMs = mp.duration.takeIf { it > 0 } ?: (durationSec * 1000)
+                if (!isActive || currentMessageId != messageId) return@launch
+
+                val player = MediaPlayer().apply {
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .build()
                     )
-                    mp.start()
-                    startProgressUpdates()
-                    showNotification()
-                    updateMediaSession(playing = true)
+                    setDataSource(context, Uri.fromFile(file))
+                    setOnPreparedListener { mp ->
+                        if (currentMessageId != messageId) {
+                            try { mp.release() } catch (_: Exception) {}
+                            return@setOnPreparedListener
+                        }
+                        _state.value = _state.value.copy(
+                            isLoading = false,
+                            isPlaying = true,
+                            durationMs = mp.duration.takeIf { it > 0 } ?: (durationSec * 1000)
+                        )
+                        mp.start()
+                        startProgressUpdates()
+                        showNotification()
+                        updateMediaSession(playing = true)
+                    }
+                    setOnCompletionListener {
+                        _state.value = _state.value.copy(
+                            isPlaying = false,
+                            progress = 0f,
+                            currentMs = 0
+                        )
+                        stopProgressUpdates()
+                        updateMediaSession(playing = false)
+                        hideNotification()
+                        currentMessageId = null
+                    }
+                    setOnErrorListener { _, what, extra ->
+                        Log.e("VoicePlayerManager", "MediaPlayer error: what=$what, extra=$extra")
+                        _state.value = _state.value.copy(
+                            isLoading = false,
+                            isPlaying = false,
+                            error = "Playback error"
+                        )
+                        hideNotification()
+                        true
+                    }
+                    prepareAsync()
                 }
-                setOnCompletionListener {
-                    _state.value = _state.value.copy(
-                        isPlaying = false,
-                        progress = 0f,
-                        currentMs = 0
-                    )
-                    stopProgressUpdates()
-                    updateMediaSession(playing = false)
-                    hideNotification()
-                    currentMessageId = null
+                mediaPlayer = player
+            } catch (e: Exception) {
+                Log.e("VoicePlayerManager", "Playback failed for $url", e)
+                if (currentMessageId == messageId) {
+                    _state.value = _state.value.copy(isLoading = false, isPlaying = false, error = e.message)
                 }
-                setOnErrorListener { _, _, _ ->
-                    _state.value = _state.value.copy(
-                        isLoading = false,
-                        isPlaying = false,
-                        error = "Playback error"
-                    )
-                    hideNotification()
-                    true
-                }
-                prepareAsync()
             }
-            mediaPlayer = player
-        } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, error = e.message)
         }
     }
 
@@ -168,6 +196,8 @@ class VoicePlayerManager(private val context: Context) {
     }
 
     private fun stopAndReset() {
+        playbackJob?.cancel()
+        playbackJob = null
         stopProgressUpdates()
         try {
             mediaPlayer?.apply { if (isPlaying) stop(); reset(); release() }

@@ -70,10 +70,18 @@ fun ChatTopBar(
                     }
                 },
             ) {
+                val currentUid = uiState.currentUser?.uid ?: ""
+                val directName = uiState.otherUser?.displayName?.ifEmpty { null }
+                    ?: uiState.chat?.displayName(currentUid)?.ifEmpty { null }
+                    ?: uiState.chat?.name?.ifEmpty { null }
+                    ?: ""
+                val directAvatarUrl = uiState.otherUser?.avatarUrl
+                    ?: uiState.chat?.avatarUrl
+
                 when (uiState.chatType) {
                     ChatType.DIRECT -> AvatarWithPresence(
-                        avatarUrl = uiState.otherUser?.avatarUrl,
-                        displayName = uiState.otherUser?.displayName ?: "",
+                        avatarUrl = directAvatarUrl,
+                        displayName = directName,
                         isOnline = uiState.topbarStatus is TopbarStatus.Online ||
                                 uiState.topbarStatus is TopbarStatus.Typing,
                         size = 36.dp,
@@ -104,7 +112,7 @@ fun ChatTopBar(
                     } else {
                         Text(
                             when (uiState.chatType) {
-                                ChatType.DIRECT -> uiState.otherUser?.displayName ?: ""
+                                ChatType.DIRECT -> directName
                                 else -> uiState.chat?.name ?: ""
                             },
                             fontSize = 18.sp,
@@ -119,6 +127,15 @@ fun ChatTopBar(
                             label = "topbar_status",
                         ) { status ->
                             when (status) {
+                                is TopbarStatus.WaitingForNetwork -> Text(stringResource(R.string.status_waiting_for_network),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                is TopbarStatus.Connecting -> Text(stringResource(R.string.status_connecting),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                                is TopbarStatus.Updating -> Text(stringResource(R.string.status_updating),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
                                 is TopbarStatus.Typing  -> TypingDots()
                                 is TopbarStatus.Online  -> Text(stringResource(R.string.chat_status_online),
                                     style = MaterialTheme.typography.labelSmall,
@@ -134,18 +151,32 @@ fun ChatTopBar(
                             }
                         }
                         ChatType.GROUP -> {
-                            val memberCount = uiState.chat?.memberCount ?: uiState.members.size
-                            val online = uiState.onlineCount
-                            Text(buildString {
-                                append(stringResource(R.string.members_topbar, memberCount))
-                                if (online > 0) append(stringResource(R.string.online_topbar, online))
-                            }, style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            if (uiState.topbarStatus is TopbarStatus.WaitingForNetwork) {
+                                Text(stringResource(R.string.status_waiting_for_network),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                            } else {
+                                val memberCount = uiState.chat?.memberCount ?: uiState.members.size
+                                val online = uiState.onlineCount
+                                Text(buildString {
+                                    append(stringResource(R.string.members_topbar, memberCount))
+                                    if (online > 0) append(stringResource(R.string.online_topbar, online))
+                                }, style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            }
                         }
-                        ChatType.CHANNEL -> Text(
-                            stringResource(R.string.subscribers_topbar, uiState.chat?.memberCount ?: 0),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        ChatType.CHANNEL -> {
+                            if (uiState.topbarStatus is TopbarStatus.WaitingForNetwork) {
+                                Text(stringResource(R.string.status_waiting_for_network),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                            } else {
+                                Text(
+                                    stringResource(R.string.subscribers_topbar, uiState.chat?.memberCount ?: 0),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                            }
+                        }
                     }
                 }
             }
@@ -176,7 +207,7 @@ fun ChatTopBar(
                     Icon(Icons.Default.Settings, stringResource(R.string.settings))
                 }
             }
-            if (uiState.chatType != ChatType.DIRECT && !isOwner) {
+            if (uiState.chatType != ChatType.DIRECT && !isOwner && (uiState.chatType != ChatType.CHANNEL || uiState.isChannelMember)) {
                 IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLeaveClick() }) {
                     Icon(Icons.Default.ExitToApp, stringResource(R.string.leave),
                         tint = MaterialTheme.colorScheme.error)

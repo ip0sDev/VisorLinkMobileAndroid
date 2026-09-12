@@ -60,8 +60,16 @@ import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import android.view.TextureView
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.platform.LocalDensity
+import androidx.media3.common.VideoSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -89,6 +97,7 @@ fun ImageViewerScreen(
 private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
     var isBuffering by remember { mutableStateOf(true) }
     var hasError by remember { mutableStateOf(false) }
@@ -98,9 +107,33 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
     var duration by remember { mutableLongStateOf(0L) }
     var position by remember { mutableLongStateOf(0L) }
 
+    val offsetY = remember { androidx.compose.animation.core.Animatable(0f) }
+    val maxDragDistance = 320.dp
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val maxDragPx = with(density) { maxDragDistance.toPx() }
+
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
             repeatMode = if (type == "gif") Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+        }
+    }
+
+    val handleBack: () -> Unit = {
+        try {
+            exoPlayer.stop()
+        } catch (_: Exception) {}
+        onNavigateBack()
+    }
+
+    androidx.activity.compose.BackHandler(onBack = handleBack)
+
+    DisposableEffect(Unit) {
+        onDispose {
+            try {
+                exoPlayer.stop()
+                exoPlayer.clearMediaItems()
+                exoPlayer.release()
+            } catch (_: Exception) {}
         }
     }
 
@@ -108,13 +141,19 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
-                Lifecycle.Event.ON_DESTROY -> exoPlayer.release()
+                Lifecycle.Event.ON_DESTROY -> {
+                    try {
+                        exoPlayer.release()
+                    } catch (_: Exception) {}
+                }
                 else -> {}
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+
+    var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
 
     DisposableEffect(url) {
         exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
@@ -137,6 +176,14 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
             override fun onIsPlayingChanged(isPlayingState: Boolean) {
                 isPlaying = isPlayingState
             }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    val unappliedRotation = videoSize.unappliedRotationDegrees
+                    val width = if (unappliedRotation == 90 || unappliedRotation == 270) videoSize.height else videoSize.width
+                    val height = if (unappliedRotation == 90 || unappliedRotation == 270) videoSize.width else videoSize.height
+                    videoAspectRatio = width.toFloat() / height.toFloat()
+                }
+            }
         }
         exoPlayer.addListener(listener)
         onDispose {
@@ -144,14 +191,16 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
         }
     }
 
-    LaunchedEffect(isPlaying, isBuffering) {
-        while (true) {
+    // Опрашиваем прогресс ТОЛЬКО когда видны элементы управления и идет воспроизведение
+    LaunchedEffect(isPlaying, isBuffering, showControls) {
+        if (!showControls && !isPlaying) return@LaunchedEffect
+        while (isActive && isPlaying && showControls) {
             if (exoPlayer.duration > 0) {
                 duration = exoPlayer.duration
                 position = exoPlayer.currentPosition
                 progress = (position.toFloat() / duration).coerceIn(0f, 1f)
             }
-            delay(100)
+            delay(200)
         }
     }
 
@@ -162,107 +211,184 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
-        AndroidView(
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    player = exoPlayer
-                    useController = false
-                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                }
-            },
-            modifier = Modifier.fillMaxSize().clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { showControls = !showControls }
-        )
+    val currentOffset = offsetY.value
+    val dragFraction = (currentOffset / maxDragPx).coerceIn(0f, 1f)
+    val backgroundAlpha = (1f - dragFraction * 0.9f).coerceIn(0f, 1f)
+    val videoScale = (1f - dragFraction * 0.25f).coerceIn(0.75f, 1f)
 
-        // Анимация полной загрузки перед показом (Оверлей)
-        AnimatedVisibility(visible = isBuffering, enter = fadeIn(), exit = fadeOut()) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = Color.White, strokeWidth = 4.dp, modifier = Modifier.size(64.dp))
-            }
-        }
-
-        // Ошибка с кнопкой "Повторить попытку"
-        if (hasError) {
-            Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(64.dp))
-                    Spacer(Modifier.height(16.dp))
-                    Text("Ошибка загрузки видео", color = Color.White, fontSize = 16.sp)
-                    Spacer(Modifier.height(24.dp))
-                    Button(onClick = {
-                        hasError = false
-                        isBuffering = true
-                        exoPlayer.prepare()
-                        exoPlayer.playWhenReady = true
-                    }) {
-                        Text("Повторить попытку")
-                    }
-                }
-            }
-        }
-
-        // Контроллы видео
-        AnimatedVisibility(
-            visible = showControls && !hasError,
-            enter = fadeIn(), exit = fadeOut(),
-            modifier = Modifier.matchParentSize()
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.fillMaxWidth().height(80.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(Color.Black.copy(0.6f), Color.Transparent))))
-                Box(modifier = Modifier.fillMaxWidth().height(120.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))))
-
-                TopAppBar(
-                    title = {},
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = backgroundAlpha))
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = {
+                        coroutineScope.launch {
+                            if (offsetY.value > maxDragPx * 0.45f) {
+                                try {
+                                    exoPlayer.stop()
+                                } catch (_: Exception) {}
+                                launch {
+                                    offsetY.animateTo(
+                                        maxDragPx * 1.5f,
+                                        animationSpec = tween(150, easing = FastOutSlowInEasing)
+                                    )
+                                }
+                                delay(100)
+                                onNavigateBack()
+                            } else {
+                                offsetY.animateTo(
+                                    0f,
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioLowBouncy,
+                                        stiffness = Spring.StiffnessMediumLow
+                                    )
+                                )
+                            }
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
-                )
-
-                if (!isBuffering && type != "gif") {
-                    Box(
-                        modifier = Modifier.align(Alignment.Center).size(64.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape).clickable {
-                            if (isPlaying) exoPlayer.pause() else {
-                                if (exoPlayer.playbackState == Player.STATE_ENDED) exoPlayer.seekTo(0)
-                                exoPlayer.play()
+                    onDragCancel = {
+                        coroutineScope.launch {
+                            offsetY.animateTo(0f)
+                        }
+                    },
+                    onVerticalDrag = { change: PointerInputChange, dragAmount: Float ->
+                        if (dragAmount > 0 || offsetY.value > 0) {
+                            change.consume()
+                            val newOffset = (offsetY.value + dragAmount).coerceAtLeast(0f)
+                            coroutineScope.launch {
+                                offsetY.snapTo(newOffset)
                             }
-                        },
-                        contentAlignment = Alignment.Center
+                        }
+                    }
+                )
+            }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationY = currentOffset
+                    scaleX = videoScale
+                    scaleY = videoScale
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            AndroidView(
+                factory = { ctx ->
+                    TextureView(ctx).apply {
+                        layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                        exoPlayer.setVideoTextureView(this)
+                    }
+                },
+                onRelease = { view ->
+                    exoPlayer.clearVideoTextureView(view)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(videoAspectRatio)
+            )
+
+            // Кликабельный оверлей переключения контролов
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
                     ) {
-                        Icon(
-                            if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp)
-                        )
+                        if (offsetY.value == 0f) {
+                            showControls = !showControls
+                        }
+                    }
+            )
+
+            // Анимация полной загрузки перед показом (Оверлей)
+            AnimatedVisibility(visible = isBuffering, enter = fadeIn(), exit = fadeOut()) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Color.White, strokeWidth = 4.dp, modifier = Modifier.size(64.dp))
+                }
+            }
+
+            // Ошибка с кнопкой "Повторить попытку"
+            if (hasError) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.ErrorOutline, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(64.dp))
+                        Spacer(Modifier.height(16.dp))
+                        Text("Ошибка загрузки видео", color = Color.White, fontSize = 16.sp)
+                        Spacer(Modifier.height(24.dp))
+                        Button(onClick = {
+                            hasError = false
+                            isBuffering = true
+                            exoPlayer.prepare()
+                            exoPlayer.playWhenReady = true
+                        }) {
+                            Text("Повторить попытку")
+                        }
                     }
                 }
+            }
 
-                if (type != "gif") {
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(formatVideoTime(position), color = Color.White, fontSize = 12.sp)
-                        Slider(
-                            value = progress,
-                            onValueChange = { p ->
-                                progress = p
-                                val newPos = (p * duration).toLong()
-                                exoPlayer.seekTo(newPos)
+            // Контроллы видео
+            AnimatedVisibility(
+                visible = showControls && !hasError && offsetY.value < 40f,
+                enter = fadeIn(), exit = fadeOut(),
+                modifier = Modifier.matchParentSize()
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxWidth().height(80.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(Color.Black.copy(0.6f), Color.Transparent))))
+                    Box(modifier = Modifier.fillMaxWidth().height(120.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))))
+
+                    TopAppBar(
+                        title = {},
+                        navigationIcon = {
+                            IconButton(onClick = handleBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                    )
+
+                    if (!isBuffering && type != "gif") {
+                        Box(
+                            modifier = Modifier.align(Alignment.Center).size(64.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape).clickable {
+                                if (isPlaying) exoPlayer.pause() else {
+                                    if (exoPlayer.playbackState == Player.STATE_ENDED) exoPlayer.seekTo(0)
+                                    exoPlayer.play()
+                                }
                             },
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = null, tint = Color.White, modifier = Modifier.size(40.dp)
                             )
-                        )
-                        Text(formatVideoTime(duration), color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+
+                    if (type != "gif") {
+                        Row(
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(formatVideoTime(position), color = Color.White, fontSize = 12.sp)
+                            Slider(
+                                value = progress,
+                                onValueChange = { p ->
+                                    progress = p
+                                    val newPos = (p * duration).toLong()
+                                    exoPlayer.seekTo(newPos)
+                                },
+                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = Color.White,
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                                )
+                            )
+                            Text(formatVideoTime(duration), color = Color.White, fontSize = 12.sp)
+                        }
                     }
                 }
             }

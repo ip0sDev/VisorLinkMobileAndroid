@@ -91,7 +91,11 @@ class CacheManager(private val context: Context) {
     suspend fun clearVoice() = withContext(Dispatchers.IO) {
         clearDir(File(context.cacheDir, CACHE_DIR_VOICE))
         context.cacheDir.listFiles()
-            ?.filter { it.name.startsWith("waveform_") && it.name.endsWith(".tmp") }
+            ?.filter { 
+                (it.name.startsWith("waveform_") && it.name.endsWith(".tmp")) ||
+                it.name.endsWith(".webm") ||
+                it.name.startsWith("voice_")
+            }
             ?.forEach { it.delete() }
         Log.d(TAG, "Voice cache cleared")
     }
@@ -112,6 +116,16 @@ class CacheManager(private val context: Context) {
         clearVoice()
         clearWaveforms()
         clearChatData()
+        context.cacheDir.listFiles()
+            ?.filter { file ->
+                file.isFile && (
+                    file.name.startsWith("upload_") ||
+                    file.name.startsWith("album_") ||
+                    file.name.startsWith("img_") ||
+                    file.name.startsWith("sticker_")
+                )
+            }
+            ?.forEach { it.delete() }
         Log.d(TAG, "All caches cleared")
     }
 
@@ -129,8 +143,30 @@ class CacheManager(private val context: Context) {
         evictDir(File(context.cacheDir, CACHE_DIR_WAVEFORM), config.maxWaveformMb.toLong())
         evictDir(File(context.cacheDir, CACHE_DIR_CHAT), 100L)
 
+        // Очистка старых orphan-файлов старше 24 часов
+        cleanupOrphanTempFiles()
+
         // Очистка старых сообщений из БД
         ChatDataCache.pruneOldData(context, config.chatCacheDays)
+    }
+
+    private fun cleanupOrphanTempFiles() {
+        val oneDayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+        context.cacheDir.listFiles()?.forEach { file ->
+            if (file.isFile) {
+                val name = file.name
+                val isOrphan = name.endsWith(".webm") ||
+                        name.startsWith("voice_") ||
+                        name.startsWith("upload_") ||
+                        name.startsWith("album_") ||
+                        name.startsWith("img_") ||
+                        name.startsWith("sticker_") ||
+                        (name.startsWith("waveform_") && name.endsWith(".tmp"))
+                if (isOrphan && file.lastModified() < oneDayAgo) {
+                    file.delete()
+                }
+            }
+        }
     }
 
     private fun evictDir(dir: File, maxMb: Long) {

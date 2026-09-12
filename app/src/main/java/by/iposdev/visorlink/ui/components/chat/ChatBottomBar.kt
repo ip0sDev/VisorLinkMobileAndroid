@@ -65,10 +65,88 @@ fun ChatBottomBar(
     onSendRecord: () -> Unit,
     onClearReply: () -> Unit,
     onCancelEdit: () -> Unit = {},
+    onJoinChannel: (() -> Unit)? = null
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
+
+    // ── 1. Канал: Неподписанный гость ─────────────────────────────────────────
+    if (uiState.chatType == ChatType.CHANNEL && !uiState.isChannelMember) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding(),
+            color = cs.surfaceContainerLow,
+            tonalElevation = 3.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = uiState.chat?.name ?: "",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = stringResource(R.string.channel_subscribers_count, uiState.chat?.memberCount ?: 0),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant
+                    )
+                }
+                Button(
+                    onClick = { onJoinChannel?.invoke() },
+                    enabled = !uiState.isJoiningChannel,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = cs.primary)
+                ) {
+                    if (uiState.isJoiningChannel) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = cs.onPrimary
+                        )
+                    } else {
+                        Text(stringResource(R.string.channel_subscribe))
+                    }
+                }
+            }
+        }
+        return
+    }
+
+    // ── 2. Канал: Подписчик без прав на публикацию ─────────────────────────────
+    if (uiState.chatType == ChatType.CHANNEL && !canSendMessage) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding(),
+            color = cs.surfaceContainerLow
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.channel_only_admins_post),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant
+                )
+            }
+        }
+        return
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
@@ -76,7 +154,6 @@ fun ChatBottomBar(
         val restriction = when {
             uiState.myMember?.banned == true -> stringResource(R.string.you_are_banned_from_this_chat)
             uiState.myMember?.muted == true  -> stringResource(R.string.you_are_muted)
-            uiState.chatType == ChatType.CHANNEL && !canSendMessage -> stringResource(R.string.only_admins_can_post_in_channels)
             else -> null
         }
         AnimatedVisibility(visible = restriction != null) {
@@ -90,9 +167,6 @@ fun ChatBottomBar(
                 .fillMaxWidth()
                 .padding(8.dp)
         ) {
-            // inputPanel, а не bar: bar в Biolume — процентная (stadium) форма,
-            // её радиус считается от высоты и при появлении реплая панель
-            // превращается в капсулу. У inputPanel радиус фиксированный.
             val panelShape = tokens.shapes.inputPanel
             Column(
                 modifier = Modifier
@@ -170,6 +244,37 @@ fun ChatBottomBar(
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(tokens.shapes.indicator), color = cs.primary, trackColor = Color.Transparent)
                 }
 
+                // ── AI Bot Concurrency Banner ─────────────────────────────────
+                AnimatedVisibility(
+                    visible = uiState.isBotGenerating,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Surface(
+                        color = cs.primaryContainer.copy(alpha = 0.4f),
+                        shape = tokens.shapes.card,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                                color = cs.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.bot_generating_banner),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.primary
+                            )
+                        }
+                    }
+                }
+
                 if (canSendMessage) {
                     if (uiState.isRecording) {
                         RecordingBar(
@@ -178,14 +283,17 @@ fun ChatBottomBar(
                             onSend = onSendRecord
                         )
                     } else {
+                        val isBot = uiState.otherUser?.isBot == true
+                        val maxChars = if (isBot) 600 else 2000
+
                         Row(verticalAlignment = Alignment.Bottom) {
                             if (canSendMedia) {
                                 IconButton(
                                     onClick = onAttach,
                                     modifier = Modifier.padding(bottom = 4.dp),
-                                    enabled = !uiState.isCooldown
+                                    enabled = !uiState.isCooldown && !uiState.isBotGenerating
                                 ) {
-                                    Icon(Icons.Default.Add, null, tint = cs.primary)
+                                    Icon(Icons.Default.Add, null, tint = if (uiState.isBotGenerating) cs.onSurfaceVariant.copy(alpha = 0.38f) else cs.primary)
                                 }
                             }
 
@@ -206,33 +314,43 @@ fun ChatBottomBar(
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     BasicTextField(
                                         value = inputText,
-                                        onValueChange = onInputChange,
+                                        onValueChange = { if (!isBot || it.length <= 600) onInputChange(it) else onInputChange(it.take(600)) },
+                                        enabled = !uiState.isBotGenerating,
                                         modifier = Modifier
                                             .weight(1f)
                                             .focusRequester(focusRequester)
                                             .padding(top = 14.dp, bottom = 14.dp, end = 4.dp),
                                         maxLines = 5,
-                                        textStyle = TextStyle(color = cs.onSurface, fontSize = 15.sp),
+                                        textStyle = TextStyle(color = if (uiState.isBotGenerating) cs.onSurface.copy(alpha = 0.5f) else cs.onSurface, fontSize = 15.sp),
                                         decorationBox = { inner ->
                                             if (inputText.isEmpty()) {
-                                                Text(stringResource(R.string.chat_input_placeholder), fontSize = 15.sp, color = cs.onSurfaceVariant.copy(alpha = 0.7f))
+                                                Text(
+                                                    if (uiState.isBotGenerating) stringResource(R.string.bot_generating_placeholder)
+                                                    else stringResource(R.string.chat_input_placeholder),
+                                                    fontSize = 15.sp,
+                                                    color = cs.onSurfaceVariant.copy(alpha = 0.7f)
+                                                )
                                             }
                                             inner()
                                         }
                                     )
 
-                                    if (inputText.isNotEmpty()) {
+                                    if (inputText.isNotEmpty() || isBot) {
                                         Text(
-                                            "${inputText.length}/2000",
+                                            "${inputText.length}/$maxChars",
                                             style = tokens.data.dataSmall,
-                                            color = if (inputText.length >= 2000) cs.error else cs.onSurfaceVariant,
+                                            color = if (inputText.length >= maxChars) cs.error else cs.onSurfaceVariant,
                                             modifier = Modifier.padding(bottom = 16.dp, end = 6.dp),
                                         )
                                     }
 
                                     if (canSendStickers) {
-                                        IconButton(onClick = onStickerClick, modifier = Modifier.padding(bottom = 2.dp)) {
-                                            Icon(Icons.Default.EmojiEmotions, null, tint = if (showStickerSheet) cs.primary else cs.onSurfaceVariant)
+                                        IconButton(
+                                            onClick = onStickerClick,
+                                            enabled = !uiState.isBotGenerating,
+                                            modifier = Modifier.padding(bottom = 2.dp)
+                                        ) {
+                                            Icon(Icons.Default.EmojiEmotions, null, tint = if (uiState.isBotGenerating) cs.onSurfaceVariant.copy(alpha = 0.38f) else if (showStickerSheet) cs.primary else cs.onSurfaceVariant)
                                         }
                                     }
                                 }
@@ -247,35 +365,36 @@ fun ChatBottomBar(
                                 label = "send_mic",
                                 modifier = Modifier.padding(bottom = 2.dp)
                             ) { hasTextOrEdit ->
+                                val sendEnabled = !uiState.isCooldown && !uiState.isBotGenerating && (!isBot || inputText.length <= 600)
                                 if (hasTextOrEdit) {
-                                    val sendScale by animateFloatAsState(if (uiState.isCooldown) 0.85f else 1f, label = "")
+                                    val sendScale by animateFloatAsState(if (!sendEnabled) 0.85f else 1f, label = "")
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
                                             .scale(sendScale)
-                                            .background(cs.primary, tokens.shapes.indicator)
+                                            .background(if (sendEnabled) cs.primary else cs.surfaceVariant, tokens.shapes.indicator)
                                             .clip(tokens.shapes.indicator)
-                                            .clickable(enabled = !uiState.isCooldown) { 
+                                            .clickable(enabled = sendEnabled) { 
                                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                                 onSend() 
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(if (uiState.editingMessage != null) Icons.Default.Check else Icons.AutoMirrored.Filled.Send, "Send", tint = cs.onPrimary, modifier = Modifier.size(22.dp))
+                                        Icon(if (uiState.editingMessage != null) Icons.Default.Check else Icons.AutoMirrored.Filled.Send, "Send", tint = if (sendEnabled) cs.onPrimary else cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
                                     }
                                 } else {
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
-                                            .background(cs.primaryContainer, tokens.shapes.indicator)
+                                            .background(if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant, tokens.shapes.indicator)
                                             .clip(tokens.shapes.indicator)
-                                            .clickable(enabled = !uiState.isCooldown) {
+                                            .clickable(enabled = !uiState.isCooldown && !uiState.isBotGenerating) {
                                                 if (audioPermission.status.isGranted) { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onStartRecord() }
                                                 else onRequestAudioPerm()
                                             },
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(Icons.Default.Mic, "Record", tint = cs.onPrimaryContainer, modifier = Modifier.size(22.dp))
+                                        Icon(Icons.Default.Mic, "Record", tint = if (!uiState.isBotGenerating) cs.onPrimaryContainer else cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
                                     }
                                 }
                             }

@@ -62,9 +62,9 @@ fun DecoyUnlockSheet(
                 }
             )
             val info = BiometricPrompt.PromptInfo.Builder()
-                .setTitle("СЛУЖЕБНЫЙ ДОСТУП")
-                .setSubtitle("Подтвердите вход отпечатком пальца")
-                .setNegativeButtonText("Ввести PIN")
+                .setTitle(activity.getString(by.iposdev.visorlink.R.string.decoy_biometric_title))
+                .setSubtitle(activity.getString(by.iposdev.visorlink.R.string.decoy_biometric_sub))
+                .setNegativeButtonText(activity.getString(by.iposdev.visorlink.R.string.decoy_biometric_negative))
                 .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
                 .build()
             prompt.authenticate(info)

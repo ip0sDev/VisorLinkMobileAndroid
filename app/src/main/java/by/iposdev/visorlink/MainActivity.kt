@@ -42,6 +42,12 @@ class MainActivity : AppCompatActivity() {
 
     private val userRepository: UserRepository by inject()
     private val functions: FirebaseFunctions by inject()
+    private val authViewModel: AuthViewModel by inject()
+    private val fcmManager: by.iposdev.visorlink.utils.FcmManager by inject()
+    private val musicPlayerManager: by.iposdev.visorlink.utils.MusicPlayerManager by inject()
+
+    private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private val pendingOpenSenderUid = androidx.compose.runtime.mutableStateOf<String?>(null)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -52,6 +58,12 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        extractOpenChatId(intent)
+        extractInviteCode(intent)
+        if (intent?.getBooleanExtra("open_music_player", false) == true) {
+            musicPlayerManager.openFullscreenPlayer()
+        }
 
         // ── FIX: Check auth state BEFORE setting content to avoid login flash ──────
         val firebaseAuth = FirebaseAuth.getInstance()
@@ -74,19 +86,44 @@ class MainActivity : AppCompatActivity() {
             val appTheme    by themeViewModel.appTheme.collectAsState()
             val themeMode   by themeViewModel.themeMode.collectAsState()
             val colorPreset by themeViewModel.colorPreset.collectAsState()
+            val showDebugIds by themeViewModel.showDebugIds.collectAsState()
 
             LaunchedEffect(Unit) {
-                IposStoreUpdates.checkUpdate()
+                if (firebaseAuth.currentUser != null) {
+                    try {
+                        fcmManager.syncTokenAfter2FA()
+                    } catch (e: Exception) {
+                        Log.e("MainActivity", "FCM token sync failed on launch", e)
+                    }
+                }
+                val prefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
+                val channel = try {
+                    com.ipos.store.sdk.UpdateChannel.fromString(prefs.getString("update_channel", "release"))
+                } catch (_: IllegalArgumentException) {
+                    com.ipos.store.sdk.UpdateChannel.RELEASE
+                }
+                IposStoreUpdates.checkUpdate(channel = channel)
             }
 
-            VisorLinkTheme(appTheme = appTheme, themeMode = themeMode, colorPreset = colorPreset) {
+            VisorLinkTheme(
+                appTheme = appTheme,
+                themeMode = themeMode,
+                colorPreset = colorPreset,
+                showDebugIds = showDebugIds
+            ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {
                         LegalConsentGuard(authViewModel = authViewModel) {
                             Box {
                                 VisorLinkNavGraph(
                                     authViewModel = authViewModel,
-                                    themeViewModel = themeViewModel
+                                    themeViewModel = themeViewModel,
+                                    pendingChatId = pendingOpenChatId.value,
+                                    pendingSenderUid = pendingOpenSenderUid.value,
+                                    onPendingChatOpened = {
+                                        pendingOpenChatId.value = null
+                                        pendingOpenSenderUid.value = null
+                                    }
                                 )
                                 FlagsOverlay()
                                 IposStoreUpdates.IposUpdateHost()
@@ -95,6 +132,35 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractOpenChatId(intent)
+        extractInviteCode(intent)
+        if (intent.getBooleanExtra("open_music_player", false)) {
+            musicPlayerManager.openFullscreenPlayer()
+        }
+    }
+
+    private fun extractInviteCode(intent: android.content.Intent?) {
+        val data = intent?.data ?: return
+        // https://visorlink.org/invite?code=... OR visorlink://invite?code=...
+        val code = data.getQueryParameter("code")
+        if (!code.isNullOrBlank()) {
+            authViewModel.setPendingInviteCode(code.trim())
+        }
+    }
+
+    private fun extractOpenChatId(intent: android.content.Intent?) {
+        val chatId = intent?.getStringExtra("openChatId")
+            ?: intent?.getStringExtra("chatId")
+        val senderUid = intent?.getStringExtra("senderUid")
+        if (!chatId.isNullOrBlank()) {
+            pendingOpenChatId.value = chatId
+            pendingOpenSenderUid.value = senderUid
         }
     }
 

@@ -76,6 +76,7 @@ fun StickerPickerBottomSheet(
             isLoading = uiState.isLoading,
             currentUid = viewModel.currentUid,
             onStickerSelected = { packId, sticker ->
+                viewModel.recordPackUsage(packId)
                 onStickerSelected(packId, sticker)
             },
             onCreatePack = { name, emoji ->

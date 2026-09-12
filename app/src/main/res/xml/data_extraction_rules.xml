@@ -1,19 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
--->
+<?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
+    <!-- В Android 12+ (Data Extraction Rules) при указании <include> в секции
+         автоматически включаются ТОЛЬКО указанные элементы, а всё остальное
+         (базы данных, файлы, секреты) исключается по умолчанию.
+         Указание <exclude> для путей, не покрытых <include>, запрещено Lint. -->
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <include domain="sharedpref" path="visorlink_settings.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <include domain="sharedpref" path="visorlink_settings.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>

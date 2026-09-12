@@ -32,6 +32,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -69,8 +71,15 @@ fun ImageEditorScreen(
     onSend: (uri: Uri, isSpoiler: Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     val haptic = rememberHaptic()
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+    }
 
     // ── Трансформации ─────────────────────────────────────────────────────────
     var rotationDeg by remember { mutableFloatStateOf(0f) }

@@ -13,9 +13,8 @@ class DynamicBaseUrlInterceptor(private val context: Context) : Interceptor {
         
         var request = chain.request()
         
-        // We only redirect if custom backend is enabled and the request is going to our "placeholder" host
-        // Our placeholder in AppModule is http://10.0.2.2:8080
-        if (isEnabled && request.url.host == "10.0.2.2" && request.url.port == 8080) {
+        // We redirect if custom backend is enabled
+        if (isEnabled) {
             val formattedUrl = if (customUrlStr.startsWith("http")) customUrlStr else "http://$customUrlStr"
             val newBaseUrl = formattedUrl.toHttpUrlOrNull()
             

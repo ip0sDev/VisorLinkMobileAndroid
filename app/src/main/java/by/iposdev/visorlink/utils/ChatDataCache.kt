@@ -19,6 +19,11 @@ private const val DB_VERSION = 5
 private const val TAG = "ChatDataCache"
 
 class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
+    override fun onConfigure(db: SQLiteDatabase) {
+        super.onConfigure(db)
+        db.enableWriteAheadLogging()
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         // Создаем таблицы. Используем составные первичные ключи для защиты от дублей.
         db.execSQL("CREATE TABLE chats (uid TEXT, chat_id TEXT, data TEXT, PRIMARY KEY(uid, chat_id))")
@@ -31,27 +36,57 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
-            db.execSQL("CREATE TABLE outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
-            db.execSQL("CREATE TABLE likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
+            try {
+                db.execSQL("CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY, chat_id TEXT, type TEXT, data TEXT, ts INTEGER, status INTEGER DEFAULT 0)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS likes (uid TEXT, item_id TEXT, PRIMARY KEY(uid, item_id))")
+            } catch (e: Exception) {
+                Log.e(TAG, "Upgrade to v2 failed", e)
+            }
         }
         if (oldVersion == 2) {
-            db.execSQL("ALTER TABLE outbox ADD COLUMN status INTEGER DEFAULT 0")
+            ensureColumnExists(db, "outbox", "status", "INTEGER DEFAULT 0")
         }
         if (oldVersion < 4) {
-            try {
-                db.execSQL("ALTER TABLE outbox ADD COLUMN retry_count INTEGER DEFAULT 0")
-                db.execSQL("ALTER TABLE outbox ADD COLUMN last_attempt INTEGER DEFAULT 0")
-                db.execSQL("ALTER TABLE outbox ADD COLUMN last_error TEXT")
-            } catch (e: Exception) {
-                Log.e("ChatDataCache", "Upgrade to v4 failed", e)
-            }
+            ensureColumnExists(db, "outbox", "retry_count", "INTEGER DEFAULT 0")
+            ensureColumnExists(db, "outbox", "last_attempt", "INTEGER DEFAULT 0")
+            ensureColumnExists(db, "outbox", "last_error", "TEXT")
         }
         if (oldVersion < 5) {
-            try {
-                db.execSQL("ALTER TABLE outbox ADD COLUMN progress REAL DEFAULT 0.0")
-            } catch (e: Exception) {
-                Log.e("ChatDataCache", "Upgrade to v5 failed", e)
+            ensureColumnExists(db, "outbox", "progress", "REAL DEFAULT 0.0")
+        }
+    }
+
+    override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        Log.w(TAG, "Downgrading database from $oldVersion to $newVersion. Recreating tables.")
+        db.execSQL("DROP TABLE IF EXISTS chats")
+        db.execSQL("DROP TABLE IF EXISTS messages")
+        db.execSQL("DROP TABLE IF EXISTS profiles")
+        db.execSQL("DROP TABLE IF EXISTS stickers")
+        db.execSQL("DROP TABLE IF EXISTS outbox")
+        db.execSQL("DROP TABLE IF EXISTS likes")
+        onCreate(db)
+    }
+
+    private fun ensureColumnExists(db: SQLiteDatabase, table: String, column: String, def: String) {
+        var cursor: android.database.Cursor? = null
+        try {
+            cursor = db.rawQuery("PRAGMA table_info($table)", null)
+            var exists = false
+            while (cursor.moveToNext()) {
+                val nameIndex = cursor.getColumnIndex("name")
+                if (nameIndex != -1 && cursor.getString(nameIndex) == column) {
+                    exists = true
+                    break
+                }
             }
+            if (!exists) {
+                db.execSQL("ALTER TABLE $table ADD COLUMN $column $def")
+                Log.d(TAG, "Added column $column to $table")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to ensure column $column in $table", e)
+        } finally {
+            cursor?.close()
         }
     }
 }
@@ -66,7 +101,7 @@ object ChatDataCache {
         fun reload() {
             launch(Dispatchers.IO) {
                 try {
-                    val outbox = loadOutbox(context).filter { it.chatId == chatId }
+                    val outbox = loadOutbox(context, chatId)
                     trySend(outbox)
                 } catch (_: Exception) {}
             }
@@ -126,12 +161,18 @@ object ChatDataCache {
             id
         }
 
-    suspend fun loadOutbox(context: Context): List<QueuedAction> =
+    suspend fun loadOutbox(context: Context, filterChatId: String? = null): List<QueuedAction> =
         withContext(Dispatchers.IO) {
             val list = mutableListOf<QueuedAction>()
             try {
                 val db = getDb(context).readableDatabase
-                db.rawQuery("SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC", null).use { cursor ->
+                val sql = if (filterChatId != null) {
+                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox WHERE chat_id = ? ORDER BY ts ASC"
+                } else {
+                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC"
+                }
+                val args = if (filterChatId != null) arrayOf(filterChatId) else null
+                db.rawQuery(sql, args).use { cursor ->
                     while (cursor.moveToNext()) {
                         list.add(QueuedAction(
                             id = cursor.getString(0),
@@ -189,6 +230,17 @@ object ChatDataCache {
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox status", e) }
         }
 
+    suspend fun retryOutbox(context: Context, id: String) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("UPDATE outbox SET status=0, retry_count=0, last_attempt=0, last_error=NULL WHERE id=?")
+                stmt.bindString(1, id)
+                stmt.executeUpdateDelete()
+                _outboxSignal.emit(Unit)
+            } catch (e: Exception) { Log.e(TAG, "Failed to retry outbox action", e) }
+        }
+
     suspend fun cleanupOutbox(context: Context, confirmedIds: List<String>) =
         withContext(Dispatchers.IO) {
             if (confirmedIds.isEmpty()) return@withContext
@@ -205,7 +257,6 @@ object ChatDataCache {
                 } finally {
                     db.endTransaction()
                 }
-                _outboxSignal.emit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to cleanup outbox", e) }
         }
 
@@ -286,6 +337,19 @@ object ChatDataCache {
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load chat list", e) }
             list
+        }
+
+    suspend fun loadChat(context: Context, chatId: String): Chat? =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).readableDatabase
+                db.rawQuery("SELECT data FROM chats WHERE chat_id=? LIMIT 1", arrayOf(chatId)).use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        try { return@withContext JSONObject(cursor.getString(0)).toChat() } catch (_: Exception) {}
+                    }
+                }
+            } catch (e: Exception) { Log.e(TAG, "Failed to load chat from cache", e) }
+            null
         }
 
     // ── Сообщения ─────────────────────────────────────────────────────────────
@@ -422,9 +486,18 @@ object ChatDataCache {
         }
         put("isForum", isForumActive)
         put("settings", sData)
-        put("lastMessage", lastMessage?.toString() ?: JSONObject.NULL)
+        when (val lm = lastMessage) {
+            is Map<*, *> -> put("lastMessage", JSONObject(lm))
+            is String -> put("lastMessage", lm)
+            else -> put("lastMessage", JSONObject.NULL)
+        }
+        put("lastMessageSenderId", lastMessageSenderId ?: JSONObject.NULL)
+        put("lastSeq", lastSeq)
         put("lastMessageAt", lastMessageAt?.seconds ?: JSONObject.NULL)
         put("createdAt", createdAt?.seconds ?: JSONObject.NULL)
+        val uData = JSONObject()
+        unreadCount.forEach { (k, v) -> uData.put(k, v) }
+        put("unreadCount", uData)
     }
 
     private fun JSONObject.toChat(): Chat {
@@ -457,6 +530,28 @@ object ChatDataCache {
             isForum = isForumFinal
         )
 
+        val uObj = optJSONObject("unreadCount")
+        val uMap = mutableMapOf<String, Int>()
+        uObj?.keys()?.forEach { k -> uMap[k] = uObj.optInt(k, 0) }
+
+        val lastMessageParsed: Any? = when {
+            isNull("lastMessage") -> null
+            optJSONObject("lastMessage") != null -> {
+                val o = getJSONObject("lastMessage")
+                val map = mutableMapOf<String, Any>()
+                o.keys().forEach { k ->
+                    if (k == "readBy") {
+                        val arr = o.optJSONArray(k)
+                        map[k] = (0 until (arr?.length() ?: 0)).map { arr!!.getString(it) }
+                    } else {
+                        map[k] = o.get(k)
+                    }
+                }
+                map
+            }
+            else -> optString("lastMessage")
+        }
+
         return Chat(
             id = getString("id"),
             type = getString("type"),
@@ -471,14 +566,18 @@ object ChatDataCache {
             memberIds = mList,
             isForum = isForumFinal,
             settings = settings,
-            lastMessage = if (isNull("lastMessage")) null else getString("lastMessage"),
+            lastMessage = lastMessageParsed,
+            lastMessageSenderId = if (isNull("lastMessageSenderId")) null else optString("lastMessageSenderId"),
+            lastSeq = optLong("lastSeq", 0L),
             lastMessageAt = if (isNull("lastMessageAt")) null else com.google.firebase.Timestamp(getLong("lastMessageAt"), 0),
-            createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0)
+            createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0),
+            unreadCount = uMap
         )
     }
 
     private fun Message.toJson(): JSONObject = JSONObject().apply {
         put("id", id)
+        put("seq", seq ?: JSONObject.NULL)
         put("senderId", senderId)
         put("senderUsername", senderUsername)
         put("type", type)
@@ -514,6 +613,10 @@ object ChatDataCache {
         val rArr = JSONArray()
         reactions.forEach { rMap -> rArr.put(JSONObject(rMap)) }
         put("reactions", rArr)
+
+        put("thumbUrl", thumbUrl ?: JSONObject.NULL)
+        put("width", width ?: JSONObject.NULL)
+        put("height", height ?: JSONObject.NULL)
     }
 
     private fun JSONObject.toMessage(): Message {
@@ -562,6 +665,7 @@ object ChatDataCache {
 
         return Message(
             id = getString("id"),
+            seq = if (has("seq") && !isNull("seq")) optLong("seq") else null,
             senderId = getString("senderId"),
             senderUsername = optString("senderUsername"),
             type = optString("type", "text"),
@@ -569,6 +673,9 @@ object ChatDataCache {
             url = if (isNull("url")) null else optString("url"),
             fileName = if (isNull("fileName")) null else optString("fileName"),
             duration = if (isNull("duration")) null else optInt("duration"),
+            thumbUrl = if (has("thumbUrl") && !isNull("thumbUrl")) optString("thumbUrl") else null,
+            width = if (has("width") && !isNull("width")) optInt("width") else null,
+            height = if (has("height") && !isNull("height")) optInt("height") else null,
             stickerId = if (isNull("stickerId")) null else optString("stickerId"),
             packId = if (isNull("packId")) null else optString("packId"),
             packName = if (isNull("packName")) null else optString("packName"),

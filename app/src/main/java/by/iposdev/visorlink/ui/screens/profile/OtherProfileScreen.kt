@@ -243,6 +243,7 @@ fun OtherProfileScreen(
                         modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        DebugUidBadge(uid = targetUser.uid)
                         if (targetUser.online) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))

@@ -7,6 +7,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import by.iposdev.visorlink.data.model.*
+import by.iposdev.visorlink.data.remote.FirestoreCollections
 import by.iposdev.visorlink.utils.*
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -27,12 +28,12 @@ class SavedMessagesRepository(
 ) {
 
     suspend fun loadSettings(uid: String): SavedMessagesSettings? = try {
-        val snap = db.collection("savedMessagesSettings").document(uid).get().await()
+        val snap = db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid).get().await()
         if (snap.exists()) snap.toObject(SavedMessagesSettings::class.java) else null
     } catch (e: Exception) { null }
 
     fun settingsFlow(uid: String): Flow<SavedMessagesSettings?> = callbackFlow {
-        val reg = db.collection("savedMessagesSettings").document(uid)
+        val reg = db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid)
             .addSnapshotListener { snap, _ ->
                 val settings = if (snap?.exists() == true) snap.toObject(SavedMessagesSettings::class.java) else null
                 trySend(settings)
@@ -42,26 +43,31 @@ class SavedMessagesRepository(
 
     suspend fun setPin(uid: String, pin: String) {
         val hash = hashPin(pin, uid)
-        db.collection("savedMessagesSettings").document(uid)
+        db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid)
             .set(mapOf("pinEnabled" to true, "pinHash" to hash, "lockTimeout" to 5, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
     }
 
     suspend fun verifyPin(uid: String, enteredPin: String): Boolean = try {
-        val snap = db.collection("savedMessagesSettings").document(uid).get().await()
+        val snap = db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid).get().await()
         val storedHash = snap.getString("pinHash") ?: ""
-        hashPin(enteredPin, uid) == storedHash
+        val isValid = verifyPinHash(enteredPin, uid, storedHash)
+        if (isValid && !storedHash.startsWith("pbkdf2:")) {
+            // Прозрачная миграция старого SHA-256 хэша на стойкий PBKDF2
+            setPin(uid, enteredPin)
+        }
+        isValid
     } catch (e: Exception) { false }
 
     suspend fun disablePin(uid: String) {
-        db.collection("savedMessagesSettings").document(uid).update(mapOf("pinEnabled" to false, "pinHash" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()
+        db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid).update(mapOf("pinEnabled" to false, "pinHash" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()
     }
 
     suspend fun updateLockTimeout(uid: String, minutes: Int) {
-        db.collection("savedMessagesSettings").document(uid).set(mapOf("lockTimeout" to minutes, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
+        db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid).set(mapOf("lockTimeout" to minutes, "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge()).await()
     }
 
     fun messagesFlow(uid: String, key: SecretKey?, includeDiary: Boolean = false): Flow<List<SavedMessage>> = callbackFlow {
-        val query = db.collection("savedMessages").document(uid).collection("messages")
+        val query = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES)
             .orderBy("createdAt", Query.Direction.DESCENDING)
 
         val reg = query.addSnapshotListener { snap, error ->
@@ -87,7 +93,7 @@ class SavedMessagesRepository(
     }
 
     fun diaryFlow(uid: String, key: SecretKey?): Flow<List<SavedMessage>> = callbackFlow {
-        val reg = db.collection("savedMessages").document(uid).collection("messages")
+        val reg = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES)
             .whereEqualTo("isDiary", true)
             .orderBy("createdAt", Query.Direction.DESCENDING)
             .addSnapshotListener { snap, error ->
@@ -109,8 +115,8 @@ class SavedMessagesRepository(
     }
 
     suspend fun saveText(uid: String, text: String, key: SecretKey?, forwardFrom: ForwardFrom? = null, isDiary: Boolean = false) {
-        val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
-        val userRef = db.collection("users").document(uid) // Ссылка на кулдаун пользователя
+        val msgRef = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES).document()
+        val userRef = db.collection(FirestoreCollections.USERS).document(uid) // Ссылка на кулдаун пользователя
 
         val data = buildMap<String, Any?> {
             put("senderId",  uid); put("type", MessageType.TEXT); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
@@ -191,8 +197,8 @@ class SavedMessagesRepository(
     private suspend fun saveMediaMeta(
         uid: String, type: String, cdnMediaId: String, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?, isDiary: Boolean = false
     ) {
-        val msgRef = db.collection("savedMessages").document(uid).collection("messages").document()
-        val userRef = db.collection("users").document(uid) // Ссылка на кулдаун пользователя
+        val msgRef = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES).document()
+        val userRef = db.collection(FirestoreCollections.USERS).document(uid) // Ссылка на кулдаун пользователя
 
         val data = buildMap<String, Any?> {
             put("senderId", uid); put("type", type); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
@@ -256,7 +262,7 @@ class SavedMessagesRepository(
     }
 
     suspend fun deleteMessage(uid: String, messageId: String) {
-        db.collection("savedMessages").document(uid).collection("messages").document(messageId).delete().await()
+        db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES).document(messageId).delete().await()
     }
 
     suspend fun editMessage(uid: String, message: SavedMessage, newText: String, key: SecretKey?) {
@@ -302,7 +308,7 @@ class SavedMessagesRepository(
             updates["editHistory"] = FieldValue.arrayUnion(historyItem)
         }
 
-        db.collection("savedMessages").document(uid).collection("messages").document(message.id)
+        db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES).document(message.id)
             .update(updates).await()
     }
 
@@ -315,6 +321,4 @@ class SavedMessagesRepository(
         val caption = msg.encryptedCaption?.let { decryptText(it, iv, key) }
         return msg.copy(text = plaintext ?: msg.text, caption = caption ?: msg.caption)
     }
-
-    suspend fun getBiometricPin(uid: String): String? = null
 }

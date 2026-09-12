@@ -49,7 +49,8 @@ class CommentsViewModel(
     private val chatRepository: ChatRepository,
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
-    private val application: Application
+    private val application: Application,
+    private val usageRankManager: by.iposdev.visorlink.utils.UsageRankManager? = null
 ) : AndroidViewModel(application) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -284,6 +285,11 @@ class CommentsViewModel(
     // ─── Reactions & delete ───────────────────────────────────────────────────
 
     fun toggleReaction(commentId: String, emoji: String, currentReactions: List<Reaction>) {
+        val existing = currentReactions.find { it.emoji == emoji }
+        val isAdding = existing == null || currentUid !in existing.uids
+        if (isAdding) {
+            usageRankManager?.recordReactionUsage(emoji)
+        }
         viewModelScope.launch {
             try {
                 chatRepository.toggleCommentReaction(chatId, messageId, commentId, emoji, currentReactions)

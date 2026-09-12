@@ -47,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -58,16 +59,39 @@ import by.iposdev.visorlink.data.model.*
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.components.CachedImage
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.MusicPlayerState
 import by.iposdev.visorlink.utils.VoicePlaybackState
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.vlInset
 import by.iposdev.visorlink.ui.theme.vlRaised
+import by.iposdev.visorlink.ui.theme.LocalShowDebugIds
 import java.text.SimpleDateFormat
 import java.util.*
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+@Composable
+internal fun DebugMessageBadge(
+    message: Message,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    if (LocalShowDebugIds.current) {
+        val seqText = message.seq?.toString() ?: "legacy"
+        Text(
+            text = "ID: ${message.id.take(8)} | seq: $seqText",
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 9.sp,
+            color = textColor.copy(alpha = 0.65f),
+            maxLines = 1,
+            softWrap = false,
+            modifier = modifier.padding(vertical = 1.dp)
+        )
+    }
+}
 
 // Цвета бабблов идут через VlTokens: в Biolume полупрозрачный primaryContainer
 // (alpha .12) для баббла слишком бледный, нужен плотный подмешанный тон.
@@ -94,12 +118,15 @@ fun Modifier.messageGestures(
     messageId: String,
     interactionSource: MutableInteractionSource,
     onTap: (() -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
+    hapticEnabled: Boolean = true,
     onLongPressStart: (Offset) -> Unit,
     onLongPressDrag: (Offset) -> Unit,
     onLongPressEnd: () -> Unit
 ) = composed {
     var globalPos by remember { mutableStateOf(Offset.Zero) }
     val scope = rememberCoroutineScope()
+    val haptic = rememberHaptic()
 
     this
         .onGloballyPositioned { globalPos = it.positionInWindow() }
@@ -112,6 +139,12 @@ fun Modifier.messageGestures(
                     scope.launch {
                         if (released) interactionSource.emit(PressInteraction.Release(press))
                         else interactionSource.emit(PressInteraction.Cancel(press))
+                    }
+                },
+                onDoubleTap = onDoubleTap?.let { action ->
+                    {
+                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                        action()
                     }
                 },
                 onTap = { onTap?.invoke() }
@@ -276,7 +309,7 @@ private fun AlbumImageItem(
     modifier: Modifier = Modifier,
     useCardShape: Boolean = true
 ) {
-    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url)
+    val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url) ?: image.url
     val showBlur = image.spoiler && !isRevealed
 
     Box(modifier
@@ -305,8 +338,16 @@ fun MessageBubble(
     hapticEnabled: Boolean,
     showSenderName: Boolean,
     voicePlayback: VoicePlaybackState,
+    musicPlayback: MusicPlayerState = MusicPlayerState(),
+    musicDownloadProgress: Map<String, Float> = emptyMap(),
     onPlayVoice: (url: String, durationSec: Int) -> Unit,
     onSeekVoice: (Float) -> Unit,
+    onPlayAudio: ((Message) -> Unit)? = null,
+    onToggleAudioPlayback: (() -> Unit)? = null,
+    onSeekAudio: ((Float) -> Unit)? = null,
+    onCycleAudioSpeed: (() -> Unit)? = null,
+    onSaveTrackToLibrary: ((MusicTrack) -> Unit)? = null,
+    onOpenFullscreenAudio: (() -> Unit)? = null,
     onLongPressStart: (Offset) -> Unit,
     onLongPressDrag: (Offset) -> Unit,
     onLongPressEnd: () -> Unit,
@@ -317,6 +358,8 @@ fun MessageBubble(
     onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {},
     chat: Chat? = null,
+    onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
@@ -342,11 +385,12 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onMediaTap = onMediaTap,
-                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat
+                        onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                     return@Box
                 }
-                message.type == MessageType.ALBUM && !message.deleted -> {
+                message.type.equals(MessageType.ALBUM, ignoreCase = true) && !message.deleted -> {
                     AlbumBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled,
@@ -354,6 +398,7 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                     return@Box
                 }
@@ -365,6 +410,7 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                     return@Box
                 }
@@ -374,6 +420,7 @@ fun MessageBubble(
                         hapticEnabled = hapticEnabled,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd, onReact = onReact,
+                        onStickerClick = onStickerClick,
                     )
                     return@Box
                 }
@@ -382,12 +429,18 @@ fun MessageBubble(
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled, showSenderName = showSenderName,
                         voicePlayback = voicePlayback,
+                        musicPlayback = musicPlayback,
+                        musicDownloadProgress = musicDownloadProgress,
                         isReadByOther = isReadByOther,
                         onPlayVoice = onPlayVoice, onSeekVoice = onSeekVoice,
+                        onPlayAudio = onPlayAudio, onToggleAudioPlayback = onToggleAudioPlayback,
+                        onSeekAudio = onSeekAudio, onCycleAudioSpeed = onCycleAudioSpeed,
+                        onSaveTrackToLibrary = onSaveTrackToLibrary, onOpenFullscreenAudio = onOpenFullscreenAudio,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onMentionClick = onMentionClick,
                         onOpenComments = onOpenComments, chat = chat,
+                        onCancelUpload = onCancelUpload
                     )
                 }
             }
@@ -398,11 +451,21 @@ fun MessageBubble(
 @Composable
 internal fun TextBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
-    showSenderName: Boolean, voicePlayback: VoicePlaybackState, isReadByOther: Boolean = false,
+    showSenderName: Boolean, voicePlayback: VoicePlaybackState,
+    musicPlayback: MusicPlayerState = MusicPlayerState(),
+    musicDownloadProgress: Map<String, Float> = emptyMap(),
+    isReadByOther: Boolean = false,
     onPlayVoice: (String, Int) -> Unit, onSeekVoice: (Float) -> Unit,
+    onPlayAudio: ((Message) -> Unit)? = null,
+    onToggleAudioPlayback: (() -> Unit)? = null,
+    onSeekAudio: ((Float) -> Unit)? = null,
+    onCycleAudioSpeed: (() -> Unit)? = null,
+    onSaveTrackToLibrary: ((MusicTrack) -> Unit)? = null,
+    onOpenFullscreenAudio: (() -> Unit)? = null,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val bubbleColor = resolveBubbleColor(isMine)
     val textColor   = resolveBubbleTextColor(isMine)
@@ -420,6 +483,8 @@ internal fun TextBubble(
                 messageId = message.id,
                 interactionSource = interactionSource,
                 onTap = null,
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart,
                 onLongPressDrag = onLongPressDrag,
                 onLongPressEnd = onLongPressEnd
@@ -458,7 +523,7 @@ internal fun TextBubble(
                         val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
                         VoiceBubble(
                             messageId = message.id,
-                            url = resolvedUrl ?: "",
+                            url = resolvedUrl ?: message.url ?: "",
                             durationSec = message.duration ?: 0,
                             tint = textColor,
                             playback = voicePlayback,
@@ -467,7 +532,30 @@ internal fun TextBubble(
                             onSeek = onSeekVoice
                         )
                     }
+                    MessageType.AUDIO -> {
+                        AudioMessageBubble(
+                            message = message,
+                            isMine = isMine,
+                            tint = textColor,
+                            musicPlayback = musicPlayback,
+                            uploadProgress = message.uploadProgress,
+                            downloadProgress = musicDownloadProgress[message.id],
+                            onPlay = { onPlayAudio?.invoke(it) },
+                            onTogglePlayPause = { onToggleAudioPlayback?.invoke() },
+                            onSeek = { onSeekAudio?.invoke(it) },
+                            onCycleSpeed = { onCycleAudioSpeed?.invoke() },
+                            onSaveToLibrary = { onSaveTrackToLibrary?.invoke(it) },
+                            onOpenFullscreen = { onOpenFullscreenAudio?.invoke() },
+                            onCancelUpload = onCancelUpload?.let { { it(message.id) } }
+                        )
+                    }
                 }
+
+                DebugMessageBadge(
+                    message = message,
+                    textColor = textColor,
+                    modifier = Modifier.align(Alignment.Start)
+                )
 
                 Row(
                     modifier = Modifier.align(Alignment.End),
@@ -529,6 +617,7 @@ internal fun VideoBubble(
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onMediaTap: (String, String) -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
@@ -541,6 +630,8 @@ internal fun VideoBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { resolvedUrl?.let { onMediaTap(it, message.type) } },
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
@@ -551,6 +642,7 @@ internal fun VideoBubble(
                     mediaId = message.cdnMediaId,
                     type = message.type,
                     localFile = message.localFile,
+                    thumbUrl = message.thumbUrl,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
                     onClick = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onMediaTap(it, message.type) } }
                 )
@@ -563,12 +655,17 @@ internal fun VideoBubble(
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                            )
-                            if (isMine) ReadReceipt(isRead = isReadByOther)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            DebugMessageBadge(message = message, textColor = Color.White)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                                    )
+                                }
+                                if (isMine) ReadReceipt(isRead = isReadByOther)
+                            }
                         }
                     }
                 }
@@ -577,7 +674,8 @@ internal fun VideoBubble(
                     Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
                     UploadProgressOverlay(
                         progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier.matchParentSize(),
+                        onCancel = onCancelUpload?.let { { it(message.id) } }
                     )
                 }
             }
@@ -596,6 +694,7 @@ internal fun ImageBubble(
     message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, 
     onTap: (String) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
@@ -609,6 +708,8 @@ internal fun ImageBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onTap(it) } },
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
@@ -630,12 +731,17 @@ internal fun ImageBubble(
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                            )
-                            if (isMine) ReadReceipt(isRead = isReadByOther)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            DebugMessageBadge(message = message, textColor = Color.White)
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                                    )
+                                }
+                                if (isMine) ReadReceipt(isRead = isReadByOther)
+                            }
                         }
                     }
                 }
@@ -644,7 +750,8 @@ internal fun ImageBubble(
                     Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
                     UploadProgressOverlay(
                         progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize()
+                        modifier = Modifier.matchParentSize(),
+                        onCancel = onCancelUpload?.let { { it(message.id) } }
                     )
                 }
             }
@@ -663,6 +770,7 @@ internal fun AlbumBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
     onAlbumTap: (List<AlbumImage>, Int) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onCancelUpload: ((String) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val revealedIndices = remember { mutableStateOf(setOf<Int>()) }
@@ -675,7 +783,10 @@ internal fun AlbumBubble(
         Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = null, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
+                onTap = null,
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
+                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             shape = VlTheme.tokens.shapes.card,
             color = Color.Transparent // Прозрачный, так как AlbumGrid сам рисует фон/рамку если нужно
@@ -695,21 +806,34 @@ internal fun AlbumBubble(
                     Box(
                         modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End, // Время справа
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                            )
-                            if (isMine) {
-                                Spacer(Modifier.width(3.dp))
-                                ReadReceipt(isRead = isReadByOther)
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            DebugMessageBadge(message = message, textColor = Color.White)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
+                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
+                                    )
+                                    if (isMine) {
+                                        Spacer(Modifier.width(3.dp))
+                                        ReadReceipt(isRead = isReadByOther)
+                                    }
+                                }
                             }
                         }
                     }
+                }
+
+                if (message.uploadProgress != null) {
+                    UploadProgressOverlay(
+                        progress = message.uploadProgress!!,
+                        modifier = Modifier.matchParentSize(),
+                        onCancel = onCancelUpload?.let { { it(message.id) } }
+                    )
                 }
             }
         }
@@ -728,6 +852,7 @@ internal fun StickerBubble(
     hapticEnabled: Boolean,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit,
+    onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -738,12 +863,21 @@ internal fun StickerBubble(
         Box(
             modifier = Modifier.size(160.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = { /* no-op */ }, onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
+                onTap = { onStickerClick?.invoke(message.packId, message.stickerId) },
+                onDoubleTap = { onReact("❤️") },
+                hapticEnabled = hapticEnabled,
+                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
             contentAlignment = Alignment.Center
         ) {
             CachedImage(model = message.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         }
+
+        DebugMessageBadge(
+            message = message,
+            textColor = resolveBubbleTextColor(isMine),
+            modifier = Modifier.align(if (isMine) Alignment.End else Alignment.Start)
+        )
 
         InlinedReactionRow(
             reactions = message.parsedReactions, currentUid = currentUid, isMine = isMine,
@@ -861,37 +995,21 @@ internal fun LinkifiedText(
     Text(
         text = annotatedString, color = color, style = MaterialTheme.typography.bodyMedium,
         onTextLayout = { layoutResult.value = it },
-        modifier = Modifier.pointerInput(Unit) {
-            awaitEachGesture {
-                val down = awaitFirstDown(requireUnconsumed = false)
-                var upEvent: PointerInputChange? = null
-                var isTap = true
-
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val change = event.changes.firstOrNull() ?: break
-                    if (change.isConsumed) { isTap = false }
-                    if (!change.pressed) { upEvent = change; break }
-                }
-
-                if (isTap && upEvent != null) {
-                    val pos = upEvent.position
-                    layoutResult.value?.let { layout ->
-                        if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
-                            val offset = layout.getOffsetForPosition(pos)
-                            annotatedString.getStringAnnotations("URL", offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
-                                    upEvent.consume()
-                                    return@awaitEachGesture
-                                }
-                            annotatedString.getStringAnnotations("MENTION", offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    onMentionClick(annotation.item.removePrefix("@"))
-                                    upEvent.consume()
-                                    return@awaitEachGesture
-                                }
-                        }
+        modifier = Modifier.pointerInput(annotatedString) {
+            detectTapGestures { pos ->
+                layoutResult.value?.let { layout ->
+                    if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
+                        val offset = layout.getOffsetForPosition(pos)
+                        annotatedString.getStringAnnotations("URL", offset, offset)
+                            .firstOrNull()?.let { annotation ->
+                                try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
+                                return@detectTapGestures
+                            }
+                        annotatedString.getStringAnnotations("MENTION", offset, offset)
+                            .firstOrNull()?.let { annotation ->
+                                onMentionClick(annotation.item.removePrefix("@"))
+                                return@detectTapGestures
+                            }
                     }
                 }
             }

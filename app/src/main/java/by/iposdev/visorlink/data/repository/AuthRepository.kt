@@ -9,6 +9,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 
+import by.iposdev.visorlink.data.remote.chat.SyncUserRequest
+import by.iposdev.visorlink.data.remote.chat.VisorLinkApi
+import by.iposdev.visorlink.data.repository.FlagsRepository
+
 // ─── Auth state ───────────────────────────────────────────────────────────────
 
 sealed class AuthState {
@@ -19,36 +23,38 @@ sealed class AuthState {
 
 class AuthRepository(
     private val auth: FirebaseAuth,
-    private val functions: FirebaseFunctions          // inject via Koin
+    private val functions: FirebaseFunctions,          // inject via Koin
+    private val api: VisorLinkApi? = null,
+    private val flagsRepository: FlagsRepository? = null
 ) {
     val currentUser: FirebaseUser? get() = auth.currentUser
     val currentUid: String? get() = auth.currentUser?.uid
+
+    fun getCurrentAuthState(): AuthState {
+        val user = auth.currentUser
+        return when {
+            user == null         -> AuthState.NoSession
+            user.isEmailVerified -> AuthState.Verified(user)
+            else                 -> AuthState.Unverified(user)
+        }
+    }
 
     // Emits on every auth state change AND on every ID token refresh.
     // AuthStateListener fires on login/logout but NOT when emailVerified flips.
     // IdTokenListener fires after user.reload() + getIdToken(true), catching
     // the verification case that AuthStateListener misses.
     val authState: Flow<AuthState> = callbackFlow {
-        fun currentState(): AuthState {
-            val user = auth.currentUser
-            return when {
-                user == null           -> AuthState.NoSession
-                user.isEmailVerified   -> AuthState.Verified(user)
-                else                   -> AuthState.Unverified(user)
-            }
-        }
-
         // ИСПРАВЛЕНИЕ: Используем классические анонимные классы (object : Interface)
         // вместо лямбд. Это обходит баг компилятора Kotlin с UnknownInitialization.
         val authListener = object : FirebaseAuth.AuthStateListener {
             override fun onAuthStateChanged(firebaseAuth: FirebaseAuth) {
-                trySend(currentState())
+                trySend(getCurrentAuthState())
             }
         }
 
         val tokenListener = object : FirebaseAuth.IdTokenListener {
             override fun onIdTokenChanged(firebaseAuth: FirebaseAuth) {
-                trySend(currentState())
+                trySend(getCurrentAuthState())
             }
         }
 
@@ -62,16 +68,7 @@ class AuthRepository(
     }
 
     // ── Registration ──────────────────────────────────────────────────────────
-    /**
-     * Per guideline §2.1:
-     *  1. createUserWithEmailAndPassword
-     *  2. Call createUserProfile Cloud Function (writes /users + /usernames atomically)
-     *  3. sendEmailVerification
-     *
-     * Client no longer writes to Firestore directly — security rules require
-     * email_verified == true, so we delegate to the CF (Admin SDK bypasses rules).
-     */
-    suspend fun register(email: String, password: String, username: String) {
+    suspend fun register(email: String, password: String, username: String, inviteCode: String? = null) {
         val clean = username.lowercase().trim()
         require(clean.length in 3..32) { "Username must be 3–32 characters" }
         require(Regex("^[a-zA-Z0-9_]+\$").matches(clean)) {
@@ -82,19 +79,47 @@ class AuthRepository(
         val cred = auth.createUserWithEmailAndPassword(email, password).await()
         val user = cred.user ?: error("Auth account creation returned null user")
 
-        // Step 2 — create Firestore profile via Cloud Function
-        // CF validates username, writes /users/{uid} and /usernames/{username} atomically.
-        // If username is taken the CF deletes the Auth account and throws already-exists.
-        try {
-            functions
-                .getHttpsCallable("createUserProfile")
-                .call(mapOf("username" to username.trim()))
-                .await()
-        } catch (e: Exception) {
-            // CF already deleted the Auth account if username is taken.
-            // Attempt local cleanup as a safety net for other errors.
-            runCatching { user.delete().await() }
-            throw mapFunctionsError(e)
+        // Step 2 — create profile
+        suspend fun cleanupOrphanAccount() {
+            var deleted = false
+            for (attempt in 1..3) {
+                try {
+                    user.delete().await()
+                    deleted = true
+                    break
+                } catch (_: Exception) {
+                    kotlinx.coroutines.delay(500L * attempt)
+                }
+            }
+            if (!deleted) {
+                // If account deletion fails, sign out so the app doesn't stay in an orphaned uninitialized state
+                try { auth.signOut() } catch (_: Exception) {}
+            }
+        }
+
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                api.syncUser(SyncUserRequest(username = username.trim()))
+            } catch (e: Exception) {
+                cleanupOrphanAccount()
+                throw e
+            }
+        } else {
+            try {
+                val profileParams = mutableMapOf<String, Any>("username" to username.trim())
+                if (!inviteCode.isNullOrBlank()) {
+                    profileParams["inviteCode"] = inviteCode.trim()
+                }
+                functions
+                    .getHttpsCallable("createUserProfile")
+                    .call(profileParams)
+                    .await()
+            } catch (e: Exception) {
+                // CF already deleted the Auth account if username is taken.
+                // Attempt local cleanup as a safety net for other errors.
+                cleanupOrphanAccount()
+                throw mapFunctionsError(e)
+            }
         }
 
         // Step 3 — send verification email
@@ -105,7 +130,13 @@ class AuthRepository(
     // ── Login ─────────────────────────────────────────────────────────────────
     suspend fun login(email: String, password: String) {
         auth.signInWithEmailAndPassword(email, password).await()
+        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
+            try {
+                api.syncUser(SyncUserRequest())
+            } catch (_: Exception) {}
+        }
     }
+
 
     suspend fun sendPasswordResetEmail(email: String) {
         auth.sendPasswordResetEmail(email.trim()).await()
@@ -153,6 +184,71 @@ class AuthRepository(
         return result.claims["auth_time"]?.toString()
     }
 
+    // ── Invite-Only Registration ─────────────────────────────────────────────
+
+    suspend fun checkRegistrationCode(code: String): Boolean {
+        val res = functions
+            .getHttpsCallable("checkRegistrationCode")
+            .call(mapOf("code" to code.trim()))
+            .await()
+        val data = res.data as? Map<*, *> ?: return false
+        return data["valid"] == true
+    }
+
+    suspend fun requestAccess(email: String, username: String, note: String): String {
+        val res = functions
+            .getHttpsCallable("requestAccess")
+            .call(mapOf(
+                "email" to email.trim(),
+                "username" to username.trim(),
+                "note" to note.trim()
+            ))
+            .await()
+        val data = res.data as? Map<*, *> ?: return ""
+        return (data["requestId"] as? String) ?: ""
+    }
+
+    suspend fun adminListAccessRequests(status: String = "pending"): List<by.iposdev.visorlink.data.model.AccessRequest> {
+        val res = functions
+            .getHttpsCallable("adminListAccessRequests")
+            .call(mapOf("status" to status))
+            .await()
+        val data = res.data as? Map<*, *> ?: return emptyList()
+        val list = data["requests"] as? List<Map<String, Any?>> ?: return emptyList()
+        return list.map { item ->
+            by.iposdev.visorlink.data.model.AccessRequest(
+                requestId = item["requestId"] as? String ?: "",
+                email = item["email"] as? String ?: "",
+                username = item["username"] as? String ?: "",
+                note = item["note"] as? String ?: "",
+                status = item["status"] as? String ?: "pending"
+            )
+        }
+    }
+
+    suspend fun adminApproveAccessRequest(requestId: String) {
+        functions
+            .getHttpsCallable("adminApproveAccessRequest")
+            .call(mapOf("requestId" to requestId))
+            .await()
+    }
+
+    suspend fun adminRejectAccessRequest(requestId: String) {
+        functions
+            .getHttpsCallable("adminRejectAccessRequest")
+            .call(mapOf("requestId" to requestId))
+            .await()
+    }
+
+    suspend fun adminCreateRegistrationCode(note: String = ""): String {
+        val res = functions
+            .getHttpsCallable("adminCreateRegistrationCode")
+            .call(mapOf("note" to note))
+            .await()
+        val data = res.data as? Map<*, *> ?: return ""
+        return (data["code"] as? String) ?: ""
+    }
+
     // ── Logout ────────────────────────────────────────────────────────────────
     fun logout() = auth.signOut()
 
@@ -168,6 +264,8 @@ class AuthRepository(
             "weak-password"               in msg -> Exception("Password is too short (minimum 6 characters).")
             "too-many-requests"           in msg -> Exception("Too many attempts. Please wait a moment and try again.")
             "network-request-failed"      in msg -> Exception("Network error. Check your connection and try again.")
+            "invalid-invite"              in msg -> Exception("Invalid or already used invite code.")
+            "invite-required"             in msg -> Exception("A valid invite code is required to register.")
             else                                 -> e
         }
     }

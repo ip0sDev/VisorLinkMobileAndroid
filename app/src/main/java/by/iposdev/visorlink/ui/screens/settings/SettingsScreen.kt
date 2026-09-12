@@ -47,6 +47,7 @@ import by.iposdev.visorlink.ui.components.settings.*
 import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import com.ipos.store.sdk.IposStoreUpdates
+import com.ipos.store.sdk.UpdateChannel
 import by.iposdev.visorlink.utils.AppLanguage
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.StealthManager
@@ -88,6 +89,7 @@ fun SettingsScreen(
     val currentLang by themeViewModel.language.collectAsState()
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
     val compactChatList by themeViewModel.compactChatList.collectAsState()
+    val showDebugIds by themeViewModel.showDebugIds.collectAsState()
 
     val profileFlow = remember(userRepository) { userRepository.currentUserFlow() }
     val profile by profileFlow.collectAsState(initial = null)
@@ -125,6 +127,19 @@ fun SettingsScreen(
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showLegalDialog by remember { mutableStateOf(false) }
+
+    val visorSettingsPrefs = remember { context.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE) }
+    var updateChannelStr by remember {
+        mutableStateOf(visorSettingsPrefs.getString("update_channel", "release") ?: "release")
+    }
+    val currentUpdateChannel = remember(updateChannelStr) {
+        try {
+            UpdateChannel.fromString(updateChannelStr)
+        } catch (_: IllegalArgumentException) {
+            UpdateChannel.RELEASE
+        }
+    }
+    var showChannelDialog by remember { mutableStateOf(false) }
 
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
@@ -234,6 +249,19 @@ fun SettingsScreen(
                     VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
                     VlSettingsItem(icon = Icons.Default.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
                     VlSettingsItem(icon = Icons.Default.Explore, iconColor = Color(0xFF10B981), title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsState().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
+                    val musicEnabled by themeViewModel.musicEnabled.collectAsState()
+                    VlSettingsItem(
+                        icon = Icons.Default.MusicNote,
+                        iconColor = Color(0xFFEC4899),
+                        title = stringResource(R.string.music_settings_title),
+                        subtitle = stringResource(R.string.music_settings_desc),
+                        trailing = {
+                            VlSwitch(
+                                checked = musicEnabled,
+                                onCheckedChange = { themeViewModel.setMusicEnabled(it) }
+                            )
+                        }
+                    )
                 }
 
                 VlSettingsSection(title = stringResource(R.string.diary_title)) {
@@ -247,10 +275,8 @@ fun SettingsScreen(
                                 checked = profile?.diaryEnabled ?: false,
                                 onCheckedChange = { v ->
                                     haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                    scope.launch {
-                                        val uid = profile?.uid ?: return@launch
-                                        Firebase.firestore.collection("users").document(uid).update("diaryEnabled", v)
-                                    }
+                                    val uid = profile?.uid ?: return@VlSwitch
+                                    userRepository.updateDiaryEnabled(uid, v)
                                 }
                             )
                         }
@@ -268,8 +294,8 @@ fun SettingsScreen(
                                     { _, h, m ->
                                         val time = String.format(Locale.US, "%02d:%02d", h, m)
                                         scope.launch {
-                                            val uid = profile?.uid ?: return@launch
-                                            Firebase.firestore.collection("users").document(uid).update("diaryReminderTime", time)
+                                            val currentReminders = profile?.diaryRemindersEnabled ?: false
+                                            userRepository.updateDiaryReminders(currentReminders, time)
                                         }
                                     },
                                     parts[0].toInt(),
@@ -284,8 +310,8 @@ fun SettingsScreen(
                                     onCheckedChange = { v ->
                                         haptic.perform(HapticType.SELECTION, hapticEnabled)
                                         scope.launch {
-                                            val uid = profile?.uid ?: return@launch
-                                            Firebase.firestore.collection("users").document(uid).update("diaryRemindersEnabled", v)
+                                            val currentTime = profile?.diaryReminderTime ?: "21:00"
+                                            userRepository.updateDiaryReminders(v, currentTime)
                                         }
                                     }
                                 )
@@ -358,6 +384,20 @@ fun SettingsScreen(
                             }
                         }
                     )
+                    val channelSubtitle = when (currentUpdateChannel) {
+                        UpdateChannel.RELEASE -> stringResource(R.string.settings_update_channel_release)
+                        UpdateChannel.BETA -> stringResource(R.string.settings_update_channel_beta)
+                        UpdateChannel.NIGHTLY -> stringResource(R.string.settings_update_channel_nightly)
+                    }
+                    VlSettingsItem(
+                        icon = Icons.Default.Tune,
+                        iconColor = colorUpdateChan,
+                        title = stringResource(R.string.settings_update_channel),
+                        subtitle = channelSubtitle,
+                        onClick = {
+                            showChannelDialog = true
+                        }
+                    )
                     VlSettingsItem(
                         icon = Icons.Default.Sync,
                         iconColor = colorUpdateCheck,
@@ -368,7 +408,7 @@ fun SettingsScreen(
                             Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
                             scope.launch {
                                 try {
-                                    val update = IposStoreUpdates.checkUpdate()
+                                    val update = IposStoreUpdates.checkUpdate(channel = currentUpdateChannel)
                                     if (update == null && IposStoreUpdates.isStoreInstalled()) {
                                         Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
                                     }
@@ -393,7 +433,7 @@ fun SettingsScreen(
                 VlSettingsSection(title = stringResource(R.string.settings_section_account)) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
                     if (flags.isEnabled("2fa_enabled")) {
-                        VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { val uid = profile?.uid ?: return@launch; Firebase.firestore.collection("users").document(uid).update("tfaEnabled", v) } }) })
+                        VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
                     }
                     VlSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
@@ -429,6 +469,18 @@ fun SettingsScreen(
                     if (flags.isEnabled("aegis_debug_mode_enabled")) VlSettingsItem(icon = Icons.Default.Terminal, title = "Aegis Project Debug", onClick = onOpenAegisDebug)
                     if (flags.isFlipperEnabled) VlSettingsItem(icon = Icons.Default.ToggleOn, title = "Flag Flipper", onClick = onOpenFlagFlipper)
                     VlSettingsItem(
+                        icon = Icons.Default.BugReport,
+                        iconColor = MaterialTheme.colorScheme.tertiary,
+                        title = stringResource(R.string.settings_debug_show_ids_title),
+                        subtitle = stringResource(R.string.settings_debug_show_ids_desc),
+                        trailing = {
+                            VlSwitch(
+                                checked = showDebugIds,
+                                onCheckedChange = { themeViewModel.setShowDebugIds(it) }
+                            )
+                        }
+                    )
+                    VlSettingsItem(
                         icon = Icons.Default.Info, 
                         title = "VisorLink", 
                         subtitle = "Версия $versionString",
@@ -445,7 +497,6 @@ fun SettingsScreen(
                         subtitle = "Условия использования и конфиденциальность",
                         onClick = { showLegalDialog = true }
                     )
-                    VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                 }
 
                 Spacer(Modifier.height(padding.calculateBottomPadding() + 32.dp))
@@ -567,6 +618,64 @@ fun SettingsScreen(
             onDismissReadOnly = { showLegalDialog = false }
         )
     }
+
+    if (showChannelDialog) {
+        val channels = listOf(
+            Triple(UpdateChannel.RELEASE, "release", stringResource(R.string.settings_update_channel_release)),
+            Triple(UpdateChannel.BETA, "beta", stringResource(R.string.settings_update_channel_beta)),
+            Triple(UpdateChannel.NIGHTLY, "nightly", stringResource(R.string.settings_update_channel_nightly))
+        )
+
+        VlAlertDialog(
+            onDismissRequest = { showChannelDialog = false },
+            title = { Text(stringResource(R.string.settings_update_channel_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    channels.forEach { (channel, chKey, label) ->
+                        val isSelected = currentUpdateChannel == channel
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    updateChannelStr = chKey
+                                    visorSettingsPrefs.edit().putString("update_channel", chKey).apply()
+                                    IposStoreUpdates.init(context, channel = channel)
+                                    showChannelDialog = false
+                                    Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
+                                },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = isSelected,
+                                    onClick = null
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            actions = {
+                VlDialogButton(onClick = { showChannelDialog = false }) {
+                    Text(stringResource(R.string.action_close))
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -684,10 +793,64 @@ fun ChangePasswordDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> U
 @Composable
 private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, proState: ProUiState, hapticEnabled: Boolean) {
     VlSettingsSection(title = stringResource(R.string.pro_title), isPremium = true) {
-        VlSettingsItem(icon = Icons.Default.WorkspacePremium, title = if (profile.isProActive()) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive))
-        VlSettingsItem(icon = Icons.Default.Toll, title = stringResource(R.string.pro_bits), trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = Color(0xFFC5A059)) })
+        val expirySubtitle = if (profile.isProActive() && profile.proUntil != null) {
+            val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(profile.proUntil.toDate())
+            "Активен до $dateStr"
+        } else null
+
+        VlSettingsItem(
+            icon = Icons.Default.WorkspacePremium,
+            title = if (profile.isProActive()) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive),
+            subtitle = expirySubtitle
+        )
+        VlSettingsItem(
+            icon = Icons.Default.Toll,
+            title = stringResource(R.string.pro_bits),
+            trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = Color(0xFFC5A059)) }
+        )
+
         if (!profile.isProActive()) {
-            Button(onClick = { proViewModel.buyPro(false) }, modifier = Modifier.padding(16.dp).fillMaxWidth()) { Text(stringResource(R.string.pro_action_buy, 1000)) }
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                if (!profile.trialUsed) {
+                    OutlinedButton(
+                        onClick = { proViewModel.buyPro(true) },
+                        enabled = !proState.isLoading,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Попробовать PRO бесплатно (1 день)")
+                    }
+                }
+                Button(
+                    onClick = { proViewModel.buyPro(false) },
+                    enabled = !proState.isLoading,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (proState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                    } else {
+                        Text(stringResource(R.string.pro_action_buy, 100))
+                    }
+                }
+            }
+        }
+
+        if (proState.error != null) {
+            Text(
+                text = proState.error,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+        if (proState.successMessage != null) {
+            Text(
+                text = proState.successMessage,
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
         }
     }
 }

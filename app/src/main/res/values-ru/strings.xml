@@ -28,6 +28,10 @@
     <string name="login_button">Войти</string>
     <string name="login_no_account">Нет аккаунта?\u0020</string>
     <string name="login_register_link">Регистрация</string>
+    <string name="error_fill_all_fields">Пожалуйста, заполните все поля</string>
+    <string name="error_fill_email_username">Пожалуйста, заполните email и имя пользователя</string>
+    <string name="error_specify_reset_email">Укажите email для сброса пароля</string>
+    <string name="error_generic">Произошла ошибка</string>
 
     <!-- Auth — 2FA -->
     <string name="tfa_title">Двухфакторная защита</string>
@@ -85,7 +89,10 @@
     <string name="chat_empty_title">Нет сообщений</string>
     <string name="chat_empty_subtitle">Поздоровайтесь! 👋</string>
 
-    <!-- Chat Screen — Typing -->
+    <!-- Chat Screen — Network and Typing Status -->
+    <string name="status_waiting_for_network">Ожидание сети…</string>
+    <string name="status_connecting">Соединение…</string>
+    <string name="status_updating">Обновление…</string>
     <string name="chat_typing">печатает</string>
     <string name="chat_date_today">Сегодня</string>
     <string name="chat_date_yesterday">Вчера</string>
@@ -435,6 +442,7 @@
     <string name="forward_from_saved">Переслано из Избранного</string>
     <string name="forward_not_allowed">Пересылка запрещена</string>
     <string name="forward_picker_title">Переслать в…</string>
+    <string name="toast_message_forwarded">Сообщение переслано</string>
     <string name="settings_no_forwards">Запретить пересылку</string>
     <string name="saved_messages_title">Избранное</string>
 
@@ -581,9 +589,18 @@
     <string name="settings_stealth_biometric">Разблокировка по отпечатку</string>
     <string name="settings_stealth_biometric_sub">Открывать режим скрытия отпечатком вместо PIN-кода</string>
     <string name="stealth_biometric_unavailable">Биометрия недоступна или не настроена на устройстве</string>
+    <string name="decoy_biometric_title">СЛУЖЕБНЫЙ ДОСТУП</string>
+    <string name="decoy_biometric_sub">Подтвердите вход отпечатком пальца</string>
+    <string name="decoy_biometric_negative">Ввести PIN</string>
+    <string name="btn_cancel">Отмена</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Канал обновлений</string>
+    <string name="settings_update_channel_sub">Выберите ветку получения версий</string>
+    <string name="settings_update_channel_dialog_title">Выбор канала обновлений</string>
+    <string name="settings_update_channel_release">Release (стабильные версии)</string>
+    <string name="settings_update_channel_beta">Beta (публичные бета-версии)</string>
+    <string name="settings_update_channel_nightly">Nightly (ночные сборки)</string>
     <string name="settings_update_channel_current">Текущий: %1$s</string>
 
     <!-- Settings — Account -->
@@ -646,9 +663,9 @@
     <string name="topics_delete_confirm">Удалить тему?</string>
     <string name="topics_delete_warning">Все сообщения и задачи в этой теме будут удалены</string>
     <string name="tasks_title">Задачи</string>
-    <string name="tasks_tab_kanban">📋 Канбан-доска</string>
-    <string name="tasks_tab_list">📄 Список задач</string>
-    <string name="tasks_tab_chat">💬 Обсуждение</string>
+    <string name="tasks_tab_kanban">Канбан</string>
+    <string name="tasks_tab_list">Список</string>
+    <string name="tasks_tab_chat">Чат</string>
     <string name="tasks_all_topics">Все темы</string>
     <string name="tasks_progress_format">%1$d/%2$d выполнено (%3$d%%)</string>
     <string name="tasks_create_title">Новая задача</string>
@@ -675,4 +692,74 @@
     <string name="chat_settings_forum_mode">Темы (Режим форума)</string>
     <string name="chat_settings_forum_mode_sub">Разделить группу на темы с канбаном и задачами</string>
     <string name="topics_permission_denied">Действие запрещено правами доступа</string>
+
+    <!-- Backend Fallback -->
+    <string name="backend_fallback_dialog_title">Проблемы с подключением</string>
+    <string name="backend_fallback_dialog_desc">Не удаётся связаться с новым бэкендом (6 неудачных попыток подряд). Хотите временно переключиться на старый бэкенд Firebase?</string>
+    <string name="backend_fallback_action_switch">Переключиться на Firebase</string>
+    <string name="backend_fallback_action_stay">Подождать</string>
+    <string name="backend_fallback_banner_title">Резервный режим (Firebase)</string>
+    <string name="backend_fallback_banner_desc">Включен старый бэкенд. Пожалуйста, сообщайте о критических ошибках в работе сервиса разработчикам.</string>
+    <string name="backend_fallback_banner_action_retry">Попробовать новый бэкенд</string>
+    <string name="backend_fallback_banner_action_report">Сообщить об ошибке</string>
+
+    <!-- ANDROID_FEATURES_INTEGRATION_SPEC additions -->
+    <string name="channel_subscribe">📢 Подписаться</string>
+    <string name="channel_subscribing">Подписка…</string>
+    <string name="channel_subscribers_count">%1$d подписчиков</string>
+    <string name="channel_only_admins_post">📢 Только администраторы могут писать</string>
+    <string name="bot_generating_banner">Бот генерирует ответ... Пожалуйста, дождитесь завершения.</string>
+    <string name="bot_generating_placeholder">⏳ Бот генерирует ответ... Пожалуйста, подождите.</string>
+    <string name="register_invite_code">Инвайт-код</string>
+    <string name="register_invite_code_hint">Введите код приглашения</string>
+    <string name="register_invite_invalid">Недействительный или уже использованный инвайт-код</string>
+    <string name="register_request_access_button">Запросить доступ</string>
+    <string name="register_request_access_title">Заявка на доступ</string>
+    <string name="register_request_access_desc">VisorLink работает по инвайтам. Заполните форму, и администратор рассмотрит вашу заявку.</string>
+    <string name="register_request_note_label">Цель регистрации / Примечание</string>
+    <string name="register_request_submit">Отправить заявку</string>
+    <string name="register_request_success">Заявка успешно отправлена! Мы свяжемся с вами по email.</string>
+    <string name="secret_token_warning">⚠️ Скопируйте и сохраните токен прямо сейчас. Он отображается один раз и не может быть восстановлен!</string>
+    <string name="secret_token_copy">Скопировать токен</string>
+    <string name="secret_token_copied">Скопировано в буфер!</string>
+    <string name="secret_token_done">Готово, я сохранил токен</string>
+    <string name="forward_from_saved_banner">↩ Переслано из Избранного</string>
+    <string name="forward_from_user">↩ Переслано от @%1$s</string>
+    <string name="forward_from_user_chat">↩ Переслано от @%1$s · %2$s</string>
+    <string name="forwarding_disabled_channel">Пересылка сообщений из этого чата запрещена</string>
+
+    <!-- Music & Audio Player -->
+    <string name="nav_tab_music">Музыка</string>
+    <string name="music_title">Музыка</string>
+    <string name="music_tab_playlists">Плейлисты</string>
+    <string name="music_tab_all_tracks">Все треки</string>
+    <string name="music_tab_device">Устройство</string>
+    <string name="music_playlist_favorites">Понравившиеся</string>
+    <string name="music_playlist_create">Создать плейлист</string>
+    <string name="music_playlist_name">Название плейлиста</string>
+    <string name="music_add_to_playlist">В плейлист</string>
+    <string name="music_added_to_favorites">Добавлено в Понравившиеся</string>
+    <string name="music_removed_from_favorites">Удалено из Понравившихся</string>
+    <string name="music_track_unknown">Без названия</string>
+    <string name="music_artist_unknown">Неизвестный исполнитель</string>
+    <string name="music_empty_tracks">Здесь пока нет треков</string>
+    <string name="music_empty_playlists">Нет созданных плейлистов</string>
+    <string name="music_device_permission_needed">Для воспроизведения треков предоставьте доступ к аудиофайлам устройства</string>
+    <string name="music_grant_permission">Предоставить доступ</string>
+    <string name="music_settings_title">Музыка</string>
+    <string name="music_settings_desc">Отображать вкладку Музыка в нижней панели и встроенный плеер</string>
+    <string name="music_onboarding_title">Встречайте Музыку в VisorLink!</string>
+    <string name="music_onboarding_desc">Слушайте треки прямо в чатах, сохраняйте любимую музыку в плейлист «Понравившиеся» и импортируйте треки с устройства.</string>
+    <string name="music_onboarding_enable">Включить музыку</string>
+    <string name="music_onboarding_disable">Не сейчас</string>
+    <string name="music_send_audio">Аудиозапись</string>
+    <string name="music_edit_metadata">Редактировать аудио</string>
+    <string name="music_save_to_library">Сохранить в медиатеку</string>
+    <string name="music_downloading">Скачивание трека…</string>
+    <string name="music_download_complete">Трек сохранен в медиатеку</string>
+
+    <!-- Debug Mode -->
+    <string name="settings_debug_show_ids_title">Режим отладки (ID и seq)</string>
+    <string name="settings_debug_show_ids_desc">Отображать ID сообщений, счетчик seq и UID пользователей</string>
+    <string name="uid_copied_toast">UID скопирован</string>
 </resources>

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -26,12 +27,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
 import by.iposdev.visorlink.data.model.ChatType
+import by.iposdev.visorlink.data.model.SyncState
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlBrandText
 import by.iposdev.visorlink.ui.components.VlTopAppBar
 import by.iposdev.visorlink.ui.components.chatlist.*
 import by.iposdev.visorlink.ui.theme.*
 import by.iposdev.visorlink.utils.HapticType
+import by.iposdev.visorlink.utils.NotificationHelper
 import by.iposdev.visorlink.utils.rememberHaptic
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -56,16 +59,30 @@ fun ChatListScreen(
     val profileCache by viewModel.profileCache.collectAsState()
     val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
     val drafts by viewModel.drafts.collectAsState()
+    val isManualFallbackActive by viewModel.isManualFallbackActive.collectAsState()
+    val typingMap by viewModel.typingMap.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val compactList by themeViewModel.compactChatList.collectAsState()
 
     val haptic = rememberHaptic()
+    val context = LocalContext.current
 
     var showFabMenu by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+
+    LaunchedEffect(chats) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            chats.forEach { chat ->
+                if (chat.unreadCountFor(viewModel.currentUid) == 0) {
+                    NotificationHelper.clearNotification(context, chat.id)
+                }
+            }
+        }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -94,18 +111,34 @@ fun ChatListScreen(
                             ) + fadeIn(tween(200)),
                             exit = shrinkVertically(tween(150)) + fadeOut(tween(100))
                         ) {
-                            Text(
-                                text = if (chats.isEmpty()) "" else {
-                                    val count = chats.size
-                                    pluralStringResource(
-                                        R.plurals.chatlist_chats_count,
-                                        count,
-                                        count
-                                    )
-                                },
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            AnimatedContent(
+                                targetState = syncState,
+                                transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(150)) },
+                                label = "chatlist_sync_status"
+                            ) { state ->
+                                val (statusText, statusColor) = when (state) {
+                                    SyncState.WAITING_FOR_NETWORK -> stringResource(R.string.status_waiting_for_network) to MaterialTheme.colorScheme.error
+                                    SyncState.CONNECTING -> stringResource(R.string.status_connecting) to MaterialTheme.colorScheme.primary
+                                    SyncState.UPDATING -> stringResource(R.string.status_updating) to MaterialTheme.colorScheme.primary
+                                    SyncState.SYNCED -> {
+                                        val text = if (chats.isEmpty()) "" else {
+                                            val count = chats.size
+                                            pluralStringResource(
+                                                R.plurals.chatlist_chats_count,
+                                                count,
+                                                count
+                                            )
+                                        }
+                                        text to MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                }
+
+                                Text(
+                                    text = statusText,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = statusColor
+                                )
+                            }
                         }
                     }
                 },
@@ -178,11 +211,20 @@ fun ChatListScreen(
                 label = "list_empty_toggle"
             ) { isEmpty ->
                 if (isEmpty) {
-                    ChatListEmptyState(
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
-                    )
+                    ) {
+                        if (isManualFallbackActive) {
+                            BackendFallbackBanner(
+                                onRetryNewBackend = { viewModel.retryNewBackend() }
+                            )
+                        }
+                        ChatListEmptyState(
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 } else {
                     LazyColumn(
                         state = listState,
@@ -192,6 +234,13 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
+                        if (isManualFallbackActive) {
+                            item(key = "backend_fallback_banner") {
+                                BackendFallbackBanner(
+                                    onRetryNewBackend = { viewModel.retryNewBackend() }
+                                )
+                            }
+                        }
                         if (compactList) {
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {
@@ -240,6 +289,8 @@ fun ChatListScreen(
                                             currentUid = viewModel.currentUid,
                                             otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                             draftText = drafts[chat.id],
+                                            unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
+                                            isTyping = typingMap[chat.id] == true,
                                             onClick = {
                                                 if (chat.isForumActive) onOpenTopicList(chat.id)
                                                 else onOpenChat(chat.id, otherUid)
@@ -267,13 +318,19 @@ fun ChatListScreen(
                                     currentUid = viewModel.currentUid,
                                     otherProfile = null,
                                     draftText = drafts[savedChat.id],
+                                    unreadCount = 0,
                                     isSavedMessages = true,
                                     isCompactList = false,
+                                    isTyping = false,
                                     onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
                                 )
                                 Spacer(Modifier.height(8.dp))
                             }
-                            itemsIndexed(chats, key = { _, chat -> chat.id }) { index, chat ->
+                            itemsIndexed(
+                                items = chats,
+                                key = { _, chat -> chat.id },
+                                contentType = { _, _ -> "chat_item" }
+                            ) { index, chat ->
                                 val chatType = chat.chatType()
                                 val otherUid = when (chatType) {
                                     ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
@@ -286,7 +343,9 @@ fun ChatListScreen(
                                     currentUid = viewModel.currentUid,
                                     otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
                                     draftText = drafts[chat.id],
+                                    unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                     isCompactList = compactList,
+                                    isTyping = typingMap[chat.id] == true,
                                     onClick = {
                                         if (chat.isForumActive) onOpenTopicList(chat.id)
                                         else onOpenChat(chat.id, otherUid)

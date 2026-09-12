@@ -22,7 +22,10 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
     private val KEY_COMPACT_LIST = "compact_chat_list"
     private val KEY_DISCOVER_ENABLED = "discover_enabled"
+    private val KEY_MUSIC_ENABLED = "music_enabled"
+    private val KEY_MUSIC_ONBOARDING_SHOWN = "music_onboarding_shown"
     private val KEY_ONBOARDING_VER = "onboarding_version"
+    private val KEY_DEBUG_SHOW_IDS = "debug_show_ids"
     private val CURRENT_ONBOARDING_VERSION = 1
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -54,11 +57,20 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val _discoverEnabled = MutableStateFlow(prefs.getBoolean(KEY_DISCOVER_ENABLED, true))
     val discoverEnabled: StateFlow<Boolean> = _discoverEnabled.asStateFlow()
 
+    private val _musicEnabled = MutableStateFlow(prefs.getBoolean(KEY_MUSIC_ENABLED, true))
+    val musicEnabled: StateFlow<Boolean> = _musicEnabled.asStateFlow()
+
+    private val _showMusicOnboarding = MutableStateFlow(!prefs.getBoolean(KEY_MUSIC_ONBOARDING_SHOWN, false))
+    val showMusicOnboarding: StateFlow<Boolean> = _showMusicOnboarding.asStateFlow()
+
     private val _showOnboarding = MutableStateFlow(prefs.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION)
     val showOnboarding: StateFlow<Boolean> = _showOnboarding.asStateFlow()
 
     private val _language = MutableStateFlow(AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, null) ?: AppLanguage.SYSTEM.code))
     val language: StateFlow<AppLanguage> = _language.asStateFlow()
+
+    private val _showDebugIds = MutableStateFlow(prefs.getBoolean(KEY_DEBUG_SHOW_IDS, false))
+    val showDebugIds: StateFlow<Boolean> = _showDebugIds.asStateFlow()
 
     init {
         prefs.registerOnSharedPreferenceChangeListener(this)
@@ -79,7 +91,10 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
             KEY_DYNAMIC_INPUT -> _dynamicChatInput.value = sharedPreferences.getBoolean(KEY_DYNAMIC_INPUT, true)
             KEY_COMPACT_LIST -> _compactChatList.value = sharedPreferences.getBoolean(KEY_COMPACT_LIST, true)
             KEY_DISCOVER_ENABLED -> _discoverEnabled.value = sharedPreferences.getBoolean(KEY_DISCOVER_ENABLED, true)
+            KEY_MUSIC_ENABLED -> _musicEnabled.value = sharedPreferences.getBoolean(KEY_MUSIC_ENABLED, true)
+            KEY_MUSIC_ONBOARDING_SHOWN -> _showMusicOnboarding.value = !sharedPreferences.getBoolean(KEY_MUSIC_ONBOARDING_SHOWN, false)
             KEY_ONBOARDING_VER -> _showOnboarding.value = sharedPreferences.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION
+            KEY_DEBUG_SHOW_IDS -> _showDebugIds.value = sharedPreferences.getBoolean(KEY_DEBUG_SHOW_IDS, false)
             KEY_LANGUAGE -> {
                 val langStr = sharedPreferences.getString(KEY_LANGUAGE, null)
                 if (langStr != null) _language.value = AppLanguage.fromCode(langStr)
@@ -95,6 +110,19 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     fun setDynamicChatInput(enabled: Boolean) = prefs.edit().putBoolean(KEY_DYNAMIC_INPUT, enabled).apply()
     fun setCompactChatList(enabled: Boolean) = prefs.edit().putBoolean(KEY_COMPACT_LIST, enabled).apply()
     fun setDiscoverEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_DISCOVER_ENABLED, enabled).apply()
+    fun setMusicEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MUSIC_ENABLED, enabled).apply()
+    fun setShowDebugIds(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_DEBUG_SHOW_IDS, enabled).apply()
+        _showDebugIds.value = enabled
+    }
+    fun completeMusicOnboarding(enableMusic: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_MUSIC_ONBOARDING_SHOWN, true)
+            .putBoolean(KEY_MUSIC_ENABLED, enableMusic)
+            .apply()
+        _showMusicOnboarding.value = false
+        _musicEnabled.value = enableMusic
+    }
     fun completeOnboarding() = prefs.edit().putInt(KEY_ONBOARDING_VER, CURRENT_ONBOARDING_VERSION).apply()
     fun setLanguage(language: AppLanguage) {
         prefs.edit().putString(KEY_LANGUAGE, language.code).apply()

@@ -4,6 +4,7 @@ package by.iposdev.visorlink.di
 import by.iposdev.visorlink.data.aegis.*
 import by.iposdev.visorlink.data.remote.flags.AegisKeyManager
 import by.iposdev.visorlink.data.remote.flags.FlagsApi
+import by.iposdev.visorlink.data.remote.chat.BackendConnectivityInterceptor
 import by.iposdev.visorlink.data.remote.chat.ChatWebSocketClient
 import by.iposdev.visorlink.data.remote.chat.DynamicBaseUrlInterceptor
 import by.iposdev.visorlink.data.remote.chat.FirebaseAuthInterceptor
@@ -14,6 +15,7 @@ import by.iposdev.visorlink.ui.aegis.LinkDebugViewModel
 import by.iposdev.visorlink.ui.appcheck.AppCheckViewModel
 import by.iposdev.visorlink.ui.screens.auth.AuthViewModel
 import by.iposdev.visorlink.ui.screens.chat.ChatViewModel
+import by.iposdev.visorlink.ui.screens.music.MusicViewModel
 import by.iposdev.visorlink.ui.screens.diary.DiaryViewModel
 import by.iposdev.visorlink.ui.screens.chatlist.ChatListViewModel
 import by.iposdev.visorlink.ui.screens.main.MainViewModel
@@ -33,6 +35,7 @@ import by.iposdev.visorlink.ui.screens.settings.FlagFlipperViewModel
 import by.iposdev.visorlink.ui.screens.stickers.StickerPackViewModel
 import by.iposdev.visorlink.ui.screens.topics.TopicListViewModel
 import by.iposdev.visorlink.ui.screens.topics.TaskTrackerViewModel
+import by.iposdev.visorlink.ui.components.mediapicker.MediaPickerViewModel
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
 import by.iposdev.visorlink.utils.CacheManager
 import by.iposdev.visorlink.utils.TfaManager
@@ -52,6 +55,7 @@ import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.core.qualifier.named
+import org.koin.dsl.bind
 import org.koin.dsl.module
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -68,6 +72,11 @@ val appModule = module {
     }
     single { Firebase.auth }
     single { Firebase.functions("europe-west1") }
+    single {
+        com.google.firebase.database.FirebaseDatabase.getInstance("https://visorlink-f9484-default-rtdb.europe-west1.firebasedatabase.app")
+    }
+    single { by.iposdev.visorlink.data.repository.TypingRepository(get()) }
+    single { by.iposdev.visorlink.utils.SidebarTypingManager(get()) }
 
     single {
         Retrofit.Builder()
@@ -78,48 +87,56 @@ val appModule = module {
     }
     single { AegisKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
+    single { BackendFallbackManager(androidContext(), get()) { get<VisorLinkApi>() } }
 
     // --- Chat Backend ---
     single(named("chatOkHttp")) {
         OkHttpClient.Builder()
             .addInterceptor(DynamicBaseUrlInterceptor(androidContext()))
+            .addInterceptor(BackendConnectivityInterceptor(get()))
             .addInterceptor(FirebaseAuthInterceptor())
             .build()
     }
     single {
         Retrofit.Builder()
-            .baseUrl("http://10.0.2.2:8080") // Default for emulator, should be configurable
+            .baseUrl("https://backend.visorlink.org/")
             .client(get(named("chatOkHttp")))
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(VisorLinkApi::class.java)
     }
-    single { ChatWebSocketClient(get(named("chatOkHttp"))) }
+    single { ChatWebSocketClient(get(named("chatOkHttp")), get()) }
 
-    single { AuthRepository(get(), get()) }
+    single { AuthRepository(get(), get(), get(), get()) }
     single { ChatRepository(get(), get(), get(), androidContext(), get(), get(), get(), get()) }
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
-    single { BotRepository(get()) }
-    single { LegalRepository(get(), androidContext()) }
+    single { BotRepository(get(), get(), get()) }
+    single { LegalRepository(get(), androidContext(), get(), get()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
+    single { by.iposdev.visorlink.utils.StealthManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
+    single { by.iposdev.visorlink.utils.MusicPlayerManager(androidContext()) }
+    single { MusicDatabase(androidContext()) }
+    single { MusicRepository(androidContext()) }
     single { NetworkMonitor(androidContext()) }
-    single { OutboxManager(androidContext(), get(), get(), get(), get(), get()) }
+    single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), fallbackManager = get()) }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
     single { by.iposdev.visorlink.utils.FcmManager(androidContext(), get(), get()) }
+    single { by.iposdev.visorlink.utils.UsageRankManager(androidContext()) }
 
     viewModel { AppCheckViewModel() }
 
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
-    viewModel { MainViewModel(get(), get()) }
-    viewModel { ChatListViewModel(get(), get(), get(), get()) }
+    viewModel { MainViewModel(get(), get(), get()) }
+    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication(), get(), get()) }
+    viewModel { MusicViewModel(get(), get()) }
 
     viewModel { parameters ->
         ChatViewModel(
@@ -131,7 +148,12 @@ val appModule = module {
             draftManager   = get(),
             chatId         = parameters[0],
             otherUid       = parameters[1],
-            initialTopicId = if (parameters.size() > 2) parameters[2] else null
+            initialTopicId = if (parameters.size() > 2) parameters[2] else null,
+            typingRepository = get(),
+            musicPlayerManager = get(),
+            musicRepository = get(),
+            networkMonitor = get(),
+            usageRankManager = get()
         )
     }
 
@@ -165,7 +187,8 @@ val appModule = module {
             chatRepository = get(),
             userRepository = get(),
             auth           = get(),
-            application    = androidApplication()
+            application    = androidApplication(),
+            usageRankManager = get()
         )
     }
 
@@ -173,7 +196,7 @@ val appModule = module {
     viewModel { ProfileViewModel(get(), get(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
 
-    viewModel { StickerPackViewModel(get(), get()) }
+    viewModel { StickerPackViewModel(get(), get(), get()) }
 
     viewModel { params ->
         ChatSettingsViewModel(
@@ -190,18 +213,19 @@ val appModule = module {
     viewModel { StorageViewModel() }
     viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
 
-    // Передаем Context для работы с файлами
     single { SavedMessagesRepository(get(), androidContext()) }
     single { FeedRepository(get(), get(), androidContext(), get(), get(), get()) }
-    single { ForwardRepository(get()) }
+    single { ForwardRepository(get(), get(), get()) }
+    single { by.iposdev.visorlink.utils.BiometricPinManager(androidContext()) }
 
-    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get()) }
+    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get(), get()) }
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }
     viewModel { CustomizationViewModel(get()) }
     viewModel { FlagFlipperViewModel(get()) }
+    viewModel { MediaPickerViewModel(androidApplication()) }
     
     // ── Aegis Project ──
     single { DictionaryRepository(androidContext()) }

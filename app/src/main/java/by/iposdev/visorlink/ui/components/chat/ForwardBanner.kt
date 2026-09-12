@@ -38,10 +38,14 @@ fun ForwardBanner(
     val accentColor = if (isMine) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.primary
     val bgColor = if (isMine) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
 
-    val label = buildString {
-        append("↩ Переслано")
-        if (forwardFrom.senderUsername.isNotBlank()) append(" от @${forwardFrom.senderUsername}")
-        if (!forwardFrom.chatName.isNullOrBlank()) append(" · ${forwardFrom.chatName}")
+    val label = if (forwardFrom.chatId == null) {
+        "↩ Переслано из Избранного"
+    } else if (!forwardFrom.chatName.isNullOrBlank()) {
+        "↩ Переслано от @${forwardFrom.senderUsername} · ${forwardFrom.chatName}"
+    } else if (forwardFrom.senderUsername.isNotBlank()) {
+        "↩ Переслано от @${forwardFrom.senderUsername}"
+    } else {
+        "↩ Переслано"
     }
 
     Row(

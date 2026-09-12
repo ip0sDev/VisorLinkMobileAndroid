@@ -11,14 +11,12 @@ plugins {
 val commitId: String = if (project.hasProperty("commitId")) {
     project.property("commitId").toString()
 } else {
-    try {
-        val process = Runtime.getRuntime().exec(arrayOf("git", "rev-parse", "--short", "HEAD"))
-        process.inputStream.bufferedReader().readLine()?.trim() ?: ""
-    } catch (_: Exception) {
-        ""
-    }
+    providers.exec {
+        commandLine("git", "rev-parse", "--short", "HEAD")
+        isIgnoreExitValue = true
+    }.standardOutput.asText.map { it.trim() }.getOrElse("")
 }
-val currentChannel = "RELEASE"
+val currentChannel = "BETA"
 
 android {
     namespace = "by.iposdev.visorlink"
@@ -28,11 +26,11 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 134
-        versionName = "3.4.04"
+        versionCode = 147
+        versionName = "3.7.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"RELEASE\"")
+        buildConfigField("String", "CHANNEL", "\"BETA\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -151,6 +149,10 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.jwt.decode)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.video)
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)

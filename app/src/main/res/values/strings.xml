@@ -28,6 +28,10 @@
     <string name="login_button">Sign In</string>
     <string name="login_no_account">Don\'t have an account?\u0020</string>
     <string name="login_register_link">Register</string>
+    <string name="error_fill_all_fields">Please fill in all fields</string>
+    <string name="error_fill_email_username">Please fill in email and username</string>
+    <string name="error_specify_reset_email">Specify email for password reset</string>
+    <string name="error_generic">Something went wrong</string>
 
     <!-- Auth — 2FA -->
     <string name="tfa_title">Two-Factor Protection</string>
@@ -83,7 +87,10 @@
     <string name="chat_empty_title">No messages yet</string>
     <string name="chat_empty_subtitle">Say hi! 👋</string>
 
-    <!-- Chat Screen — Typing -->
+    <!-- Chat Screen — Network and Typing Status -->
+    <string name="status_waiting_for_network">Waiting for network…</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_updating">Updating…</string>
     <string name="chat_typing">typing</string>
     <string name="chat_date_today">Today</string>
     <string name="chat_date_yesterday">Yesterday</string>
@@ -432,8 +439,9 @@
     <string name="forward_from">Переслано от @%1$s</string>
     <string name="forward_from_saved">Переслано из Избранного</string>
     <string name="forward_not_allowed">Пересылка запрещена</string>
-    <string name="forward_picker_title">Переслать в…</string>
-    <string name="settings_no_forwards">No forwards allowed</string>
+    <string name="forward_picker_title">Forward to…</string>
+    <string name="toast_message_forwarded">Message forwarded</string>
+    <string name="settings_no_forwards">Restrict forwarding</string>
     <string name="saved_messages_title">Saved Messages</string>
 
     <!-- Discover Feed -->
@@ -579,9 +587,18 @@
     <string name="settings_stealth_biometric">Fingerprint Unlock</string>
     <string name="settings_stealth_biometric_sub">Open stealth mode with your fingerprint instead of the PIN</string>
     <string name="stealth_biometric_unavailable">Biometrics unavailable or not enrolled on this device</string>
+    <string name="decoy_biometric_title">Service Access</string>
+    <string name="decoy_biometric_sub">Confirm access with fingerprint</string>
+    <string name="decoy_biometric_negative">Enter PIN</string>
+    <string name="btn_cancel">Cancel</string>
 
     <!-- Settings — Updates -->
     <string name="settings_update_channel">Update Channel</string>
+    <string name="settings_update_channel_sub">Select branch for receiving updates</string>
+    <string name="settings_update_channel_dialog_title">Select update channel</string>
+    <string name="settings_update_channel_release">Release (Stable)</string>
+    <string name="settings_update_channel_beta">Beta (Public betas)</string>
+    <string name="settings_update_channel_nightly">Nightly (Fresh builds)</string>
     <string name="settings_update_channel_current">Current: %1$s</string>
 
     <!-- Settings — Account -->
@@ -644,9 +661,9 @@
     <string name="topics_delete_confirm">Delete topic?</string>
     <string name="topics_delete_warning">All messages and tasks in this topic will be deleted</string>
     <string name="tasks_title">Tasks</string>
-    <string name="tasks_tab_kanban">📋 Kanban</string>
-    <string name="tasks_tab_list">📄 Task List</string>
-    <string name="tasks_tab_chat">💬 Discussion</string>
+    <string name="tasks_tab_kanban">Kanban</string>
+    <string name="tasks_tab_list">List</string>
+    <string name="tasks_tab_chat">Chat</string>
     <string name="tasks_all_topics">All topics</string>
     <string name="tasks_progress_format">%1$d/%2$d completed (%3$d%%)</string>
     <string name="tasks_create_title">New Task</string>
@@ -673,4 +690,74 @@
     <string name="chat_settings_forum_mode">Topics (Forum Mode)</string>
     <string name="chat_settings_forum_mode_sub">Split group into topics with tasks and kanban board</string>
     <string name="topics_permission_denied">Action not permitted</string>
+
+    <!-- Backend Fallback -->
+    <string name="backend_fallback_dialog_title">Connection Issues</string>
+    <string name="backend_fallback_dialog_desc">Unable to reach the new server (6 consecutive failed attempts). Would you like to switch to the backup backend (Firebase)?</string>
+    <string name="backend_fallback_action_switch">Switch to Firebase</string>
+    <string name="backend_fallback_action_stay">Wait</string>
+    <string name="backend_fallback_banner_title">Backup Backend (Firebase)</string>
+    <string name="backend_fallback_banner_desc">Backup backend is currently active. Please report any critical issues to help us improve the service.</string>
+    <string name="backend_fallback_banner_action_retry">Try New Backend</string>
+    <string name="backend_fallback_banner_action_report">Report Issue</string>
+
+    <!-- ANDROID_FEATURES_INTEGRATION_SPEC additions -->
+    <string name="channel_subscribe">📢 Subscribe</string>
+    <string name="channel_subscribing">Subscribing…</string>
+    <string name="channel_subscribers_count">%1$d subscribers</string>
+    <string name="channel_only_admins_post">📢 Only admins can post</string>
+    <string name="bot_generating_banner">The bot is generating a response... Please wait for completion.</string>
+    <string name="bot_generating_placeholder">⏳ Bot is generating a response... Please wait.</string>
+    <string name="register_invite_code">Invite code</string>
+    <string name="register_invite_code_hint">Enter your invite code</string>
+    <string name="register_invite_invalid">Invalid or already used invite code</string>
+    <string name="register_request_access_button">Request access</string>
+    <string name="register_request_access_title">Access Request</string>
+    <string name="register_request_access_desc">VisorLink is invite-only. Fill out this form and an administrator will review your request.</string>
+    <string name="register_request_note_label">Note / Purpose</string>
+    <string name="register_request_submit">Submit request</string>
+    <string name="register_request_success">Request submitted successfully! We will contact you via email.</string>
+    <string name="secret_token_warning">⚠️ Copy and save this token right now. It is shown only once and cannot be recovered!</string>
+    <string name="secret_token_copy">Copy token</string>
+    <string name="secret_token_copied">Copied to clipboard!</string>
+    <string name="secret_token_done">Done, I saved the token</string>
+    <string name="forward_from_saved_banner">↩ Forwarded from Saved Messages</string>
+    <string name="forward_from_user">↩ Forwarded from @%1$s</string>
+    <string name="forward_from_user_chat">↩ Forwarded from @%1$s · %2$s</string>
+    <string name="forwarding_disabled_channel">Forwarding messages from this chat is restricted</string>
+
+    <!-- Music & Audio Player -->
+    <string name="nav_tab_music">Music</string>
+    <string name="music_title">Music</string>
+    <string name="music_tab_playlists">Playlists</string>
+    <string name="music_tab_all_tracks">All tracks</string>
+    <string name="music_tab_device">Device</string>
+    <string name="music_playlist_favorites">Favorites</string>
+    <string name="music_playlist_create">Create playlist</string>
+    <string name="music_playlist_name">Playlist name</string>
+    <string name="music_add_to_playlist">To playlist</string>
+    <string name="music_added_to_favorites">Added to Favorites</string>
+    <string name="music_removed_from_favorites">Removed from Favorites</string>
+    <string name="music_track_unknown">Untitled</string>
+    <string name="music_artist_unknown">Unknown artist</string>
+    <string name="music_empty_tracks">No tracks here yet</string>
+    <string name="music_empty_playlists">No playlists created</string>
+    <string name="music_device_permission_needed">Allow access to device audio files to play local tracks</string>
+    <string name="music_grant_permission">Grant access</string>
+    <string name="music_settings_title">Music</string>
+    <string name="music_settings_desc">Show Music tab in bottom navigation and integrated music player</string>
+    <string name="music_onboarding_title">Introducing Music in VisorLink!</string>
+    <string name="music_onboarding_desc">Listen to tracks right in chats, save your favorite music into the Favorites playlist, and play tracks from your device.</string>
+    <string name="music_onboarding_enable">Enable Music</string>
+    <string name="music_onboarding_disable">Not now</string>
+    <string name="music_send_audio">Audio track</string>
+    <string name="music_edit_metadata">Edit audio info</string>
+    <string name="music_save_to_library">Save to library</string>
+    <string name="music_downloading">Downloading track…</string>
+    <string name="music_download_complete">Track saved to library</string>
+
+    <!-- Debug Mode -->
+    <string name="settings_debug_show_ids_title">Debug Mode (IDs &amp; seq)</string>
+    <string name="settings_debug_show_ids_desc">Display message ID, monotonic seq, and user UID badge</string>
+    <string name="uid_copied_toast">UID copied</string>
 </resources>

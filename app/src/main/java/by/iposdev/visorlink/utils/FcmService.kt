@@ -7,7 +7,6 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -22,15 +21,24 @@ class FcmService : FirebaseMessagingService() {
     private val userRepository: by.iposdev.visorlink.data.repository.UserRepository by inject()
     private val tfaManager: TfaManager by inject()
     private val authRepository: by.iposdev.visorlink.data.repository.AuthRepository by inject()
+    private val stealthManager: StealthManager by inject()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        Log.d("FCM", "New token received: $token")
+        if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+            Log.d("FCM", "New token received: $token")
+        }
+
+        // Сохраняем pending-токен локально для гарантии регистрации при 2FA / ретраях
+        val internalPrefs = applicationContext.getSharedPreferences("fcm_internal", Context.MODE_PRIVATE)
+        internalPrefs.edit().putString("pending_fcm_token", token).apply()
 
         val uid = FirebaseAuth.getInstance().currentUser?.uid
         if (uid == null) {
-            Log.d("FCM", "User not logged in, skipping token save")
+            if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                Log.d("FCM", "User not logged in, token stored as pending")
+            }
             return
         }
 
@@ -39,11 +47,16 @@ class FcmService : FirebaseMessagingService() {
                 val authTime = authRepository.getAuthTime()
                 val isTfaPassed = authTime != null && tfaManager.isTfaPassed(authTime)
                 val profile = userRepository.getUserProfile(uid)
-                if (profile != null && (!profile.tfaEnabled || isTfaPassed)) {
+                if (profile == null || !profile.tfaEnabled || isTfaPassed) {
                     userRepository.saveFcmToken(token)
-                    Log.d("FCM", "New token saved post-2FA")
+                    internalPrefs.edit().remove("pending_fcm_token").apply()
+                    if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                        Log.d("FCM", "New token saved: $token")
+                    }
                 } else {
-                    Log.d("FCM", "2FA pending or profile loading: deferring new token registration")
+                    if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+                        Log.d("FCM", "2FA pending: deferred token in fcm_internal")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("FCM", "Failed to save new token", e)
@@ -53,7 +66,20 @@ class FcmService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         super.onMessageReceived(message)
-        Log.d("FCM", "Message received: ${message.data}")
+        if (by.iposdev.visorlink.BuildConfig.DEBUG) {
+            Log.d("FCM", "Message received: ${message.data}")
+        }
+
+        val chatId = message.data["chatId"] ?: run {
+            Log.w("FCM", "No chatId in data payload")
+            return
+        }
+
+        val type = message.data["type"]
+        if (type == "read" || type == "clear_notification") {
+            NotificationHelper.clearNotification(applicationContext, chatId)
+            return
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(
@@ -73,18 +99,25 @@ class FcmService : FirebaseMessagingService() {
             return
         }
 
-        val chatId = message.data["chatId"] ?: run {
-            Log.w("FCM", "No chatId in data payload")
-            return
-        }
-
         val title = message.notification?.title
             ?: message.data["senderName"]
+            ?: message.data["title"]
             ?: "New message"
 
         val body = message.notification?.body
             ?: message.data["body"]
+            ?: message.data["message"]
             ?: "You have a new message"
+
+        val senderUid = message.data["senderUid"]
+            ?: message.data["senderId"]
+            ?: message.data["fromUid"]
+
+        // Если активен режим скрытия (стелс включен и не разблокирован) — подавляем показ уведомления
+        if (stealthManager.isStealthActive()) {
+            Log.d("FCM", "Suppressed notification: stealth mode is active")
+            return
+        }
 
         // Если чат открыт на экране прямо сейчас и приложение на переднем плане — скрываем уведомление
         val isCurrentChat = ActiveChatTracker.isChatActive(chatId)
@@ -93,30 +126,13 @@ class FcmService : FirebaseMessagingService() {
             return
         }
 
-        scope.launch {
-            val uid = FirebaseAuth.getInstance().currentUser?.uid
-            if (uid != null) {
-                // ── Проверка на Mute (заглушенный чат) ──
-                try {
-                    val userDoc = FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
-                    if (userDoc.exists()) {
-                        val mutedChatIds = userDoc.get("mutedChatIds") as? List<String> ?: emptyList()
-                        if (mutedChatIds.contains(chatId)) {
-                            Log.d("FCM", "Suppressed notification: chat $chatId is muted")
-                            return@launch
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("FCM", "Failed to check mute status", e)
-                }
-            }
-
-            NotificationHelper.showMessageNotification(
-                context = applicationContext,
-                chatId = chatId,
-                senderName = title,
-                messagePreview = body
-            )
-        }
+        // Синхронный показ уведомления во избежание сброса фонового сервиса операционной системой
+        NotificationHelper.showMessageNotification(
+            context = applicationContext,
+            chatId = chatId,
+            senderName = title,
+            messagePreview = body,
+            senderUid = senderUid
+        )
     }
 }

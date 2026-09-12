@@ -1,5 +1,11 @@
 package by.iposdev.visorlink.ui.screens.profile
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,6 +46,38 @@ import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
 import coil.compose.AsyncImage
 import org.koin.compose.viewmodel.koinViewModel
+
+@Composable
+internal fun DebugUidBadge(uid: String, modifier: Modifier = Modifier) {
+    if (!LocalShowDebugIds.current || uid.isBlank()) return
+    val context = LocalContext.current
+    val toastMessage = stringResource(R.string.uid_copied_toast)
+    Surface(
+        modifier = modifier
+            .padding(vertical = 4.dp)
+            .clickable {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("UID", uid))
+                Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
+            },
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "UID: $uid",
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -273,6 +311,7 @@ fun ProfileScreen(
                         modifier = Modifier.padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        DebugUidBadge(uid = user.uid)
                         if (user.online) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))

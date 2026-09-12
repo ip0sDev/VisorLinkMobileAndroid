@@ -26,7 +26,10 @@ import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderF
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.component.KoinComponent
@@ -45,54 +48,75 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         super.onCreate()
         
         SentryAndroid.init(this) { options ->
-            // Performance monitoring
-            options.tracesSampleRate = 1.0
+            // Performance monitoring (10% samples in production to prevent overhead)
+            options.tracesSampleRate = 0.1
             // User feedback
-            options.isEnableUserInteractionTracing = true
-            // Profile sessions
-            options.profilesSampleRate = 1.0
+            options.isEnableUserInteractionTracing = false
+            // Profile sessions - disabled to eliminate thread profiling lag in release builds
+            options.profilesSampleRate = 0.0
         }
 
         NotificationHelper.createChannels(this)
-        com.ipos.store.sdk.IposStoreUpdates.init(this)
-
-        // ─── Firebase App Check ───────────────────────────────────────────────
-        if (BuildConfig.DEBUG) {
-            try {
-                val factoryClass = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
-                val getInstance = factoryClass.getMethod("getInstance")
-                val factory = getInstance.invoke(null)
-                Firebase.appCheck.installAppCheckProviderFactory(
-                    factory as com.google.firebase.appcheck.AppCheckProviderFactory
-                )
-            } catch (e: Exception) {
-                Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
-            }
-        } else {
-            Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
-        }
 
         startKoin {
             androidContext(this@VisorLinkApp)
             modules(appModule)
         }
 
-        // Initialize Cache
-        val cacheManager: CacheManager = GlobalContext.get().get()
-        AppImageLoader.init(this, cacheManager.loadConfig())
-        MainScope().launch {
-            cacheManager.evictIfNeeded()
+        // ─── Firebase App Check — ОБЯЗАТЕЛЬНО до любых Firestore-запросов ───
+        try {
+            if (BuildConfig.DEBUG) {
+                try {
+                    val factoryClass = Class.forName("com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory")
+                    val getInstance = factoryClass.getMethod("getInstance")
+                    val factory = getInstance.invoke(null)
+                    Firebase.appCheck.installAppCheckProviderFactory(
+                        factory as com.google.firebase.appcheck.AppCheckProviderFactory
+                    )
+                } catch (_: Exception) {
+                    Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+                }
+            } else {
+                Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+            }
+        } catch (e: Exception) {
+            Log.e("VisorLinkApp", "Failed to init AppCheck", e)
         }
 
-        // Initialize OutboxManager to start background processing
-        GlobalContext.get().get<OutboxManager>()
+        // Initialize ImageLoader immediately on Main thread with default/fast config
+        val cacheManager: CacheManager = GlobalContext.get().get()
+        AppImageLoader.init(this, cacheManager.loadConfig())
 
-        // ─── Feature Flags ───
-        MainScope().launch {
+        // OutboxManager — инициализируем сразу, чтобы был готов к отправке сообщений
+        try {
+            GlobalContext.get().get<OutboxManager>()
+        } catch (_: Exception) {}
+
+        // ─── Некритичные инициализации в фоне ────────────────
+        val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        appScope.launch {
+            // 1. IposStoreUpdates
             try {
-                Log.d("VisorLinkApp", "Starting flags fetch from Application.onCreate")
+                val updatePrefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
+                val savedChannelStr = updatePrefs.getString("update_channel", "release")
+                val initialChannel = try {
+                    com.ipos.store.sdk.UpdateChannel.fromString(savedChannelStr)
+                } catch (_: IllegalArgumentException) {
+                    com.ipos.store.sdk.UpdateChannel.RELEASE
+                }
+                com.ipos.store.sdk.IposStoreUpdates.init(this@VisorLinkApp, channel = initialChannel)
+            } catch (e: Exception) {
+                Log.e("VisorLinkApp", "Failed to init IposStoreUpdates", e)
+            }
+
+            // 2. Очистка кэша
+            try {
+                cacheManager.evictIfNeeded()
+            } catch (_: Exception) {}
+
+            // 3. Feature Flags
+            try {
                 GlobalContext.get().get<FlagsRepository>().fetchFlags()
-                Log.d("VisorLinkApp", "Flags fetch call completed")
             } catch (e: Exception) {
                 Log.e("VisorLinkApp", "Failed to fetch flags", e)
             }
@@ -127,13 +151,22 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             }
         })
 
-        // Автоматически управляем presence при смене auth state
+        // Автоматически управляем presence и FCM-токеном при смене auth state
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             val uid = auth.currentUser?.uid
             if (uid != null) {
-                presenceManager?.detach()
-                presenceManager = PresenceManager(uid).also {
-                    it.attach(ProcessLifecycleOwner.get().lifecycle)
+                if (presenceManager?.uid != uid) {
+                    presenceManager?.detach()
+                    presenceManager = PresenceManager(uid).also {
+                        it.attach(ProcessLifecycleOwner.get().lifecycle)
+                    }
+                }
+                MainScope().launch {
+                    try {
+                        GlobalContext.get().get<by.iposdev.visorlink.utils.FcmManager>().syncTokenAfter2FA()
+                    } catch (e: Exception) {
+                        Log.e("VisorLinkApp", "FCM token sync failed on auth state change", e)
+                    }
                 }
             } else {
                 presenceManager?.detach()
