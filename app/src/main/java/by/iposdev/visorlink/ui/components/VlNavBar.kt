@@ -5,7 +5,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -27,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
@@ -56,6 +59,7 @@ fun VlNavigationBar(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
+    val isDark = cs.surface.luminance() < 0.5f
     val barShape: Shape = if (tokens.isForge) tokens.shapes.bar else RoundedCornerShape(32.dp)
 
     Box(
@@ -70,6 +74,25 @@ fun VlNavigationBar(
             ),
         contentAlignment = Alignment.Center
     ) {
+        val barBrush = remember(tokens.isBiolume, tokens.structure.enabled, cs) {
+            if (tokens.isBiolume) {
+                val topColor = cs.surfaceContainerHigh.copy(alpha = 0.96f)
+                val bottomColor = cs.surfaceContainer.copy(alpha = 0.94f)
+                Brush.verticalGradient(listOf(topColor, bottomColor))
+            } else {
+                val color = if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow
+                Brush.verticalGradient(listOf(color, color))
+            }
+        }
+
+        val barBorder = remember(tokens.isBiolume, cs, isDark) {
+            if (tokens.isBiolume) {
+                val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.50f)
+                val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+                BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
+            } else null
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,12 +102,10 @@ fun VlNavigationBar(
                     else Modifier
                 )
                 .clip(barShape)
-                .background(
-                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
-                    barShape,
-                )
+                .background(barBrush, barShape)
                 .then(
-                    if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, barShape)
+                    if (barBorder != null) Modifier.border(barBorder, barShape)
+                    else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, barShape)
                     else Modifier
                 )
                 .padding(horizontal = 12.dp),
@@ -173,10 +194,30 @@ fun VlTabItem(
 
     val pillShape: Shape = if (tokens.isForge) tokens.shapes.pill else CircleShape
 
-    Box(
-        modifier = modifier
+    val pillModifier = if (tokens.isBiolume && selected) {
+        val pillGradient = Brush.horizontalGradient(
+            listOf(
+                cs.primary.copy(alpha = if (isDark) 0.16f else 0.12f),
+                cs.primary.copy(alpha = if (isDark) 0.08f else 0.05f)
+            )
+        )
+        val pillBorder = BorderStroke(
+            1.dp,
+            if (isDark) cs.primary.copy(alpha = 0.18f) else cs.primary.copy(alpha = 0.15f)
+        )
+        Modifier
+            .clip(pillShape)
+            .background(pillGradient)
+            .border(pillBorder, pillShape)
+    } else {
+        Modifier
             .clip(pillShape)
             .background(pillColor)
+    }
+
+    Box(
+        modifier = modifier
+            .then(pillModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

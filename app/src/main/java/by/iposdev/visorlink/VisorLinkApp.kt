@@ -57,6 +57,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         }
 
         NotificationHelper.createChannels(this)
+        by.iposdev.visorlink.utils.DiagnosticLogBuffer.install()
 
         startKoin {
             androidContext(this@VisorLinkApp)

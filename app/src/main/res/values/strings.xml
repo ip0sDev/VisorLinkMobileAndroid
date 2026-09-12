@@ -10,6 +10,7 @@
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_close">Close</string>
+    <string name="action_ok">OK</string>
     <string name="action_edit">Edit</string>
     <string name="action_delete">Delete</string>
     <string name="action_search">Search</string>
@@ -760,4 +761,34 @@
     <string name="settings_debug_show_ids_title">Debug Mode (IDs &amp; seq)</string>
     <string name="settings_debug_show_ids_desc">Display message ID, monotonic seq, and user UID badge</string>
     <string name="uid_copied_toast">UID copied</string>
+
+    <!-- Bug Report & FaultyWire -->
+    <string name="settings_bug_report_title">Report a bug</string>
+    <string name="settings_bug_report_subtitle">Send report to engineers</string>
+    <string name="bug_report_title">Report a Bug</string>
+    <string name="bug_report_field_title">Title *</string>
+    <string name="bug_report_field_title_hint">Short summary of the issue</string>
+    <string name="bug_report_category_label">Category</string>
+    <string name="bug_cat_ui">Interface</string>
+    <string name="bug_cat_chat">Chats</string>
+    <string name="bug_cat_calls">Calls</string>
+    <string name="bug_cat_media">Media</string>
+    <string name="bug_cat_auth">Auth</string>
+    <string name="bug_cat_other">Other</string>
+    <string name="bug_report_severity_label">Severity</string>
+    <string name="bug_sev_low">Low</string>
+    <string name="bug_sev_medium">Medium</string>
+    <string name="bug_sev_high">High</string>
+    <string name="bug_sev_critical">Critical</string>
+    <string name="bug_report_field_desc">Description *</string>
+    <string name="bug_report_field_desc_hint">Describe what happened in detail</string>
+    <string name="bug_report_field_steps">Steps to reproduce</string>
+    <string name="bug_report_field_steps_hint">1. Open chat...\n2. Press button...</string>
+    <string name="bug_report_screenshots_title">Screenshots (up to 5)</string>
+    <string name="bug_report_add_screenshot">Add screenshot</string>
+    <string name="bug_report_attach_logs">Attach diagnostic logs</string>
+    <string name="bug_report_attach_logs_desc">Helps engineers reproduce and fix the error faster</string>
+    <string name="bug_report_submit">Send Report</string>
+    <string name="bug_report_success_title">Ticket #%1$d submitted!</string>
+    <string name="bug_report_success_desc">Your report has been sent to FaultyWire. The official FaultyWire Bot will notify you in direct messages when status updates.</string>
 </resources>

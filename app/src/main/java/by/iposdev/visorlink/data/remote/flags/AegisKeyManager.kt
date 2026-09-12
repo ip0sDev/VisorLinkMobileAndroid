@@ -46,7 +46,11 @@ class AegisKeyManager {
 
             val publicKey = keyStore.getCertificate(ALIAS).publicKey
             val pubKeyBase64 = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
-            return "-----BEGIN PUBLIC KEY-----\n$pubKeyBase64\n-----END PUBLIC KEY-----"
+            return buildString {
+                append("-----BEGIN PUBLIC KEY-----\n")
+                pubKeyBase64.chunked(64).forEach { append(it).append("\n") }
+                append("-----END PUBLIC KEY-----\n")
+            }
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("AegisKey", "Error generating/obtaining public key", e)
             throw e

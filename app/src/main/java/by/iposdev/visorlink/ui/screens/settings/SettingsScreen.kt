@@ -127,6 +127,7 @@ fun SettingsScreen(
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showLegalDialog by remember { mutableStateOf(false) }
+    var showBugReportSheet by remember { mutableStateOf(false) }
 
     val visorSettingsPrefs = remember { context.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE) }
     var updateChannelStr by remember {
@@ -469,7 +470,7 @@ fun SettingsScreen(
                     if (flags.isEnabled("aegis_debug_mode_enabled")) VlSettingsItem(icon = Icons.Default.Terminal, title = "Aegis Project Debug", onClick = onOpenAegisDebug)
                     if (flags.isFlipperEnabled) VlSettingsItem(icon = Icons.Default.ToggleOn, title = "Flag Flipper", onClick = onOpenFlagFlipper)
                     VlSettingsItem(
-                        icon = Icons.Default.BugReport,
+                        icon = Icons.Default.Code,
                         iconColor = MaterialTheme.colorScheme.tertiary,
                         title = stringResource(R.string.settings_debug_show_ids_title),
                         subtitle = stringResource(R.string.settings_debug_show_ids_desc),
@@ -481,6 +482,16 @@ fun SettingsScreen(
                         }
                     )
                     VlSettingsItem(
+                        icon = Icons.Default.BugReport,
+                        iconColor = MaterialTheme.colorScheme.error,
+                        title = stringResource(R.string.settings_bug_report_title),
+                        subtitle = stringResource(R.string.settings_bug_report_subtitle),
+                        onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            showBugReportSheet = true
+                        }
+                    )
+                    VlSettingsItem(
                         icon = Icons.Default.Info, 
                         title = "VisorLink", 
                         subtitle = "Версия $versionString",
@@ -488,6 +499,19 @@ fun SettingsScreen(
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("Version", versionString))
                             Toast.makeText(context, "Версия скопирована", Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                    val clientFlagsId = remember(flags) { flagsRepository.getClientFlagsId() }
+                    VlSettingsItem(
+                        icon = Icons.Default.Fingerprint,
+                        iconColor = MaterialTheme.colorScheme.secondary,
+                        title = "ID клиента",
+                        subtitle = clientFlagsId,
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Client Flags ID", clientFlagsId))
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            Toast.makeText(context, "ID клиента скопирован в буфер обмена", Toast.LENGTH_SHORT).show()
                         }
                     )
                     VlSettingsItem(
@@ -506,6 +530,7 @@ fun SettingsScreen(
 
     if (showAdminPanel) AdminPanelSheet { showAdminPanel = false }
     if (showBotsManager) BotsManagerSheet { showBotsManager = false }
+    if (showBugReportSheet) BugReportSheet(onDismiss = { showBugReportSheet = false })
     if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { showLogoutDialog = false; authViewModel.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
     if (showUrlDialog) {

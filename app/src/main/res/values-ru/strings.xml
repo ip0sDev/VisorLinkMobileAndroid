@@ -10,6 +10,7 @@
     <string name="action_save">Сохранить</string>
     <string name="action_cancel">Отмена</string>
     <string name="action_close">Закрыть</string>
+    <string name="action_ok">Понятно</string>
     <string name="action_edit">Редактировать</string>
     <string name="action_delete">Удалить</string>
     <string name="action_search">Поиск</string>
@@ -762,4 +763,34 @@
     <string name="settings_debug_show_ids_title">Режим отладки (ID и seq)</string>
     <string name="settings_debug_show_ids_desc">Отображать ID сообщений, счетчик seq и UID пользователей</string>
     <string name="uid_copied_toast">UID скопирован</string>
+
+    <!-- Bug Report & FaultyWire -->
+    <string name="settings_bug_report_title">Сообщить об ошибке</string>
+    <string name="settings_bug_report_subtitle">Отправить баг-репорт разработчикам</string>
+    <string name="bug_report_title">Сообщить об ошибке</string>
+    <string name="bug_report_field_title">Тема *</string>
+    <string name="bug_report_field_title_hint">Краткое описание проблемы</string>
+    <string name="bug_report_category_label">Категория</string>
+    <string name="bug_cat_ui">Интерфейс</string>
+    <string name="bug_cat_chat">Чаты</string>
+    <string name="bug_cat_calls">Звонки</string>
+    <string name="bug_cat_media">Медиа</string>
+    <string name="bug_cat_auth">Вход / Авторизация</string>
+    <string name="bug_cat_other">Другое</string>
+    <string name="bug_report_severity_label">Критичность</string>
+    <string name="bug_sev_low">Низкая</string>
+    <string name="bug_sev_medium">Средняя</string>
+    <string name="bug_sev_high">Высокая</string>
+    <string name="bug_sev_critical">Критическая</string>
+    <string name="bug_report_field_desc">Подробное описание *</string>
+    <string name="bug_report_field_desc_hint">Опишите, что именно произошло</string>
+    <string name="bug_report_field_steps">Шаги воспроизведения</string>
+    <string name="bug_report_field_steps_hint">1. Открыть чат...\n2. Нажать на...</string>
+    <string name="bug_report_screenshots_title">Скриншоты (до 5)</string>
+    <string name="bug_report_add_screenshot">Прикрепить скриншот</string>
+    <string name="bug_report_attach_logs">Прикрепить диагностические логи</string>
+    <string name="bug_report_attach_logs_desc">Поможет инженерам быстрее понять причину сбоя</string>
+    <string name="bug_report_submit">Отправить репорт</string>
+    <string name="bug_report_success_title">Тикет #%1$d принят!</string>
+    <string name="bug_report_success_desc">Баг-репорт отправлен в систему FaultyWire. Официальный FaultyWire Bot уведомит вас в личных сообщениях об изменении статуса.</string>
 </resources>

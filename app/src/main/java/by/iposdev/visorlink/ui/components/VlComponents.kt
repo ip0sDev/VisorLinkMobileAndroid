@@ -77,37 +77,8 @@ fun LinkifiedText(
     val uriHandler = LocalUriHandler.current
     val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
 
-    val (urlList, mentionList) = remember(text) {
-        val urls = mutableListOf<Triple<String, Int, Int>>()
-        val urlMatcher = Patterns.WEB_URL.matcher(text)
-        while (urlMatcher.find()) {
-            var url = urlMatcher.group() ?: continue
-            if (!url.startsWith("http://") && !url.startsWith("https://")) url = "https://$url"
-            urls.add(Triple(url, urlMatcher.start(), urlMatcher.end()))
-        }
-        val mentions = mutableListOf<Triple<String, Int, Int>>()
-        val mentionRegex = Regex("(?<!\\w)@[a-zA-Z0-9_]+")
-        mentionRegex.findAll(text).forEach { match ->
-            val start = match.range.first
-            val end = match.range.last + 1
-            val isInsideUrl = urls.any { start >= it.second && end <= it.third }
-            if (!isInsideUrl) mentions.add(Triple(match.value, start, end))
-        }
-        Pair(urls, mentions)
-    }
-
-    val annotatedString = remember(text, color, linkColor) {
-        buildAnnotatedString {
-            append(text)
-            urlList.forEach { (url, start, end) ->
-                addStyle(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline), start, end)
-                addStringAnnotation("URL", url, start, end)
-            }
-            mentionList.forEach { (mention, start, end) ->
-                addStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold), start, end)
-                addStringAnnotation("MENTION", mention, start, end)
-            }
-        }
+    val annotatedString = remember(text, linkColor) {
+        by.iposdev.visorlink.utils.MarkdownTextParser.parse(text, linkColor)
     }
 
     Text(

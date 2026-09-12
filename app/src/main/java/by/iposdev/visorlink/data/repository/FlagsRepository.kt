@@ -62,14 +62,47 @@ class FlagsRepository(
         } catch (e: Exception) {
             emptyMap<String, Boolean>()
         }
+
+        val cachedClaimsJson = prefs.getString("cached_server_claims", null)
+        val cachedClaims = try {
+            if (cachedClaimsJson != null) {
+                val map = mutableMapOf<String, Any?>()
+                val json = JSONObject(cachedClaimsJson)
+                json.keys().forEach { key ->
+                    map[key] = json.get(key)
+                }
+                map
+            } else emptyMap()
+        } catch (e: Exception) {
+            emptyMap<String, Any?>()
+        }
+
         _flags.value = _flags.value.copy(
             isFlipperEnabled = isFlipperEnabled,
-            localOverrides = overrides
+            localOverrides = overrides,
+            serverClaims = cachedClaims
         )
+    }
+
+    fun getInstallId(): String {
+        var id = prefs.getString("install_id", null)
+        if (id == null) {
+            id = UUID.randomUUID().toString()
+            prefs.edit().putString("install_id", id).apply()
+        }
+        return id
     }
 
     fun getDeviceId(): String? {
         return prefs.getString("device_id", null)
+    }
+
+    /**
+     * Возвращает постоянный идентификатор клиента для отображения в UI и таргетирования в панели Hermes.
+     * Если устройство уже зарегистрировано на сервере Hermes — возвращает `device_id`, иначе локальный `install_id`.
+     */
+    fun getClientFlagsId(): String {
+        return getDeviceId() ?: getInstallId()
     }
 
     suspend fun pairIfNeeded(): String {
@@ -86,11 +119,12 @@ class FlagsRepository(
             prefs.edit().remove("device_id").apply()
         }
 
-        if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Starting pairing process...")
+        val installId = getInstallId()
+        if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Starting pairing process for install_id: $installId...")
         val publicKeyPem = keyManager.generatePublicKeyPem()
         if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Generated Public Key PEM:\n$publicKeyPem")
         
-        val response = api.pair(PairRequest(publicKeyPem))
+        val response = api.pair(PairRequest(publicKeyPem, installId))
         if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Pairing successful, received device_id: ${response.deviceId}")
         
         prefs.edit().putString("device_id", response.deviceId).apply()
@@ -102,7 +136,7 @@ class FlagsRepository(
         try {
             val deviceId = pairIfNeeded()
             val timestamp = System.currentTimeMillis() / 1000L
-            val nonce = UUID.randomUUID().toString()
+            val nonce = UUID.randomUUID().toString().replace("-", "")
             
             if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Signing payload: deviceId=$deviceId, timestamp=$timestamp, nonce=$nonce")
             val signature = keyManager.signPayload(deviceId, timestamp, nonce)
@@ -147,17 +181,23 @@ class FlagsRepository(
             val isTest = jwt.getClaim("test_flag").asBoolean() ?: false
 
             val allClaimsMap = mutableMapOf<String, Any?>()
+            val claimsJson = JSONObject()
             jwt.claims.forEach { (key, claim) ->
-                val value = when {
-                    claim.asBoolean() != null -> claim.asBoolean()
-                    claim.asString() != null -> claim.asString()
-                    claim.asInt() != null -> claim.asInt()
-                    claim.asDouble() != null -> claim.asDouble()
-                    else -> claim.asString()
+                if (key !in listOf("iss", "sub", "iat", "exp")) {
+                    val value = when {
+                        claim.asBoolean() != null -> claim.asBoolean()
+                        claim.asInt() != null -> claim.asInt()
+                        claim.asDouble() != null -> claim.asDouble()
+                        claim.asString() != null -> claim.asString()
+                        else -> claim.asString()
+                    }
+                    allClaimsMap[key] = value
+                    claimsJson.put(key, value)
+                    if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Claim: $key = $value")
                 }
-                allClaimsMap[key] = value
-                if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Claim: $key = $value")
             }
+            // Кэшируем claims для offline-first работы
+            prefs.edit().putString("cached_server_claims", claimsJson.toString()).apply()
             
             if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Applying flags: test_flag=$isTest, is_aegis_debug_mode=$isDebug")
             

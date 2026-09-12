@@ -227,6 +227,11 @@ val appModule = module {
     viewModel { FlagFlipperViewModel(get()) }
     viewModel { MediaPickerViewModel(androidApplication()) }
     
+    // ── Bug Reports & FaultyWire ──
+    single { by.iposdev.visorlink.data.remote.CdnUploadService(OkHttpClient()) }
+    single { by.iposdev.visorlink.data.repository.BugReportRepository(get()) }
+    viewModel { by.iposdev.visorlink.ui.screens.settings.BugReportViewModel(get(), get()) }
+    
     // ── Aegis Project ──
     single { DictionaryRepository(androidContext()) }
     single { DictionaryHeuristicEngine(get()) }

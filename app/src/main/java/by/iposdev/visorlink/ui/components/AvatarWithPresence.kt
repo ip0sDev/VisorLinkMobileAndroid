@@ -4,6 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,7 +34,8 @@ fun AvatarWithPresence(
     displayName: String,
     isOnline: Boolean,
     size: Dp = 48.dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isFaultyWireBot: Boolean = false
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
@@ -54,11 +58,21 @@ fun AvatarWithPresence(
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Text(
-                        text = displayName.firstOrNull()?.uppercase() ?: "?",
-                        color = cs.onPrimaryContainer,
-                        fontSize = (size.value * 0.38f).sp,
-                    )
+                    val isFaulty = isFaultyWireBot || displayName.contains("FaultyWire", ignoreCase = true)
+                    if (isFaulty) {
+                        Icon(
+                            imageVector = Icons.Default.BugReport,
+                            contentDescription = "FaultyWire Bot",
+                            tint = cs.onPrimaryContainer,
+                            modifier = Modifier.size(size * 0.55f)
+                        )
+                    } else {
+                        Text(
+                            text = displayName.firstOrNull()?.uppercase() ?: "?",
+                            color = cs.onPrimaryContainer,
+                            fontSize = (size.value * 0.38f).sp,
+                        )
+                    }
                 }
             }
         }

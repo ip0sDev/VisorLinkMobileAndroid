@@ -79,13 +79,19 @@ fun ChatTopBar(
                     ?: uiState.chat?.avatarUrl
 
                 when (uiState.chatType) {
-                    ChatType.DIRECT -> AvatarWithPresence(
-                        avatarUrl = directAvatarUrl,
-                        displayName = directName,
-                        isOnline = uiState.topbarStatus is TopbarStatus.Online ||
-                                uiState.topbarStatus is TopbarStatus.Typing,
-                        size = 36.dp,
-                    )
+                    ChatType.DIRECT -> {
+                        val isFaulty = uiState.otherUser?.uid == "bot_faultywire" ||
+                                uiState.otherUser?.username == "faultywire" ||
+                                uiState.chat?.otherUsername(currentUid) == "faultywire"
+                        AvatarWithPresence(
+                            avatarUrl = directAvatarUrl,
+                            displayName = directName,
+                            isOnline = uiState.topbarStatus is TopbarStatus.Online ||
+                                    uiState.topbarStatus is TopbarStatus.Typing,
+                            size = 36.dp,
+                            isFaultyWireBot = isFaulty
+                        )
+                    }
                     ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                         avatarUrl = uiState.chat?.avatarUrl, name = uiState.chat?.name ?: "",
                         isChannel = uiState.chatType == ChatType.CHANNEL, size = 36.dp,
@@ -110,15 +116,33 @@ fun ChatTopBar(
                             overflow = TextOverflow.Ellipsis
                         )
                     } else {
-                        Text(
-                            when (uiState.chatType) {
-                                ChatType.DIRECT -> directName
-                                else -> uiState.chat?.name ?: ""
-                            },
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                when (uiState.chatType) {
+                                    ChatType.DIRECT -> directName
+                                    else -> uiState.chat?.name ?: ""
+                                },
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            val isOfficial = uiState.chatType == ChatType.DIRECT && (
+                                uiState.otherUser?.botBadge == "official" ||
+                                uiState.otherUser?.uid == "bot_faultywire" ||
+                                uiState.otherUser?.username == "faultywire" ||
+                                uiState.chat?.otherUsername(currentUid) == "faultywire"
+                            )
+                            if (isOfficial) {
+                                Spacer(Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Verified,
+                                    contentDescription = "Official Bot",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                     when (uiState.chatType) {
                         ChatType.DIRECT -> AnimatedContent(

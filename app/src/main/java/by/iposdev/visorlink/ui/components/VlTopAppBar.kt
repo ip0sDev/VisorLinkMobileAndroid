@@ -13,6 +13,12 @@ import by.iposdev.visorlink.ui.theme.vlHairline
 import androidx.compose.ui.draw.clip
 import by.iposdev.visorlink.ui.theme.vlRaised
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+
 /**
  * Тематический TopAppBar.
  *
@@ -35,7 +41,19 @@ fun VlTopAppBar(
     val cs = MaterialTheme.colorScheme
 
     if (tokens.isBiolume) {
+        val isDark = cs.surface.luminance() < 0.5f
         val barShape = tokens.shapes.inputPanel
+        val barBrush = remember(isDark, cs) {
+            val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+            val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.90f) else cs.surfaceContainer.copy(alpha = 0.92f)
+            Brush.verticalGradient(listOf(topColor, bottomColor))
+        }
+        val barBorder = remember(isDark, cs) {
+            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.50f)
+            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
+        }
+
         Box(
             modifier = modifier
                 .fillMaxWidth()
@@ -50,11 +68,8 @@ fun VlTopAppBar(
                         else Modifier
                     )
                     .clip(barShape)
-                    .background(cs.surfaceContainerLow)
-                    .then(
-                        if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, barShape)
-                        else Modifier
-                    )
+                    .background(barBrush, barShape)
+                    .border(barBorder, barShape)
             ) {
                 TopAppBar(
                     title = title,

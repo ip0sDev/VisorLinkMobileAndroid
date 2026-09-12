@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -104,6 +105,28 @@ fun ChatListItem(
         isLastMessageRead(chat, currentUid)
     }
 
+    val cardColor = remember(tokens.isBiolume, isDark, cs) {
+        if (tokens.isBiolume) {
+            if (isDark) cs.surfaceContainer.copy(alpha = 0.70f)
+            else cs.surfaceContainerLow.copy(alpha = 0.90f)
+        } else {
+            if (isDark) cs.surfaceVariant.copy(alpha = 0.45f) else cs.surface
+        }
+    }
+
+    val cardBorder = remember(tokens.isBiolume, isDark, cs) {
+        if (tokens.isBiolume) {
+            val topColor = if (isDark) cs.outlineVariant.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.45f)
+            val bottomColor = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.10f)
+            BorderStroke(1.dp, Brush.verticalGradient(listOf(topColor, bottomColor)))
+        } else {
+            BorderStroke(
+                1.dp,
+                if (isDark) cs.outlineVariant.copy(alpha = 0.15f) else cs.outlineVariant.copy(alpha = 0.35f)
+            )
+        }
+    }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -121,15 +144,19 @@ fun ChatListItem(
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = shape,
-        color = if (isDark) cs.surfaceVariant.copy(alpha = 0.45f) else cs.surface,
-        border = BorderStroke(
-            1.dp,
-            if (isDark) cs.outlineVariant.copy(alpha = 0.15f) else cs.outlineVariant.copy(alpha = 0.35f)
-        )
+        color = cardColor,
+        border = cardBorder
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(
+                    if (tokens.isBiolume) {
+                        val gTop = if (isDark) cs.surfaceContainerHigh.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.18f)
+                        val gBottom = Color.Transparent
+                        Modifier.background(Brush.verticalGradient(listOf(gTop, gBottom)))
+                    } else Modifier
+                )
                 .padding(horizontal = 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -138,12 +165,17 @@ fun ChatListItem(
                     SavedMessagesIcon(size = 52.dp)
                 } else {
                     when (chatType) {
-                        ChatType.DIRECT -> AvatarWithPresence(
-                            avatarUrl = otherProfile?.avatarUrl,
-                            displayName = chat.otherDisplayName(currentUid),
-                            isOnline = otherProfile?.online ?: false,
-                            size = 52.dp
-                        )
+                        ChatType.DIRECT -> {
+                            val otherUsername = chat.otherUsername(currentUid)
+                            val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
+                            AvatarWithPresence(
+                                avatarUrl = otherProfile?.avatarUrl,
+                                displayName = chat.otherDisplayName(currentUid),
+                                isOnline = otherProfile?.online ?: false,
+                                size = 52.dp,
+                                isFaultyWireBot = isFaulty
+                            )
+                        }
                         ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                             avatarUrl = chat.avatarUrl,
                             name = chat.name,
@@ -164,10 +196,16 @@ fun ChatListItem(
                     if (chatType != ChatType.DIRECT && !isSavedMessages) {
                         Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
                     }
+                    val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
+                    val isOfficial = chatType == ChatType.DIRECT && (
+                        otherProfile?.botBadge == "official" ||
+                        otherProfile?.uid == "bot_faultywire" ||
+                        otherUsername == "faultywire"
+                    )
                     Text(
                         text = when {
                             isSavedMessages -> stringResource(R.string.saved_messages_title)
-                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" }
+                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
                             else -> chat.name
                         },
                         fontSize = 16.sp,
@@ -175,8 +213,17 @@ fun ChatListItem(
                         color = titleColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    if (isOfficial) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = "Official Bot",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
                     chat.lastMessageAt?.let {
                         Text(
                             formatTime(it.toDate()),
@@ -230,7 +277,9 @@ fun ChatListItem(
                                     MessageStatusIcon(isRead = isRead)
                                     Spacer(Modifier.width(5.dp))
                                 }
-                                val messageText = chat.lastMessageText()
+                                val messageText = remember(chat.lastMessage) {
+                                    by.iposdev.visorlink.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
+                                }
                                 Text(
                                     text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                                     style = MaterialTheme.typography.bodySmall,
@@ -292,12 +341,17 @@ fun ChatListItemCompact(
                 SavedMessagesIcon(size = 54.dp)
             } else {
                 when (chatType) {
-                    ChatType.DIRECT -> AvatarWithPresence(
-                        avatarUrl = otherProfile?.avatarUrl,
-                        displayName = chat.otherDisplayName(currentUid),
-                        isOnline = otherProfile?.online ?: false,
-                        size = 54.dp
-                    )
+                    ChatType.DIRECT -> {
+                        val otherUsername = chat.otherUsername(currentUid)
+                        val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
+                        AvatarWithPresence(
+                            avatarUrl = otherProfile?.avatarUrl,
+                            displayName = chat.otherDisplayName(currentUid),
+                            isOnline = otherProfile?.online ?: false,
+                            size = 54.dp,
+                            isFaultyWireBot = isFaulty
+                        )
+                    }
                     ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
                         avatarUrl = chat.avatarUrl,
                         name = chat.name,
@@ -318,10 +372,16 @@ fun ChatListItemCompact(
                 if (chatType != ChatType.DIRECT && !isSavedMessages) {
                     Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
                 }
+                val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
+                val isOfficial = chatType == ChatType.DIRECT && (
+                    otherProfile?.botBadge == "official" ||
+                    otherProfile?.uid == "bot_faultywire" ||
+                    otherUsername == "faultywire"
+                )
                 Text(
                     text = when {
                         isSavedMessages -> stringResource(R.string.saved_messages_title)
-                        chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@${chat.otherUsername(currentUid)}" }
+                        chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
                         else -> chat.name
                     },
                     fontSize = 16.sp,
@@ -329,8 +389,17 @@ fun ChatListItemCompact(
                     color = titleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f, fill = false)
                 )
+                if (isOfficial) {
+                    Icon(
+                        imageVector = Icons.Default.Verified,
+                        contentDescription = "Official Bot",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+                Spacer(Modifier.weight(1f))
                 chat.lastMessageAt?.let {
                     Text(
                         formatTime(it.toDate()),
@@ -384,7 +453,9 @@ fun ChatListItemCompact(
                                 MessageStatusIcon(isRead = isRead)
                                 Spacer(Modifier.width(5.dp))
                             }
-                            val messageText = chat.lastMessageText()
+                            val messageText = remember(chat.lastMessage) {
+                                by.iposdev.visorlink.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
+                            }
                             Text(
                                 text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                                 style = MaterialTheme.typography.bodySmall,

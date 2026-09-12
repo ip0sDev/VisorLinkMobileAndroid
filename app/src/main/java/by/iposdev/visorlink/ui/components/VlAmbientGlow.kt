@@ -41,16 +41,38 @@ fun VlAmbientGlow(
     if (simplifiedGraphics) return
 
     val tokens = VlTheme.tokens
-    if (tokens.isBiolume || tokens.reduceMotion) return
+    if (tokens.reduceMotion) return
 
     val cs = MaterialTheme.colorScheme
-    val accent = overrideAccent ?: cs.primary
+    val isBiolume = tokens.isBiolume
     val isDark = cs.surface.luminance() < 0.5f
 
-    // Более богатая цветовая палитра для утонченного глассморфизма
-    val c1 = remember(accent, isDark) { accent.copy(alpha = if (isDark) 0.20f else 0.35f) }
-    val c2 = remember(cs.tertiary, isDark) { cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.25f) }
-    val c3 = remember(cs.secondary, isDark) { cs.secondary.copy(alpha = if (isDark) 0.15f else 0.25f) }
+    // Для Biolume используем палитру мягкого глубоководного биолюминесцентного градиента
+    val c1 = remember(overrideAccent, cs.primary, isBiolume, isDark) {
+        if (isBiolume) {
+            if (isDark) Color(0xFF35C7E8).copy(alpha = 0.035f) // Abyss Primary Cyan (мягкий)
+            else cs.primary.copy(alpha = 0.04f)
+        } else {
+            val accent = overrideAccent ?: cs.primary
+            accent.copy(alpha = if (isDark) 0.20f else 0.35f)
+        }
+    }
+    val c2 = remember(cs.secondary, cs.tertiary, isBiolume, isDark) {
+        if (isBiolume) {
+            if (isDark) Color(0xFF8C6BFF).copy(alpha = 0.030f) // Abyss Secondary Violet (мягкий)
+            else cs.secondary.copy(alpha = 0.035f)
+        } else {
+            cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.25f)
+        }
+    }
+    val c3 = remember(cs.secondary, cs.primary, isBiolume, isDark) {
+        if (isBiolume) {
+            if (isDark) Color(0xFF6FC6FF).copy(alpha = 0.025f) // Abyss Tertiary Moon Cyan (мягкий)
+            else cs.tertiary.copy(alpha = 0.03f)
+        } else {
+            cs.secondary.copy(alpha = if (isDark) 0.15f else 0.25f)
+        }
+    }
 
     val brush1 = remember(c1) { Brush.radialGradient(listOf(c1, Color.Transparent)) }
     val brush2 = remember(c2) { Brush.radialGradient(listOf(c2, Color.Transparent)) }

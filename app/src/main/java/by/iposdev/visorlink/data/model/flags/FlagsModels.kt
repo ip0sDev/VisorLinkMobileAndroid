@@ -3,7 +3,8 @@ package by.iposdev.visorlink.data.model.flags
 import com.google.gson.annotations.SerializedName
 
 data class PairRequest(
-    @SerializedName("public_key_pem") val publicKey: String
+    @SerializedName("public_key_pem") val publicKey: String,
+    @SerializedName("install_id") val installId: String? = null
 )
 
 data class PairResponse(

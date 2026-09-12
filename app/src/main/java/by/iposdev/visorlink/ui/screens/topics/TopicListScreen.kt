@@ -492,7 +492,7 @@ private fun TopicCardItem(
                 }
             }
 
-            val lastMsg = topic.lastMessageText()
+            val lastMsg = by.iposdev.visorlink.utils.MarkdownTextParser.stripMarkdown(topic.lastMessageText())
             if (lastMsg.isNotEmpty()) {
                 Text(
                     text = lastMsg,
