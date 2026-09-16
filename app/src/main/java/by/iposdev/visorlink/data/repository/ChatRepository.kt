@@ -926,10 +926,17 @@ class ChatRepository(
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
+        val directUrl = if (mediaId.startsWith("http")) mediaId else "https://lh3.googleusercontent.com/d/$mediaId"
+        val driveUrl = if (mediaId.startsWith("http")) mediaId else "https://drive.google.com/file/d/$mediaId/view?usp=sharing"
+        val previewUrl = if (mediaId.startsWith("http")) mediaId else "https://lh3.googleusercontent.com/d/$mediaId=s400"
+
         val extra = mutableMapOf<String, Any?>(
-            "type"       to MessageType.IMAGE,
-            "cdnMediaId" to mediaId,
-            "fileName"   to fileName
+            "type"        to MessageType.IMAGE,
+            "driveFileId" to mediaId,
+            "driveUrl"    to driveUrl,
+            "url"         to directUrl,
+            "previewUrl"  to previewUrl,
+            "fileName"    to fileName
         )
         if (isSpoiler) extra["spoiler"] = true
 
@@ -1009,10 +1016,15 @@ class ChatRepository(
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
+        val directUrl = if (mediaId.startsWith("http")) mediaId else "https://lh3.googleusercontent.com/d/$mediaId"
+        val driveUrl = if (mediaId.startsWith("http")) mediaId else "https://drive.google.com/file/d/$mediaId/view?usp=sharing"
+
         val extra = mapOf(
-            "type"       to MessageType.VOICE,
-            "cdnMediaId" to mediaId,
-            "duration"   to durationSec
+            "type"        to MessageType.VOICE,
+            "driveFileId" to mediaId,
+            "driveUrl"    to driveUrl,
+            "url"         to directUrl,
+            "duration"    to durationSec
         )
 
         val msg = mutableMapOf<String, Any?>(
@@ -1108,17 +1120,22 @@ class ChatRepository(
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
+        val directUrl = if (mediaId.startsWith("http")) mediaId else "https://lh3.googleusercontent.com/d/$mediaId"
+        val driveUrl = if (mediaId.startsWith("http")) mediaId else "https://drive.google.com/file/d/$mediaId/view?usp=sharing"
+
         val extra = mutableMapOf<String, Any?>(
-            "type" to MessageType.AUDIO,
-            "cdnMediaId" to mediaId,
-            "fileName" to fileName,
-            "fileSize" to fileSize,
-            "title" to title,
-            "performer" to performer,
-            "duration" to durationSec
+            "type"        to MessageType.AUDIO,
+            "driveFileId" to mediaId,
+            "driveUrl"    to driveUrl,
+            "url"         to directUrl,
+            "fileName"    to fileName,
+            "fileSize"    to fileSize,
+            "title"       to title,
+            "performer"   to performer,
+            "duration"    to durationSec
         )
         if (coverMediaId != null) {
-            extra["coverCdnMediaId"] = coverMediaId
+            extra["coverUrl"] = if (coverMediaId.startsWith("http")) coverMediaId else "https://lh3.googleusercontent.com/d/$coverMediaId"
         }
 
         val msg = mutableMapOf<String, Any?>(
@@ -1206,15 +1223,24 @@ class ChatRepository(
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
         val userRef = db.collection("users").document(currentUid)
 
+        val directUrl = if (mediaId.startsWith("http")) mediaId else "https://lh3.googleusercontent.com/d/$mediaId"
+        val driveUrl = if (mediaId.startsWith("http")) mediaId else "https://drive.google.com/file/d/$mediaId/view?usp=sharing"
+        val preview = thumbUrl ?: if (mediaId.startsWith("http")) null else "https://lh3.googleusercontent.com/d/$mediaId=s400"
+
         val extra = mutableMapOf<String, Any?>(
-            "type"       to MessageType.VIDEO,
-            "cdnMediaId" to mediaId,
-            "fileName"   to fileName
+            "type"        to MessageType.VIDEO,
+            "driveFileId" to mediaId,
+            "driveUrl"    to driveUrl,
+            "url"         to directUrl,
+            "fileName"    to fileName
         )
         if (duration != null && duration > 0) extra["duration"] = duration
         if (width != null && width > 0) extra["width"] = width
         if (height != null && height > 0) extra["height"] = height
-        if (!thumbUrl.isNullOrBlank()) extra["thumbUrl"] = thumbUrl
+        if (preview != null) {
+            extra["previewUrl"] = preview
+            extra["thumbUrl"] = preview
+        }
 
         val msg = mutableMapOf<String, Any?>(
             "senderId"       to currentUid,
@@ -1388,16 +1414,7 @@ class ChatRepository(
             return res.id
         }
 
-        // 1. Попытка прямой быстрой отправки альбома через CDN/Backend
-        try {
-            val (messageId, _) = CdnService.sendAlbumViaCdn(chatId, images, caption, replyTo)
-            try { db.collection("users").document(currentUid).update("lastMessageAt", FieldValue.serverTimestamp()).await() } catch (_: Exception) {}
-            return messageId
-        } catch (e: Exception) {
-            Log.w("ChatRepository", "CDN sendAlbum failed, falling back to Firebase Cloud Function", e)
-        }
-
-        // 2. Фоллбэк на Firebase Cloud Function
+        // Отправка альбома через Firebase Cloud Function (Секция 1.1 — CDN отключен)
         val data = buildMap<String, Any?> {
             put("chatId",  chatId)
             put("images",  images.map { it.toMap() })

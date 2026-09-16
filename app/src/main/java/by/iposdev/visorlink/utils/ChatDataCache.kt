@@ -393,6 +393,22 @@ object ChatDataCache {
 
     // ── Стикерпаки ────────────────────────────────────────────────────────────
 
+    const val PREF_STICKER_CACHE_VERSION = "official_curated_v3"
+
+    suspend fun checkAndPurgeLegacyStickerCache(context: Context) = withContext(Dispatchers.IO) {
+        val prefs = context.getSharedPreferences("visorlink_cache_meta", Context.MODE_PRIVATE)
+        if (prefs.getString("sticker_cache_version", "") != PREF_STICKER_CACHE_VERSION) {
+            try {
+                val db = getDb(context).writableDatabase
+                db.delete("stickers", null, null)
+                prefs.edit().putString("sticker_cache_version", PREF_STICKER_CACHE_VERSION).apply()
+                Log.d(TAG, "Purged legacy sticker cache to $PREF_STICKER_CACHE_VERSION")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to purge legacy sticker cache", e)
+            }
+        }
+    }
+
     suspend fun saveStickerPacks(context: Context, uid: String, packs: List<StickerPack>) =
         withContext(Dispatchers.IO) {
             try {

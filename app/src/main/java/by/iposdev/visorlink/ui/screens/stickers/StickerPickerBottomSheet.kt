@@ -180,9 +180,6 @@ private fun StickerPickerContent(
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = { showCreateDialog = true }) {
-                    Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                }
             }
         }
 
@@ -203,7 +200,7 @@ private fun StickerPickerContent(
                 isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
                 }
-                packs.isEmpty() -> EmptyPacksPlaceholder(onCreatePack = { showCreateDialog = true })
+                packs.isEmpty() -> EmptyPacksPlaceholder()
                 selectedPackIndex == -1 -> PackListView(
                     packs = packs,
                     currentUid = currentUid,
@@ -221,16 +218,6 @@ private fun StickerPickerContent(
     }
 
     // ── Dialogs & Sheets ───────────────────────────────────────────────────────
-
-    if (showCreateDialog) {
-        CreatePackDialog(
-            onDismiss = { showCreateDialog = false },
-            onCreate = { name, emoji ->
-                onCreatePack(name, emoji)
-                showCreateDialog = false
-            }
-        )
-    }
 
     showDeleteConfirm?.let { pack ->
         val isOwner = pack.authorId == currentUid
@@ -670,16 +657,12 @@ fun AddStickerSheet(
 // ════════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun EmptyPacksPlaceholder(onCreatePack: () -> Unit) {
+private fun EmptyPacksPlaceholder() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("🎭", fontSize = 64.sp)
-            Text("У вас нет стикеров", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            Text("Создайте свой первый пак или получите\nстикер-пак в чате", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f), textAlign = TextAlign.Center)
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.width(200.dp)) {
-                VlButton(onClick = onCreatePack) { Text("Создать пак") }
-            }
+            Text("Стикеры не найдены", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text("Официальные стикер-паки загружаются...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.8f), textAlign = TextAlign.Center)
         }
     }
 }

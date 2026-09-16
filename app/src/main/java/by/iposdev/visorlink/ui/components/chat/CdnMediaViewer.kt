@@ -38,6 +38,11 @@ fun CdnMediaViewer(
     thumbUrl: String? = null,
     onClick: (() -> Unit)? = null
 ) {
+    if (localFile == null && (!mediaId.isNullOrEmpty() || thumbUrl?.contains("api.visorlink.org") == true || (thumbUrl?.contains("/f/") == true && thumbUrl.contains("googleusercontent.com") != true))) {
+        LegacyMediaPlaceholder(modifier = modifier)
+        return
+    }
+
     val context = LocalContext.current
     var resolvedUrl by remember(thumbUrl) { mutableStateOf<String?>(thumbUrl) }
 

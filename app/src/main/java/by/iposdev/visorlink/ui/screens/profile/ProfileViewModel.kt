@@ -110,7 +110,17 @@ class ProfileViewModel(
                 userRepository.uploadAvatar(uri)
                 _uiState.update { it.copy(isLoading = false, successMessage = "Avatar updated!") }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = e.message) }
+                val errorMsg = when {
+                    e is com.google.firebase.functions.FirebaseFunctionsException &&
+                        e.code == com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT ->
+                        "Avatar rejected: image violates safety guidelines (adult/violence/sensitive content)."
+                    e.message?.contains("INVALID_ARGUMENT", ignoreCase = true) == true ||
+                    e.message?.contains("SafeSearch", ignoreCase = true) == true ||
+                    e.message?.contains("safety", ignoreCase = true) == true ->
+                        "Avatar rejected: image violates safety guidelines (adult/violence/sensitive content)."
+                    else -> e.message ?: "Avatar upload failed"
+                }
+                _uiState.update { it.copy(isLoading = false, error = errorMsg) }
             }
         }
     }

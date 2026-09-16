@@ -410,17 +410,28 @@ data class TagSearchResult(
 @IgnoreExtraProperties
 data class AlbumImage(
     val url: String? = null,
+    val driveFileId: String? = null,
+    val previewUrl: String? = null,
     val cdnMediaId: String? = null,
     val fileName: String = "",
     val spoiler: Boolean = false
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
-        "url"        to url,
-        "cdnMediaId" to cdnMediaId,
-        "fileName"   to fileName,
-        "spoiler"    to spoiler
+        "url"         to url,
+        "driveFileId" to driveFileId,
+        "previewUrl"  to previewUrl,
+        "cdnMediaId"  to cdnMediaId,
+        "fileName"    to fileName,
+        "spoiler"     to spoiler
     )
 }
+
+data class DriveMediaItem(
+    val driveFileId: String = "",
+    val url: String = "",
+    val previewUrl: String? = null,
+    val spoiler: Boolean = false
+)
 
 data class AlbumImageLocal(
     val uri: android.net.Uri,
@@ -435,6 +446,8 @@ data class StickerPack(
     val emoji: String = "📦",
     val authorId: String = "",
     val authorName: String = "",
+    val author: String = "VisorLink Official",
+    val isOfficial: Boolean = true,
     val stickerCount: Int = 0,
     val createdAt: Timestamp? = null,
     val stickers: List<StickerItem> = emptyList()
@@ -508,8 +521,15 @@ data class Message(
     val performer: String? = null,
     val fileSize: Long? = null,
 
-    // CDN / Временные файлы
+    // Google Drive Media
+    val driveFileId: String? = null,
+    val driveUrl: String? = null,
+    val previewUrl: String? = null,
+    val thumbnailUrl: String? = null,
+
+    // CDN / Временные файлы (Legacy)
     val cdnMediaId: String? = null,
+    val thumbId: String? = null,
     val thumbUrl: String? = null,
     val width: Int? = null,
     val height: Int? = null,
@@ -566,6 +586,28 @@ fun calculateNextSeq(
     val chatLastSeq = chat?.lastSeq ?: 0L
     val maxMsgSeq = currentMessages.maxOfOrNull { it.seq ?: 0L } ?: 0L
     return maxOf(chatLastSeq, maxMsgSeq) + 1L
+}
+
+/**
+ * Определение устаревших медиа-сообщений CDN (Секция 5 спецификации).
+ * Предотвращает HTTP-запросы к отключенному api.visorlink.org.
+ */
+fun isLegacyMediaMessage(message: Message): Boolean {
+    // Если есть driveFileId, сообщение современное и валидное
+    if (!message.driveFileId.isNullOrEmpty()) return false
+
+    // Если есть старый cdnMediaId, thumbId или URL ссылается на выключенный CDN
+    if (!message.cdnMediaId.isNullOrEmpty()) return true
+    if (!message.thumbId.isNullOrEmpty()) return true
+    if (message.url?.contains("api.visorlink.org") == true) return true
+    if (message.url?.contains("/f/") == true && message.url?.contains("googleusercontent.com") != true) return true
+
+    // Если URL пустой и сообщение не текстовое, не подарок и не в процессе локальной отправки
+    if (message.url.isNullOrEmpty() && message.type != MessageType.TEXT && message.type != MessageType.GIFT && message.type != MessageType.ALBUM && message.localFile == null && message.localBytes == null) {
+        return true
+    }
+
+    return false
 }
 
 /**
@@ -799,13 +841,9 @@ data class FeedItem(
             val bestUrl = url ?: media_url ?: mediaUrl ?: image_url
             if (!bestUrl.isNullOrEmpty()) return bestUrl
 
-            val bestCdnId = cdnMediaId ?: cdn_media_id
-            if (!bestCdnId.isNullOrEmpty()) return "https://api.visorlink.org/p/$bestCdnId"
-
             val firstAlbum = images?.firstOrNull()
             if (firstAlbum != null) {
                 if (!firstAlbum.url.isNullOrEmpty()) return firstAlbum.url
-                if (!firstAlbum.cdnMediaId.isNullOrEmpty()) return "https://api.visorlink.org/p/${firstAlbum.cdnMediaId}"
             }
             return null
         }
@@ -821,15 +859,6 @@ data class FeedItem(
             author_avatar_url ?: authorAvatarUrl
 
             if (!url.isNullOrEmpty()) return url
-
-            val cdnId = channelData?.cdnMediaId ?: channelData?.cdn_media_id ?:
-            channel_data?.cdnMediaId ?: channel_data?.cdn_media_id ?:
-            authorData?.cdnMediaId ?: authorData?.cdn_media_id ?:
-            author_avatar_url // sometimes the ID is in the avatar_url field if it's just the ID
-
-            if (!cdnId.isNullOrEmpty() && !cdnId.startsWith("http")) {
-                return "https://api.visorlink.org/p/$cdnId"
-            }
             return null
         }
 

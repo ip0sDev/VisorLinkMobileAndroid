@@ -40,13 +40,44 @@ fun LegalConsentGuard(
 
     val isTfaRequired by authViewModel.isTfaRequired.collectAsState()
 
-    // Требуется согласие ТОЛЬКО ПОСЛЕ ДВУХФАКТОРКИ:
-    // если двухфакторка активна (isTfaRequired), диалог ToS не показывается, пока пользователь не подтвердит 2FA.
-    val requiresConsent = remember(isVerified, userProfile, latestVersion, isTfaRequired) {
-        if (!isVerified || currentUser == null || userProfile == null || isTfaRequired) {
+    var locallyAcceptedState by remember { mutableStateOf(false) }
+
+    // Проверяем версию в EncryptedSharedPreferences (п. 2.2 ANDROID_COMPLIANCE)
+    val localAcceptedVersion = remember(currentUser?.uid, locallyAcceptedState) {
+        legalRepository.getLocalAcceptedVersion()
+    }
+
+    // Эффективная принятая версия: берем наибольшую между версией в профиле на сервере (например,
+    // принятой при регистрации с ПК) и локальным кэшем в EncryptedSharedPreferences.
+    val effectiveAcceptedVersion = remember(userProfile?.acceptedVersion, localAcceptedVersion) {
+        val serverVersion = userProfile?.acceptedVersion
+        if (serverVersion != null && localAcceptedVersion != null) {
+            if (legalRepository.compareSemVer(serverVersion, localAcceptedVersion) >= 0) serverVersion else localAcceptedVersion
+        } else {
+            serverVersion ?: localAcceptedVersion
+        }
+    }
+
+    // Если на сервере версия уже зафиксирована (например, пользователь зарегистрировался с ПК),
+    // синхронизируем локальный EncryptedSharedPreferences.
+    LaunchedEffect(userProfile?.acceptedVersion) {
+        val serverVersion = userProfile?.acceptedVersion
+        if (!serverVersion.isNullOrBlank()) {
+            val local = legalRepository.getLocalAcceptedVersion()
+            if (local == null || legalRepository.compareSemVer(serverVersion, local) > 0) {
+                legalRepository.saveLocalAcceptedVersion(serverVersion)
+            }
+        }
+    }
+
+    // Согласие требуется согласно п. 2.1 ANDROID_COMPLIANCE ТОЛЬКО если remote.acceptedVersion > local.acceptedVersion:
+    val requiresConsent = remember(isVerified, userProfile, latestVersion, isTfaRequired, effectiveAcceptedVersion, locallyAcceptedState) {
+        if (!isVerified || currentUser == null || isTfaRequired || locallyAcceptedState) {
+            false
+        } else if (userProfile == null && localAcceptedVersion != null && !legalRepository.isConsentRequired(latestVersion, localAcceptedVersion)) {
             false
         } else {
-            userProfile?.acceptedVersion != latestVersion
+            legalRepository.isConsentRequired(latestVersion, effectiveAcceptedVersion)
         }
     }
 
@@ -58,19 +89,28 @@ fun LegalConsentGuard(
                 currentVersion = latestVersion,
                 legalRepository = legalRepository,
                 isReadOnly = false,
-                onAccept = {
-                    coroutineScope.launch {
-                        try {
-                            legalRepository.recordConsent(currentUser.uid, latestVersion)
-                            userRepository.updateCachedProfile(currentUser.uid) {
-                                it.copy(
-                                    acceptedVersion = latestVersion,
-                                    acceptedAt = com.google.firebase.Timestamp.now()
-                                )
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("LegalConsentGuard", "Error recording consent", e)
+                onAccept = { agreeTos, agreePrivacy, agreePersonalData, agreeCrossBorder, agreeAge14 ->
+                    try {
+                        legalRepository.recordConsent(
+                            userId = currentUser.uid,
+                            version = latestVersion,
+                            agreeTos = agreeTos,
+                            agreePrivacy = agreePrivacy,
+                            agreePersonalData = agreePersonalData,
+                            agreeCrossBorder = agreeCrossBorder,
+                            agreeAge14 = agreeAge14
+                        )
+                        userRepository.updateCachedProfile(currentUser.uid) {
+                            it.copy(
+                                acceptedVersion = latestVersion,
+                                acceptedAt = com.google.firebase.Timestamp.now()
+                            )
                         }
+                        locallyAcceptedState = true
+                        true
+                    } catch (e: Exception) {
+                        android.util.Log.e("LegalConsentGuard", "Error recording consent", e)
+                        false
                     }
                 },
                 onLogout = {

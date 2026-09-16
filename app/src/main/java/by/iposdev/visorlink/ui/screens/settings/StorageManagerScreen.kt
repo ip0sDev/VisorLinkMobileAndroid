@@ -1,17 +1,17 @@
 package by.iposdev.visorlink.ui.screens.settings
 
-import android.content.Intent
-import android.net.Uri
-import androidx.compose.animation.*
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,22 +19,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import by.iposdev.visorlink.R
-import by.iposdev.visorlink.ui.theme.VlTheme
 import by.iposdev.visorlink.ui.components.VlAmbientGlow
 import by.iposdev.visorlink.ui.components.VlSurface
 import by.iposdev.visorlink.ui.theme.ThemeViewModel
-import by.iposdev.visorlink.utils.CdnService
 import by.iposdev.visorlink.utils.HapticType
 import by.iposdev.visorlink.utils.rememberHaptic
-import coil.compose.AsyncImage
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.ApiException
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -42,7 +38,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun StorageManagerScreen(
     onNavigateBack: () -> Unit,
-    onViewMedia: (String, String) -> Unit,
+    onViewMedia: (String, String) -> Unit = { _, _ -> },
     viewModel: StorageViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -52,24 +48,56 @@ fun StorageManagerScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var fileToDelete by remember { mutableStateOf<Map<String, Any>?>(null) }
+    var showDisconnectConfirm by remember { mutableStateOf(false) }
 
-    if (fileToDelete != null) {
+    val gdriveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            if (account != null) {
+                viewModel.handleSignInResult(
+                    account = account,
+                    onSuccess = {
+                        Toast.makeText(context, context.getString(R.string.gdrive_status_connected), Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { error ->
+                        Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+        } catch (e: Exception) {
+            Toast.makeText(context, e.message ?: "Google Sign-In failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    if (showDisconnectConfirm) {
         AlertDialog(
-            onDismissRequest = { fileToDelete = null },
-            title = { Text(stringResource(R.string.storage_delete_title)) },
-            text = { Text(stringResource(R.string.storage_delete_confirm, fileToDelete!!["original_name"] as String)) },
+            onDismissRequest = { showDisconnectConfirm = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.CloudOff,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text(stringResource(R.string.gdrive_disconnect_btn)) },
+            text = { Text(stringResource(R.string.gdrive_storage_desc)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        viewModel.deleteFile(fileToDelete!!["media_id"] as String)
-                        fileToDelete = null
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text(stringResource(R.string.action_delete)) }
+                        showDisconnectConfirm = false
+                        viewModel.disconnectDrive()
+                    }
+                ) {
+                    Text(stringResource(R.string.gdrive_disconnect_btn), color = MaterialTheme.colorScheme.error)
+                }
             },
             dismissButton = {
-                TextButton(onClick = { fileToDelete = null }) { Text(stringResource(R.string.action_cancel)) }
+                TextButton(onClick = { showDisconnectConfirm = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
             }
         )
     }
@@ -84,11 +112,6 @@ fun StorageManagerScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                     }
                 },
-                actions = {
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
             )
         }
@@ -100,216 +123,207 @@ fun StorageManagerScreen(
         ) {
             VlAmbientGlow()
 
-            if (uiState.isLoading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 32.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(padding)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // ── Google Drive Storage Card ────────────────────────────────
+                VlSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    customRadius = 16.dp,
+                    contentPadding = PaddingValues(16.dp)
                 ) {
-                    item { Spacer(Modifier.height(padding.calculateTopPadding() + 8.dp)) }
-
-                    item {
-                        StorageStatsCard(stats = uiState.stats)
-                    }
-
-                    item {
-                        SectionHeader(stringResource(R.string.storage_section_files))
-                    }
-
-                    if (uiState.files.isEmpty()) {
-                        item {
-                            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(64.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(stringResource(R.string.storage_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    TextButton(onClick = { viewModel.refresh() }) {
-                                        Text(stringResource(R.string.action_refresh))
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudUpload,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
                                     }
+                                }
+                                Text(
+                                    text = stringResource(R.string.gdrive_storage_card_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            // Connection badge
+                            val badgeColor = if (uiState.isDriveConnected) Color(0xFF10B981) else MaterialTheme.colorScheme.outline
+                            val badgeText = if (uiState.isDriveConnected) {
+                                stringResource(R.string.gdrive_status_connected)
+                            } else {
+                                stringResource(R.string.gdrive_status_disconnected)
+                            }
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = badgeColor.copy(alpha = 0.15f),
+                                border = BorderStroke(1.dp, badgeColor.copy(alpha = 0.4f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(badgeColor)
+                                    )
+                                    Text(
+                                        text = badgeText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = badgeColor,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
                             }
                         }
-                    } else {
-                        items(uiState.files) { file ->
-                            FileItem(
-                                file = file,
-                                onView = {
-                                    scope.launch {
-                                        val url = CdnService.getFileUrl(file["media_id"] as String)
-                                        onViewMedia(url, file["mime_type"] as String)
-                                    }
-                                },
-                                onDownload = {
-                                    scope.launch {
-                                        val url = CdnService.getFileUrl(file["media_id"] as String)
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    }
-                                },
-                                onDelete = { fileToDelete = file }
+
+                        if (uiState.isDriveConnected) {
+                            if (!uiState.driveAccountEmail.isNullOrBlank()) {
+                                Text(
+                                    text = uiState.driveAccountEmail!!,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.gdrive_folder_label),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
+
+                        Text(
+                            text = stringResource(R.string.gdrive_storage_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(Modifier.height(4.dp))
+
+                        if (uiState.isDriveConnected) {
+                            OutlinedButton(
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    showDisconnectConfirm = true
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.error
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudOff,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.gdrive_disconnect_btn),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    scope.launch {
+                                        val clientId = viewModel.getGoogleDriveClientId()
+                                        val client = viewModel.driveAuthManager.getGoogleSignInClient(clientId)
+                                        gdriveLauncher.launch(client.signInIntent)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudUpload,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.gdrive_connect_btn),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // ── Profile Cloud Storage Card (Firebase Storage) ────────────
+                VlSurface(
+                    modifier = Modifier.fillMaxWidth(),
+                    customRadius = 16.dp,
+                    contentPadding = PaddingValues(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudQueue,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = stringResource(R.string.firebase_storage_cloud_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Text(
+                            text = stringResource(R.string.firebase_storage_cloud_desc),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text     = title.uppercase(),
-        style    = MaterialTheme.typography.labelSmall,
-        color    = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 32.dp, top = 20.dp, bottom = 4.dp)
-    )
-}
-
-@Composable
-fun StorageStatsCard(stats: Map<String, Any>) {
-    val used = stats["used_bytes"] as? Long ?: 0L
-    val quota = stats["quota_bytes"] as? Long ?: 2147483648L
-    val filesCount = stats["files_count"] as? Int ?: 0
-    val fraction = (used.toFloat() / quota.toFloat()).coerceIn(0f, 1f)
-
-    VlSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        contentPadding = PaddingValues(20.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Cloud, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text(
-                        stringResource(R.string.storage_usage_title),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        stringResource(R.string.storage_usage_of, formatBytes(used), formatBytes(quota)),
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(20.dp))
-
-            LinearProgressIndicator(
-                progress = { fraction },
-                modifier = Modifier.fillMaxWidth().height(8.dp).clip(VlTheme.tokens.shapes.indicator),
-                color = if (fraction > 0.9f) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.primaryContainer
-            )
-
-            Spacer(Modifier.height(12.dp))
-            Text(
-                stringResource(R.string.storage_usage_files_count, filesCount),
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-fun FileItem(
-    file: Map<String, Any>,
-    onView: () -> Unit,
-    onDownload: () -> Unit,
-    onDelete: () -> Unit
-) {
-    val name = file["original_name"] as String
-    val size = file["size"] as Long
-    val mime = file["mime_type"] as String
-    val isImage = mime.startsWith("image/")
-    val id = file["media_id"] as String
-    val zone = file["zone"] as? String ?: "public"
-
-    var thumbUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(id) {
-        thumbUrl = CdnService.getFileUrl(id)
-    }
-
-    VlSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 4.dp),
-        onClick = { if (isImage) onView() else onDownload() }
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(50.dp)
-                    .clip(VlTheme.tokens.shapes.chip)
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isImage && thumbUrl != null) {
-                    AsyncImage(
-                        model = thumbUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        if (isImage) Icons.Default.Image else Icons.AutoMirrored.Filled.InsertDriveFile,
-                        null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(14.dp))
-
-            Column(Modifier.weight(1f)) {
-                Text(
-                    name,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        formatBytes(size),
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(" • ", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        if (zone == "vault") stringResource(R.string.storage_zone_vault) else stringResource(R.string.storage_zone_public),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-
-            Row {
-                IconButton(onClick = onDownload) {
-                    Icon(Icons.Default.Download, null, modifier = Modifier.size(20.dp))
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                }
-            }
-        }
-    }
-}
-
-private fun formatBytes(bytes: Long): String {
-    if (bytes < 1024) return "$bytes B"
-    val exp = (Math.log(bytes.toDouble()) / Math.log(1024.0)).toInt()
-    val pre = "KMGTPE"[exp - 1]
-    return "%.1f %sB".format(bytes / Math.pow(1024.0, exp.toDouble()), pre)
 }

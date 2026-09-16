@@ -809,4 +809,19 @@
     <string name="animation_test_card_desc">Вязкая перемычка динамически растягивается. Поднесите ближе для втягивания.</string>
     <string name="animation_test_controls_viscosity">Натяжение жидкости: %1$.1f</string>
     <string name="animation_test_controls_bounciness">Упругость желе: %1$.1f</string>
+
+    <!-- Интеграция Google Drive и хранилища -->
+    <string name="msg_unsupported_media">Неподдерживаемый формат медиа (Архивное вложение недоступно)</string>
+    <string name="gdrive_status_connected">Подключено</string>
+    <string name="gdrive_status_disconnected">Не подключено</string>
+    <string name="gdrive_folder_label">Папка: VisorLink Media</string>
+    <string name="gdrive_connect_btn">Подключить Google Drive</string>
+    <string name="gdrive_disconnect_btn">Отключить</string>
+    <string name="gdrive_storage_card_title">Хранилище Google Drive</string>
+    <string name="gdrive_storage_desc">Все фото, видео, аудиофайлы и голосовые сообщения, отправляемые в чаты, сохраняются в вашей личной папке «VisorLink Media» на Google Диске.</string>
+    <string name="firebase_storage_cloud_title">Облачное хранилище профиля</string>
+    <string name="firebase_storage_cloud_desc">Аватарки, обложки профиля и стикеры хранятся в защищённом облаке VisorLink и не расходуют место на вашем Google Диске.</string>
+    <string name="gdrive_connect_dialog_title">Требуется Google Drive</string>
+    <string name="gdrive_connect_dialog_desc">Для отправки медиафайлов подключите ваш Google Диск. Все вложения будут сохраняться строго в изолированной папке «VisorLink Media».</string>
+    <string name="msg_avatar_moderation_failed">Аватар отклонен: изображение нарушает правила безопасности (неприемлемый контент).</string>
 </resources>

@@ -48,13 +48,20 @@ fun LegalConsentDialog(
     currentVersion: String,
     legalRepository: LegalRepository,
     isReadOnly: Boolean = false,
-    onAccept: () -> Unit = {},
+    onAccept: suspend (agreeTos: Boolean, agreePrivacy: Boolean, agreePersonalData: Boolean, agreeCrossBorder: Boolean, agreeAge14: Boolean) -> Boolean = { _, _, _, _, _ -> true },
     onLogout: () -> Unit = {},
     onDismissReadOnly: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0: ToS, 1: Privacy
-    var isAgreed by remember { mutableStateOf(false) }
+    var agreeTos by remember { mutableStateOf(false) }
+    var agreePrivacy by remember { mutableStateOf(false) }
+    var agreePersonalData by remember { mutableStateOf(false) }
+    var agreeCrossBorder by remember { mutableStateOf(false) }
+    var agreeAge14 by remember { mutableStateOf(false) }
+
+    val allAgreed = agreeTos && agreePrivacy && agreePersonalData && agreeCrossBorder && agreeAge14
     var isSubmitting by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     var tosDoc by remember { mutableStateOf<LegalDocument?>(null) }
     var privacyDoc by remember { mutableStateOf<LegalDocument?>(null) }
@@ -257,39 +264,89 @@ fun LegalConsentDialog(
 
                     HorizontalDivider(color = cs.outlineVariant, thickness = 1.dp)
 
-                    // ── ФУТЕР (Чекбокс + Кнопки) ───────────────────────────────────────
+                    // ── ФУТЕР (5 обязательных чекбоксов + Кнопки) ───────────────────────────────────────
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(cs.surfaceContainerLow)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (!isReadOnly) {
-                            // Чекбокс согласия
+                            // Заголовок согласий и быстрый выбор
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { isAgreed = !isAgreed }
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Checkbox(
-                                    checked = isAgreed,
-                                    onCheckedChange = { isAgreed = it },
-                                    colors = CheckboxDefaults.colors(
-                                        checkedColor = cs.primary,
-                                        checkmarkColor = cs.onPrimary
+                                Text(
+                                    text = "Обязательные согласия (Закон № 99-З):",
+                                    style = TextStyle(
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = cs.onSurfaceVariant
                                     )
                                 )
                                 Text(
-                                    text = "Я принимаю Условия использования и Политику конфиденциальности VisorLink (v$currentVersion)",
+                                    text = if (allAgreed) "Снять всё" else "Выбрать всё",
                                     style = TextStyle(
-                                        fontSize = 12.sp,
-                                        lineHeight = 16.sp,
-                                        color = cs.onSurface
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = cs.primary
+                                    ),
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            val target = !allAgreed
+                                            agreeTos = target
+                                            agreePrivacy = target
+                                            agreePersonalData = target
+                                            agreeCrossBorder = target
+                                            agreeAge14 = target
+                                        }
+                                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+
+                            // 5 обязательных чекбоксов (п. 2.1 ANDROID_COMPLIANCE)
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                LegalCheckboxRow(
+                                    checked = agreeTos,
+                                    onCheckedChange = { agreeTos = it },
+                                    text = "Ознакомлен(а) и согласен(сна) с Пользовательским соглашением (ToS)"
+                                )
+                                LegalCheckboxRow(
+                                    checked = agreePrivacy,
+                                    onCheckedChange = { agreePrivacy = it },
+                                    text = "Ознакомлен(а) и согласен(сна) с Политикой конфиденциальности"
+                                )
+                                LegalCheckboxRow(
+                                    checked = agreePersonalData,
+                                    onCheckedChange = { agreePersonalData = it },
+                                    text = "Даю согласие на обработку персональных данных (ст. 5 Закона № 99-З)"
+                                )
+                                LegalCheckboxRow(
+                                    checked = agreeCrossBorder,
+                                    onCheckedChange = { agreeCrossBorder = it },
+                                    text = "Согласен(сна) на трансграничную передачу данных (ст. 9 Закона № 99-З)"
+                                )
+                                LegalCheckboxRow(
+                                    checked = agreeAge14,
+                                    onCheckedChange = { agreeAge14 = it },
+                                    text = "Мне исполнилось 14 лет (или получено согласие представителей, ст. 25 ГК РБ)"
+                                )
+                            }
+
+                            if (!errorMessage.isNullOrBlank()) {
+                                Text(
+                                    text = errorMessage!!,
+                                    style = TextStyle(
+                                        fontSize = 11.sp,
+                                        color = cs.error,
+                                        fontWeight = FontWeight.Medium
                                     )
                                 )
                             }
@@ -320,13 +377,26 @@ fun LegalConsentDialog(
 
                                 Button(
                                     onClick = {
-                                        if (isAgreed && !isSubmitting) {
+                                        if (allAgreed && !isSubmitting) {
                                             isSubmitting = true
-                                            onAccept()
+                                            errorMessage = null
+                                            coroutineScope.launch {
+                                                val success = onAccept(
+                                                    agreeTos,
+                                                    agreePrivacy,
+                                                    agreePersonalData,
+                                                    agreeCrossBorder,
+                                                    agreeAge14
+                                                )
+                                                if (!success) {
+                                                    isSubmitting = false
+                                                    errorMessage = "Не удалось зафиксировать согласие. Проверьте сеть и повторите."
+                                                }
+                                            }
                                         }
                                     },
                                     modifier = Modifier.weight(0.65f),
-                                    enabled = isAgreed && !isSubmitting,
+                                    enabled = allAgreed && !isSubmitting,
                                     shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = cs.primary,
@@ -489,5 +559,45 @@ fun LegalSectionCard(
             // Содержимое раздела (с HTML-тегами)
             LegalHtmlContent(html = section.content)
         }
+    }
+}
+
+/**
+ * Строка отдельного юридического чекбокса (п. 2.1 ANDROID_COMPLIANCE).
+ */
+@Composable
+private fun LegalCheckboxRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(
+                checkedColor = cs.primary,
+                checkmarkColor = cs.onPrimary
+            ),
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = text,
+            style = TextStyle(
+                fontSize = 11.sp,
+                lineHeight = 14.sp,
+                color = cs.onSurface
+            )
+        )
     }
 }

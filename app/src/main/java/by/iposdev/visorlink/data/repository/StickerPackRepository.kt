@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import by.iposdev.visorlink.data.model.StickerItem
 import by.iposdev.visorlink.data.model.StickerPack
 import by.iposdev.visorlink.utils.ChatDataCache
@@ -13,18 +14,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.DataOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.UUID
 
 class StickerPackRepository(
     private val auth: FirebaseAuth,
-    private val context: Context
+    private val context: Context,
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
 ) {
-    private val currentUid get() = auth.currentUser!!.uid
-    private val baseUrl = "https://api.visorlink.org"
+    private val currentUid get() = auth.currentUser?.uid ?: ""
 
     private val _packsFlow = MutableStateFlow<List<StickerPack>>(emptyList())
 
@@ -32,52 +29,65 @@ class StickerPackRepository(
 
     suspend fun refreshPacks() = withContext(Dispatchers.IO) {
         try {
+            ChatDataCache.checkAndPurgeLegacyStickerCache(context)
             val cached = ChatDataCache.loadStickerPacks(context, currentUid)
             if (cached.isNotEmpty() && _packsFlow.value.isEmpty()) {
                 _packsFlow.value = cached
             }
 
-            val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: return@withContext
-            val url = URL("$baseUrl/stickerpacks/my")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.setRequestProperty("Authorization", "Bearer $token")
-
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                val json = JSONObject(response)
-                val packsArray = json.optJSONArray("packs") ?: JSONArray()
-                val packs = (0 until packsArray.length()).map {
-                    parseStickerPack(packsArray.getJSONObject(it))
-                }
+            val packs = fetchOfficialStickerPacks()
+            if (packs.isNotEmpty()) {
                 _packsFlow.value = packs
                 ChatDataCache.saveStickerPacks(context, currentUid, packs)
             }
         } catch (e: Exception) {
-            Log.e("StickerRepo", "Failed to fetch packs", e)
+            Log.e("StickerRepo", "Failed to fetch official packs from Firestore", e)
         }
     }
 
-    private fun parseStickerPack(json: JSONObject): StickerPack {
-        val stickersArray = json.optJSONArray("stickers") ?: JSONArray()
-        val stickers = (0 until stickersArray.length()).map { i ->
-            val sJson = stickersArray.getJSONObject(i)
-            StickerItem(
-                id = sJson.getString("id"),
-                url = sJson.getString("url"),
-                emoji = sJson.getString("emoji"),
-                sortOrder = sJson.optInt("sort_order", 0)
-            )
-        }.sortedBy { it.sortOrder }
+    suspend fun fetchOfficialStickerPacks(): List<StickerPack> = withContext(Dispatchers.IO) {
+        try {
+            val snapshot = db.collection("stickerPacks")
+                .whereEqualTo("isOfficial", true)
+                .get()
+                .await()
 
-        return StickerPack(
-            id = json.getString("id"),
-            name = json.getString("name"),
-            emoji = json.getString("emoji"),
-            authorId = json.getString("author_id"),
-            authorName = json.getString("author_name"),
-            stickerCount = json.getInt("sticker_count"),
-            stickers = stickers
-        )
+            snapshot.documents.mapNotNull { doc ->
+                val id = doc.id
+                val name = doc.getString("name") ?: "Sticker Pack"
+                val emoji = doc.getString("emoji") ?: "📦"
+                val author = doc.getString("author") ?: "VisorLink Official"
+                val authorId = doc.getString("authorId") ?: "official"
+                val authorName = doc.getString("authorName") ?: author
+                val isOfficial = doc.getBoolean("isOfficial") ?: true
+                val stickersRaw = doc.get("stickers") as? List<Map<String, Any>> ?: emptyList()
+
+                val stickers = stickersRaw.mapIndexed { index, sMap ->
+                    StickerItem(
+                        id = sMap["id"] as? String ?: UUID.randomUUID().toString(),
+                        emoji = sMap["emoji"] as? String ?: "🎭",
+                        url = sMap["url"] as? String ?: "",
+                        storagePath = sMap["storagePath"] as? String ?: "",
+                        sortOrder = (sMap["sortOrder"] as? Number)?.toInt() ?: index
+                    )
+                }.sortedBy { it.sortOrder }
+
+                StickerPack(
+                    id = id,
+                    name = name,
+                    emoji = emoji,
+                    author = author,
+                    authorId = authorId,
+                    authorName = authorName,
+                    isOfficial = isOfficial,
+                    stickerCount = stickers.size,
+                    stickers = stickers
+                )
+            }
+        } catch (e: Exception) {
+            Log.e("StickerRepo", "Error querying official sticker packs", e)
+            emptyList()
+        }
     }
 
     suspend fun getPackById(packId: String): StickerPack? {
@@ -93,147 +103,62 @@ class StickerPackRepository(
         if (local != null) return@withContext local
 
         try {
-            val token = auth.currentUser?.getIdToken(false)?.await()?.token
-            val url = URL("$baseUrl/stickerpacks/$packId")
-            val conn = url.openConnection() as HttpURLConnection
-            if (!token.isNullOrEmpty()) {
-                conn.setRequestProperty("Authorization", "Bearer $token")
-            }
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().readText()
-                val json = JSONObject(response)
-                val packJson = json.optJSONObject("pack") ?: json
-                parseStickerPack(packJson)
-            } else null
+            val doc = db.collection("stickerPacks").document(packId).get().await()
+            if (!doc.exists()) return@withContext null
+            val id = doc.id
+            val name = doc.getString("name") ?: "Sticker Pack"
+            val emoji = doc.getString("emoji") ?: "📦"
+            val author = doc.getString("author") ?: "VisorLink Official"
+            val authorId = doc.getString("authorId") ?: "official"
+            val authorName = doc.getString("authorName") ?: author
+            val isOfficial = doc.getBoolean("isOfficial") ?: true
+            val stickersRaw = doc.get("stickers") as? List<Map<String, Any>> ?: emptyList()
+
+            val stickers = stickersRaw.mapIndexed { index, sMap ->
+                StickerItem(
+                    id = sMap["id"] as? String ?: UUID.randomUUID().toString(),
+                    emoji = sMap["emoji"] as? String ?: "🎭",
+                    url = sMap["url"] as? String ?: "",
+                    storagePath = sMap["storagePath"] as? String ?: "",
+                    sortOrder = (sMap["sortOrder"] as? Number)?.toInt() ?: index
+                )
+            }.sortedBy { it.sortOrder }
+
+            StickerPack(
+                id = id,
+                name = name,
+                emoji = emoji,
+                author = author,
+                authorId = authorId,
+                authorName = authorName,
+                isOfficial = isOfficial,
+                stickerCount = stickers.size,
+                stickers = stickers
+            )
         } catch (e: Exception) {
             Log.e("StickerRepo", "Failed to fetch pack details for $packId", e)
             null
         }
     }
 
+    // Deprecated legacy stubs to preserve interface compatibility without hitting legacy CDN
     suspend fun createPack(name: String, emoji: String): String = withContext(Dispatchers.IO) {
-        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
-        val url = URL("$baseUrl/stickerpacks/create")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.setRequestProperty("Authorization", "Bearer $token")
-        conn.setRequestProperty("Content-Type", "application/json")
-
-        val authorName = ChatDataCache.loadProfile(context, currentUid)?.displayName ?: "User"
-
-        val json = JSONObject().apply {
-            put("name", name)
-            put("emoji", emoji)
-            put("author_name", authorName)
-        }
-
-        conn.outputStream.write(json.toString().toByteArray(Charsets.UTF_8))
-
-        if (conn.responseCode == 200) {
-            val response = conn.inputStream.bufferedReader().readText()
-            val resJson = JSONObject(response)
-            refreshPacks()
-            return@withContext resJson.getString("pack_id")
-        } else {
-            throw Exception("Create pack failed")
-        }
+        throw UnsupportedOperationException("Custom sticker pack creation has been decommissioned.")
     }
 
     suspend fun deletePack(packId: String, isOwner: Boolean) = withContext(Dispatchers.IO) {
-        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
-        val endpoint = if (isOwner) "/stickerpacks/$packId" else "/stickerpacks/$packId/library"
-        val url = URL("$baseUrl$endpoint")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "DELETE"
-        conn.setRequestProperty("Authorization", "Bearer $token")
-
-        if (conn.responseCode == 200) {
-            refreshPacks()
-        } else {
-            throw Exception("Delete pack failed")
-        }
+        // No-op for official packs
     }
 
     suspend fun addPackToUser(packId: String): String = withContext(Dispatchers.IO) {
-        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
-        val url = URL("$baseUrl/stickerpacks/$packId/library")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.setRequestProperty("Authorization", "Bearer $token")
-
-        if (conn.responseCode == 200) {
-            refreshPacks()
-            return@withContext "Pack Added"
-        } else {
-            throw Exception("Add pack failed")
-        }
+        "Official pack"
     }
 
     suspend fun uploadSticker(packId: String, uri: Uri, emoji: String): StickerItem = withContext(Dispatchers.IO) {
-        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
-        val boundary = "----VisorLinkStickerBoundary${System.currentTimeMillis()}"
-        val url = URL("$baseUrl/stickerpacks/$packId/add_sticker")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.setRequestProperty("Authorization", "Bearer $token")
-        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
-
-        DataOutputStream(conn.outputStream).use { out ->
-            val crlf = "\r\n"
-            val twoHyphens = "--"
-
-            fun writeField(name: String, value: String) {
-                out.writeBytes("$twoHyphens$boundary$crlf")
-                out.writeBytes("Content-Disposition: form-data; name=\"$name\"$crlf$crlf")
-                out.write(value.toByteArray(Charsets.UTF_8))
-                out.writeBytes(crlf)
-            }
-
-            writeField("emoji", emoji)
-            val fileName = "sticker_${System.currentTimeMillis()}.webp"
-            writeField("name", fileName)
-
-            out.writeBytes("$twoHyphens$boundary$crlf")
-            out.writeBytes("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"$crlf")
-            out.writeBytes("Content-Type: image/webp$crlf$crlf")
-
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                input.copyTo(out)
-            }
-            out.writeBytes(crlf)
-            out.writeBytes("$twoHyphens$boundary--$crlf")
-            out.flush()
-        }
-
-        if (conn.responseCode == 200) {
-            val response = conn.inputStream.bufferedReader().readText()
-            val json = JSONObject(response)
-            refreshPacks()
-            return@withContext StickerItem(
-                id = json.getString("id"),
-                url = json.getString("url"),
-                emoji = json.getString("emoji"),
-                sortOrder = json.optInt("sort_order", 0)
-            )
-        } else {
-            val err = conn.errorStream?.bufferedReader()?.readText()
-            throw Exception("Upload failed: $err")
-        }
+        throw UnsupportedOperationException("Custom sticker upload has been decommissioned.")
     }
 
     suspend fun deleteStickerFromPack(packId: String, sticker: StickerItem) = withContext(Dispatchers.IO) {
-        val token = auth.currentUser?.getIdToken(false)?.await()?.token ?: throw Exception("No auth token")
-        val url = URL("$baseUrl/stickerpacks/$packId/stickers/${sticker.id}")
-        val conn = url.openConnection() as HttpURLConnection
-        conn.requestMethod = "DELETE"
-        conn.setRequestProperty("Authorization", "Bearer $token")
-
-        if (conn.responseCode == 200) {
-            refreshPacks()
-        } else {
-            throw Exception("Delete sticker failed")
-        }
+        // No-op
     }
 }

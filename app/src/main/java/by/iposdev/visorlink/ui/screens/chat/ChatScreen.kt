@@ -151,7 +151,34 @@ fun ChatScreen(
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
 
+    val driveAuthManager: by.iposdev.visorlink.utils.GoogleDriveAuthManager = org.koin.compose.koinInject()
+    val driveConfigRepo: by.iposdev.visorlink.data.repository.GoogleDriveConfigRepository = org.koin.compose.koinInject()
+    var showDriveConnectDialog by remember { mutableStateOf(false) }
     var showMediaPicker by remember { mutableStateOf(false) }
+
+    val gdriveLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+            if (account != null) {
+                scope.launch {
+                    val res = driveAuthManager.handleSignInResult(account)
+                    if (res.isSuccess) {
+                        showDriveConnectDialog = false
+                        showMediaPicker = true
+                    } else {
+                        Toast.makeText(context, res.exceptionOrNull()?.message ?: "Google Drive connection error", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ChatScreen", "Google Sign-In failed", e)
+            Toast.makeText(context, e.message ?: "Google Drive error", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.setWallpaper(it) }
     }
@@ -311,7 +338,11 @@ fun ChatScreen(
                         onAttach = {
                             keyboardController?.hide()
                             focusManager.clearFocus(force = true)
-                            showMediaPicker = true
+                            if (!driveAuthManager.isDriveConnected()) {
+                                showDriveConnectDialog = true
+                            } else {
+                                showMediaPicker = true
+                            }
                         },
                         onStickerClick = { showStickerSheet = true },
                         onSend = {
@@ -320,7 +351,13 @@ fun ChatScreen(
                             if (uiState.editingMessage != null) viewModel.saveEdit(t)
                             else viewModel.sendText(t)
                         },
-                        onStartRecord = { viewModel.startRecording() },
+                        onStartRecord = {
+                            if (!driveAuthManager.isDriveConnected()) {
+                                showDriveConnectDialog = true
+                            } else {
+                                viewModel.startRecording()
+                            }
+                        },
                         onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
                         onCancelRecord = { viewModel.cancelRecording() },
                         onSendRecord = { viewModel.stopRecordingAndSend() },
@@ -586,6 +623,45 @@ fun ChatScreen(
             fallbackPackName = name,
             fallbackPackEmoji = emoji,
             onDismiss = { selectedStickerPack = null }
+        )
+    }
+
+    if (showDriveConnectDialog) {
+        AlertDialog(
+            onDismissRequest = { showDriveConnectDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.CloudUpload,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            },
+            title = { Text(stringResource(R.string.gdrive_connect_dialog_title)) },
+            text = { Text(stringResource(R.string.gdrive_connect_dialog_desc)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            val clientId = driveConfigRepo.getGoogleDriveClientId()
+                            val client = driveAuthManager.getSignInClient(clientId)
+                            gdriveLauncher.launch(client.signInIntent)
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudUpload,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.gdrive_connect_btn))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDriveConnectDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
         )
     }
 

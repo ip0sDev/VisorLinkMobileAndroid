@@ -26,8 +26,8 @@ android {
         applicationId = "by.iposdev.visorlink"
         minSdk = 30
         targetSdk = 37
-        versionCode = 149
-        versionName = "3.7.01"
+        versionCode = 150
+        versionName = "3.7.02"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"BETA\"")
@@ -136,6 +136,7 @@ dependencies {
 
     // ── Other ────────────────────────────────────────────────────────────────
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.play.services.auth)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.accompanist.permissions)

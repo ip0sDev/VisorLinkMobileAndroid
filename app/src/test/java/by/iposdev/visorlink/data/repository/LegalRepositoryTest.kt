@@ -120,4 +120,31 @@ class LegalRepositoryTest {
         assertEquals(1, urlAnnotations.size)
         assertEquals("mailto:test@visorlink.org", urlAnnotations[0].item)
     }
+
+    @Test
+    fun `compareSemVer compares versions and normalizes correctly`() {
+        assertEquals(0, repository.compareSemVer("1.0.0", "1.0.0"))
+        assertEquals(0, repository.compareSemVer("1.0", "1.0.0"))
+        assertEquals(0, repository.compareSemVer("v1.2", "1.2.0"))
+        assertTrue(repository.compareSemVer("1.2.0", "1.0.0") > 0)
+        assertTrue(repository.compareSemVer("1.0.0", "1.2.0") < 0)
+        assertTrue(repository.compareSemVer("1.2.1", "1.2.0") > 0)
+        assertTrue(repository.compareSemVer("2.0.0", "1.9.9") > 0)
+    }
+
+    @Test
+    fun `isConsentRequired follows ANDROID_COMPLIANCE rule remote greater than accepted`() {
+        // Если пользователь не принимал версию (null/blank) -> обязательно требуется согласие
+        assertTrue(repository.isConsentRequired("1.0.0", null))
+        assertTrue(repository.isConsentRequired("1.0.0", ""))
+
+        // Если пользователь зарегистрировался на ПК и уже принял актуальную версию -> согласие НЕ требуется
+        assertFalse(repository.isConsentRequired("1.0.0", "1.0.0"))
+        assertFalse(repository.isConsentRequired("1.0.0", "1.0"))
+        assertFalse(repository.isConsentRequired("1.0.0", "1.2.0"))
+
+        // Если вышла новая версия документов (remote > user) -> повторное согласие обязательно
+        assertTrue(repository.isConsentRequired("1.3.0", "1.2.0"))
+        assertTrue(repository.isConsentRequired("2.0.0", "1.0.0"))
+    }
 }

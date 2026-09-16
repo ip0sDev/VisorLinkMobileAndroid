@@ -62,12 +62,12 @@ class StatusViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             
-            // 1. Check VisorLink CDN
-            val cdnStatus = withContext(Dispatchers.IO) { checkCdn() }
-            if (cdnStatus.isUp) {
-                resolveIncident("CDN")
+            // 1. Check Google Drive / Cloud Storage
+            val storageStatus = withContext(Dispatchers.IO) { checkStorage() }
+            if (storageStatus.isUp) {
+                resolveIncident("Cloud Storage")
             } else {
-                reportIncident("CDN", cdnStatus.error ?: "HTTP 502 / Timeout")
+                reportIncident("Cloud Storage", storageStatus.error ?: "Storage Timeout")
             }
 
             // 2. Check Firebase Firestore
@@ -87,30 +87,28 @@ class StatusViewModel(
             }
 
             _uiState.update { it.copy(
-                services = listOf(cdnStatus, firestoreStatus, flagsStatus),
+                services = listOf(storageStatus, firestoreStatus, flagsStatus),
                 isRefreshing = false
             ) }
         }
     }
 
-    private suspend fun checkCdn(): ServiceStatus {
+    private suspend fun checkStorage(): ServiceStatus {
         return try {
             val request = Request.Builder()
-                .url("https://api.visorlink.org/ping")
+                .url("https://www.googleapis.com/generate_204")
                 .header("User-Agent", "VisorLink/Android")
                 .build()
             pingClient.newCall(request).execute().use { response ->
-                // Любой ответ от сервера, кроме 5xx (ошибки сервера), означает, что CDN жива.
-                // 404 или 401/403 — это ответы сервера, а не ошибки инфраструктуры.
-                val isUp = response.code < 500
+                val isUp = response.isSuccessful
                 ServiceStatus(
-                    name = "CDN",
+                    name = "Cloud Storage",
                     isUp = isUp,
-                    error = if (!isUp) "HTTP ${response.code} (Server Error)" else null
+                    error = if (!isUp) "HTTP ${response.code}" else null
                 )
             }
         } catch (e: Exception) {
-            ServiceStatus("CDN", false, error = e.message ?: "Network error")
+            ServiceStatus("Cloud Storage", false, error = e.message ?: "Network error")
         }
     }
 

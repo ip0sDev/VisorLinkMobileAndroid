@@ -12,6 +12,10 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.google.firebase.firestore.SetOptions
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
@@ -26,13 +30,79 @@ class LegalRepository(
     private val firestore: FirebaseFirestore,
     private val context: Context,
     private val api: VisorLinkApi? = null,
-    private val flagsRepository: FlagsRepository? = null
+    private val flagsRepository: FlagsRepository? = null,
+    private val functions: FirebaseFunctions? = null
 ) {
     companion object {
         private const val TAG = "LegalRepository"
         const val DEFAULT_FALLBACK_VERSION = "1.0.0"
         private const val TOS_ASSET = "legal_tos.json"
         private const val PRIVACY_ASSET = "legal_privacy_policy.json"
+        private const val LEGAL_PREFS_NAME = "visorlink_legal_prefs"
+        private const val KEY_ACCEPTED_VERSION = "accepted_version"
+    }
+
+    private val masterKey by lazy {
+        androidx.security.crypto.MasterKey.Builder(context.applicationContext)
+            .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
+            .build()
+    }
+
+    private val securePrefs by lazy {
+        try {
+            EncryptedSharedPreferences.create(
+                context.applicationContext,
+                LEGAL_PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            context.applicationContext.getSharedPreferences("${LEGAL_PREFS_NAME}_fallback", Context.MODE_PRIVATE)
+        }
+    }
+
+    /**
+     * Чтение локально подтвержденной версии из защищенного хранилища EncryptedSharedPreferences (п. 2.2 ANDROID_COMPLIANCE).
+     */
+    fun getLocalAcceptedVersion(): String? {
+        return securePrefs.getString(KEY_ACCEPTED_VERSION, null)
+    }
+
+    /**
+     * Запись подтвержденной версии в защищенное хранилище EncryptedSharedPreferences (п. 2.2 ANDROID_COMPLIANCE).
+     */
+    fun saveLocalAcceptedVersion(version: String) {
+        securePrefs.edit().putString(KEY_ACCEPTED_VERSION, version).apply()
+    }
+
+    /**
+     * Сравнение двух семантических версий (SemVer).
+     * Возвращает положительное число, если v1 > v2; 0, если равны; отрицательное, если v1 < v2.
+     * Корректно нормализует форматы (например, "1.0" и "1.0.0" считаются эквивалентными).
+     */
+    fun compareSemVer(v1: String, v2: String): Int {
+        val p1 = v1.trim().removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
+        val p2 = v2.trim().removePrefix("v").split(".").map { it.toIntOrNull() ?: 0 }
+        val maxLen = maxOf(p1.size, p2.size, 3)
+        for (i in 0 until maxLen) {
+            val num1 = p1.getOrElse(i) { 0 }
+            val num2 = p2.getOrElse(i) { 0 }
+            if (num1 != num2) {
+                return num1.compareTo(num2)
+            }
+        }
+        return 0
+    }
+
+    /**
+     * Проверка необходимости подписания соглашений согласно п. 2.1 ANDROID_COMPLIANCE:
+     * Согласие требуется, только если актуальная серверная версия строго превышает
+     * уже подтвержденную пользователем версию (remote.acceptedVersion > local.acceptedVersion).
+     */
+    fun isConsentRequired(remoteVersion: String, userAcceptedVersion: String?): Boolean {
+        if (userAcceptedVersion.isNullOrBlank()) return true
+        return compareSemVer(remoteVersion, userAcceptedVersion) > 0
     }
 
     /**
@@ -98,8 +168,6 @@ class LegalRepository(
 
         val docRef = firestore.collection("internal")
             .document("legal_tos")
-            .collection("tos")
-            .document("tos")
 
         val listenerRegistration = docRef.addSnapshotListener { snapshot, error ->
             if (error != null) {
@@ -108,7 +176,11 @@ class LegalRepository(
                 return@addSnapshotListener
             }
 
-            val version = snapshot?.getString("version")
+            var version = snapshot?.getString("version")
+            if (version.isNullOrBlank()) {
+                val tosObj = snapshot?.get("tos") as? Map<*, *>
+                version = tosObj?.get("version") as? String
+            }
             if (!version.isNullOrBlank()) {
                 trySend(version)
             } else {
@@ -201,10 +273,44 @@ class LegalRepository(
     }
 
     /**
-     * Запись подтверждения согласия в профиль пользователя /users/{userId}.
+     * Запись подтверждения согласия с фиксацией аудита в Cloud Function (п. 2.2 ANDROID_COMPLIANCE),
+     * сохранением в EncryptedSharedPreferences, Firestore и Backend v2.
      */
-    suspend fun recordConsent(userId: String, version: String): Unit = withContext(Dispatchers.IO) {
+    suspend fun recordConsent(
+        userId: String,
+        version: String,
+        agreeTos: Boolean = true,
+        agreePrivacy: Boolean = true,
+        agreePersonalData: Boolean = true,
+        agreeCrossBorder: Boolean = true,
+        agreeAge14: Boolean = true
+    ): Unit = withContext(Dispatchers.IO) {
         val timestamp = System.currentTimeMillis()
+
+        // 1. Локальное сохранение в EncryptedSharedPreferences (п. 2.2 ANDROID_COMPLIANCE)
+        saveLocalAcceptedVersion(version)
+
+        // 2. Вызов Callable Cloud Function recordUserLegalConsent для серверного аудита (п. 2.2 ANDROID_COMPLIANCE)
+        if (functions != null) {
+            try {
+                val auditPayload = hashMapOf<String, Any>(
+                    "version" to version,
+                    "agreeTos" to agreeTos,
+                    "agreePrivacy" to agreePrivacy,
+                    "agreePersonalData" to agreePersonalData,
+                    "agreeCrossBorder" to agreeCrossBorder,
+                    "agreeAge14" to agreeAge14
+                )
+                functions.getHttpsCallable("recordUserLegalConsent")
+                    .call(auditPayload)
+                    .await()
+                Log.i(TAG, "recordUserLegalConsent Cloud Function logged successfully for $userId, version $version")
+            } catch (e: Exception) {
+                Log.w(TAG, "recordUserLegalConsent Cloud Function call failed: ${e.message}")
+            }
+        }
+
+        // 3. Синхронизация с Backend v2 (если включен)
         if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
             try {
                 api.updateProfile(by.iposdev.visorlink.data.remote.chat.UpdateProfileRequest(
@@ -233,13 +339,34 @@ class LegalRepository(
             } catch (_: Exception) {}
             return@withContext
         }
-        firestore.collection("users").document(userId).update(
-            mapOf(
-                "acceptedAt" to FieldValue.serverTimestamp(),
-                "acceptedVersion" to version
-            )
-        ).await()
-        Log.i(TAG, "Consent recorded for user $userId (version: $version)")
+
+        // 4. Обновление Firestore через SetOptions.merge(), предотвращающее ошибку NOT_FOUND
+        try {
+            firestore.collection("users").document(userId).set(
+                mapOf(
+                    "acceptedAt" to FieldValue.serverTimestamp(),
+                    "acceptedVersion" to version
+                ),
+                SetOptions.merge()
+            ).await()
+            Log.i(TAG, "Consent recorded for user $userId (version: $version)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update Firestore consent: ${e.message}")
+        }
+
+        // 5. Обновление локального SQLite-кэша профиля
+        try {
+            val cached = by.iposdev.visorlink.utils.ChatDataCache.loadProfile(context, userId)
+            if (cached != null) {
+                by.iposdev.visorlink.utils.ChatDataCache.saveProfile(
+                    context,
+                    cached.copy(
+                        acceptedVersion = version,
+                        acceptedAt = com.google.firebase.Timestamp(java.util.Date(timestamp))
+                    )
+                )
+            }
+        } catch (_: Exception) {}
     }
 
     fun loadBundledVersion(): String {

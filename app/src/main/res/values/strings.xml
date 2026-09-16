@@ -807,4 +807,19 @@
     <string name="animation_test_card_desc">Viscous connection snaps dynamically. Drag near bar to absorb.</string>
     <string name="animation_test_controls_viscosity">Surface Tension: %1$.1f</string>
     <string name="animation_test_controls_bounciness">Jelly Bounciness: %1$.1f</string>
+
+    <!-- Google Drive & Storage Integration -->
+    <string name="msg_unsupported_media">Unsupported media format (Archived attachment unavailable)</string>
+    <string name="gdrive_status_connected">Connected</string>
+    <string name="gdrive_status_disconnected">Not connected</string>
+    <string name="gdrive_folder_label">Folder: VisorLink Media</string>
+    <string name="gdrive_connect_btn">Connect Google Drive</string>
+    <string name="gdrive_disconnect_btn">Disconnect</string>
+    <string name="gdrive_storage_card_title">Google Drive Storage</string>
+    <string name="gdrive_storage_desc">All photos, videos, audio files, and voice messages sent in chats are stored in your personal «VisorLink Media» folder on Google Drive.</string>
+    <string name="firebase_storage_cloud_title">Profile Cloud Storage</string>
+    <string name="firebase_storage_cloud_desc">Avatars, profile banners, and stickers are stored in the secure VisorLink cloud and do not consume space on your Google Drive.</string>
+    <string name="gdrive_connect_dialog_title">Google Drive Required</string>
+    <string name="gdrive_connect_dialog_desc">To send media files, please connect your personal Google Drive. Media will be stored strictly in the isolated «VisorLink Media» folder.</string>
+    <string name="msg_avatar_moderation_failed">Avatar rejected: image violates safety guidelines (adult/violence/sensitive content).</string>
 </resources>

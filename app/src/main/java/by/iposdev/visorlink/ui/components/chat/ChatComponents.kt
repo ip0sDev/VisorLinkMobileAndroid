@@ -75,21 +75,11 @@ import kotlin.random.Random
 
 @Composable
 fun resolveCdnUrl(cdnMediaId: String?, fallbackUrl: String?): String? {
-    val effectiveMediaId = cdnMediaId
-        ?: fallbackUrl?.substringAfter("/f/", "")?.substringBefore("?")?.takeIf { it.isNotEmpty() && !it.contains("/") }
-        ?: fallbackUrl?.substringAfter("/p/", "")?.substringBefore("?")?.takeIf { it.isNotEmpty() && !it.contains("/") }
-
-    var resolvedUrl by remember(effectiveMediaId, fallbackUrl) {
-        mutableStateOf(if (effectiveMediaId != null && fallbackUrl?.contains("token=") != true) null else fallbackUrl)
-    }
-    LaunchedEffect(effectiveMediaId, fallbackUrl) {
-        if (!effectiveMediaId.isNullOrEmpty()) {
-            resolvedUrl = CdnService.getFileUrl(effectiveMediaId)
-        } else {
-            resolvedUrl = fallbackUrl
-        }
-    }
-    return resolvedUrl ?: fallbackUrl
+    // Сторонний CDN api.visorlink.org выведен из эксплуатации. Не делаем HTTP-запросов (Секция 1.1).
+    if (fallbackUrl?.contains("api.visorlink.org") == true) return null
+    if (fallbackUrl?.contains("/f/") == true && fallbackUrl.contains("googleusercontent.com") != true) return null
+    if (!cdnMediaId.isNullOrEmpty()) return null
+    return fallbackUrl
 }
 
 @Composable

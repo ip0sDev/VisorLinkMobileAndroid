@@ -46,16 +46,11 @@ object ImageCache {
 
             val tmp = File(dir, "${file.name}.tmp")
             try {
-                var targetUrl = url
-                if (targetUrl.contains("api.visorlink.org/f/") && !targetUrl.contains("token=")) {
-                    try {
-                        val token = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                            ?.getIdToken(false)?.await()?.token
-                        if (!token.isNullOrEmpty()) {
-                            targetUrl = if (targetUrl.contains("?")) "$targetUrl&token=$token" else "$targetUrl?token=$token"
-                        }
-                    } catch (_: Exception) {}
+                if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("googleusercontent.com"))) {
+                    throw java.io.IOException("Legacy CDN is decommissioned, ignoring $url")
                 }
+
+                var targetUrl = url
 
                 var conn = URL(targetUrl).openConnection() as HttpURLConnection
                 conn.connectTimeout = 10_000

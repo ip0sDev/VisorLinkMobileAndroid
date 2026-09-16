@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 import java.io.File
+import by.iposdev.visorlink.data.remote.GoogleDriveService
 
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -52,6 +53,37 @@ interface CdnUploader {
         CdnService.uploadFileWithDetails(file, mimeType, onProgress = onProgress)
 }
 
+class GoogleDriveCdnUploader(
+    private val driveService: GoogleDriveService?,
+    private val authManager: GoogleDriveAuthManager?
+) : CdnUploader {
+    override suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String {
+        if (driveService == null || authManager == null) {
+            return CdnService.uploadFile(file, mimeType, onProgress = onProgress)
+        }
+        val token = authManager.getValidAccessToken()
+            ?: throw IllegalStateException("Google Drive не подключен. Перейдите в Настройки -> Хранилище.")
+        val folderId = driveService.getOrCreateVisorLinkFolder(token)
+        val result = driveService.uploadMedia(token, folderId, file, mimeType, onProgress)
+        return result.fileId
+    }
+
+    override suspend fun uploadFileWithDetails(file: File, mimeType: String, onProgress: (Float) -> Unit): CdnUploadResult {
+        if (driveService == null || authManager == null) {
+            return CdnService.uploadFileWithDetails(file, mimeType, onProgress = onProgress)
+        }
+        val token = authManager.getValidAccessToken()
+            ?: throw IllegalStateException("Google Drive не подключен. Перейдите в Настройки -> Хранилище.")
+        val folderId = driveService.getOrCreateVisorLinkFolder(token)
+        val result = driveService.uploadMedia(token, folderId, file, mimeType, onProgress)
+        return CdnUploadResult(
+            mediaId = result.fileId,
+            thumbUrl = result.thumbnailUrl,
+            size = result.fileSize
+        )
+    }
+}
+
 class DefaultCdnUploader : CdnUploader {
     override suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String =
         CdnService.uploadFile(file, mimeType, onProgress = onProgress)
@@ -68,10 +100,13 @@ class OutboxManager(
     private val functions: FirebaseFunctions,
     private val networkMonitor: NetworkMonitor,
     private val outboxDataSource: OutboxDataSource = ChatDataOutboxSource(),
-    private val cdnUploader: CdnUploader = DefaultCdnUploader(),
+    private val cdnUploader: CdnUploader? = null,
     coroutineContext: CoroutineContext = Dispatchers.IO,
-    private val fallbackManager: by.iposdev.visorlink.data.repository.BackendFallbackManager? = null
+    private val fallbackManager: by.iposdev.visorlink.data.repository.BackendFallbackManager? = null,
+    private val driveService: by.iposdev.visorlink.data.remote.GoogleDriveService? = null,
+    private val driveAuthManager: by.iposdev.visorlink.utils.GoogleDriveAuthManager? = null
 ) {
+    private val uploader: CdnUploader = cdnUploader ?: GoogleDriveCdnUploader(driveService, driveAuthManager)
     private val scope = CoroutineScope(SupervisorJob() + coroutineContext)
     private var processingJob: Job? = null
     
@@ -278,7 +313,7 @@ class OutboxManager(
                     val isSpoiler = data.optBoolean("isSpoiler", false)
                     val file = File(localPath)
                     if (file.exists()) {
-                        val mediaId = cdnUploader.uploadFile(file, "image/jpeg") { progress ->
+                        val mediaId = uploader.uploadFile(file, "image/jpeg") { progress ->
                             scope.launch { updateProgressThrottled(action.id, progress) }
                         }
                         chatRepository.sendImageNow(
@@ -303,7 +338,7 @@ class OutboxManager(
                     val duration = data.getInt("duration")
                     val file = File(localPath)
                     if (file.exists()) {
-                        val mediaId = cdnUploader.uploadFile(file, "audio/webm") { progress ->
+                        val mediaId = uploader.uploadFile(file, "audio/webm") { progress ->
                             scope.launch { updateProgressThrottled(action.id, progress) }
                         }
                         chatRepository.sendVoiceNow(
@@ -335,12 +370,12 @@ class OutboxManager(
                             val coverFile = File(coverLocalPath)
                             if (coverFile.exists()) {
                                 try {
-                                    coverMediaId = cdnUploader.uploadFile(coverFile, "image/jpeg") {}
+                                    coverMediaId = uploader.uploadFile(coverFile, "image/jpeg") {}
                                     coverFile.delete()
                                 } catch (_: Exception) {}
                             }
                         }
-                        val mediaId = cdnUploader.uploadFile(file, "audio/mpeg") { progress ->
+                        val mediaId = uploader.uploadFile(file, "audio/mpeg") { progress ->
                             scope.launch { updateProgressThrottled(action.id, progress) }
                         }
                         chatRepository.sendAudioNow(
@@ -368,7 +403,7 @@ class OutboxManager(
                     val localPath = data.getString("localPath")
                     val file = File(localPath)
                     if (file.exists()) {
-                        val uploadResult = cdnUploader.uploadFileWithDetails(file, "video/mp4") { progress ->
+                        val uploadResult = uploader.uploadFileWithDetails(file, "video/mp4") { progress ->
                             scope.launch { updateProgressThrottled(action.id, progress) }
                         }
                         chatRepository.sendVideoNow(

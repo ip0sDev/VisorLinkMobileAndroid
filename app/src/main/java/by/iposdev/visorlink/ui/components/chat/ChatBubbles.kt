@@ -374,6 +374,10 @@ fun MessageBubble(
     ) {
         Box(modifier = uploadProgressModifier) {
             when {
+                isLegacyMediaMessage(message) && !message.deleted -> {
+                    LegacyMediaPlaceholder(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
+                    return@Box
+                }
                 message.type == MessageType.GIFT && !message.deleted -> {
                     GiftMessage(message = message, chatId = chat?.id ?: "")
                     return@Box
@@ -870,7 +874,34 @@ internal fun StickerBubble(
             ),
             contentAlignment = Alignment.Center
         ) {
-            CachedImage(model = message.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            val isLegacySticker = message.url.isNullOrEmpty() ||
+                    message.url.contains("api.visorlink.org") ||
+                    (message.url.contains("/f/") && !message.url.contains("googleusercontent.com"))
+
+            if (isLegacySticker) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.msg_unsupported_media),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                }
+            } else {
+                CachedImage(model = message.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
         }
 
         DebugMessageBadge(

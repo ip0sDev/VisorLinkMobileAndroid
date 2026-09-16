@@ -113,7 +113,12 @@ val appModule = module {
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get(), get(), get()) }
-    single { LegalRepository(get(), androidContext(), get(), get()) }
+    single { LegalRepository(get(), androidContext(), get(), get(), get()) }
+
+    // ── Google Drive & Storage ──
+    single { by.iposdev.visorlink.data.repository.GoogleDriveConfigRepository(get()) }
+    single { by.iposdev.visorlink.utils.GoogleDriveAuthManager(androidContext()) }
+    single { by.iposdev.visorlink.data.remote.GoogleDriveService(get()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
@@ -123,7 +128,19 @@ val appModule = module {
     single { MusicDatabase(androidContext()) }
     single { MusicRepository(androidContext()) }
     single { NetworkMonitor(androidContext()) }
-    single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), fallbackManager = get()) }
+    single {
+        OutboxManager(
+            context = androidContext(),
+            chatRepository = get(),
+            userRepository = get(),
+            feedRepository = get(),
+            functions = get(),
+            networkMonitor = get(),
+            fallbackManager = get(),
+            driveService = get(),
+            driveAuthManager = get()
+        )
+    }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
@@ -210,7 +227,7 @@ val appModule = module {
     }
 
     viewModel { CacheViewModel(get(), androidApplication()) }
-    viewModel { StorageViewModel() }
+    viewModel { StorageViewModel(get(), get()) }
     viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
 
     single { SavedMessagesRepository(get(), androidContext()) }

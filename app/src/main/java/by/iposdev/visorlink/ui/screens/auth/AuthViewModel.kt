@@ -119,6 +119,15 @@ class AuthViewModel(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, initialAuthState is AuthState.Verified)
 
+    init {
+        // Watchdog-таймер (Секция 9 ANDROID_GOOGLE_DRIVE_AND_STORAGE_SPEC):
+        // Если за 3.5 сек профиль или 2FA зависли в загрузке, сбрасываем isLoading,
+        // предотвращая бесконечный спиннер при холодном старте.
+        viewModelScope.launch {
+            delay(3500)
+            _tfaUiState.update { if (it.isLoading) it.copy(isLoading = false) else it }
+        }
+    }
 
     fun request2FA(method: String) {
         viewModelScope.launch {

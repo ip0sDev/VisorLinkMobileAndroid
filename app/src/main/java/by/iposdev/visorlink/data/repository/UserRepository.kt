@@ -32,6 +32,12 @@ import java.io.FileOutputStream
 import android.util.Log
 import com.google.firebase.Timestamp
 import java.util.Date
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.os.Build
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 
@@ -249,8 +255,60 @@ class UserRepository(
         }
     } catch (e: Exception) { null }
 
+    suspend fun ensureStaticImage(imageUri: Uri): ByteArray = withContext(Dispatchers.IO) {
+        val inputStream = context.contentResolver.openInputStream(imageUri)
+            ?: throw IllegalArgumentException("Cannot open image input stream")
+        val originalBitmap = BitmapFactory.decodeStream(inputStream)
+        inputStream.close()
+        if (originalBitmap == null) {
+            throw IllegalArgumentException("Failed to decode image bitmap")
+        }
+
+        val outputStream = ByteArrayOutputStream()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            originalBitmap.compress(Bitmap.CompressFormat.WEBP_LOSSY, 90, outputStream)
+        } else {
+            @Suppress("DEPRECATION")
+            originalBitmap.compress(Bitmap.CompressFormat.WEBP, 90, outputStream)
+        }
+        originalBitmap.recycle()
+        outputStream.toByteArray()
+    }
+
+    suspend fun uploadAvatarWithModeration(uid: String, imageBytes: ByteArray): Result<String> = runCatching {
+        val storage = FirebaseStorage.getInstance()
+        val storagePath = "users/$uid/avatar_${System.currentTimeMillis()}.webp"
+        val fileRef = storage.reference.child(storagePath)
+
+        // 1. Загрузка в Firebase Storage
+        val metadata = StorageMetadata.Builder()
+            .setContentType("image/webp")
+            .build()
+
+        fileRef.putBytes(imageBytes, metadata).await()
+        val downloadUrl = fileRef.downloadUrl.await().toString()
+
+        // 2. Вызов Cloud Function SafeSearch модерации
+        val fns = FirebaseFunctions.getInstance("europe-west1")
+        val data = mapOf(
+            "storagePath" to storagePath,
+            "downloadUrl" to downloadUrl
+        )
+
+        val callableResult = fns
+            .getHttpsCallable("setProfileAvatarWithSafeSearch")
+            .call(data)
+            .await()
+
+        val responseMap = callableResult.data as? Map<*, *>
+        val finalAvatarUrl = responseMap?.get("avatarUrl") as? String ?: downloadUrl
+        finalAvatarUrl
+    }
+
     suspend fun uploadAvatar(uri: Uri): String = withContext(Dispatchers.IO) {
-        val url = uploadFile(uri)
+        val imageBytes = ensureStaticImage(uri)
+        val result = uploadAvatarWithModeration(currentUid, imageBytes)
+        val url = result.getOrThrow()
         if (!isFirestoreDisabled()) {
             db.collection("users").document(currentUid)
                 .update("avatarUrl", url, "updatedAt", FieldValue.serverTimestamp()).await()
@@ -259,18 +317,22 @@ class UserRepository(
     }
 
     suspend fun uploadFile(uri: Uri): String = withContext(Dispatchers.IO) {
+        val storage = FirebaseStorage.getInstance()
+        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+        val ext = if (mimeType.contains("png")) "png" else if (mimeType.contains("webp")) "webp" else "jpg"
+        val storagePath = "users/$currentUid/customization_${System.currentTimeMillis()}.$ext"
+        val fileRef = storage.reference.child(storagePath)
+
         val tempFile = File(context.cacheDir, "upload_${System.currentTimeMillis()}")
         context.contentResolver.openInputStream(uri)?.use { input ->
             FileOutputStream(tempFile).use { output -> input.copyTo(output) }
         }
 
-        // Determine mime type
-        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-
-        val mediaId = CdnService.uploadFile(tempFile, mimeType, isVault = false)
+        val metadata = StorageMetadata.Builder().setContentType(mimeType).build()
+        fileRef.putFile(Uri.fromFile(tempFile), metadata).await()
         tempFile.delete()
 
-        return@withContext "${CdnService.BASE_URL}/p/$mediaId"
+        return@withContext fileRef.downloadUrl.await().toString()
     }
 
     suspend fun checkUsername(username: String): Pair<Boolean, String?> {
