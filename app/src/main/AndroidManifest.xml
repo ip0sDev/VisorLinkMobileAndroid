@@ -23,10 +23,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <queries>
-        <package android:name="com.ipos.store" />
-        <intent>
-            <action android:name="com.ipos.store.action.UPDATE_SERVICE" />
-        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/vnd.android.package-archive" />
@@ -106,8 +102,8 @@
             android:name=".utils.VoicePlayerReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="by.iposdev.visorlink.VOICE_TOGGLE" />
-                <action android:name="by.iposdev.visorlink.VOICE_SEEK" />
+                <action android:name="org.visorlink.app.VOICE_TOGGLE" />
+                <action android:name="org.visorlink.app.VOICE_SEEK" />
             </intent-filter>
         </receiver>
 
@@ -115,10 +111,10 @@
             android:name=".utils.MusicPlayerReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="by.iposdev.visorlink.MUSIC_TOGGLE" />
-                <action android:name="by.iposdev.visorlink.MUSIC_PREV" />
-                <action android:name="by.iposdev.visorlink.MUSIC_NEXT" />
-                <action android:name="by.iposdev.visorlink.MUSIC_STOP" />
+                <action android:name="org.visorlink.app.MUSIC_TOGGLE" />
+                <action android:name="org.visorlink.app.MUSIC_PREV" />
+                <action android:name="org.visorlink.app.MUSIC_NEXT" />
+                <action android:name="org.visorlink.app.MUSIC_STOP" />
             </intent-filter>
         </receiver>
 

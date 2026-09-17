@@ -1,8 +1,8 @@
-package by.iposdev.visorlink.data.repository
+package org.visorlink.app.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
-import by.iposdev.visorlink.data.remote.chat.BackendConnectivityInterceptor
+import org.visorlink.app.data.remote.chat.BackendConnectivityInterceptor
 import okhttp3.*
 import org.junit.Assert.*
 import org.junit.Before
@@ -168,8 +168,8 @@ class BackendFallbackManagerTest {
 
     @Test
     fun `checkHealth returns true and resets failures when healthy`() = kotlinx.coroutines.test.runTest {
-        val api: by.iposdev.visorlink.data.remote.chat.VisorLinkApi = mock()
-        whenever(api.getHealth()).thenReturn(by.iposdev.visorlink.data.remote.chat.HealthResponseDto(status = "healthy", database = true, redis = true))
+        val api: org.visorlink.app.data.remote.chat.VisorLinkApi = mock()
+        whenever(api.getHealth()).thenReturn(org.visorlink.app.data.remote.chat.HealthResponseDto(status = "healthy", database = true, redis = true))
 
         val manager = BackendFallbackManager(context, flagsRepository) { api }
         manager.recordFailure("Prior error")
@@ -182,7 +182,7 @@ class BackendFallbackManagerTest {
 
     @Test
     fun `checkHealth returns false and records failure on exception`() = kotlinx.coroutines.test.runTest {
-        val api: by.iposdev.visorlink.data.remote.chat.VisorLinkApi = mock()
+        val api: org.visorlink.app.data.remote.chat.VisorLinkApi = mock()
         whenever(api.getHealth()).thenThrow(RuntimeException("Health check down"))
 
         val manager = BackendFallbackManager(context, flagsRepository) { api }

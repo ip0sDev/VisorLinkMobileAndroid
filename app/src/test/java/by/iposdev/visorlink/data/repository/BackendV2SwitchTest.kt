@@ -1,7 +1,7 @@
-package by.iposdev.visorlink.data.repository
+package org.visorlink.app.data.repository
 
-import by.iposdev.visorlink.data.model.flags.AppFlags
-import by.iposdev.visorlink.data.remote.chat.*
+import org.visorlink.app.data.model.flags.AppFlags
+import org.visorlink.app.data.remote.chat.*
 import com.google.gson.Gson
 import org.junit.Assert.*
 import org.junit.Test
@@ -284,7 +284,7 @@ class BackendV2SwitchTest {
         assertTrue(dto.trialUsed)
         assertEquals(250, dto.bits)
 
-        val profile = by.iposdev.visorlink.data.model.UserProfile(
+        val profile = org.visorlink.app.data.model.UserProfile(
             uid = dto.id,
             username = dto.username,
             proUntil = dto.proUntil?.let { com.google.firebase.Timestamp(java.util.Date(it)) },

@@ -1,8 +1,8 @@
-package by.iposdev.visorlink.utils
+package org.visorlink.app.utils
 
 import android.content.Context
 import android.content.SharedPreferences
-import by.iposdev.visorlink.data.model.StickerPack
+import org.visorlink.app.data.model.StickerPack
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test

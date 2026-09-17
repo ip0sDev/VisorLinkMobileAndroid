@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.data.model
+package org.visorlink.app.data.model
 
 import com.google.firebase.Timestamp
 import org.junit.Assert.*

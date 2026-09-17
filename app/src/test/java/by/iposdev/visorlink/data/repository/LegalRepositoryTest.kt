@@ -1,10 +1,10 @@
-package by.iposdev.visorlink.data.repository
+package org.visorlink.app.data.repository
 
 import android.content.Context
 import android.content.res.AssetManager
 import androidx.compose.ui.graphics.Color
-import by.iposdev.visorlink.data.model.UserProfile
-import by.iposdev.visorlink.ui.screens.legal.buildAnnotatedStringFromHtml
+import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.ui.screens.legal.buildAnnotatedStringFromHtml
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import org.junit.Assert.*

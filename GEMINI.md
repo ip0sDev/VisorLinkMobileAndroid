@@ -7,7 +7,7 @@
 ## 1. Project Overview & Tech Stack
 
 - **Назначение:** VisorLink — защищенный многофункциональный мессенджер с поддержкой личных/групповых чатов, голосовых сообщений, медиа-хранилища, персонального дневника, режима маскировки (Stealth mode) и ассистента Aegis. Распространяется через собственный сервис обновлений (без Google Play).
-- **Пакет:** `by.iposdev.visorlink` (модуль `:app`).
+- **Пакет:** `org.visorlink.app` (модуль `:app`).
 - **Тулчейн и окружение:**
   - Kotlin: `2.4.10` (Compose Compiler: `org.jetbrains.kotlin.plugin.compose`)
   - Android Gradle Plugin (AGP): `9.3.2`
@@ -50,8 +50,8 @@
 ./gradlew testDebugUnitTest
 
 # Запуск конкретного тестового класса или метода
-./gradlew testDebugUnitTest --tests "by.iposdev.visorlink.utils.OutboxManagerTest"
-./gradlew testDebugUnitTest --tests "by.iposdev.visorlink.ui.screens.auth.AuthViewModelTest.login with blank email sets error"
+./gradlew testDebugUnitTest --tests "org.visorlink.app.utils.OutboxManagerTest"
+./gradlew testDebugUnitTest --tests "org.visorlink.app.ui.screens.auth.AuthViewModelTest.login with blank email sets error"
 
 # Запуск Instrumented-тестов на подключенном устройстве/эмуляторе
 ./gradlew connectedDebugAndroidTest

@@ -1,9 +1,9 @@
-package by.iposdev.visorlink.ui.screens.auth
+package org.visorlink.app.ui.screens.auth
 
-import by.iposdev.visorlink.data.repository.AuthRepository
-import by.iposdev.visorlink.data.repository.AuthState
-import by.iposdev.visorlink.data.repository.UserRepository
-import by.iposdev.visorlink.utils.TfaManager
+import org.visorlink.app.data.repository.AuthRepository
+import org.visorlink.app.data.repository.AuthState
+import org.visorlink.app.data.repository.UserRepository
+import org.visorlink.app.utils.TfaManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -34,7 +34,7 @@ class AuthViewModelTest {
             on { userProfileFlow(any()) } doReturn flowOf(null)
         }
         tfaManager = mock()
-        val fcmManager: by.iposdev.visorlink.utils.FcmManager = mock()
+        val fcmManager: org.visorlink.app.utils.FcmManager = mock()
         viewModel = AuthViewModel(authRepository, userRepository, tfaManager, fcmManager)
     }
 

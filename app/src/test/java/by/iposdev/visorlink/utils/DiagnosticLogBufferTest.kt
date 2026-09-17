@@ -1,4 +1,4 @@
-﻿package by.iposdev.visorlink.utils
+﻿package org.visorlink.app.utils
 
 import org.junit.Assert.assertTrue
 import org.junit.Test

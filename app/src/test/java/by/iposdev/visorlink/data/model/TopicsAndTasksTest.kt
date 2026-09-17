@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.data.model
+package org.visorlink.app.data.model
 
 import org.junit.Assert.*
 import org.junit.Test

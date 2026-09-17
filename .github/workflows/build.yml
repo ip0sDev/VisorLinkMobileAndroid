@@ -1,15 +1,15 @@
 name: App Build
 
 on:
-  push:
-    branches:
-      - canary
-      - nightly
-      - beta
-    tags:
-      - 'canary-*'
-      - 'nightly-*'
-      - 'beta-*'
+  #push:
+  #  branches:
+  #    - canary
+  #    - nightly
+  #    - beta
+  #  tags:
+  #    - 'canary-*'
+  #    - 'nightly-*'
+  #    - 'beta-*'
   workflow_dispatch:
 
 jobs:

@@ -6,6 +6,15 @@
     <string name="app_logo">⬡</string>
 
     <!-- Common -->
+    <string name="appcheck_diagnostic_title">App Check Диагностика</string>
+    <string name="appcheck_verdict">Вердикт безопасности</string>
+    <string name="appcheck_secure">Защищено</string>
+    <string name="appcheck_secure_desc">Устройство прошло проверки целостности</string>
+    <string name="appcheck_insecure">Небезопасно</string>
+    <string name="appcheck_insecure_desc">Проверка не пройдена. Возможные причины: Root-права, разблокированный загрузчик, эмулятор, или неофициальная сборка приложения.</string>
+    <string name="appcheck_checking">Проверка...</string>
+    <string name="appcheck_technical_details">Технические детали</string>
+    <string name="appcheck_retry">Повторить проверку</string>
     <string name="action_back">Назад</string>
     <string name="action_save">Сохранить</string>
     <string name="action_cancel">Отмена</string>
@@ -810,18 +819,59 @@
     <string name="animation_test_controls_viscosity">Натяжение жидкости: %1$.1f</string>
     <string name="animation_test_controls_bounciness">Упругость желе: %1$.1f</string>
 
-    <!-- Интеграция Google Drive и хранилища -->
+    <!-- Regulatory Compliance & Legal Consents (Закон № 99-З) -->
+    <string name="legal_consent_checkbox_tos">Ознакомлен(а) и согласен(сна) с Пользовательским соглашением (ToS)</string>
+    <string name="legal_consent_checkbox_privacy">Ознакомлен(а) и согласен(сна) с Политикой конфиденциальности</string>
+    <string name="legal_consent_checkbox_personal_data">Даю информированное согласие на обработку персональных данных (ст. 5 Закона № 99-З)</string>
+    <string name="legal_consent_checkbox_cross_border">Подтверждаю согласие на трансграничную передачу данных в Google Cloud (ст. 9 Закона № 99-З)</string>
+    <string name="legal_consent_checkbox_age14">Мне исполнилось 14 лет (или получено согласие законных представителей в порядке ст. 25 ГК РБ)</string>
+    <string name="legal_load_error_title">Не удалось загрузить документы</string>
+    <string name="legal_load_error_desc">Для использования VisorLink необходимо загрузить актуальные юридические документы с сервера. Проверьте подключение к сети.</string>
+    <string name="legal_retry_button">Повторить попытку</string>
+
+    <!-- Google Play: Account Deletion -->
+    <string name="settings_delete_account_title">Удалить аккаунт</string>
+    <string name="settings_delete_account_subtitle">Безвозвратное стирание учетной записи и данных</string>
+    <string name="delete_account_dialog_title">Удалить аккаунт?</string>
+    <string name="delete_account_dialog_warning">Все ваши сообщения, чаты, профиль и связанные сессии будут безвозвратно удалены как на сервере, так и на этом устройстве. Это действие необратимо.\n\nВы также можете запросить удаление через веб-форму:</string>
+    <string name="delete_account_password_label">Пароль от аккаунта</string>
+    <string name="delete_account_confirm_button">Удалить навсегда</string>
+    <string name="delete_account_error_wrong_password">Неверный пароль. Попробуйте снова.</string>
+    <string name="delete_account_in_progress">Удаление аккаунта...</string>
+
+    <!-- UGC Moderation & Reporting -->
+    <string name="action_report">Пожаловаться</string>
+    <string name="action_block_user">Заблокировать</string>
+    <string name="action_unblock_user">Разблокировать</string>
+    <string name="report_dialog_title">Пожаловаться на контент</string>
+    <string name="report_cat_spam">Спам или реклама</string>
+    <string name="report_cat_violence">Насилие или угрозы</string>
+    <string name="report_cat_harassment">Оскорбления и травля</string>
+    <string name="report_cat_illegal">Незаконный контент</string>
+    <string name="report_cat_copyright">Нарушение авторских прав</string>
+    <string name="report_details_hint">Кратко опишите нарушение (необязательно)</string>
+    <string name="report_submit">Отправить жалобу</string>
+    <string name="report_submitted_toast">Жалоба отправлена на рассмотрение модераторам</string>
+    <string name="user_blocked_toast">Пользователь заблокирован</string>
+    <string name="user_unblocked_toast">Пользователь разблокирован</string>
+    <string name="block_user_confirm_title">Заблокировать пользователя?</string>
+    <string name="block_user_confirm_desc">Сообщения от этого пользователя будут скрыты из всех чатов.</string>
+
+    <!-- Photo Picker Compliance -->
+    <string name="media_picker_open_system">Открыть системную галерею</string>
+    <string name="media_picker_no_perm_desc">Предоставьте доступ к галерее или выберите файлы через системный Photo Picker без выдачи постоянных прав.</string>
+
+    <!-- Google Drive & Storage Spec -->
     <string name="msg_unsupported_media">Неподдерживаемый формат медиа (Архивное вложение недоступно)</string>
-    <string name="gdrive_status_connected">Подключено</string>
-    <string name="gdrive_status_disconnected">Не подключено</string>
-    <string name="gdrive_folder_label">Папка: VisorLink Media</string>
-    <string name="gdrive_connect_btn">Подключить Google Drive</string>
-    <string name="gdrive_disconnect_btn">Отключить</string>
-    <string name="gdrive_storage_card_title">Хранилище Google Drive</string>
-    <string name="gdrive_storage_desc">Все фото, видео, аудиофайлы и голосовые сообщения, отправляемые в чаты, сохраняются в вашей личной папке «VisorLink Media» на Google Диске.</string>
-    <string name="firebase_storage_cloud_title">Облачное хранилище профиля</string>
-    <string name="firebase_storage_cloud_desc">Аватарки, обложки профиля и стикеры хранятся в защищённом облаке VisorLink и не расходуют место на вашем Google Диске.</string>
-    <string name="gdrive_connect_dialog_title">Требуется Google Drive</string>
-    <string name="gdrive_connect_dialog_desc">Для отправки медиафайлов подключите ваш Google Диск. Все вложения будут сохраняться строго в изолированной папке «VisorLink Media».</string>
-    <string name="msg_avatar_moderation_failed">Аватар отклонен: изображение нарушает правила безопасности (неприемлемый контент).</string>
+    <string name="msg_sticker_unavailable">Стикер недоступен</string>
+    <string name="storage_gdrive_title">Хранилище Google Drive</string>
+    <string name="storage_gdrive_connected">Подключено</string>
+    <string name="storage_gdrive_not_connected">Не подключено</string>
+    <string name="storage_gdrive_connect_btn">Подключить Google Drive</string>
+    <string name="storage_gdrive_disconnect_btn">Отключить</string>
+    <string name="storage_gdrive_desc">Все фото, видео, аудиофайлы и голосовые сообщения, отправляемые в чаты, сохраняются в вашей личной папке «VisorLink Media» на Google Диске.</string>
+    <string name="storage_firebase_cloud_title">Облачное хранилище профиля</string>
+    <string name="storage_firebase_cloud_desc">Аватарки, обложки профиля и стикеры хранятся в защищённом облаке VisorLink и не расходуют место на вашем Google Диске.</string>
+    <string name="storage_gdrive_required_title">Требуется Google Drive</string>
+    <string name="storage_gdrive_required_desc">Для отправки медиа подключите ваш Google Диск в настройках хранилища.</string>
 </resources>

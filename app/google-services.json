@@ -77,6 +77,58 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:18511020064:android:462be962ccbcdbf2b97c45",
+        "android_client_info": {
+          "package_name": "org.visorlink.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "18511020064-7v5r5qk75gf01jctks2jam7e41e8fni7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.visorlink.app",
+            "certificate_hash": "b4839450bca61d04863a0f7e620a762d32fbff08"
+          }
+        },
+        {
+          "client_id": "18511020064-ul9q03lbpviduhtlumr0sr3oorsrnplq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.visorlink.app",
+            "certificate_hash": "97e0ca44d6d8aa604d39e4a23c5ecbb078b696b1"
+          }
+        },
+        {
+          "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAy5ZY8tWAyWuJnwtDCMQA05HUAr4vf-b0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "18511020064-3nfqqml9efiomrsanpuol8qvr0bv987v.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "18511020064-0kq4085ug8rsbkpc9qgotocngi885vr1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "by.iposdev.visorlink"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

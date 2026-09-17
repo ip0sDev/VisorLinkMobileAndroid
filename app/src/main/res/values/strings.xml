@@ -6,6 +6,15 @@
     <string name="app_logo">⬡</string>
 
     <!-- Common -->
+    <string name="appcheck_diagnostic_title">App Check Diagnostic</string>
+    <string name="appcheck_verdict">Security Verdict</string>
+    <string name="appcheck_secure">Secured</string>
+    <string name="appcheck_secure_desc">Device passed integrity checks</string>
+    <string name="appcheck_insecure">Insecure</string>
+    <string name="appcheck_insecure_desc">Verification failed. Possible reasons: Root, unlocked bootloader, emulator, or unofficial app build.</string>
+    <string name="appcheck_checking">Checking...</string>
+    <string name="appcheck_technical_details">Technical details</string>
+    <string name="appcheck_retry">Retry Check</string>
     <string name="action_back">Back</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
@@ -808,18 +817,59 @@
     <string name="animation_test_controls_viscosity">Surface Tension: %1$.1f</string>
     <string name="animation_test_controls_bounciness">Jelly Bounciness: %1$.1f</string>
 
-    <!-- Google Drive & Storage Integration -->
+    <!-- Regulatory Compliance & Legal Consents (Закон № 99-З) -->
+    <string name="legal_consent_checkbox_tos">I have read and agree to the Terms of Service (ToS)</string>
+    <string name="legal_consent_checkbox_privacy">I have read and agree to the Privacy Policy</string>
+    <string name="legal_consent_checkbox_personal_data">I give informed consent to the processing of personal data (Art. 5 Law No. 99-Z)</string>
+    <string name="legal_consent_checkbox_cross_border">I consent to the cross-border data transfer to Google Cloud (Art. 9 Law No. 99-Z)</string>
+    <string name="legal_consent_checkbox_age14">I confirm that I am at least 14 years old (or have parental consent under Art. 25 Civil Code of the Republic of Belarus)</string>
+    <string name="legal_load_error_title">Failed to load legal documents</string>
+    <string name="legal_load_error_desc">To use VisorLink, current legal policies must be loaded from the server. Please check your network connection.</string>
+    <string name="legal_retry_button">Retry</string>
+
+    <!-- Google Play: Account Deletion -->
+    <string name="settings_delete_account_title">Delete Account</string>
+    <string name="settings_delete_account_subtitle">Permanently erase account and all data</string>
+    <string name="delete_account_dialog_title">Delete Account?</string>
+    <string name="delete_account_dialog_warning">All your messages, chats, profile, and associated sessions will be permanently deleted both on the server and on this device. This action cannot be undone.\n\nYou can also request deletion via the web form:</string>
+    <string name="delete_account_password_label">Account password</string>
+    <string name="delete_account_confirm_button">Delete Permanently</string>
+    <string name="delete_account_error_wrong_password">Incorrect password. Please try again.</string>
+    <string name="delete_account_in_progress">Deleting account...</string>
+
+    <!-- UGC Moderation & Reporting -->
+    <string name="action_report">Report</string>
+    <string name="action_block_user">Block</string>
+    <string name="action_unblock_user">Unblock</string>
+    <string name="report_dialog_title">Report Content</string>
+    <string name="report_cat_spam">Spam or advertising</string>
+    <string name="report_cat_violence">Violence or threats</string>
+    <string name="report_cat_harassment">Harassment or abuse</string>
+    <string name="report_cat_illegal">Illegal content</string>
+    <string name="report_cat_copyright">Copyright infringement</string>
+    <string name="report_details_hint">Describe the violation briefly (optional)</string>
+    <string name="report_submit">Submit Report</string>
+    <string name="report_submitted_toast">Report submitted for moderator review</string>
+    <string name="user_blocked_toast">User blocked</string>
+    <string name="user_unblocked_toast">User unblocked</string>
+    <string name="block_user_confirm_title">Block user?</string>
+    <string name="block_user_confirm_desc">Messages from this user will be hidden across all chats.</string>
+
+    <!-- Photo Picker Compliance -->
+    <string name="media_picker_open_system">Open System Gallery</string>
+    <string name="media_picker_no_perm_desc">Grant gallery access or select media using the system Photo Picker without granting broad permissions.</string>
+
+    <!-- Google Drive & Storage Spec -->
     <string name="msg_unsupported_media">Unsupported media format (Archived attachment unavailable)</string>
-    <string name="gdrive_status_connected">Connected</string>
-    <string name="gdrive_status_disconnected">Not connected</string>
-    <string name="gdrive_folder_label">Folder: VisorLink Media</string>
-    <string name="gdrive_connect_btn">Connect Google Drive</string>
-    <string name="gdrive_disconnect_btn">Disconnect</string>
-    <string name="gdrive_storage_card_title">Google Drive Storage</string>
-    <string name="gdrive_storage_desc">All photos, videos, audio files, and voice messages sent in chats are stored in your personal «VisorLink Media» folder on Google Drive.</string>
-    <string name="firebase_storage_cloud_title">Profile Cloud Storage</string>
-    <string name="firebase_storage_cloud_desc">Avatars, profile banners, and stickers are stored in the secure VisorLink cloud and do not consume space on your Google Drive.</string>
-    <string name="gdrive_connect_dialog_title">Google Drive Required</string>
-    <string name="gdrive_connect_dialog_desc">To send media files, please connect your personal Google Drive. Media will be stored strictly in the isolated «VisorLink Media» folder.</string>
-    <string name="msg_avatar_moderation_failed">Avatar rejected: image violates safety guidelines (adult/violence/sensitive content).</string>
+    <string name="msg_sticker_unavailable">Sticker unavailable</string>
+    <string name="storage_gdrive_title">Google Drive Storage</string>
+    <string name="storage_gdrive_connected">Connected</string>
+    <string name="storage_gdrive_not_connected">Not connected</string>
+    <string name="storage_gdrive_connect_btn">Connect Google Drive</string>
+    <string name="storage_gdrive_disconnect_btn">Disconnect</string>
+    <string name="storage_gdrive_desc">All photos, videos, audio files, and voice messages sent to chats are stored in your personal \"VisorLink Media\" folder on Google Drive.</string>
+    <string name="storage_firebase_cloud_title">Profile Cloud Storage</string>
+    <string name="storage_firebase_cloud_desc">Avatars, profile covers, and stickers are stored in the secure VisorLink cloud and do not consume space on your Google Drive.</string>
+    <string name="storage_gdrive_required_title">Google Drive Required</string>
+    <string name="storage_gdrive_required_desc">To send media, please connect your Google Drive in Storage Settings.</string>
 </resources>
