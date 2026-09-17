@@ -87,11 +87,27 @@
       },
       "oauth_client": [
         {
+          "client_id": "18511020064-2d2m1hkokvf70qjqtgpnghhirudhkudd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.visorlink.app",
+            "certificate_hash": "a87bc7c6c1c394b09a7b45d00a580a1c94d3add0"
+          }
+        },
+        {
           "client_id": "18511020064-7v5r5qk75gf01jctks2jam7e41e8fni7.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "org.visorlink.app",
             "certificate_hash": "b4839450bca61d04863a0f7e620a762d32fbff08"
+          }
+        },
+        {
+          "client_id": "18511020064-ejigi3lrcf05fsesonjjqho3rqod7s6k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "org.visorlink.app",
+            "certificate_hash": "98125d81fbe3323d786db61586d48dcf6ac7040a"
           }
         },
         {
