@@ -701,16 +701,6 @@
     <string name="chat_settings_forum_mode_sub">Split group into topics with tasks and kanban board</string>
     <string name="topics_permission_denied">Action not permitted</string>
 
-    <!-- Backend Fallback -->
-    <string name="backend_fallback_dialog_title">Connection Issues</string>
-    <string name="backend_fallback_dialog_desc">Unable to reach the new server (6 consecutive failed attempts). Would you like to switch to the backup backend (Firebase)?</string>
-    <string name="backend_fallback_action_switch">Switch to Firebase</string>
-    <string name="backend_fallback_action_stay">Wait</string>
-    <string name="backend_fallback_banner_title">Backup Backend (Firebase)</string>
-    <string name="backend_fallback_banner_desc">Backup backend is currently active. Please report any critical issues to help us improve the service.</string>
-    <string name="backend_fallback_banner_action_retry">Try New Backend</string>
-    <string name="backend_fallback_banner_action_report">Report Issue</string>
-
     <!-- ANDROID_FEATURES_INTEGRATION_SPEC additions -->
     <string name="channel_subscribe">📢 Subscribe</string>
     <string name="channel_subscribing">Subscribing…</string>

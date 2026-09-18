@@ -33,7 +33,6 @@ class OutboxManagerTest {
     private val functions: FirebaseFunctions = mock()
     private val networkMonitor: NetworkMonitor = mock()
     private val outboxDataSource: OutboxDataSource = mock()
-    private val cdnUploader: CdnUploader = mock()
     private val googleDriveAuthManager: GoogleDriveAuthManager = mock()
     private val googleDriveMediaService: GoogleDriveMediaService = mock()
 
@@ -63,9 +62,7 @@ class OutboxManagerTest {
             functions = functions,
             networkMonitor = networkMonitor,
             outboxDataSource = outboxDataSource,
-            cdnUploader = cdnUploader,
             coroutineContext = testDispatcher,
-            fallbackManager = null,
             googleDriveAuthManager = googleDriveAuthManager,
             googleDriveMediaService = googleDriveMediaService
         )
@@ -127,9 +124,7 @@ class OutboxManagerTest {
             functions = functions,
             networkMonitor = networkMonitor,
             outboxDataSource = outboxDataSource,
-            cdnUploader = cdnUploader,
             coroutineContext = testDispatcher,
-            fallbackManager = null,
             googleDriveAuthManager = googleDriveAuthManager,
             googleDriveMediaService = googleDriveMediaService
         )

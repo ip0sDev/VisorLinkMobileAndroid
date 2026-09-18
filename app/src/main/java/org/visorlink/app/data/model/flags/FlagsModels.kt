@@ -44,11 +44,8 @@ data class AppFlags(
         return when (key) {
             "test_flag" -> testFlag
             "animation_test" -> (serverClaims["animation_test"] as? Boolean) ?: BuildConfig.DEBUG
-            "backend_v2_enabled" -> (serverClaims["backend_v2_enabled"] as? Boolean) ?: false
             else -> serverClaims[key] as? Boolean ?: false
         }
     }
-
-    val isBackendV2Enabled: Boolean get() = isEnabled("backend_v2_enabled")
 }
 

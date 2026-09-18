@@ -22,7 +22,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.visorlink.app.utils.CdnService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import java.io.File
@@ -414,11 +413,7 @@ class MusicRepository(private val context: Context) {
             return@withContext track
         }
 
-        // Получаем рабочий URL для скачивания (разрешаем CDN при необходимости)
-        var downloadUrl = track.url
-        if (downloadUrl.isNullOrBlank() && !track.cdnMediaId.isNullOrBlank()) {
-            downloadUrl = CdnService.getFileUrl(track.cdnMediaId)
-        }
+        val downloadUrl = track.url
         if (downloadUrl.isNullOrBlank()) return@withContext track
 
         try {

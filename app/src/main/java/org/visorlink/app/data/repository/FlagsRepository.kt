@@ -24,20 +24,8 @@ class FlagsRepository(
     private val keyManager: AegisKeyManager
 ) {
     private val prefs = context.getSharedPreferences("visorlink_flags_prefs", Context.MODE_PRIVATE)
-    private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
-
     private val _flags = MutableStateFlow(AppFlags())
     val flags: StateFlow<AppFlags> = _flags.asStateFlow()
-    val isBackendV2EnabledFlow: Flow<Boolean> = _flags.map { isBackendV2Enabled() }
-
-    fun isManualFallbackActive(): Boolean = backendPrefs.getBoolean("manual_fallback_firebase", false)
-
-    fun isBackendV2Enabled(): Boolean {
-        if (isManualFallbackActive()) return false
-        return _flags.value.isBackendV2Enabled
-    }
-
-    fun isBackendV2EnabledDirect(): Boolean = _flags.value.isBackendV2Enabled
 
     fun notifyFlagsChanged() {
         _flags.value = _flags.value.copy()

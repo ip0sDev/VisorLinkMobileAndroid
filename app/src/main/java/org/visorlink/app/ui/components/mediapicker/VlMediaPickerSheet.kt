@@ -153,159 +153,208 @@ fun VlMediaPickerSheet(
         contentWindowInsets = { WindowInsets(0) },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(
+        VlMediaPickerViewContent(
+            viewModel = viewModel,
+            maxSelection = maxSelection,
+            onClose = onDismiss,
+            onOpenAudioPicker = onOpenAudioPicker,
+            onOpenEditor = onOpenEditor,
+            onMediaSelected = onMediaSelected,
+            onPhotoTaken = onPhotoTaken,
+            onVideoRecorded = onVideoRecorded,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(animatedHeight)
                 .navigationBarsPadding()
-        ) {
-            // Верхняя панель заголовка и быстрых действий
-            MediaPickerTopBar(
-                currentTab = currentTab,
-                selectedCount = selectedItems.size,
-                maxSelection = maxSelection,
-                isExpanded = isExpanded,
-                onToggleExpand = { isExpanded = !isExpanded },
-                onClose = onDismiss,
-                onOpenAudio = onOpenAudioPicker,
-                onClearSelection = { viewModel.clearSelection() },
-                modifier = dragModifier
-            )
+        )
+    }
+}
 
-                // Основная область контента (сетка медиа или камера)
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
-                    when (currentTab) {
-                        MediaPickerTab.CAMERA -> {
-                            CameraTab(
-                                onPhotoTaken = { uri ->
-                                    viewModel.clearSelection()
-                                    onPhotoTaken(uri)
-                                },
-                                onVideoRecorded = { uri ->
-                                    viewModel.clearSelection()
-                                    onVideoRecorded(uri)
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                        else -> {
-                            MediaGalleryGrid(
-                                items = mediaItems,
-                                selectedItems = selectedItems,
-                                isLoading = isLoading,
-                                onItemClick = { item ->
-                                    viewModel.toggleSelection(item, maxSelection = maxSelection)
-                                },
-                                onItemLongClick = { item ->
-                                    if (item.type == MediaType.IMAGE) {
-                                        viewModel.clearSelection()
-                                        onOpenEditor(item.uri)
-                                    }
-                                },
-                                onReload = {
-                                    val filter = when (currentTab) {
-                                        MediaPickerTab.PHOTOS -> MediaFilter.PHOTOS_ONLY
-                                        MediaPickerTab.VIDEOS -> MediaFilter.VIDEOS_ONLY
-                                        else -> MediaFilter.ALL
-                                    }
-                                    viewModel.loadMedia(filter)
-                                },
-                                gridState = gridState,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                    }
-                }
+/**
+ * Внутреннее содержимое медиа-пикера (галерея, вкладки, камера, кнопки отправки).
+ * Переиспользуется как в модальной шторке, так и в жидкостной панели чата.
+ */
+@Composable
+fun VlMediaPickerViewContent(
+    viewModel: MediaPickerViewModel = koinViewModel(),
+    maxSelection: Int = 10,
+    onClose: () -> Unit,
+    onOpenAudioPicker: () -> Unit,
+    onOpenEditor: (Uri) -> Unit,
+    onMediaSelected: (List<SelectedMediaItem>) -> Unit,
+    onPhotoTaken: (Uri) -> Unit,
+    onVideoRecorded: (Uri) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var currentTab by remember { mutableStateOf(MediaPickerTab.ALL) }
+    var isExpanded by remember { mutableStateOf(false) }
 
-                // Блок плавающих кнопок действий над нижним таб-баром (при выборе элементов)
-                AnimatedVisibility(
-                    visible = selectedItems.isNotEmpty() && currentTab != MediaPickerTab.CAMERA,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Кнопка перехода в редактор (аккуратный неоморфный кругляш)
-                        if (selectedItems.size == 1 && selectedItems.first().type == MediaType.IMAGE) {
-                            val editShape = CircleShape
-                            Surface(
-                                onClick = {
-                                    val item = selectedItems.first()
-                                    viewModel.clearSelection()
-                                    onOpenEditor(item.uri)
-                                },
-                                shape = editShape,
-                                color = if (tokens.structure.enabled) cs.surfaceContainerHigh else cs.secondaryContainer,
-                                contentColor = cs.onSecondaryContainer,
-                                modifier = Modifier
-                                    .padding(end = 10.dp)
-                                    .size(44.dp)
-                                    .then(
-                                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, editShape)
-                                        else Modifier
-                                    )
-                                    .then(
-                                        if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), editShape)
-                                        else Modifier
-                                    )
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Редактировать",
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
-                        }
+    val mediaItems by viewModel.mediaItems.collectAsStateWithLifecycle()
+    val selectedItems by viewModel.selectedItems.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
-                        // Кнопка отправки с подсчетом
-                        ExtendedFloatingActionButton(
-                            onClick = {
-                                val result = selectedItems.map {
-                                    SelectedMediaItem(
-                                        uri = it.uri,
-                                        type = it.type,
-                                        durationMs = it.durationMs
-                                    )
-                                }
-                                viewModel.clearSelection()
-                                onMediaSelected(result)
-                            },
-                            icon = {
-                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
-                            },
-                            text = {
-                                Text(
-                                    text = if (selectedItems.size == 1) "Отправить" else "Отправить (${selectedItems.size})",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            },
-                            containerColor = cs.primary,
-                            contentColor = cs.onPrimary,
-                            shape = tokens.shapes.fab,
-                            modifier = Modifier.height(48.dp)
-                        )
-                    }
-                }
+    val gridState = rememberLazyGridState()
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
 
-                // Нижняя панель вкладок (всегда видна внизу шторки)
-                MediaPickerBottomNavBar(
-                    currentTab = currentTab,
-                    onTabSelected = { newTab -> currentTab = newTab }
-                )
+    // Загрузка медиа при смене вкладок
+    LaunchedEffect(currentTab) {
+        when (currentTab) {
+            MediaPickerTab.ALL -> viewModel.loadMedia(MediaFilter.ALL)
+            MediaPickerTab.PHOTOS -> viewModel.loadMedia(MediaFilter.PHOTOS_ONLY)
+            MediaPickerTab.VIDEOS -> viewModel.loadMedia(MediaFilter.VIDEOS_ONLY)
+            MediaPickerTab.CAMERA -> {
+                isExpanded = true
             }
         }
     }
+
+    Column(modifier = modifier) {
+        // Верхняя панель заголовка и быстрых действий
+        MediaPickerTopBar(
+            currentTab = currentTab,
+            selectedCount = selectedItems.size,
+            maxSelection = maxSelection,
+            isExpanded = isExpanded,
+            onToggleExpand = { isExpanded = !isExpanded },
+            onClose = onClose,
+            onOpenAudio = onOpenAudioPicker,
+            onClearSelection = { viewModel.clearSelection() }
+        )
+
+        // Основная область контента (сетка медиа или камера)
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            when (currentTab) {
+                MediaPickerTab.CAMERA -> {
+                    CameraTab(
+                        onPhotoTaken = { uri ->
+                            viewModel.clearSelection()
+                            onPhotoTaken(uri)
+                        },
+                        onVideoRecorded = { uri ->
+                            viewModel.clearSelection()
+                            onVideoRecorded(uri)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                else -> {
+                    MediaGalleryGrid(
+                        items = mediaItems,
+                        selectedItems = selectedItems,
+                        isLoading = isLoading,
+                        onItemClick = { item ->
+                            viewModel.toggleSelection(item, maxSelection = maxSelection)
+                        },
+                        onItemLongClick = { item ->
+                            if (item.type == MediaType.IMAGE) {
+                                viewModel.clearSelection()
+                                onOpenEditor(item.uri)
+                            }
+                        },
+                        onReload = {
+                            val filter = when (currentTab) {
+                                MediaPickerTab.PHOTOS -> MediaFilter.PHOTOS_ONLY
+                                MediaPickerTab.VIDEOS -> MediaFilter.VIDEOS_ONLY
+                                else -> MediaFilter.ALL
+                            }
+                            viewModel.loadMedia(filter)
+                        },
+                        gridState = gridState,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        // Блок плавающих кнопок действий над нижним таб-баром (при выборе элементов)
+        AnimatedVisibility(
+            visible = selectedItems.isNotEmpty() && currentTab != MediaPickerTab.CAMERA,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Кнопка перехода в редактор (аккуратный неоморфный кругляш)
+                if (selectedItems.size == 1 && selectedItems.first().type == MediaType.IMAGE) {
+                    val editShape = CircleShape
+                    Surface(
+                        onClick = {
+                            val item = selectedItems.first()
+                            viewModel.clearSelection()
+                            onOpenEditor(item.uri)
+                        },
+                        shape = editShape,
+                        color = if (tokens.structure.enabled) cs.surfaceContainerHigh else cs.secondaryContainer,
+                        contentColor = cs.onSecondaryContainer,
+                        modifier = Modifier
+                            .padding(end = 10.dp)
+                            .size(44.dp)
+                            .then(
+                                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, editShape)
+                                else Modifier
+                            )
+                            .then(
+                                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), editShape)
+                                else Modifier
+                            )
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Редактировать",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Кнопка отправки с подсчетом
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        val result = selectedItems.map {
+                            SelectedMediaItem(
+                                uri = it.uri,
+                                type = it.type,
+                                durationMs = it.durationMs
+                            )
+                        }
+                        viewModel.clearSelection()
+                        onMediaSelected(result)
+                    },
+                    icon = {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить")
+                    },
+                    text = {
+                        Text(
+                            text = if (selectedItems.size == 1) "Отправить" else "Отправить (${selectedItems.size})",
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    containerColor = cs.primary,
+                    contentColor = cs.onPrimary,
+                    shape = tokens.shapes.fab,
+                    modifier = Modifier.height(48.dp)
+                )
+            }
+        }
+
+        // Нижняя панель вкладок (всегда видна внизу шторки)
+        MediaPickerBottomNavBar(
+            currentTab = currentTab,
+            onTabSelected = { newTab -> currentTab = newTab }
+        )
+    }
+}
 
 /**
  * Верхняя компактная панель заголовка и быстрых действий.

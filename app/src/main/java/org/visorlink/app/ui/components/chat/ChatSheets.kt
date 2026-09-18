@@ -56,7 +56,6 @@ import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.rememberHaptic
 import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.utils.CdnService
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -434,9 +433,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                                     val currentImg = images[pagerState.currentPage]
                                     scope.launch {
                                         isSaving = true
-                                        val url = if (currentImg.cdnMediaId != null) {
-                                            CdnService.getFileUrl(currentImg.cdnMediaId)
-                                        } else currentImg.url ?: ""
+                                        val url = currentImg.url ?: ""
 
                                         val success = ImageCache.saveImageToGallery(context, url)
                                         isSaving = false

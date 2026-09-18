@@ -46,30 +46,10 @@ object ImageCache {
 
             val tmp = File(dir, "${file.name}.tmp")
             try {
-                var targetUrl = url
-                if (targetUrl.contains("api.visorlink.org/f/") && !targetUrl.contains("token=")) {
-                    try {
-                        val token = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
-                            ?.getIdToken(false)?.await()?.token
-                        if (!token.isNullOrEmpty()) {
-                            targetUrl = if (targetUrl.contains("?")) "$targetUrl&token=$token" else "$targetUrl?token=$token"
-                        }
-                    } catch (_: Exception) {}
-                }
-
-                var conn = URL(targetUrl).openConnection() as HttpURLConnection
+                val conn = URL(url).openConnection() as HttpURLConnection
                 conn.connectTimeout = 10_000
                 conn.readTimeout    = 30_000
                 conn.connect()
-
-                if (conn.responseCode == 401 && targetUrl.contains("/f/")) {
-                    conn.disconnect()
-                    val publicUrl = targetUrl.replace("/f/", "/p/").substringBefore("?")
-                    conn = URL(publicUrl).openConnection() as HttpURLConnection
-                    conn.connectTimeout = 10_000
-                    conn.readTimeout    = 30_000
-                    conn.connect()
-                }
 
                 if (conn.responseCode == 200) {
                     FileOutputStream(tmp).use { out ->

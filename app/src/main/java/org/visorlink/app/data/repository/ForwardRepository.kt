@@ -37,33 +37,6 @@ class ForwardRepository(
             messageId      = originalMsg.id
         )
 
-        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
-            val req = SendMessageRequest(
-                chatId = targetChat.id,
-                type = originalMsg.type,
-                text = originalMsg.text,
-                caption = originalMsg.caption,
-                url = originalMsg.imageUrl ?: originalMsg.voiceUrl,
-                stickerId = originalMsg.stickerId,
-                packEmoji = originalMsg.packEmoji,
-                images = originalMsg.albumItems?.map {
-                    AlbumImageDto(
-                        url = it.url,
-                        cdnMediaId = it.cdnMediaId,
-                        fileName = it.fileName,
-                        spoiler = it.spoiler
-                    )
-                },
-                forwardFrom = ForwardDto(
-                    senderId = forwardFrom.senderId,
-                    senderUsername = forwardFrom.senderUsername,
-                    chatId = forwardFrom.chatId
-                )
-            )
-            api.sendMessage(req)
-            return
-        }
-
         val msgRef = db.collection(FirestoreCollections.CHATS).document(targetChat.id)
             .collection(FirestoreCollections.MESSAGES).document()
 

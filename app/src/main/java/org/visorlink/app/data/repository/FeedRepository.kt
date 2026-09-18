@@ -37,15 +37,14 @@ class FeedRepository(
     private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
 
     private fun isFeedBackendEnabled(): Boolean {
-        val serverV2 = flagsRepository.isBackendV2Enabled()
         val serverFlag = flagsRepository.flags.value.isEnabled("test_backend_enabled")
         val userSetting = backendPrefs.getBoolean("use_backend_feed", false)
-        return serverV2 || (serverFlag && userSetting)
+        return serverFlag && userSetting
     }
 
     private fun isFirestoreDisabled(): Boolean {
-        return flagsRepository.isBackendV2Enabled() || (flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
-                backendPrefs.getBoolean("disable_firestore_completely", false))
+        return flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
+                backendPrefs.getBoolean("disable_firestore_completely", false)
     }
 
 

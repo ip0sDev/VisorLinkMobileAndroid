@@ -37,7 +37,13 @@ import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.NotificationHelper
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import org.visorlink.app.data.repository.FlagsRepository
+import org.visorlink.app.ui.components.calculateJellyScale
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.rememberLiquidJellyState
+import androidx.compose.ui.graphics.graphicsLayer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,14 +58,16 @@ fun ChatListScreen(
     onOpenNotifications: () -> Unit,
     onOpenFeed: () -> Unit,
     viewModel: ChatListViewModel = koinViewModel(),
-    themeViewModel: ThemeViewModel = koinViewModel()
+    themeViewModel: ThemeViewModel = koinViewModel(),
+    flagsRepository: FlagsRepository = koinInject()
 ) {
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
     val chats by viewModel.chats.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val profileCache by viewModel.profileCache.collectAsState()
     val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
     val drafts by viewModel.drafts.collectAsState()
-    val isManualFallbackActive by viewModel.isManualFallbackActive.collectAsState()
     val typingMap by viewModel.typingMap.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
 
@@ -87,7 +95,18 @@ fun ChatListScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
+            val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+            if (isLiquidEnabled) {
+                LaunchedEffect(syncState) {
+                    topBarJelly.pulse(0.06f)
+                }
+                LaunchedEffect(isScrolled) {
+                    topBarJelly.pulse(0.07f)
+                }
+            }
+
             VlTopAppBar(
+                modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
                 title = {
                     val tokens = VlTheme.tokens
                     Column {
@@ -216,11 +235,6 @@ fun ChatListScreen(
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
                     ) {
-                        if (isManualFallbackActive) {
-                            BackendFallbackBanner(
-                                onRetryNewBackend = { viewModel.retryNewBackend() }
-                            )
-                        }
                         ChatListEmptyState(
                             modifier = Modifier.fillMaxSize()
                         )
@@ -234,13 +248,6 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
-                        if (isManualFallbackActive) {
-                            item(key = "backend_fallback_banner") {
-                                BackendFallbackBanner(
-                                    onRetryNewBackend = { viewModel.retryNewBackend() }
-                                )
-                            }
-                        }
                         if (compactList) {
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {
@@ -375,3 +382,4 @@ fun ChatListScreen(
         }
     }
 }
+

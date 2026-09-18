@@ -14,7 +14,6 @@ import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.*
 import org.visorlink.app.data.remote.chat.*
 import org.visorlink.app.utils.ChatDataCache
-import org.visorlink.app.utils.CdnService
 import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.VoiceCache
 import org.visorlink.app.utils.NetworkMonitor
@@ -57,15 +56,14 @@ class ChatRepository(
     private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
 
     fun isBackendEnabled(): Boolean {
-        val serverV2 = flagsRepository.isBackendV2Enabled()
         val serverFlag = flagsRepository.flags.value.isEnabled("test_backend_enabled")
         val userSetting = backendPrefs.getBoolean("use_custom_backend", false)
-        return serverV2 || (serverFlag && userSetting)
+        return serverFlag && userSetting
     }
 
     fun isFirestoreDisabled(): Boolean {
-        return flagsRepository.isBackendV2Enabled() || (flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
-                backendPrefs.getBoolean("disable_firestore_completely", false))
+        return flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
+                backendPrefs.getBoolean("disable_firestore_completely", false)
     }
 
     private fun MessageDto.toDomain(): Message {
@@ -405,7 +403,7 @@ class ChatRepository(
                     // Prefetch media
                     messages.forEach { msg ->
                         try {
-                            val url = if (msg.cdnMediaId != null) CdnService.getFileUrl(msg.cdnMediaId) else msg.url
+                            val url = msg.url
                             if (!url.isNullOrEmpty()) {
                                 if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
                                 else ImageCache.getOrDownload(context, url)
@@ -1710,13 +1708,18 @@ class ChatRepository(
         context.contentResolver.openInputStream(file)?.use { input ->
             FileOutputStream(tempFile).use { output -> input.copyTo(output) }
         }
-        val mediaId = CdnService.uploadFile(tempFile, "image/jpeg")
+        val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("comments/$chatId/$fileName")
+        storageRef.putFile(Uri.fromFile(tempFile)).await()
+        val downloadUrl = storageRef.downloadUrl.await().toString()
         tempFile.delete()
-        addComment(chatId = chatId, messageId = messageId, type = MessageType.IMAGE, cdnMediaId = mediaId, fileName = fileName, spoiler = spoiler, replyTo = replyTo)
+        addComment(chatId = chatId, messageId = messageId, type = MessageType.IMAGE, url = downloadUrl, fileName = fileName, spoiler = spoiler, replyTo = replyTo)
     }
 
     suspend fun uploadAndCommentVoice(chatId: String, messageId: String, audioFile: File, durationSeconds: Int, replyTo: CommentReplyData? = null) = withContext(Dispatchers.IO) {
-        val mediaId = CdnService.uploadFile(audioFile, "audio/webm")
-        addComment(chatId = chatId, messageId = messageId, type = MessageType.VOICE, cdnMediaId = mediaId, duration = durationSeconds, replyTo = replyTo)
+        val fileName = "${System.currentTimeMillis()}_voice.webm"
+        val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("comments/$chatId/$fileName")
+        storageRef.putFile(Uri.fromFile(audioFile)).await()
+        val downloadUrl = storageRef.downloadUrl.await().toString()
+        addComment(chatId = chatId, messageId = messageId, type = MessageType.VOICE, url = downloadUrl, duration = durationSeconds, replyTo = replyTo)
     }
 }

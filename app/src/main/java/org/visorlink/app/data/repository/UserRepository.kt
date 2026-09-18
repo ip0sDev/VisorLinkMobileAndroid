@@ -14,7 +14,6 @@ import org.visorlink.app.data.remote.chat.UpdateProfileRequest
 import org.visorlink.app.data.remote.chat.UserDto
 import org.visorlink.app.data.remote.chat.VisorLinkApi
 import org.visorlink.app.utils.ChatDataCache
-import org.visorlink.app.utils.CdnService
 import org.visorlink.app.data.repository.FlagsRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
@@ -48,15 +47,14 @@ class UserRepository(
     private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
 
     private fun isProfileBackendEnabled(): Boolean {
-        val serverV2 = flagsRepository.isBackendV2Enabled()
         val serverFlag = flagsRepository.flags.value.isEnabled("test_backend_enabled")
         val userSetting = backendPrefs.getBoolean("use_backend_profile", false)
-        return serverV2 || (serverFlag && userSetting)
+        return serverFlag && userSetting
     }
 
     private fun isFirestoreDisabled(): Boolean {
-        return flagsRepository.isBackendV2Enabled() || (flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
-                backendPrefs.getBoolean("disable_firestore_completely", false))
+        return flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
+                backendPrefs.getBoolean("disable_firestore_completely", false)
     }
 
 
@@ -448,7 +446,7 @@ class UserRepository(
         if (isProfileBackendEnabled()) {
             try {
                 api.removeFcmToken(org.visorlink.app.data.remote.chat.FcmTokenRequest(token = token))
-                android.util.Log.d("UserRepository", "FCM token removed from Backend v2")
+                android.util.Log.d("UserRepository", "FCM token removed from Backend")
             } catch (e: Exception) {
                 android.util.Log.e("UserRepository", "Failed to remove FCM token from backend", e)
             }

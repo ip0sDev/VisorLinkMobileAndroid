@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components.chatlist
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -26,8 +27,12 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import org.koin.compose.koinInject
 import org.visorlink.app.R
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.VlFab
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.motionSpec
 import org.visorlink.app.utils.HapticType
@@ -40,8 +45,11 @@ fun ChatListFab(
     onToggle: () -> Unit,
     onNewChat: () -> Unit,
     onNewGroup: () -> Unit,
-    onFindChannel: () -> Unit
+    onFindChannel: () -> Unit,
+    flagsRepository: FlagsRepository = koinInject()
 ) {
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
     val haptic = rememberHaptic()
     Column(
         horizontalAlignment = Alignment.End,
@@ -89,6 +97,21 @@ fun ChatListFab(
             label = "fab_scale"
         )
 
+        val fabJelly = rememberLiquidJellyState(softness = 0.09f, damping = 0.70f, stiffness = 300f)
+
+        if (isLiquidEnabled) {
+            LaunchedEffect(isPressed) {
+                if (isPressed) {
+                    fabJelly.press(0.09f)
+                } else {
+                    fabJelly.release(0.06f)
+                }
+            }
+            LaunchedEffect(showMenu) {
+                fabJelly.pulse(0.08f)
+            }
+        }
+
         val fabBgOpen = cs.primary
         val fabBgClosed = cs.primary
 
@@ -104,7 +127,9 @@ fun ChatListFab(
 
         VlFab(
             onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); onToggle() },
-            modifier = Modifier.scale(fabScale),
+            modifier = Modifier
+                .scale(fabScale)
+                .liquidJelly(fabJelly, enabled = isLiquidEnabled),
             containerColor = if (showMenu) fabBgOpen else fabBgClosed,
             glowActive = !showMenu,
             shape = fabShape,

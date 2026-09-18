@@ -90,14 +90,6 @@ fun MainScreen(
 
     val showNavbar = diaryEnabled || discoverEnabled || musicEnabled
     val isOnline by mainViewModel.isOnline.collectAsState()
-    val showFallbackPrompt by mainViewModel.showFallbackPrompt.collectAsState()
-
-    if (showFallbackPrompt) {
-        org.visorlink.app.ui.components.BackendFallbackOfferDialog(
-            onDismissRequest = { mainViewModel.dismissFallbackPrompt() },
-            onConfirmFallback = { mainViewModel.confirmFallback() }
-        )
-    }
 
     if (showMusicOnboarding) {
         MusicOnboardingDialog(

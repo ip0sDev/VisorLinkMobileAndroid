@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.utils.CdnService
 import coil.compose.AsyncImage
 
 @Composable
@@ -98,16 +97,7 @@ fun MarkdownText(text: String) {
 
 @Composable
 fun DiaryInlineImage(mediaId: String) {
-    val context = LocalContext.current
-    var url by remember { mutableStateOf<String?>(null) }
-    
-    LaunchedEffect(mediaId) {
-        if (!mediaId.startsWith("http")) {
-            url = CdnService.getFileUrl(mediaId)
-        } else {
-            url = mediaId
-        }
-    }
+    val url = if (mediaId.startsWith("http")) mediaId else null
     
     if (url != null) {
         AsyncImage(

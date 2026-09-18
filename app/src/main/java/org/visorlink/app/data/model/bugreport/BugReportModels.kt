@@ -37,11 +37,11 @@ data class DeviceInfo(
 )
 
 /**
- * Прикрепленный скриншот с CDN
+ * Прикрепленный скриншот
  */
 data class ScreenshotAttachment(
     @SerializedName("url") val url: String,
-    @SerializedName("cdnMediaId") val cdnMediaId: String,
+    @SerializedName("cdnMediaId") val cdnMediaId: String? = null,
     @SerializedName("fileName") val fileName: String,
     @SerializedName("size") val size: Long
 )

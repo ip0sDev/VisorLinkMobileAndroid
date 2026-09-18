@@ -46,20 +46,6 @@ class ChatDataOutboxSource : OutboxDataSource {
     }
 }
 
-interface CdnUploader {
-    suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String
-    suspend fun uploadFileWithDetails(file: File, mimeType: String, onProgress: (Float) -> Unit): CdnUploadResult =
-        CdnService.uploadFileWithDetails(file, mimeType, onProgress = onProgress)
-}
-
-class DefaultCdnUploader : CdnUploader {
-    override suspend fun uploadFile(file: File, mimeType: String, onProgress: (Float) -> Unit): String =
-        CdnService.uploadFile(file, mimeType, onProgress = onProgress)
-
-    override suspend fun uploadFileWithDetails(file: File, mimeType: String, onProgress: (Float) -> Unit): CdnUploadResult =
-        CdnService.uploadFileWithDetails(file, mimeType, onProgress = onProgress)
-}
-
 class OutboxManager(
     private val context: Context,
     private val chatRepository: ChatRepository,
@@ -68,9 +54,7 @@ class OutboxManager(
     private val functions: FirebaseFunctions,
     private val networkMonitor: NetworkMonitor,
     private val outboxDataSource: OutboxDataSource = ChatDataOutboxSource(),
-    private val cdnUploader: CdnUploader = DefaultCdnUploader(),
     coroutineContext: CoroutineContext = Dispatchers.IO,
-    private val fallbackManager: org.visorlink.app.data.repository.BackendFallbackManager? = null,
     private val googleDriveAuthManager: GoogleDriveAuthManager? = null,
     private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null
 ) {
@@ -455,13 +439,6 @@ class OutboxManager(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing action ${action.id} of type ${action.type}", e)
-            val now = System.currentTimeMillis()
-            if (fallbackManager != null && (now - lastHealthCheckTimestamp > 30_000L)) {
-                lastHealthCheckTimestamp = now
-                scope.launch {
-                    fallbackManager.checkHealth()
-                }
-            }
             throw e
         }
     }

@@ -1,6 +1,8 @@
 package org.visorlink.app.ui.components.chat
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,19 +17,24 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.koin.compose.koinInject
 import org.visorlink.app.R
-import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.TopbarStatus
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.screens.chat.ChatUiState
 import org.visorlink.app.ui.components.chatlist.GroupChannelAvatar
+import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import java.text.SimpleDateFormat
@@ -51,10 +58,29 @@ fun ChatTopBar(
     onAegisClick: () -> Unit = {},
     isAegisEnabled: Boolean = false,
     onOpenTopicList: (() -> Unit)? = null,
+    flagsRepository: FlagsRepository = koinInject()
 ) {
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
     val haptic = rememberHaptic()
 
+    val statusKey = when (uiState.topbarStatus) {
+        is TopbarStatus.Typing -> "typing"
+        is TopbarStatus.Online -> "online"
+        is TopbarStatus.Connecting -> "connecting"
+        is TopbarStatus.Updating -> "updating"
+        is TopbarStatus.WaitingForNetwork -> "waiting"
+        else -> "idle"
+    }
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+    if (isLiquidEnabled) {
+        LaunchedEffect(statusKey) {
+            topBarJelly.pulse(0.08f)
+        }
+    }
+
     VlTopAppBar(
+        modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
         navigationIcon = {
             IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))

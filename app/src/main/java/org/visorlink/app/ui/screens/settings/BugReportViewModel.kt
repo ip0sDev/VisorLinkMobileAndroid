@@ -7,15 +7,20 @@ import androidx.lifecycle.viewModelScope
 import org.visorlink.app.data.model.bugreport.BugReportRequest
 import org.visorlink.app.data.model.bugreport.BugReportResponse
 import org.visorlink.app.data.model.bugreport.ScreenshotAttachment
-import org.visorlink.app.data.remote.CdnUploadService
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
 import org.visorlink.app.data.repository.BugReportRepository
 import org.visorlink.app.utils.DeviceInfoProvider
 import org.visorlink.app.utils.DiagnosticLogBuffer
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 
 data class BugReportUiState(
     val title: String = "",
@@ -32,8 +37,7 @@ data class BugReportUiState(
 )
 
 class BugReportViewModel(
-    private val bugReportRepository: BugReportRepository,
-    private val cdnUploadService: CdnUploadService
+    private val bugReportRepository: BugReportRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BugReportUiState())
@@ -67,7 +71,24 @@ class BugReportViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isUploadingScreenshot = true, error = null) }
             try {
-                val attachment = cdnUploadService.uploadScreenshotUri(context, uri)
+                val user = FirebaseAuth.getInstance().currentUser
+                    ?: throw IllegalStateException("Пользователь не авторизован")
+                val contentResolver = context.contentResolver
+                val bytes = withContext(Dispatchers.IO) {
+                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                } ?: throw IllegalArgumentException("Не удалось прочитать файл скриншота")
+
+                val fileName = "screenshot_${System.currentTimeMillis()}.jpg"
+                val storageRef = FirebaseStorage.getInstance().reference.child("bugreports/${user.uid}/$fileName")
+                val metadata = StorageMetadata.Builder().setContentType("image/jpeg").build()
+                storageRef.putBytes(bytes, metadata).await()
+                val downloadUrl = storageRef.downloadUrl.await().toString()
+
+                val attachment = ScreenshotAttachment(
+                    url = downloadUrl,
+                    fileName = fileName,
+                    size = bytes.size.toLong()
+                )
                 _uiState.update { state ->
                     state.copy(
                         screenshots = state.screenshots + attachment,
@@ -87,7 +108,7 @@ class BugReportViewModel(
 
     fun removeScreenshot(attachment: ScreenshotAttachment) {
         _uiState.update { state ->
-            state.copy(screenshots = state.screenshots.filter { it.cdnMediaId != attachment.cdnMediaId })
+            state.copy(screenshots = state.screenshots.filter { it.url != attachment.url })
         }
     }
 

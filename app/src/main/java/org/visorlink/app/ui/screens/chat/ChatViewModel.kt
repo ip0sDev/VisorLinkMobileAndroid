@@ -12,7 +12,6 @@ import org.visorlink.app.data.model.*
 import org.visorlink.app.data.repository.ChatRepository
 import org.visorlink.app.data.repository.UserRepository
 import org.visorlink.app.utils.ActiveChatTracker
-import org.visorlink.app.utils.CdnService
 import org.visorlink.app.utils.PresenceManager
 import org.visorlink.app.utils.DraftManager
 import org.visorlink.app.utils.NotificationHelper
@@ -478,15 +477,9 @@ class ChatViewModel(
                 val type = _uiState.value.chatType
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
 
-                val tempFile = java.io.File(context.cacheDir, "wallpaper_${System.currentTimeMillis()}.jpg")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    java.io.FileOutputStream(tempFile).use { output -> input.copyTo(output) }
-                }
-
-                val mediaId = CdnService.uploadFile(tempFile, "image/jpeg", isVault = false)
-                tempFile.delete()
-
-                val downloadUrl = "${CdnService.BASE_URL}/p/$mediaId"
+                val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("chats/$chatId/wallpapers/$docId.jpg")
+                storageRef.putFile(uri).await()
+                val downloadUrl = storageRef.downloadUrl.await().toString()
                 val data = hashMapOf(
                     "url" to downloadUrl,
                     "setBy" to currentUid,
@@ -662,59 +655,16 @@ class ChatViewModel(
 
         val job = viewModelScope.launch {
             try {
-                val uploadResult = CdnService.uploadFileWithDetails(file, if (isGif) "image/gif" else "video/mp4", isVault = false) { progress ->
-                    _uiState.update { state ->
-                        val updatedTemp = state.tempMessages.map {
-                            if (it.id == tempId) it.copy(uploadProgress = progress) else it
-                        }
-                        state.copy(
-                            tempMessages = updatedTemp,
-                            messageListItems = buildMessageList(state.messages + updatedTemp)
-                        )
-                    }
-                }
-
-                val msgRef = db.collection("chats").document(chatId).collection("messages").document()
-                val batch = db.batch()
-
-                val msgMap = mutableMapOf<String, Any?>(
-                    "senderId" to currentUid,
-                    "senderUsername" to currentUsername,
-                    "type" to type,
-                    "cdnMediaId" to uploadResult.mediaId,
-                    "fileName" to file.name,
-                    "createdAt" to FieldValue.serverTimestamp(),
-                    "readBy" to listOf(currentUid),
-                    "deleted" to false,
-                    "replyTo" to tempMsg.replyTo
+                chatRepository.sendVideo(
+                    chatId = chatId,
+                    uri = Uri.fromFile(file),
+                    senderUsername = currentUsername,
+                    replyTo = reply,
+                    topicId = activeTopicId
                 )
-                if (uploadResult.duration != null && uploadResult.duration > 0) msgMap["duration"] = uploadResult.duration
-                if (uploadResult.width != null && uploadResult.width > 0) msgMap["width"] = uploadResult.width
-                if (uploadResult.height != null && uploadResult.height > 0) msgMap["height"] = uploadResult.height
-                if (!uploadResult.thumbUrl.isNullOrBlank()) msgMap["thumbUrl"] = uploadResult.thumbUrl
-                if (activeTopicId != null) msgMap["topicId"] = activeTopicId
-
-                batch.set(msgRef, msgMap)
-
-                val preview = if (isGif) "🖼️ GIF" else "🎥 Видео"
-                batch.update(db.collection("chats").document(chatId), mapOf(
-                    "lastMessage" to preview,
-                    "lastMessageAt" to FieldValue.serverTimestamp()
-                ))
-                if (activeTopicId != null) {
-                    val topicRef = db.collection("chats").document(chatId).collection("topics").document(activeTopicId)
-                    batch.update(topicRef, mapOf(
-                        "lastMessage" to mapOf("text" to preview, "senderUsername" to currentUsername),
-                        "lastMessageAt" to FieldValue.serverTimestamp()
-                    ))
-                }
-
-                batch.update(db.collection("users").document(currentUid), "lastMessageAt", FieldValue.serverTimestamp())
-                batch.commit().await()
-
             } catch (e: Exception) {
                 if (e !is kotlinx.coroutines.CancellationException) {
-                    _uiState.update { it.copy(error = "Ошибка CDN: ${e.message}") }
+                    _uiState.update { it.copy(error = "Ошибка отправки видео: ${e.message}") }
                 }
             } finally {
                 activeUploadJobs.remove(tempId)
@@ -736,11 +686,7 @@ class ChatViewModel(
                 url
             } else {
                 val msg = _uiState.value.messages.firstOrNull { it.id == messageId }
-                if (!msg?.cdnMediaId.isNullOrEmpty()) {
-                    CdnService.getFileUrl(msg!!.cdnMediaId!!)
-                } else {
-                    msg?.url ?: ""
-                }
+                msg?.url ?: ""
             }
             if (effectiveUrl.isNotBlank()) {
                 voicePlayer.play(messageId, effectiveUrl, durationSec)
@@ -1317,16 +1263,8 @@ class ChatViewModel(
 
     fun playAudio(message: Message) {
         viewModelScope.launch {
-            val resolvedUrl = if (!message.cdnMediaId.isNullOrEmpty()) {
-                CdnService.getFileUrl(message.cdnMediaId)
-            } else {
-                message.url ?: ""
-            }
-            val resolvedCoverUrl = if (!message.coverCdnMediaId.isNullOrEmpty()) {
-                CdnService.getFileUrl(message.coverCdnMediaId)
-            } else {
-                message.coverUrl
-            }
+            val resolvedUrl = message.url ?: ""
+            val resolvedCoverUrl = message.coverUrl
             val track = MusicTrack(
                 id = message.id,
                 title = message.title?.ifBlank { message.fileName ?: "Аудиозапись" } ?: message.fileName ?: "Аудиозапись",

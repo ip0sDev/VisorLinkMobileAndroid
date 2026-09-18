@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.storage.FirebaseStorage
 import org.visorlink.app.data.model.*
 import org.visorlink.app.data.remote.FirestoreCollections
 import org.visorlink.app.utils.*
@@ -157,13 +158,15 @@ class SavedMessagesRepository(
             fileToUpload = tempOriginalFile
         }
 
-        val mediaId = CdnService.uploadFile(fileToUpload, "image/jpeg", isVault = true)
+        val storageRef = FirebaseStorage.getInstance().reference.child("saved_messages/$uid/$fileName")
+        storageRef.putFile(Uri.fromFile(fileToUpload)).await()
+        val downloadUrl = storageRef.downloadUrl.await().toString()
 
         tempOriginalFile.delete()
         tempUploadFile.delete()
 
-        saveMediaMeta(uid, MessageType.IMAGE, mediaId, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, fileIv, isDiary)
-        return@withContext mediaId
+        saveMediaMeta(uid, MessageType.IMAGE, downloadUrl, fileName, null, caption, emptyList(), null, null, null, null, isSpoiler, forwardFrom, key, fileIv, isDiary)
+        return@withContext downloadUrl
     }
 
     suspend fun saveVoice(uid: String, uri: Uri, durationSec: Int, key: SecretKey? = null, forwardFrom: ForwardFrom? = null) = withContext(Dispatchers.IO) {
@@ -186,23 +189,25 @@ class SavedMessagesRepository(
             fileToUpload = tempOriginalFile
         }
 
-        val mediaId = CdnService.uploadFile(fileToUpload, "audio/webm", isVault = true)
+        val storageRef = FirebaseStorage.getInstance().reference.child("saved_messages/$uid/$fileName")
+        storageRef.putFile(Uri.fromFile(fileToUpload)).await()
+        val downloadUrl = storageRef.downloadUrl.await().toString()
 
         tempOriginalFile.delete()
         tempUploadFile.delete()
 
-        saveMediaMeta(uid, MessageType.VOICE, mediaId, null, durationSec, null, emptyList(), null, null, null, null, false, forwardFrom, key, fileIv)
+        saveMediaMeta(uid, MessageType.VOICE, downloadUrl, null, durationSec, null, emptyList(), null, null, null, null, false, forwardFrom, key, fileIv)
     }
 
     private suspend fun saveMediaMeta(
-        uid: String, type: String, cdnMediaId: String, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?, isDiary: Boolean = false
+        uid: String, type: String, url: String?, fileName: String?, duration: Int?, caption: String?, images: List<AlbumImage>, stickerId: String?, packId: String?, packName: String?, packEmoji: String?, spoiler: Boolean, forwardFrom: ForwardFrom?, key: SecretKey?, fileIv: String?, isDiary: Boolean = false
     ) {
         val msgRef = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES).document()
         val userRef = db.collection(FirestoreCollections.USERS).document(uid) // Ссылка на кулдаун пользователя
 
         val data = buildMap<String, Any?> {
             put("senderId", uid); put("type", type); put("createdAt", FieldValue.serverTimestamp()); put("deleted", false)
-            put("cdnMediaId", cdnMediaId)
+            if (url != null) put("url", url)
             put("isDiary", isDiary)
             if (fileName != null) put("fileName", fileName)
             if (duration != null) put("duration", duration)
@@ -238,17 +243,17 @@ class SavedMessagesRepository(
     }
 
     suspend fun getDecryptedMediaFile(message: SavedMessage, key: SecretKey?): File? = withContext(Dispatchers.IO) {
-        if (message.encrypted != true || key == null || message.cdnMediaId == null || message.iv == null) return@withContext null
+        if (message.encrypted != true || key == null || message.iv == null) return@withContext null
+        val mediaUrl = message.url ?: return@withContext null
 
-        val decryptedFile = File(context.cacheDir, "decrypted_${message.id}_${message.cdnMediaId}")
+        val decryptedFile = File(context.cacheDir, "decrypted_${message.id}_${message.fileName ?: "media"}")
 
         if (decryptedFile.exists() && decryptedFile.length() > 0) {
             return@withContext decryptedFile
         }
 
         try {
-            val url = CdnService.getFileUrl(message.cdnMediaId)
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            val connection = java.net.URL(mediaUrl).openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 15000
             connection.readTimeout = 30000
 

@@ -9,14 +9,12 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.tasks.await
 import okhttp3.*
-import org.visorlink.app.data.repository.BackendFallbackManager
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "ChatWS"
 
 class ChatWebSocketClient(
-    private val client: OkHttpClient,
-    private val fallbackManager: BackendFallbackManager? = null
+    private val client: OkHttpClient
 ) {
 
     private var webSocket: WebSocket? = null
@@ -77,7 +75,6 @@ class ChatWebSocketClient(
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
                 Log.d(TAG, "🟢 WebSocket Connected! Code: ${response.code}")
-                fallbackManager?.recordSuccess()
                 // Resubscribe to all active channels
                 activeChannels.forEach { ch ->
                     sendSubscribe(ch)
@@ -102,7 +99,6 @@ class ChatWebSocketClient(
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 val code = response?.code
                 Log.e(TAG, "🔴 WebSocket Failure: ${t.message}, HTTP code: $code")
-                fallbackManager?.recordFailure("WebSocket failure: ${t.message} (HTTP $code)")
                 stopPing()
                 val isAuthError = code == 401 || code == 403
                 scheduleReconnect(forceRefreshToken = isAuthError)

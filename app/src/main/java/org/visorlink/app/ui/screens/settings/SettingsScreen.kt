@@ -118,13 +118,6 @@ fun SettingsScreen(
     var showAdminPanel by remember { mutableStateOf(false) }
     var showBotsManager by remember { mutableStateOf(false) }
 
-    val backendPrefs = remember { context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE) }
-    var useBackend by remember { mutableStateOf(backendPrefs.getBoolean("use_custom_backend", false)) }
-    var useBackendProfile by remember { mutableStateOf(backendPrefs.getBoolean("use_backend_profile", false)) }
-    var useBackendFeed by remember { mutableStateOf(backendPrefs.getBoolean("use_backend_feed", false)) }
-    var disableFirestore by remember { mutableStateOf(backendPrefs.getBoolean("disable_firestore_completely", false)) }
-    var customBackendUrl by remember { mutableStateOf(backendPrefs.getString("custom_backend_url", "10.0.2.2:8080") ?: "10.0.2.2:8080") }
-    var showUrlDialog by remember { mutableStateOf(false) }
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
@@ -362,15 +355,7 @@ fun SettingsScreen(
                     }
                 }
 
-                if (flags.isEnabled("test_backend_enabled")) {
-                    VlSettingsSection(title = "Тестирование") {
-                        VlSettingsItem(icon = Icons.Default.BugReport, iconColor = MaterialTheme.colorScheme.tertiary, title = "Бэкенд: Чаты", subtitle = "Ktor + Redis для сообщений", trailing = { VlSwitch(checked = useBackend, onCheckedChange = { useBackend = it; backendPrefs.edit().putBoolean("use_custom_backend", it).apply() }) })
-                        VlSettingsItem(icon = Icons.Default.PersonSearch, iconColor = MaterialTheme.colorScheme.primary, title = "Бэкенд: Профили", subtitle = "Поиск и данные пользователей", trailing = { VlSwitch(checked = useBackendProfile, onCheckedChange = { useBackendProfile = it; backendPrefs.edit().putBoolean("use_backend_profile", it).apply() }) })
-                        VlSettingsItem(icon = Icons.Default.RssFeed, iconColor = MaterialTheme.colorScheme.error, title = "Бэкенд: Лента", subtitle = "Discover Feed через API", trailing = { VlSwitch(checked = useBackendFeed, onCheckedChange = { useBackendFeed = it; backendPrefs.edit().putBoolean("use_backend_feed", it).apply() }) })
-                        VlSettingsItem(icon = Icons.Default.CloudOff, iconColor = Color.Gray, title = "Железно отключить Firestore", subtitle = "Полная блокировка Firebase БД", trailing = { VlSwitch(checked = disableFirestore, onCheckedChange = { disableFirestore = it; backendPrefs.edit().putBoolean("disable_firestore_completely", it).apply() }) })
-                        VlSettingsItem(icon = Icons.Default.Dns, iconColor = MaterialTheme.colorScheme.secondary, title = "Адрес бэкенда", subtitle = customBackendUrl, onClick = { showUrlDialog = true })
-                    }
-                }
+
 
                 VlSettingsSection(title = stringResource(R.string.settings_section_account)) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
@@ -574,22 +559,7 @@ fun SettingsScreen(
         )
     }
 
-    if (showUrlDialog) {
-        var url by remember { mutableStateOf(customBackendUrl) }
-        VlAlertDialog(
-            onDismissRequest = { showUrlDialog = false },
-            title = { Text("Адрес бэкенда") },
-            text = { VlTextField(value = url, onValueChange = { url = it }, label = "URL (напр. 10.0.2.2:8080)", modifier = Modifier.fillMaxWidth()) },
-            actions = {
-                VlDialogButton(onClick = { showUrlDialog = false }) { Text(stringResource(R.string.action_cancel)) }
-                VlDialogButton(isPrimary = true, onClick = {
-                    customBackendUrl = url
-                    backendPrefs.edit().putString("custom_backend_url", url).apply()
-                    showUrlDialog = false
-                }) { Text(stringResource(R.string.action_save)) }
-            }
-        )
-    }
+
 
     if (showStealthSetup) {
         StealthSetupDialog(

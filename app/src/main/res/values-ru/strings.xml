@@ -703,16 +703,6 @@
     <string name="chat_settings_forum_mode_sub">Разделить группу на темы с канбаном и задачами</string>
     <string name="topics_permission_denied">Действие запрещено правами доступа</string>
 
-    <!-- Backend Fallback -->
-    <string name="backend_fallback_dialog_title">Проблемы с подключением</string>
-    <string name="backend_fallback_dialog_desc">Не удаётся связаться с новым бэкендом (6 неудачных попыток подряд). Хотите временно переключиться на старый бэкенд Firebase?</string>
-    <string name="backend_fallback_action_switch">Переключиться на Firebase</string>
-    <string name="backend_fallback_action_stay">Подождать</string>
-    <string name="backend_fallback_banner_title">Резервный режим (Firebase)</string>
-    <string name="backend_fallback_banner_desc">Включен старый бэкенд. Пожалуйста, сообщайте о критических ошибках в работе сервиса разработчикам.</string>
-    <string name="backend_fallback_banner_action_retry">Попробовать новый бэкенд</string>
-    <string name="backend_fallback_banner_action_report">Сообщить об ошибке</string>
-
     <!-- ANDROID_FEATURES_INTEGRATION_SPEC additions -->
     <string name="channel_subscribe">📢 Подписаться</string>
     <string name="channel_subscribing">Подписка…</string>

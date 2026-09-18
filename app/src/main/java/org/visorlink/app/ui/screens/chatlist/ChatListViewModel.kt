@@ -8,7 +8,6 @@ import org.visorlink.app.data.model.*
 import org.visorlink.app.data.repository.ChatRepository
 import org.visorlink.app.data.repository.UserRepository
 import org.visorlink.app.utils.DraftManager
-import org.visorlink.app.data.repository.BackendFallbackManager
 import org.visorlink.app.utils.NotificationHelper
 import org.visorlink.app.utils.PresenceManager
 import com.google.firebase.auth.FirebaseAuth
@@ -23,7 +22,6 @@ class ChatListViewModel(
     private val userRepository: UserRepository,
     private val auth: FirebaseAuth,
     private val draftManager: DraftManager,
-    private val fallbackManager: BackendFallbackManager? = null,
     private val context: Context? = null,
     private val sidebarTypingManager: org.visorlink.app.utils.SidebarTypingManager? = null,
     private val networkMonitor: NetworkMonitor? = null
@@ -38,13 +36,6 @@ class ChatListViewModel(
 
     val typingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
         ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
-
-    val isManualFallbackActive: StateFlow<Boolean> = fallbackManager?.manualFallbackActive
-        ?: MutableStateFlow(false).asStateFlow()
-
-    fun retryNewBackend() {
-        fallbackManager?.disableManualFallback()
-    }
 
     val currentUid: String get() = auth.currentUser!!.uid
 

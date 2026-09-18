@@ -87,7 +87,7 @@ fun StickerPickerBottomSheet(
 // ════════════════════════════════════════════════════════════════════════════════
 
 @Composable
-private fun StickerPickerContent(
+internal fun StickerPickerContent(
     packs: List<StickerPack>,
     isLoading: Boolean,
     currentUid: String,

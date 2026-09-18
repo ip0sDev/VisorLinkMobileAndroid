@@ -643,11 +643,10 @@ internal fun VideoBubble(
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Box {
-                CdnMediaViewer(
-                    mediaId = message.cdnMediaId,
-                    type = message.type,
-                    localFile = message.localFile,
+                ChatVideoViewer(
+                    url = resolvedUrl,
                     thumbUrl = message.thumbUrl,
+                    localFile = message.localFile,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
                     onClick = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onMediaTap(it, message.type) } }
                 )

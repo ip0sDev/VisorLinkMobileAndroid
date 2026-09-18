@@ -4,7 +4,6 @@ package org.visorlink.app.di
 import org.visorlink.app.data.aegis.*
 import org.visorlink.app.data.remote.flags.AegisKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
-import org.visorlink.app.data.remote.chat.BackendConnectivityInterceptor
 import org.visorlink.app.data.remote.chat.ChatWebSocketClient
 import org.visorlink.app.data.remote.chat.DynamicBaseUrlInterceptor
 import org.visorlink.app.data.remote.chat.FirebaseAuthInterceptor
@@ -87,13 +86,11 @@ val appModule = module {
     }
     single { AegisKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
-    single { BackendFallbackManager(androidContext(), get()) { get<VisorLinkApi>() } }
 
     // --- Chat Backend ---
     single(named("chatOkHttp")) {
         OkHttpClient.Builder()
             .addInterceptor(DynamicBaseUrlInterceptor(androidContext()))
-            .addInterceptor(BackendConnectivityInterceptor(get()))
             .addInterceptor(FirebaseAuthInterceptor())
             .build()
     }
@@ -105,7 +102,7 @@ val appModule = module {
             .build()
             .create(VisorLinkApi::class.java)
     }
-    single { ChatWebSocketClient(get(named("chatOkHttp")), get()) }
+    single { ChatWebSocketClient(get(named("chatOkHttp"))) }
 
     // --- Google Drive Storage ---
     single { org.visorlink.app.data.repository.GoogleDriveConfigRepository(get()) }
@@ -117,7 +114,7 @@ val appModule = module {
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
-    single { BotRepository(get(), get(), get()) }
+    single { BotRepository(get()) }
     single { LegalRepository(get(), androidContext(), get(), get()) }
 
     single { CacheManager(androidContext()) }
@@ -128,7 +125,7 @@ val appModule = module {
     single { MusicDatabase(androidContext()) }
     single { MusicRepository(androidContext()) }
     single { NetworkMonitor(androidContext()) }
-    single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), fallbackManager = get(), googleDriveAuthManager = get(), googleDriveMediaService = get()) }
+    single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), googleDriveAuthManager = get(), googleDriveMediaService = get()) }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
@@ -139,8 +136,18 @@ val appModule = module {
 
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
-    viewModel { MainViewModel(get(), get(), get()) }
-    viewModel { ChatListViewModel(get(), get(), get(), get(), get(), androidApplication(), get(), get()) }
+    viewModel { MainViewModel(get(), get()) }
+    viewModel {
+        ChatListViewModel(
+            chatRepository = get(),
+            userRepository = get(),
+            auth = get(),
+            draftManager = get(),
+            context = androidApplication(),
+            sidebarTypingManager = get(),
+            networkMonitor = get()
+        )
+    }
     viewModel { MusicViewModel(get(), get()) }
 
     viewModel { parameters ->
@@ -233,10 +240,9 @@ val appModule = module {
     viewModel { MediaPickerViewModel(androidApplication()) }
     
     // ── Bug Reports & FaultyWire ──
-    single { org.visorlink.app.data.remote.CdnUploadService(OkHttpClient()) }
     single { org.visorlink.app.data.repository.BugReportRepository(get()) }
     single { org.visorlink.app.data.repository.ReportRepository(get(), get(), get()) }
-    viewModel { org.visorlink.app.ui.screens.settings.BugReportViewModel(get(), get()) }
+    viewModel { org.visorlink.app.ui.screens.settings.BugReportViewModel(get()) }
     
     // ── Aegis Project ──
     single { DictionaryRepository(androidContext()) }

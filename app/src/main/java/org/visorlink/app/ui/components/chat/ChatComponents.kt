@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.Canvas
@@ -61,7 +62,6 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.Message
 import org.visorlink.app.data.model.MessageType
 import org.visorlink.app.data.model.SendStatus
-import org.visorlink.app.utils.CdnService
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.VoicePlaybackState
 import org.visorlink.app.utils.rememberHaptic
@@ -88,19 +88,64 @@ fun resolveCdnUrl(cdnMediaId: String?, fallbackUrl: String?): String? {
 fun TypingDots(primaryColor: Color = Color.Unspecified) {
     val infiniteTransition = rememberInfiniteTransition(label = "typing")
     val color = if (primaryColor == Color.Unspecified) MaterialTheme.colorScheme.primary else primaryColor
+    val cycleDuration = 1200
+
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(stringResource(R.string.chat_typing),
-            style = MaterialTheme.typography.labelSmall, color = color, fontSize = 11.sp)
+        Text(
+            stringResource(R.string.chat_typing),
+            style = MaterialTheme.typography.labelSmall, 
+            color = color, 
+            fontSize = 11.sp
+        )
         (0..2).forEach { i ->
+            val startDelay = i * 160
+            val peakTime = startDelay + 180
+            val endTime = startDelay + 360
+
             val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.2f, targetValue = 1f,
+                initialValue = 0.25f,
+                targetValue = 0.25f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(400, delayMillis = i * 130, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse,
+                    animation = keyframes {
+                        durationMillis = cycleDuration
+                        0.25f at 0
+                        if (startDelay > 0) {
+                            0.25f at startDelay
+                        }
+                        1f at peakTime using FastOutSlowInEasing
+                        0.25f at endTime using FastOutSlowInEasing
+                        0.25f at cycleDuration
+                    },
+                    repeatMode = RepeatMode.Restart
                 ),
-                label = "dot_$i",
+                label = "dot_alpha_$i"
             )
-            Box(Modifier.size(4.dp).background(color.copy(alpha = alpha), VlTheme.tokens.shapes.indicator))
+
+            val offsetY by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 0f,
+                animationSpec = infiniteRepeatable(
+                    animation = keyframes {
+                        durationMillis = cycleDuration
+                        0f at 0
+                        if (startDelay > 0) {
+                            0f at startDelay
+                        }
+                        (-2.5f) at peakTime using FastOutSlowInEasing
+                        0f at endTime using FastOutSlowInEasing
+                        0f at cycleDuration
+                    },
+                    repeatMode = RepeatMode.Restart
+                ),
+                label = "dot_offset_$i"
+            )
+
+            Box(
+                Modifier
+                    .offset(y = offsetY.dp)
+                    .size(4.dp)
+                    .background(color.copy(alpha = alpha), VlTheme.tokens.shapes.indicator)
+            )
         }
     }
 }

@@ -60,8 +60,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
+import org.visorlink.app.data.repository.FlagsRepository
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -79,7 +81,11 @@ fun ChatScreen(
     onForward: ((Message) -> Unit)? = null,
     onOpenTopicList: ((String) -> Unit)? = null,
     hapticEnabled: Boolean = true,
+    flagsRepository: FlagsRepository = koinInject(),
 ) {
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+
     val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid, topicId) })
     val uiState by viewModel.uiState.collectAsState()
     val listState = rememberLazyListState()
@@ -307,32 +313,120 @@ fun ChatScreen(
                     }
                 },
                 bottomBar = {
-                    ChatBottomBar(
-                        uiState = uiState, inputText = inputText,
-                        canSendMessage = canSendMessage, canSendMedia = canSendMedia,
-                        hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
-                        audioPermission = audioPermission, focusRequester = inputFocusRequester,
-                        onInputChange = { inputText = it; viewModel.onTextChanged(it) },
-                        onAttach = {
-                            keyboardController?.hide()
-                            focusManager.clearFocus(force = true)
-                            showMediaPicker = true
-                        },
-                        onStickerClick = { showStickerSheet = true },
-                        onSend = {
-                            val t = inputText
-                            inputText = ""
-                            if (uiState.editingMessage != null) viewModel.saveEdit(t)
-                            else viewModel.sendText(t)
-                        },
-                        onStartRecord = { viewModel.startRecording() },
-                        onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
-                        onCancelRecord = { viewModel.cancelRecording() },
-                        onSendRecord = { viewModel.stopRecordingAndSend() },
-                        onClearReply = { viewModel.clearReply() },
-                        onCancelEdit = { viewModel.cancelEditing(); inputText = "" },
-                        onJoinChannel = { viewModel.joinChannel() }
-                    )
+                    if (isLiquidEnabled) {
+                        LiquidMorphingChatBottomBar(
+                            uiState = uiState,
+                            inputText = inputText,
+                            canSendMessage = canSendMessage,
+                            canSendMedia = canSendMedia,
+                            hapticEnabled = hapticEnabled,
+                            showStickerSheet = showStickerSheet,
+                            showMediaPicker = showMediaPicker,
+                            audioPermission = audioPermission,
+                            focusRequester = inputFocusRequester,
+                            onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                            onAttach = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                                showMediaPicker = !showMediaPicker
+                                showStickerSheet = false
+                            },
+                            onStickerClick = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                                showStickerSheet = !showStickerSheet
+                                showMediaPicker = false
+                            },
+                            onCloseStickers = { showStickerSheet = false },
+                            onCloseMediaPicker = { showMediaPicker = false },
+                            onSend = {
+                                val t = inputText
+                                inputText = ""
+                                if (uiState.editingMessage != null) viewModel.saveEdit(t)
+                                else viewModel.sendText(t)
+                            },
+                            onStartRecord = { viewModel.startRecording() },
+                            onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
+                            onCancelRecord = { viewModel.cancelRecording() },
+                            onSendRecord = { viewModel.stopRecordingAndSend() },
+                            onClearReply = { viewModel.clearReply() },
+                            onCancelEdit = { viewModel.cancelEditing(); inputText = "" },
+                            onJoinChannel = { viewModel.joinChannel() },
+                            onStickerSelected = { packId, sticker ->
+                                viewModel.sendSticker(sticker = sticker, packId = packId, packName = "", packEmoji = "")
+                            },
+                            onOpenAudioPicker = {
+                                showMediaPicker = false
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                                audioPicker.launch("audio/*")
+                            },
+                            onOpenEditor = { uri ->
+                                showMediaPicker = false
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                                editorUri = uri
+                            },
+                            onMediaSelected = { items ->
+                                showMediaPicker = false
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                                if (items.isNotEmpty()) {
+                                    if (items.size == 1) {
+                                        val item = items.first()
+                                        if (item.type == MediaType.VIDEO) {
+                                            viewModel.sendVideo(item.uri)
+                                        } else {
+                                            viewModel.sendImage(item.uri)
+                                        }
+                                    } else {
+                                        val photosOnly = items.filter { it.type == MediaType.IMAGE }.map { it.uri }
+                                        if (photosOnly.isNotEmpty()) {
+                                            viewModel.onImagesPicked(photosOnly)
+                                        } else {
+                                            val firstVideo = items.firstOrNull { it.type == MediaType.VIDEO }
+                                            firstVideo?.let { viewModel.sendVideo(it.uri) }
+                                        }
+                                    }
+                                }
+                            },
+                            onPhotoTaken = { uri ->
+                                showMediaPicker = false
+                                editorUri = uri
+                            },
+                            onVideoRecorded = { uri ->
+                                showMediaPicker = false
+                                viewModel.sendVideo(uri)
+                            }
+                        )
+                    } else {
+                        ChatBottomBar(
+                            uiState = uiState, inputText = inputText,
+                            canSendMessage = canSendMessage, canSendMedia = canSendMedia,
+                            hapticEnabled = hapticEnabled, showStickerSheet = showStickerSheet,
+                            audioPermission = audioPermission, focusRequester = inputFocusRequester,
+                            onInputChange = { inputText = it; viewModel.onTextChanged(it) },
+                            onAttach = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                                showMediaPicker = true
+                            },
+                            onStickerClick = { showStickerSheet = true },
+                            onSend = {
+                                val t = inputText
+                                inputText = ""
+                                if (uiState.editingMessage != null) viewModel.saveEdit(t)
+                                else viewModel.sendText(t)
+                            },
+                            onStartRecord = { viewModel.startRecording() },
+                            onRequestAudioPerm = { audioPermission.launchPermissionRequest() },
+                            onCancelRecord = { viewModel.cancelRecording() },
+                            onSendRecord = { viewModel.stopRecordingAndSend() },
+                            onClearReply = { viewModel.clearReply() },
+                            onCancelEdit = { viewModel.cancelEditing(); inputText = "" },
+                            onJoinChannel = { viewModel.joinChannel() }
+                        )
+                    }
                 }
             ) { innerPadding ->
                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
@@ -529,7 +623,7 @@ fun ChatScreen(
         )
     }
 
-    if (showStickerSheet) {
+    if (showStickerSheet && !isLiquidEnabled) {
         StickerPickerBottomSheet(
             onDismiss = { showStickerSheet = false },
             onStickerSelected = { packId, sticker ->
@@ -637,7 +731,7 @@ fun ChatScreen(
         )
     }
 
-    if (showMediaPicker) {
+    if (showMediaPicker && !isLiquidEnabled) {
         VlMediaPickerSheet(
             onDismiss = {
                 showMediaPicker = false

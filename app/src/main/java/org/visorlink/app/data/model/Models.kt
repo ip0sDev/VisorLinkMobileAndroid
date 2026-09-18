@@ -835,13 +835,9 @@ data class FeedItem(
             val bestUrl = url ?: media_url ?: mediaUrl ?: image_url
             if (!bestUrl.isNullOrEmpty()) return bestUrl
 
-            val bestCdnId = cdnMediaId ?: cdn_media_id
-            if (!bestCdnId.isNullOrEmpty()) return "https://api.visorlink.org/p/$bestCdnId"
-
             val firstAlbum = images?.firstOrNull()
             if (firstAlbum != null) {
                 if (!firstAlbum.url.isNullOrEmpty()) return firstAlbum.url
-                if (!firstAlbum.cdnMediaId.isNullOrEmpty()) return "https://api.visorlink.org/p/${firstAlbum.cdnMediaId}"
             }
             return null
         }
@@ -856,16 +852,7 @@ data class FeedItem(
             authorData?.avatarUrl ?: authorData?.avatar_url ?:
             author_avatar_url ?: authorAvatarUrl
 
-            if (!url.isNullOrEmpty()) return url
-
-            val cdnId = channelData?.cdnMediaId ?: channelData?.cdn_media_id ?:
-            channel_data?.cdnMediaId ?: channel_data?.cdn_media_id ?:
-            authorData?.cdnMediaId ?: authorData?.cdn_media_id ?:
-            author_avatar_url // sometimes the ID is in the avatar_url field if it's just the ID
-
-            if (!cdnId.isNullOrEmpty() && !cdnId.startsWith("http")) {
-                return "https://api.visorlink.org/p/$cdnId"
-            }
+            if (!url.isNullOrEmpty() && url.startsWith("http")) return url
             return null
         }
 

@@ -97,29 +97,20 @@ class AuthRepository(
             }
         }
 
-        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
-            try {
-                api.syncUser(SyncUserRequest(username = username.trim()))
-            } catch (e: Exception) {
-                cleanupOrphanAccount()
-                throw e
+        try {
+            val profileParams = mutableMapOf<String, Any>("username" to username.trim())
+            if (!inviteCode.isNullOrBlank()) {
+                profileParams["inviteCode"] = inviteCode.trim()
             }
-        } else {
-            try {
-                val profileParams = mutableMapOf<String, Any>("username" to username.trim())
-                if (!inviteCode.isNullOrBlank()) {
-                    profileParams["inviteCode"] = inviteCode.trim()
-                }
-                functions
-                    .getHttpsCallable("createUserProfile")
-                    .call(profileParams)
-                    .await()
-            } catch (e: Exception) {
-                // CF already deleted the Auth account if username is taken.
-                // Attempt local cleanup as a safety net for other errors.
-                cleanupOrphanAccount()
-                throw mapFunctionsError(e)
-            }
+            functions
+                .getHttpsCallable("createUserProfile")
+                .call(profileParams)
+                .await()
+        } catch (e: Exception) {
+            // CF already deleted the Auth account if username is taken.
+            // Attempt local cleanup as a safety net for other errors.
+            cleanupOrphanAccount()
+            throw mapFunctionsError(e)
         }
 
         // Step 3 — send verification email
@@ -130,11 +121,6 @@ class AuthRepository(
     // ── Login ─────────────────────────────────────────────────────────────────
     suspend fun login(email: String, password: String) {
         auth.signInWithEmailAndPassword(email, password).await()
-        if (flagsRepository?.isBackendV2Enabled() == true && api != null) {
-            try {
-                api.syncUser(SyncUserRequest())
-            } catch (_: Exception) {}
-        }
     }
 
 
