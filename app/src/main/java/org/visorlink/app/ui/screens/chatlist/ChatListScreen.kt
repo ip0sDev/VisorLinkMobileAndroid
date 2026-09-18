@@ -42,6 +42,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.calculateJellyScale
 import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import androidx.compose.ui.graphics.graphicsLayer
 
@@ -57,6 +58,7 @@ fun ChatListScreen(
     onFindChannel: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenFeed: () -> Unit,
+    isActive: Boolean = true,
     viewModel: ChatListViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel(),
     flagsRepository: FlagsRepository = koinInject()
@@ -82,6 +84,8 @@ fun ChatListScreen(
 
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
+    val triggerKey = remember(isActive, chats.isEmpty()) { "${isActive}_${chats.isNotEmpty()}" }
+
     LaunchedEffect(chats) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             chats.forEach { chat ->
@@ -94,9 +98,15 @@ fun ChatListScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
         topBar = {
             val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
             if (isLiquidEnabled) {
+                LaunchedEffect(triggerKey) {
+                    if (isActive) {
+                        topBarJelly.pulse(0.08f)
+                    }
+                }
                 LaunchedEffect(syncState) {
                     topBarJelly.pulse(0.06f)
                 }
@@ -224,13 +234,8 @@ fun ChatListScreen(
         ) {
             VlAmbientGlow()
 
-            AnimatedContent(
-                targetState = chats.isEmpty(),
-                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
-                label = "list_empty_toggle"
-            ) { isEmpty ->
-                if (isEmpty) {
-                    Column(
+            if (chats.isEmpty()) {
+                Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
@@ -257,6 +262,11 @@ fun ChatListScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .liquidPillCardSlideOut(
+                                            index = 0,
+                                            enabled = isLiquidEnabled,
+                                            triggerKey = triggerKey
+                                        )
                                         .padding(horizontal = 12.dp)
                                         .padding(bottom = 12.dp)
                                         .background(cs.surfaceContainerLow, shape)
@@ -319,18 +329,28 @@ fun ChatListScreen(
                             // 📌 SAVED MESSAGES
                             item(key = "saved_messages") {
                                 val savedChat = viewModel.savedMessagesEntry
-                                ChatListItem(
-                                    chat = savedChat,
-                                    chatType = ChatType.DIRECT,
-                                    currentUid = viewModel.currentUid,
-                                    otherProfile = null,
-                                    draftText = drafts[savedChat.id],
-                                    unreadCount = 0,
-                                    isSavedMessages = true,
-                                    isCompactList = false,
-                                    isTyping = false,
-                                    onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .liquidPillCardSlideOut(
+                                            index = 0,
+                                            enabled = isLiquidEnabled,
+                                            triggerKey = triggerKey
+                                        )
+                                ) {
+                                    ChatListItem(
+                                        chat = savedChat,
+                                        chatType = ChatType.DIRECT,
+                                        currentUid = viewModel.currentUid,
+                                        otherProfile = null,
+                                        draftText = drafts[savedChat.id],
+                                        unreadCount = 0,
+                                        isSavedMessages = true,
+                                        isCompactList = false,
+                                        isTyping = false,
+                                        onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
+                                    )
+                                }
                                 Spacer(Modifier.height(8.dp))
                             }
                             itemsIndexed(
@@ -344,25 +364,34 @@ fun ChatListScreen(
                                     else -> chat.id
                                 }
 
-                                ChatListItem(
-                                    chat = chat,
-                                    chatType = chatType,
-                                    currentUid = viewModel.currentUid,
-                                    otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
-                                    draftText = drafts[chat.id],
-                                    unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
-                                    isCompactList = compactList,
-                                    isTyping = typingMap[chat.id] == true,
-                                    onClick = {
-                                        if (chat.isForumActive) onOpenTopicList(chat.id)
-                                        else onOpenChat(chat.id, otherUid)
-                                    }
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .liquidPillCardSlideOut(
+                                            index = index + 1,
+                                            enabled = isLiquidEnabled,
+                                            triggerKey = triggerKey
+                                        )
+                                ) {
+                                    ChatListItem(
+                                        chat = chat,
+                                        chatType = chatType,
+                                        currentUid = viewModel.currentUid,
+                                        otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                        draftText = drafts[chat.id],
+                                        unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
+                                        isCompactList = compactList,
+                                        isTyping = typingMap[chat.id] == true,
+                                        onClick = {
+                                            if (chat.isForumActive) onOpenTopicList(chat.id)
+                                            else onOpenChat(chat.id, otherUid)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
             // FAB Menu Overlay
             if (showFabMenu) {

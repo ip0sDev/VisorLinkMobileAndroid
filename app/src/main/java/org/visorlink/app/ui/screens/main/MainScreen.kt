@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.main
 
 import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -25,9 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,6 +71,14 @@ fun MainScreen(
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    BackHandler(enabled = selectedTab != 0) {
+        selectedTab = 0
+    }
+
+    val onSelectTab = remember { { tab: Int -> selectedTab = tab } }
+    val onOpenDiaryTab = remember { { selectedTab = 2 } }
+    val onOpenMusicTab = remember { { selectedTab = 3 } }
     
     val context = LocalContext.current
     LaunchedEffect(Unit) {
@@ -145,53 +156,68 @@ fun MainScreen(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    when (selectedTab) {
-                        0 -> ChatListScreen(
-                            onOpenChat = onOpenChat,
-                            onOpenTopicList = onOpenTopicList,
-                            onOpenSearch = onOpenSearch,
-                            onOpenProfile = onOpenProfile,
-                            onOpenSettings = onOpenSettings,
-                            onCreateChat = onCreateChat,
-                            onFindChannel = onFindChannel,
-                            onOpenNotifications = onOpenNotifications,
-                            onOpenFeed = { if (discoverEnabled) selectedTab = 1 }
-                        )
-                        1 -> if (discoverEnabled) {
-                            FeedScreen(
-                                onNavigateBack = { selectedTab = 0 },
-                                onOpenChannel = onOpenChannel,
-                                onOpenComments = onOpenComments,
-                                onOpenImageViewer = onOpenImageViewer
-                            )
-                        } else {
-                            selectedTab = 0
+                // Вкладка чатов (Главная) сохраняется в дереве композиции, чтобы исключить
+                // пересоздание верстки, сброс скролла и мигание полупрозрачного стекла навбара при возврате на главную.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            alpha = if (selectedTab == 0) 1f else 0f
                         }
-                        2 -> if (diaryEnabled) {
-                            val chatListEntry = LocalViewModelStoreOwner.current
-                            val diaryVm: org.visorlink.app.ui.screens.diary.DiaryViewModel = if (chatListEntry != null) {
-                                koinViewModel(viewModelStoreOwner = chatListEntry)
+                        .zIndex(if (selectedTab == 0) 0f else -1f)
+                ) {
+                    ChatListScreen(
+                        onOpenChat = onOpenChat,
+                        onOpenTopicList = onOpenTopicList,
+                        onOpenSearch = onOpenSearch,
+                        onOpenProfile = onOpenProfile,
+                        onOpenSettings = onOpenSettings,
+                        onCreateChat = onCreateChat,
+                        onFindChannel = onFindChannel,
+                        onOpenNotifications = onOpenNotifications,
+                        onOpenFeed = { if (discoverEnabled) selectedTab = 1 },
+                        isActive = selectedTab == 0
+                    )
+                }
+
+                if (selectedTab != 0) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when (selectedTab) {
+                            1 -> if (discoverEnabled) {
+                                FeedScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    onOpenChannel = onOpenChannel,
+                                    onOpenComments = onOpenComments,
+                                    onOpenImageViewer = onOpenImageViewer
+                                )
                             } else {
-                                koinViewModel()
+                                selectedTab = 0
                             }
-                            DiaryScreen(
-                                onNavigateBack = { selectedTab = 0 },
-                                onAddEntry = onAddDiaryEntry,
-                                onEditEntry = onEditDiaryEntry,
-                                viewModel = diaryVm
-                            )
-                        } else {
-                            selectedTab = 0
-                        }
-                        3 -> if (musicEnabled) {
-                            val musicVm: MusicViewModel = koinViewModel()
-                            MusicLibraryScreen(
-                                viewModel = musicVm,
-                                onNavigateBack = { selectedTab = 0 }
-                            )
-                        } else {
-                            selectedTab = 0
+                            2 -> if (diaryEnabled) {
+                                val chatListEntry = LocalViewModelStoreOwner.current
+                                val diaryVm: org.visorlink.app.ui.screens.diary.DiaryViewModel = if (chatListEntry != null) {
+                                    koinViewModel(viewModelStoreOwner = chatListEntry)
+                                } else {
+                                    koinViewModel()
+                                }
+                                DiaryScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    onAddEntry = onAddDiaryEntry,
+                                    onEditEntry = onEditDiaryEntry,
+                                    viewModel = diaryVm
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
+                            3 -> if (musicEnabled) {
+                                val musicVm: MusicViewModel = koinViewModel()
+                                MusicLibraryScreen(
+                                    viewModel = musicVm,
+                                    onNavigateBack = { selectedTab = 0 }
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
                         }
                     }
                 }
@@ -234,12 +260,12 @@ fun MainScreen(
 
                         VlNavigationBar(
                             selectedTab = selectedTab,
-                            onTabSelected = { selectedTab = it },
+                            onTabSelected = onSelectTab,
                             diaryEnabled = diaryEnabled,
                             discoverEnabled = discoverEnabled,
                             musicEnabled = musicEnabled,
-                            onOpenDiary = { selectedTab = 2 },
-                            onOpenMusic = { selectedTab = 3 }
+                            onOpenDiary = onOpenDiaryTab,
+                            onOpenMusic = onOpenMusicTab
                         )
                     }
                 }

@@ -2,8 +2,9 @@ package org.visorlink.app.ui.components
 
 import android.os.Build
 import android.util.Patterns
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -33,6 +34,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
@@ -123,9 +125,10 @@ fun ColorPresetCircle(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val isLiquidEnabled = rememberLiquidEnabled()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else if (isSelected) 1.25f else 1f,
-        animationSpec = VlTheme.tokens.motion.motionSpec<Float>(),
+        animationSpec = if (isLiquidEnabled) spring(dampingRatio = 0.58f, stiffness = 320f) else VlTheme.tokens.motion.motionSpec<Float>(),
         label = "scale"
     )
 
@@ -278,8 +281,9 @@ fun VlSwitch(
 ) {
     val haptic = rememberHaptic()
     val tokens = VlTheme.tokens
+    val isLiquidEnabled = rememberLiquidEnabled()
 
-    if (!tokens.structure.enabled) {
+    if (!tokens.structure.enabled && !isLiquidEnabled) {
         Switch(
             checked = checked,
             onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(it) },
@@ -294,9 +298,34 @@ fun VlSwitch(
     val thumbSize = 24.dp
     val trackShape = tokens.shapes.pill
 
+    val trackJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.65f)
+    val thumbStretch = remember { Animatable(0f) }
+
+    LaunchedEffect(checked) {
+        if (isLiquidEnabled) {
+            trackJelly.pulse(0.08f)
+            // Фаза полёта: быстрое растяжение бегунка в каплю вдоль оси X
+            thumbStretch.animateTo(0.26f, tween(65, easing = FastOutSlowInEasing))
+            // Пружинный отскок с перелётом в сжатие (squash) и мягкой стабилизацией
+            thumbStretch.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = 0.52f,
+                    stiffness = 300f
+                )
+            )
+        } else {
+            thumbStretch.snapTo(0f)
+        }
+    }
+
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) trackWidth - thumbSize - 4.dp else 4.dp,
-        animationSpec = VlTheme.tokens.motion.motionSpec<Dp>(),
+        animationSpec = if (isLiquidEnabled) {
+            spring(dampingRatio = 0.60f, stiffness = 340f)
+        } else {
+            tokens.motion.motionSpec<Dp>()
+        },
         label = "vlswitch_thumb",
     )
     val thumbColor by animateColorAsState(
@@ -307,6 +336,7 @@ fun VlSwitch(
 
     Box(
         modifier = modifier
+            .liquidJelly(trackJelly, enabled = isLiquidEnabled)
             .size(width = trackWidth, height = trackHeight)
             .clip(trackShape)
             .background(if (checked) cs.primaryContainer else cs.surfaceContainer, trackShape)
@@ -314,13 +344,26 @@ fun VlSwitch(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(!checked) },
+            ) {
+                haptic.perform(HapticType.SELECTION, hapticEnabled)
+                if (isLiquidEnabled) {
+                    trackJelly.press(0.06f)
+                }
+                onCheckedChange(!checked)
+            },
         contentAlignment = Alignment.CenterStart,
     ) {
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .size(thumbSize)
+                .graphicsLayer {
+                    if (isLiquidEnabled) {
+                        val s = thumbStretch.value
+                        scaleX = 1f + s
+                        scaleY = 1f - (s * 0.55f)
+                    }
+                }
                 .vlRaised(tokens.structure, tokens.shapes.indicator)
                 .clip(tokens.shapes.indicator)
                 .background(thumbColor, tokens.shapes.indicator)
@@ -504,7 +547,25 @@ fun VlSettingsSection(
         // §7: карточка = neumorphic-raised + нейтральная грань. Это контейнер всех
         // настроек, поэтому именно здесь рельеф даёт максимум читаемости структуры.
         val tokens = VlTheme.tokens
-        val sectionShape = RoundedCornerShape(24.dp)
+        val isLiquidEnabled = rememberLiquidEnabled()
+        val sectionShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else RoundedCornerShape(24.dp)
+        val isDark = cs.surface.luminance() < 0.5f
+
+        val cardBrush = remember(isLiquidEnabled, isDark, cs) {
+            if (isLiquidEnabled) {
+                val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+                val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
+                Brush.verticalGradient(listOf(top, bottom))
+            } else null
+        }
+        val cardBorder = remember(isLiquidEnabled, isDark, cs) {
+            if (isLiquidEnabled) {
+                val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.60f)
+                val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+                BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
+            } else null
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -514,12 +575,16 @@ fun VlSettingsSection(
                     else Modifier
                 )
                 .clip(sectionShape)
-                .background(
-                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
-                    sectionShape,
+                .then(
+                    if (cardBrush != null) Modifier.background(cardBrush, sectionShape)
+                    else Modifier.background(
+                        if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
+                        sectionShape,
+                    )
                 )
                 .then(
-                    if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, sectionShape)
+                    if (cardBorder != null) Modifier.border(cardBorder, sectionShape)
+                    else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, sectionShape)
                     else Modifier
                 )
         ) {
@@ -553,6 +618,8 @@ fun VlSettingsItem(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
+    val isLiquidEnabled = rememberLiquidEnabled()
+    val iconShape = if (isLiquidEnabled) RoundedCornerShape(14.dp) else CircleShape
 
     val color = iconColor ?: if (isDestructive) cs.error else cs.primary
 
@@ -573,11 +640,20 @@ fun VlSettingsItem(
             ),
         color = Color.Transparent,
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = if (isLiquidEnabled) 15.dp else 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
-                Modifier.size(40.dp).background(color.copy(alpha = 0.15f), CircleShape),
+                Modifier
+                    .size(if (isLiquidEnabled) 42.dp else 40.dp)
+                    .background(color.copy(alpha = if (isLiquidEnabled) 0.16f else 0.15f), iconShape),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, contentDescription = title, tint = color, modifier = Modifier.size(20.dp)) }
+            ) {
+                Icon(icon, contentDescription = title, tint = color, modifier = Modifier.size(if (isLiquidEnabled) 22.dp else 20.dp))
+            }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = if (isDestructive) color else cs.onSurface)
@@ -608,24 +684,96 @@ fun VlOptionRow(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
+    val isLiquidEnabled = rememberLiquidEnabled()
+    val iconShape = if (isLiquidEnabled) RoundedCornerShape(14.dp) else CircleShape
+
+    val rowShape: Shape = if (isLiquidEnabled) {
+        RoundedCornerShape(20.dp)
+    } else {
+        RoundedCornerShape(12.dp)
+    }
+
+    val rowJelly = rememberLiquidJellyState(softness = 0.06f, damping = 0.68f)
+
+    val targetBgColor = if (selected) {
+        if (isLiquidEnabled) cs.primary.copy(alpha = 0.15f) else cs.primaryContainer
+    } else {
+        Color.Transparent
+    }
+    val animatedBg by animateColorAsState(
+        targetValue = targetBgColor,
+        animationSpec = spring(dampingRatio = 0.70f, stiffness = 380f),
+        label = "option_row_bg"
+    )
+
+    val rowBorder = if (selected && isLiquidEnabled) {
+        BorderStroke(1.dp, cs.primary.copy(alpha = 0.30f))
+    } else null
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
-        color = if (selected) cs.primaryContainer else Color.Transparent,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .liquidJelly(rowJelly, enabled = isLiquidEnabled)
+            .clip(rowShape)
+            .then(if (rowBorder != null) Modifier.border(rowBorder, rowShape) else Modifier),
+        shape = rowShape,
+        onClick = {
+            haptic.perform(HapticType.CLICK, hapticEnabled)
+            if (isLiquidEnabled) rowJelly.pulse(0.06f)
+            onClick()
+        },
+        color = animatedBg,
     ) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
-                Modifier.size(40.dp)
-                    .background(if (selected) cs.primary.copy(alpha = 0.15f) else cs.surfaceContainerHigh, CircleShape),
+                Modifier
+                    .size(if (isLiquidEnabled) 42.dp else 40.dp)
+                    .background(
+                        if (selected) cs.primary.copy(alpha = 0.22f) else cs.surfaceContainerHigh,
+                        iconShape
+                    ),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, contentDescription = label, tint = if (selected) cs.primary else cs.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = label,
+                    tint = if (selected) cs.primary else cs.onSurfaceVariant,
+                    modifier = Modifier.size(if (isLiquidEnabled) 22.dp else 20.dp)
+                )
+            }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(label, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = if (selected) cs.onPrimaryContainer else cs.onSurface)
-                desc?.let { Text(it, fontSize = 13.sp, color = if (selected) cs.onPrimaryContainer.copy(alpha = 0.7f) else cs.onSurfaceVariant) }
+                Text(
+                    label,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    color = if (selected) cs.primary else cs.onSurface
+                )
+                desc?.let {
+                    Text(
+                        it,
+                        fontSize = 13.sp,
+                        color = if (selected) cs.primary.copy(alpha = 0.8f) else cs.onSurfaceVariant
+                    )
+                }
             }
-            if (selected) Icon(Icons.Default.CheckCircle, contentDescription = "Selected", tint = cs.primary)
+            AnimatedVisibility(
+                visible = selected,
+                enter = scaleIn(spring(dampingRatio = 0.55f, stiffness = 340f)) + fadeIn(),
+                exit = scaleOut(spring(dampingRatio = 0.7f, stiffness = 400f)) + fadeOut()
+            ) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    contentDescription = "Selected",
+                    tint = cs.primary
+                )
+            }
         }
     }
 }

@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -52,6 +53,11 @@ import org.visorlink.app.data.model.AlbumImage
 import org.visorlink.app.data.model.AlbumImageLocal
 import org.visorlink.app.ui.components.VlTextField
 import org.visorlink.app.ui.components.VlButton
+import org.visorlink.app.ui.components.liquidDragStretch
+import org.visorlink.app.ui.components.liquidPopIn
+import org.visorlink.app.ui.components.rememberLiquidEnabled
+import org.visorlink.app.ui.components.rememberLiquidPopProgress
+import org.visorlink.app.ui.components.rubberBand
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.rememberHaptic
@@ -77,9 +83,13 @@ fun WallpaperBottomSheet(
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
+        val isLiquidEnabled = rememberLiquidEnabled()
+        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.68f, stiffness = 480f)
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .liquidPopIn(popProgress, isLiquidEnabled, TransformOrigin(0.5f, 1f))
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp, top = 8.dp)
         ) {
@@ -134,8 +144,15 @@ fun AlbumPreviewSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         containerColor = MaterialTheme.colorScheme.surface
     ) {
+        val isLiquidEnabled = rememberLiquidEnabled()
+        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.68f, stiffness = 480f)
+
         Column(
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
+            modifier = Modifier
+                .fillMaxWidth()
+                .liquidPopIn(popProgress, isLiquidEnabled, TransformOrigin(0.5f, 1f))
+                .navigationBarsPadding()
+                .imePadding()
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
@@ -245,6 +262,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
     val swipeOffset = remember { Animatable(0f) }
     val dismissThreshold = 300f
     val isDismissing = remember { mutableStateOf(false) }
+    val isLiquidEnabled = rememberLiquidEnabled()
 
     Dialog(
         onDismissRequest = { if (!isDismissing.value) onDismiss() },
@@ -291,7 +309,9 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                                 var initialOffsetX = 0f
                                 var initialOffsetY = 0f
                                 var initialCentroid = Offset.Zero
-                                
+                                // Сырое смещение до резинки: именно его копит палец
+                                var rawSwipeY = swipeOffset.value
+
                                 do {
                                     val event = awaitPointerEvent()
                                     val changes = event.changes
@@ -353,13 +373,36 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                                         } else {
                                             // Scale == 1f: проверяем вертикальный свайп для закрытия
                                             if (abs(pan.y) > abs(pan.x) * 2f && abs(pan.y) > 5.dp.toPx()) {
-                                                scope.launch { swipeOffset.snapTo(swipeOffset.value + pan.y) }
+                                                rawSwipeY += pan.y
+                                                val target = if (isLiquidEnabled) {
+                                                    // У порога закрытия картинка вязнет, как капля перед отрывом
+                                                    rubberBand(rawSwipeY, dismissThreshold, dismissThreshold * 0.8f)
+                                                } else {
+                                                    swipeOffset.value + pan.y
+                                                }
+                                                scope.launch { swipeOffset.snapTo(target) }
                                                 change.consume()
                                             }
                                             // Горизонтальный свайп НЕ потребляем - уходит в HorizontalPager
                                         }
                                     }
                                 } while (changes.any { it.pressed })
+
+                                // Палец отпущен: за порогом закрываем, иначе упруго возвращаем на место
+                                if (!isDismissing.value && abs(swipeOffset.value) > 0.5f) {
+                                    if (abs(swipeOffset.value) > dismissThreshold) {
+                                        isDismissing.value = true
+                                        onDismiss()
+                                    } else {
+                                        scope.launch {
+                                            swipeOffset.animateTo(
+                                                0f,
+                                                if (isLiquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+                                                else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                         .pointerInput(Unit) {
@@ -385,6 +428,13 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                         contentScale = ContentScale.Fit,
                         modifier = Modifier
                             .fillMaxSize()
+                            .liquidDragStretch(
+                                dragPx = swipeOffset.value,
+                                referencePx = dismissThreshold,
+                                enabled = isLiquidEnabled && scale <= 1f,
+                                maxStretch = 0.08f,
+                                vertical = true
+                            )
                             .graphicsLayer {
                                 scaleX = animatedScale
                                 scaleY = animatedScale

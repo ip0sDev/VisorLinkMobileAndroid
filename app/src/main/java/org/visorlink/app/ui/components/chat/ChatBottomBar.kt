@@ -2,7 +2,9 @@ package org.visorlink.app.ui.components.chat
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -20,8 +22,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +38,8 @@ import org.koin.compose.koinInject
 import org.visorlink.app.R
 import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.liquidRevealEnter
+import org.visorlink.app.ui.components.liquidRevealExit
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
@@ -174,24 +181,61 @@ fun ChatBottomBar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 8.dp)
+                .navigationBarsPadding()
+                .imePadding()
+                .graphicsLayer { clip = false }
         ) {
             val panelShape = tokens.shapes.inputPanel
+            val isDark = cs.surface.luminance() < 0.5f
+            val panelBrush = remember(isDark, cs, tokens) {
+                if (tokens.isBiolume) {
+                    val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+                    val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.90f) else cs.surfaceContainer.copy(alpha = 0.92f)
+                    Brush.verticalGradient(listOf(topColor, bottomColor))
+                } else if (tokens.isForge) {
+                    Brush.verticalGradient(listOf(cs.surfaceContainerHigh, cs.surfaceContainerHigh))
+                } else {
+                    Brush.verticalGradient(listOf(cs.surfaceContainerLow, cs.surfaceContainerLow))
+                }
+            }
+            val panelBorder = remember(isDark, cs, tokens) {
+                if (tokens.isBiolume) {
+                    val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.50f)
+                    val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+                    BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
+                } else {
+                    BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.25f))
+                }
+            }
+
+            // Панель ввода слегка пружинит, принимая цитату реплая или блок редактирования
+            val panelJelly = rememberLiquidJellyState(softness = 0.05f, damping = 0.62f, stiffness = 340f)
+            if (isLiquidEnabled) {
+                LaunchedEffect(uiState.replyingTo?.id, uiState.editingMessage?.id) {
+                    panelJelly.pulse(0.05f)
+                }
+            }
+
+            // Спецификации «вылезания» вложенных баннеров: жидкие под флагом, штатные без него
+            val bannerEnter = if (isLiquidEnabled) liquidRevealEnter() else expandVertically() + fadeIn()
+            val bannerExit = if (isLiquidEnabled) liquidRevealExit() else shrinkVertically() + fadeOut()
+
             Column(
                 modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { clip = false }
+                    .liquidJelly(panelJelly, enabled = isLiquidEnabled)
                     .then(
                         if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                         else Modifier
                     )
                     .clip(panelShape)
-                    .background(cs.surfaceContainerLow)
-                    .then(
-                        if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, panelShape)
-                        else Modifier
-                    )
+                    .background(panelBrush, panelShape)
+                    .border(panelBorder, panelShape)
                     .padding(4.dp)
             ) {
-                AnimatedVisibility(visible = uiState.replyingTo != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                AnimatedVisibility(visible = uiState.replyingTo != null, enter = bannerEnter, exit = bannerExit) {
                     uiState.replyingTo?.let { msg ->
                         // Цитата «принимает» контент чужого сообщения → inset (§4.1).
                         val quoteShape = tokens.shapes.card
@@ -222,7 +266,7 @@ fun ChatBottomBar(
                     }
                 }
 
-                AnimatedVisibility(visible = uiState.editingMessage != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+                AnimatedVisibility(visible = uiState.editingMessage != null, enter = bannerEnter, exit = bannerExit) {
                     uiState.editingMessage?.let { msg ->
                         val quoteShape = tokens.shapes.card
                         Box(
@@ -249,15 +293,19 @@ fun ChatBottomBar(
                     }
                 }
 
-                AnimatedVisibility(visible = uiState.isUploading, enter = expandVertically(), exit = shrinkVertically()) {
+                AnimatedVisibility(
+                    visible = uiState.isUploading,
+                    enter = if (isLiquidEnabled) liquidRevealEnter() else expandVertically(),
+                    exit = if (isLiquidEnabled) liquidRevealExit() else shrinkVertically()
+                ) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(tokens.shapes.indicator), color = cs.primary, trackColor = Color.Transparent)
                 }
 
                 // ── AI Bot Concurrency Banner ─────────────────────────────────
                 AnimatedVisibility(
                     visible = uiState.isBotGenerating,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
+                    enter = bannerEnter,
+                    exit = bannerExit
                 ) {
                     Surface(
                         color = cs.primaryContainer.copy(alpha = 0.4f),
@@ -295,7 +343,10 @@ fun ChatBottomBar(
                         val isBot = uiState.otherUser?.isBot == true
                         val maxChars = if (isBot) 600 else 2000
 
-                        Row(verticalAlignment = Alignment.Bottom) {
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            modifier = Modifier.graphicsLayer { clip = false }
+                        ) {
                             if (canSendMedia) {
                                 IconButton(
                                     onClick = onAttach,
@@ -378,10 +429,15 @@ fun ChatBottomBar(
                             AnimatedContent(
                                 targetState = isSendMode,
                                 transitionSpec = {
-                                    scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn() togetherWith scaleOut(spring(stiffness = Spring.StiffnessHigh)) + fadeOut()
+                                    (scaleIn(spring(Spring.DampingRatioLowBouncy)) + fadeIn())
+                                        .togetherWith(scaleOut(spring(stiffness = Spring.StiffnessHigh)) + fadeOut())
+                                        .using(SizeTransform(clip = false))
                                 },
                                 label = "send_mic",
-                                modifier = Modifier.padding(bottom = 2.dp)
+                                modifier = Modifier
+                                    .padding(bottom = 2.dp)
+                                    .zIndex(10f)
+                                    .graphicsLayer { clip = false }
                             ) { hasTextOrEdit ->
                                 val sendEnabled = !uiState.isCooldown && !uiState.isBotGenerating && (!isBot || inputText.length <= 600)
                                 if (hasTextOrEdit) {
@@ -389,19 +445,23 @@ fun ChatBottomBar(
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
+                                            .graphicsLayer { clip = false }
                                             .scale(sendScale)
                                             .liquidJelly(sendBtnJelly, enabled = isLiquidEnabled)
                                             .then(
                                                 if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .clip(tokens.shapes.indicator)
-                                            .background(if (sendEnabled) cs.primary else cs.surfaceVariant)
+                                            .background(if (sendEnabled) cs.primary else cs.surfaceVariant, tokens.shapes.indicator)
                                             .then(
                                                 if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .clickable(enabled = sendEnabled) { 
+                                            .clickable(
+                                                enabled = sendEnabled,
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) { 
                                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                                 if (isLiquidEnabled) {
                                                     sendBtnJelly.pulse(0.09f)
@@ -416,18 +476,22 @@ fun ChatBottomBar(
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
+                                            .graphicsLayer { clip = false }
                                             .liquidJelly(sendBtnJelly, enabled = isLiquidEnabled)
                                             .then(
                                                 if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .clip(tokens.shapes.indicator)
-                                            .background(if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant)
+                                            .background(if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant, tokens.shapes.indicator)
                                             .then(
                                                 if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .clickable(enabled = !uiState.isCooldown && !uiState.isBotGenerating) {
+                                            .clickable(
+                                                enabled = !uiState.isCooldown && !uiState.isBotGenerating,
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) {
                                                 if (audioPermission.status.isGranted) {
                                                     haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
                                                     if (isLiquidEnabled) {

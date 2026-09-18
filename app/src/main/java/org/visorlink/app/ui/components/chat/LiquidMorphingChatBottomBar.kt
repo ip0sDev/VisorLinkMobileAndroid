@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -136,6 +137,7 @@ fun LiquidMorphingChatBottomBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer { clip = false }
             .liquidJelly(panelJelly, enabled = true)
             .then(
                 if (isExpanded) {
@@ -155,6 +157,7 @@ fun LiquidMorphingChatBottomBar(
     ) {
         AnimatedContent(
             targetState = currentMode,
+            modifier = Modifier.graphicsLayer { clip = false },
             transitionSpec = {
                 val springSpec = spring<IntSize>(
                     dampingRatio = 0.72f,
@@ -167,7 +170,7 @@ fun LiquidMorphingChatBottomBar(
                         initialOffsetY = { it / 4 }
                     ) + fadeIn(tween(160, delayMillis = 40)))
                         .togetherWith(fadeOut(tween(80)))
-                        .using(SizeTransform(clip = true) { _, _ -> springSpec })
+                        .using(SizeTransform(clip = false) { _, _ -> springSpec })
                 } else {
                     // Плавное схлопывание обратно в строку ввода
                     (fadeIn(tween(140, delayMillis = 40)))
@@ -175,7 +178,7 @@ fun LiquidMorphingChatBottomBar(
                             animationSpec = spring(dampingRatio = 0.75f, stiffness = 320f),
                             targetOffsetY = { it / 4 }
                         ) + fadeOut(tween(90)))
-                        .using(SizeTransform(clip = true) { _, _ -> springSpec })
+                        .using(SizeTransform(clip = false) { _, _ -> springSpec })
                 }
             },
             label = "liquid_bottom_bar_morph"

@@ -29,6 +29,7 @@ import androidx.fragment.app.FragmentActivity
 import org.visorlink.app.R
 import org.visorlink.app.data.model.*
 import org.visorlink.app.ui.components.VlAmbientGlow
+import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.saved.*
 import org.visorlink.app.ui.screens.chat.*
 import org.visorlink.app.ui.components.chat.*
@@ -90,6 +91,7 @@ fun SavedMessagesScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context  = LocalContext.current
     val haptic   = rememberHaptic()
+    val isLiquidEnabled = rememberLiquidEnabled()
 
     val themeVm: ThemeViewModel = koinViewModel()
     val listState   = rememberLazyListState()
@@ -277,6 +279,7 @@ fun SavedMessagesScreen(
                                 message       = msg,
                                 isMine        = true,
                                 hapticEnabled = hapticEnabled,
+                                liquidEnabled = isLiquidEnabled,
                                 onReply       = { }
                             ) {
                                 MessageBubble(

@@ -31,6 +31,7 @@ import org.visorlink.app.ui.theme.VisorLinkTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.theme.vlSignalGlow
 
 /**
@@ -89,8 +90,9 @@ private fun ThemePreviewCard(
 
     // Рамка выбора рисуется во ВНЕШНЕЙ теме — иначе выделение прыгало бы вместе
     // с палитрой превью и перестало бы читаться как элемент настроек.
+    val isLiquid = rememberLiquidEnabled()
     val outerCs = MaterialTheme.colorScheme
-    val outerShape = VlTheme.tokens.shapes.card
+    val outerShape = if (isLiquid) RoundedCornerShape(24.dp) else VlTheme.tokens.shapes.card
 
     Column(
         modifier = Modifier

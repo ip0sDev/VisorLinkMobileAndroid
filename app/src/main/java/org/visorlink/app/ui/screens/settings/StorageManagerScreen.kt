@@ -25,13 +25,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.VlSurface
+import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.liquidPillCardSlideOut
+import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +51,17 @@ fun StorageManagerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+
+    val flagsRepository: FlagsRepository = koinInject()
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+
+    LaunchedEffect(Unit) {
+        if (isLiquidEnabled) {
+            topBarJelly.pulse(0.06f)
+        }
+    }
 
     val googleAuthLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -74,32 +91,41 @@ fun StorageManagerScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.storage_title), fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            VlAmbientGlow()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        VlAmbientGlow()
 
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                VlTopAppBar(
+                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    title = { Text(stringResource(R.string.storage_title), fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            viewModel.refresh()
+                        }) {
+                            Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
+                        }
+                    }
+                )
+            }
+        ) { padding ->
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 32.dp)
@@ -112,6 +138,8 @@ fun StorageManagerScreen(
                         isConnected = uiState.isConnected,
                         accountEmail = uiState.accountEmail,
                         isConnecting = uiState.isConnecting,
+                        modifier = Modifier.liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled),
+                        isLiquidEnabled = isLiquidEnabled,
                         onConnectClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             viewModel.connectGoogleDrive { pendingIntent ->
@@ -132,7 +160,10 @@ fun StorageManagerScreen(
 
                 // ── Firebase Storage Cloud Card ──────────────────────────────
                 item {
-                    FirebaseStorageCloudCard()
+                    FirebaseStorageCloudCard(
+                        modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
+                        isLiquidEnabled = isLiquidEnabled
+                    )
                 }
 
                 if (!uiState.error.isNullOrBlank()) {
@@ -173,12 +204,15 @@ private fun GoogleDriveStorageCard(
     accountEmail: String?,
     isConnecting: Boolean,
     onConnectClick: () -> Unit,
-    onDisconnectClick: () -> Unit
+    onDisconnectClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    isLiquidEnabled: Boolean = false
 ) {
     VlSurface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
+        customRadius = if (isLiquidEnabled) 32.dp else null,
         contentPadding = PaddingValues(20.dp)
     ) {
         Column {
@@ -314,11 +348,15 @@ private fun GoogleDriveStorageCard(
 }
 
 @Composable
-private fun FirebaseStorageCloudCard() {
+private fun FirebaseStorageCloudCard(
+    modifier: Modifier = Modifier,
+    isLiquidEnabled: Boolean = false
+) {
     VlSurface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
+        customRadius = if (isLiquidEnabled) 32.dp else null,
         contentPadding = PaddingValues(20.dp)
     ) {
         Column {

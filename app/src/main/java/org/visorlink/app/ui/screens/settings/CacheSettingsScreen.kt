@@ -20,13 +20,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlSurface
+import org.visorlink.app.ui.components.VlSwitch
+import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.liquidPillCardSlideOut
+import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.CacheSizeInfo
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.delay
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +47,17 @@ fun CacheSettingsScreen(
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
+    val flagsRepository: FlagsRepository = koinInject()
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+
+    LaunchedEffect(Unit) {
+        if (isLiquidEnabled) {
+            topBarJelly.pulse(0.06f)
+        }
+    }
+
     // Авто-сброс сообщения об успехе
     LaunchedEffect(state.successMessageRes) {
         if (state.successMessageRes != null) {
@@ -48,58 +66,61 @@ fun CacheSettingsScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.cache_title)) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                        onNavigateBack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        VlAmbientGlow()
+
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                VlTopAppBar(
+                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    title = { Text(stringResource(R.string.cache_title), fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            viewModel.refreshSizes()
+                        }) {
+                            Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
+                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                        viewModel.refreshSizes()
-                    }) {
-                        Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        },
-        snackbarHost = {
-            AnimatedVisibility(
-                visible = state.successMessageRes != null,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut()
-            ) {
-                Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
-                    Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.inverseSurface, tonalElevation = 4.dp) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.size(18.dp))
-                            Text(state.successMessageRes?.let { stringResource(it) } ?: "", color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium)
+                )
+            },
+            snackbarHost = {
+                AnimatedVisibility(
+                    visible = state.successMessageRes != null,
+                    enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                    exit  = slideOutVertically(targetOffsetY = { it }) + fadeOut()
+                ) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.BottomCenter) {
+                        Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.inverseSurface, tonalElevation = 4.dp) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.inverseOnSurface, modifier = Modifier.size(18.dp))
+                                Text(state.successMessageRes?.let { stringResource(it) } ?: "", color = MaterialTheme.colorScheme.inverseOnSurface, style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                 }
             }
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            VlAmbientGlow()
-
+        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -111,32 +132,38 @@ fun CacheSettingsScreen(
                 SectionHeader(stringResource(R.string.cache_section_usage))
 
                 CacheUsageCard(
-                    sizes     = state.sizes,
-                    isLoading = state.isLoading
+                    sizes           = state.sizes,
+                    isLoading       = state.isLoading,
+                    modifier        = Modifier.liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled),
+                    isLiquidEnabled = isLiquidEnabled
                 )
 
                 // ── Очистка ───────────────────────────────────────────────────────
                 SectionHeader(stringResource(R.string.cache_section_clear))
 
                 ClearActionsCard(
-                    isClearing    = state.isClearing,
-                    onClearImages = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
-                    onClearVoice  = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
-                    onClearAll    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() }
+                    isClearing      = state.isClearing,
+                    onClearImages   = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
+                    onClearVoice    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
+                    onClearAll      = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() },
+                    modifier        = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
+                    isLiquidEnabled = isLiquidEnabled
                 )
 
                 // ── Лимиты ────────────────────────────────────────────────────────
                 SectionHeader(stringResource(R.string.cache_section_limits))
 
                 LimitsCard(
-                    isUnlimited   = state.config.isUnlimited,
-                    imageLimitMb  = state.config.maxImageMb,
-                    voiceLimitMb  = state.config.maxVoiceMb,
-                    cacheDays     = state.config.chatCacheDays,
-                    onUnlimited   = { viewModel.setUnlimited(it) },
-                    onImageLimit  = { viewModel.setMaxImageMb(it) },
-                    onVoiceLimit  = { viewModel.setMaxVoiceMb(it) },
-                    onCacheDays   = { viewModel.setChatCacheDays(it) }
+                    isUnlimited     = state.config.isUnlimited,
+                    imageLimitMb    = state.config.maxImageMb,
+                    voiceLimitMb    = state.config.maxVoiceMb,
+                    cacheDays       = state.config.chatCacheDays,
+                    onUnlimited     = { viewModel.setUnlimited(it) },
+                    onImageLimit    = { viewModel.setMaxImageMb(it) },
+                    onVoiceLimit    = { viewModel.setMaxVoiceMb(it) },
+                    onCacheDays     = { viewModel.setChatCacheDays(it) },
+                    modifier        = Modifier.liquidPillCardSlideOut(index = 2, enabled = isLiquidEnabled),
+                    isLiquidEnabled = isLiquidEnabled
                 )
 
                 Spacer(modifier = Modifier.height(padding.calculateBottomPadding() + 32.dp))
@@ -146,9 +173,10 @@ fun CacheSettingsScreen(
 }
 
 @Composable
-private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean) {
+private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, modifier: Modifier = Modifier, isLiquidEnabled: Boolean = false) {
     VlSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        customRadius = if (isLiquidEnabled) 32.dp else null,
         contentPadding = PaddingValues(16.dp)
     ) {
         Column {
@@ -240,12 +268,15 @@ private fun ClearActionsCard(
     isClearing: Boolean,
     onClearImages: () -> Unit,
     onClearVoice: () -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    modifier: Modifier = Modifier,
+    isLiquidEnabled: Boolean = false
 ) {
     var showConfirmAll by remember { mutableStateOf(false) }
 
     VlSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        customRadius = if (isLiquidEnabled) 32.dp else null
     ) {
         Column {
             ClearButton(
@@ -344,10 +375,13 @@ private fun LimitsCard(
     onUnlimited: (Boolean) -> Unit,
     onImageLimit: (Int) -> Unit,
     onVoiceLimit: (Int) -> Unit,
-    onCacheDays:  (Int) -> Unit
+    onCacheDays:  (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    isLiquidEnabled: Boolean = false
 ) {
     VlSurface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        customRadius = if (isLiquidEnabled) 32.dp else null,
         contentPadding = PaddingValues(16.dp)
     ) {
         Column {
@@ -437,7 +471,7 @@ private fun SwitchRow(
             )
         }
 
-        Switch(
+        VlSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange
         )

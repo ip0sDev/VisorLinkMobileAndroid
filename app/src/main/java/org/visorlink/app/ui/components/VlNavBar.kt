@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -305,19 +306,31 @@ private fun NeumorphicLiquidNavBarContent(
     val activeIndex = navTabs.indexOfFirst { it.tabId == selectedTab }.coerceAtLeast(0)
     val pillShape: Shape = if (tokens.isForge) tokens.shapes.pill else CircleShape
 
-    var totalWidthPx by remember { mutableFloatStateOf(1f) }
-    val runnerLeft = remember { Animatable(-1f) }
-    val runnerWidth = remember { Animatable(-1f) }
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp.toFloat()
+    val initialEstimatedWidthDp = remember(screenWidthDp, tokens.isForge) {
+        val horizontalMargin = if (tokens.isForge) 0f else 48f
+        val innerPadding = 16f
+        (screenWidthDp - horizontalMargin - innerPadding).coerceAtLeast(100f)
+    }
+    val initialEstimatedWidthPx = with(density) { initialEstimatedWidthDp.dp.toPx() }
+
+    var totalWidthPx by remember { mutableFloatStateOf(initialEstimatedWidthPx) }
+
+    val initialSlot = remember(navTabs, activeIndex, initialEstimatedWidthDp) {
+        calculateTabSlots(navTabs, activeIndex, initialEstimatedWidthDp).getOrNull(activeIndex)
+    }
+    val initialLeftPx = with(density) { (initialSlot?.leftDp ?: 0f).dp.toPx() }
+    val initialWidthPx = with(density) { (initialSlot?.widthDp ?: 48f).dp.toPx() }
+
+    val runnerLeft = remember { Animatable(initialLeftPx) }
+    val runnerWidth = remember { Animatable(initialWidthPx) }
     val stretchAnim = remember { Animatable(0f) }
     var prevActiveIndex by remember { mutableIntStateOf(activeIndex) }
 
     val totalWidthDp = with(density) { totalWidthPx.toDp().value }
     val tabSlots = remember(navTabs, activeIndex, totalWidthDp) {
-        if (totalWidthDp > 10f) {
-            calculateTabSlots(navTabs, activeIndex, totalWidthDp)
-        } else {
-            emptyList()
-        }
+        calculateTabSlots(navTabs, activeIndex, totalWidthDp)
     }
 
     val activeSlot = tabSlots.getOrNull(activeIndex)
@@ -326,22 +339,17 @@ private fun NeumorphicLiquidNavBarContent(
         if (activeSlot != null) {
             val targetLeft = with(density) { activeSlot.leftDp.dp.toPx() }
             val targetWidth = with(density) { activeSlot.widthDp.dp.toPx() }
-            if (runnerLeft.value < 0f) {
-                runnerLeft.snapTo(targetLeft)
-                runnerWidth.snapTo(targetWidth)
-            } else {
-                launch {
-                    runnerLeft.animateTo(
-                        targetLeft,
-                        spring(dampingRatio = 0.72f, stiffness = 320f)
-                    )
-                }
-                launch {
-                    runnerWidth.animateTo(
-                        targetWidth,
-                        spring(dampingRatio = 0.72f, stiffness = 320f)
-                    )
-                }
+            launch {
+                runnerLeft.animateTo(
+                    targetLeft,
+                    spring(dampingRatio = 0.72f, stiffness = 320f)
+                )
+            }
+            launch {
+                runnerWidth.animateTo(
+                    targetWidth,
+                    spring(dampingRatio = 0.72f, stiffness = 320f)
+                )
             }
         }
     }
@@ -372,9 +380,9 @@ private fun NeumorphicLiquidNavBarContent(
             }
     ) {
         // Динамический жидкостный неоморфный бегунок с адаптивным размером
-        if (totalWidthPx > 10f && runnerLeft.value >= 0f) {
+        if (totalWidthPx > 10f) {
             val runnerLeftDp = with(density) { runnerLeft.value.toDp() }
-            val runnerWidthDp = with(density) { runnerWidth.value.toDp() }
+            val runnerWidthDp = with(density) { runnerWidth.value.toDp().coerceAtLeast(40.dp) }
             val scaleX = 1f + abs(stretchAnim.value) * 0.18f
             val scaleY = 1f - abs(stretchAnim.value) * 0.12f
 
@@ -386,6 +394,7 @@ private fun NeumorphicLiquidNavBarContent(
                     .graphicsLayer {
                         this.scaleX = scaleX
                         this.scaleY = scaleY
+                        this.clip = false
                     }
                     .vlRaised(tokens.structure, pillShape)
                     .clip(pillShape)
@@ -536,21 +545,40 @@ fun VlTabItem(
 
     val pillShape: Shape = if (tokens.isForge) tokens.shapes.pill else CircleShape
 
-    val pillModifier = if (tokens.isBiolume && selected) {
+    val selectionProgress by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "tab_selection_progress"
+    )
+
+    val pillModifier = if (tokens.isBiolume) {
+        val maxAlpha1 = if (isDark) 0.16f else 0.12f
+        val maxAlpha2 = if (isDark) 0.08f else 0.05f
+        val borderAlpha = if (isDark) 0.18f else 0.15f
+
         val pillGradient = Brush.horizontalGradient(
             listOf(
-                cs.primary.copy(alpha = if (isDark) 0.16f else 0.12f),
-                cs.primary.copy(alpha = if (isDark) 0.08f else 0.05f)
+                cs.primary.copy(alpha = maxAlpha1 * selectionProgress),
+                cs.primary.copy(alpha = maxAlpha2 * selectionProgress)
             )
         )
-        val pillBorder = BorderStroke(
-            1.dp,
-            if (isDark) cs.primary.copy(alpha = 0.18f) else cs.primary.copy(alpha = 0.15f)
-        )
+        val pillBorder = if (selectionProgress > 0.02f) {
+            BorderStroke(
+                1.dp,
+                cs.primary.copy(alpha = borderAlpha * selectionProgress)
+            )
+        } else null
+
         Modifier
             .clip(pillShape)
             .background(pillGradient)
-            .border(pillBorder, pillShape)
+            .then(
+                if (pillBorder != null) Modifier.border(pillBorder, pillShape)
+                else Modifier
+            )
     } else {
         Modifier
             .clip(pillShape)

@@ -287,9 +287,17 @@ fun ChatScreen(
                     model = chatBgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop, alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.6f else 0.8f
                 )
+            } else if (uiState.wallpaperUrl != null && !applyCustom) {
+                AsyncImage(
+                    model = uiState.wallpaperUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(), alpha = 0.5f
+                )
+            } else if (!applyCustom) {
+                VlAmbientGlow()
             }
             Scaffold(
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 snackbarHost = { SnackbarHost(snackbarHostState) },
                 topBar = {
                     Column {
@@ -429,22 +437,27 @@ fun ChatScreen(
                     }
                 }
             ) { innerPadding ->
-                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                    if (uiState.wallpaperUrl != null && !applyCustom) {
-                        AsyncImage(model = uiState.wallpaperUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(), alpha = 0.5f)
-                    } else if (!applyCustom) {
-                        VlAmbientGlow()
-                    }
-
+                Box(modifier = Modifier.fillMaxSize()) {
                     if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
-                        EmptyChatPlaceholder(modifier = Modifier.fillMaxSize())
+                        EmptyChatPlaceholder(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(
+                                    top = innerPadding.calculateTopPadding(),
+                                    bottom = innerPadding.calculateBottomPadding()
+                                )
+                        )
                     } else {
                         LazyColumn(
                             state = listState, reverseLayout = true,
                             userScrollEnabled = contextMenuData == null,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(12.dp),
+                            contentPadding = PaddingValues(
+                                top = innerPadding.calculateTopPadding() + 8.dp,
+                                bottom = innerPadding.calculateBottomPadding() + 8.dp,
+                                start = 12.dp,
+                                end = 12.dp
+                            ),
                         ) {
                             itemsIndexed(
                                 items = uiState.messageListItems.asReversed(),
@@ -470,6 +483,7 @@ fun ChatScreen(
                                         val isMine = item.message.senderId == viewModel.currentUid
                                         SwipeableMessage(
                                             message = item.message, isMine = isMine, hapticEnabled = hapticEnabled,
+                                            liquidEnabled = isLiquidEnabled,
                                             onReply = {
                                                 haptic.perform(HapticType.SELECTION, hapticEnabled)
                                                 viewModel.setReplyTo(item.message)
@@ -522,7 +536,14 @@ fun ChatScreen(
                     }
 
                     if (showScrollDown) {
-                        Box(modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(
+                                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                                    end = 16.dp
+                                )
+                        ) {
                             VlFab(
                                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
                                 icon = Icons.Default.KeyboardArrowDown,

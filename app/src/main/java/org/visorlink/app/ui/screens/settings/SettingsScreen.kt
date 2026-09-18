@@ -9,7 +9,13 @@ import androidx.biometric.BiometricManager
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlRaised
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -115,8 +121,9 @@ fun SettingsScreen(
     var isGeneratingTgCode by remember { mutableStateOf(false) }
     var tgError by remember { mutableStateOf<String?>(null) }
 
-    var showAdminPanel by remember { mutableStateOf(false) }
-    var showBotsManager by remember { mutableStateOf(false) }
+    var showDevMenuSheet by remember { mutableStateOf(false) }
+    var devTapCount by remember { mutableIntStateOf(0) }
+    var lastDevTapTime by remember { mutableLongStateOf(0L) }
 
     var showPasswordDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -141,6 +148,15 @@ fun SettingsScreen(
     val colorPassword = Color(0xFFF43F5E)
     val colorSecurity = Color(0xFF10B981)
 
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+
+    LaunchedEffect(Unit) {
+        if (isLiquidEnabled) {
+            topBarJelly.pulse(0.06f)
+        }
+    }
+
     LaunchedEffect(proState.successMessage) { proState.successMessage?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); proViewModel.clearMessages() } }
     LaunchedEffect(proState.error) { proState.error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); proViewModel.clearMessages() } }
 
@@ -153,49 +169,139 @@ fun SettingsScreen(
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        VlAmbientGlow()
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                VlTopAppBar(
+                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                        }
                     }
-                }
-            )
-        }
-    ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-            VlAmbientGlow()
+                )
+            }
+        ) { padding ->
             Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
                 Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
                 profile?.let { p ->
-                    Surface(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(),
-                        onClick = { },
-                        shape = VlTheme.tokens.shapes.card,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow
+                    val tokens = VlTheme.tokens
+                    val cs = MaterialTheme.colorScheme
+                    val accountShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else tokens.shapes.card
+                    val isDark = cs.surface.luminance() < 0.5f
+
+                    val accountBrush = remember(isLiquidEnabled, isDark, cs) {
+                        if (isLiquidEnabled) {
+                            val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+                            val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
+                            Brush.verticalGradient(listOf(top, bottom))
+                        } else null
+                    }
+                    val accountBorder = remember(isLiquidEnabled, isDark, cs) {
+                        if (isLiquidEnabled) {
+                            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.60f)
+                            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+                            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
+                        } else null
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled)
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .then(
+                                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, accountShape)
+                                else Modifier
+                            )
+                            .clip(accountShape)
+                            .then(
+                                if (accountBrush != null) Modifier.background(accountBrush, accountShape)
+                                else Modifier.background(
+                                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
+                                    accountShape
+                                )
+                            )
+                            .then(
+                                if (accountBorder != null) Modifier.border(accountBorder, accountShape)
+                                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, accountShape)
+                                else Modifier
+                            )
                     ) {
-                        Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                            AvatarWithPresence(avatarUrl = p.avatarUrl, displayName = p.displayName.ifEmpty { p.username }, isOnline = false, size = 64.dp)
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(text = p.displayName.ifEmpty { p.username }, style = MaterialTheme.typography.titleLarge)
-                                Text(text = "@${p.username}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                        CompositionLocalProvider(LocalContentColor provides cs.onSurface) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AvatarWithPresence(
+                                    avatarUrl = p.avatarUrl,
+                                    displayName = p.displayName.ifEmpty { p.username },
+                                    isOnline = true,
+                                    size = 64.dp
+                                )
+                                Spacer(Modifier.width(16.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = p.displayName.ifEmpty { p.username },
+                                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = cs.onSurface,
+                                            maxLines = 1
+                                        )
+                                        if (p.isProActive()) {
+                                            Spacer(Modifier.width(8.dp))
+                                            ProBadge()
+                                        }
+                                    }
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "@${p.username}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (p.bio?.isNotBlank() == true) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = p.bio,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                    ProStatusBanner(profile = p, proViewModel = proViewModel, proState = proState, hapticEnabled = hapticEnabled)
+                    Box(modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled)) {
+                        ProStatusBanner(profile = p, proViewModel = proViewModel, proState = proState, hapticEnabled = hapticEnabled)
+                    }
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_custom_title), isPremium = true) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_custom_title),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 2, enabled = isLiquidEnabled),
+                    isPremium = true
+                ) {
                     VlSettingsItem(icon = Icons.Default.Brush, title = stringResource(R.string.settings_custom_design_title), subtitle = stringResource(R.string.settings_custom_design_sub), onClick = { if (profile?.isProActive() == true) onOpenCustomization() else Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show() })
                     VlSettingsItem(icon = Icons.Default.HideImage, title = stringResource(R.string.settings_custom_hide_title), subtitle = stringResource(R.string.settings_custom_hide_sub), trailing = { VlSwitch(checked = profile?.ignoreCustomizations ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateIgnoreCustomizations(v) } }) })
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_section_theme)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_theme),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 3, enabled = isLiquidEnabled)
+                ) {
                     VlThemeSelector(
                         selected = currentTheme,
                         onSelect = { themeViewModel.setTheme(it) },
@@ -205,7 +311,10 @@ fun SettingsScreen(
                     )
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_accent),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 4, enabled = isLiquidEnabled)
+                ) {
                     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         ColorPreset.entries.forEach { preset ->
                             ColorPresetCircle(preset = preset, isSelected = currentPreset == preset, onClick = { themeViewModel.setColorPreset(preset) })
@@ -213,19 +322,28 @@ fun SettingsScreen(
                     }
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_dark_title)) {
-                    VlOptionRow(icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, onClick = { themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
-                    VlOptionRow(icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, onClick = { themeViewModel.setThemeMode(ThemeMode.LIGHT) })
-                    VlOptionRow(icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, onClick = { themeViewModel.setThemeMode(ThemeMode.DARK) })
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_dark_title),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 5, enabled = isLiquidEnabled)
+                ) {
+                    VlOptionRow(icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
+                    VlOptionRow(icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, index = 1, total = 3, onClick = { themeViewModel.setThemeMode(ThemeMode.LIGHT) })
+                    VlOptionRow(icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, index = 2, total = 3, onClick = { themeViewModel.setThemeMode(ThemeMode.DARK) })
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_section_language)) {
-                    VlOptionRow(icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
-                    VlOptionRow(icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
-                    VlOptionRow(icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_language),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 6, enabled = isLiquidEnabled)
+                ) {
+                    VlOptionRow(icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
+                    VlOptionRow(icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
+                    VlOptionRow(icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_section_management)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_management),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 7, enabled = isLiquidEnabled)
+                ) {
                     VlSettingsItem(icon = Icons.Default.NotificationsActive, iconColor = colorNotif, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
                     VlSettingsItem(icon = Icons.Default.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
                     VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
@@ -246,7 +364,10 @@ fun SettingsScreen(
                     )
                 }
 
-                VlSettingsSection(title = stringResource(R.string.diary_title)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.diary_title),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 8, enabled = isLiquidEnabled)
+                ) {
                     VlSettingsItem(
                         icon = Icons.Default.Book,
                         iconColor = MaterialTheme.colorScheme.primary,
@@ -302,7 +423,10 @@ fun SettingsScreen(
                     }
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_section_privacy)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_privacy),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 9, enabled = isLiquidEnabled)
+                ) {
                     VlSettingsItem(icon = Icons.Default.VisibilityOff, iconColor = colorStealth, title = stringResource(R.string.settings_stealth_title), subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off), trailing = { VlSwitch(checked = isStealthEnabled, onCheckedChange = { if (it) { if (hasStealthPin) { stealthManager.setEnabled(true); isStealthEnabled = true } else showStealthSetup = true } else showStealthDisable = true }) })
                     if (hasStealthPin) {
                         VlSettingsItem(icon = Icons.Default.Password, iconColor = colorStealthPin, title = stringResource(R.string.settings_stealth_change_pin), subtitle = stringResource(R.string.settings_stealth_change_pin_sub), onClick = { showStealthChangePin = true })
@@ -338,26 +462,19 @@ fun SettingsScreen(
                     }
                 }
 
-                VlSettingsSection(title = stringResource(R.string.settings_section_storage)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_storage),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 10, enabled = isLiquidEnabled)
+                ) {
                     VlSettingsItem(icon = Icons.Default.Storage, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
                     VlSettingsItem(icon = Icons.Default.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
                     VlSettingsItem(icon = Icons.Default.HealthAndSafety, iconColor = colorStorage, title = "Статус системы", onClick = onOpenStatus)
-                    VlSettingsItem(icon = Icons.Default.VerifiedUser, iconColor = colorSecurity, title = "App Check Диагностика", onClick = { onNavigateToAppCheckDiagnostic() })
                 }
 
-                VlSettingsSection(title = stringResource(R.string.stickers_title)) {
-                    VlSettingsItem(icon = Icons.Default.SmartToy, iconColor = colorBots, title = stringResource(R.string.settings_bots_title), subtitle = stringResource(R.string.settings_bots_subtitle), onClick = { showBotsManager = true })
-                }
-
-                if (profile?.isAdmin == true) {
-                    VlSettingsSection(title = stringResource(R.string.settings_admin_panel)) {
-                        VlSettingsItem(icon = Icons.Default.AdminPanelSettings, iconColor = MaterialTheme.colorScheme.error, title = "Admin Panel", onClick = { showAdminPanel = true })
-                    }
-                }
-
-
-
-                VlSettingsSection(title = stringResource(R.string.settings_section_account)) {
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_account),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
+                ) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
                     if (flags.isEnabled("2fa_enabled")) {
                         VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
@@ -400,31 +517,11 @@ fun SettingsScreen(
                     )
                 }
 
-                VlSettingsSection(title = "О приложении") {
+                VlSettingsSection(
+                    title = "О приложении",
+                    modifier = Modifier.liquidPillCardSlideOut(index = 12, enabled = isLiquidEnabled)
+                ) {
                     val uriHandler = LocalUriHandler.current
-                    if (flags.isEnabled("aegis_debug_mode_enabled")) VlSettingsItem(icon = Icons.Default.Terminal, title = "Aegis Project Debug", onClick = onOpenAegisDebug)
-                    if (flags.isFlipperEnabled) VlSettingsItem(icon = Icons.Default.ToggleOn, title = "Flag Flipper", onClick = onOpenFlagFlipper)
-                    if (flags.isEnabled("animation_test")) {
-                        VlSettingsItem(
-                            icon = Icons.Default.AutoAwesome,
-                            iconColor = MaterialTheme.colorScheme.primary,
-                            title = stringResource(R.string.settings_animation_test_title),
-                            subtitle = stringResource(R.string.settings_animation_test_subtitle),
-                            onClick = onOpenAnimationTest
-                        )
-                    }
-                    VlSettingsItem(
-                        icon = Icons.Default.Code,
-                        iconColor = MaterialTheme.colorScheme.tertiary,
-                        title = stringResource(R.string.settings_debug_show_ids_title),
-                        subtitle = stringResource(R.string.settings_debug_show_ids_desc),
-                        trailing = {
-                            VlSwitch(
-                                checked = showDebugIds,
-                                onCheckedChange = { themeViewModel.setShowDebugIds(it) }
-                            )
-                        }
-                    )
                     VlSettingsItem(
                         icon = Icons.Default.BugReport,
                         iconColor = MaterialTheme.colorScheme.error,
@@ -440,22 +537,19 @@ fun SettingsScreen(
                         title = "VisorLink", 
                         subtitle = "Версия $versionString",
                         onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Version", versionString))
-                            Toast.makeText(context, "Версия скопирована", Toast.LENGTH_SHORT).show()
-                        }
-                    )
-                    val clientFlagsId = remember(flags) { flagsRepository.getClientFlagsId() }
-                    VlSettingsItem(
-                        icon = Icons.Default.Fingerprint,
-                        iconColor = MaterialTheme.colorScheme.secondary,
-                        title = "ID клиента",
-                        subtitle = clientFlagsId,
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Client Flags ID", clientFlagsId))
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            Toast.makeText(context, "ID клиента скопирован в буфер обмена", Toast.LENGTH_SHORT).show()
+                            val now = System.currentTimeMillis()
+                            if (now - lastDevTapTime > 1500L) {
+                                devTapCount = 1
+                            } else {
+                                devTapCount++
+                            }
+                            lastDevTapTime = now
+
+                            if (devTapCount >= 5) {
+                                devTapCount = 0
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                showDevMenuSheet = true
+                            }
                         }
                     )
                     VlSettingsItem(
@@ -479,8 +573,20 @@ fun SettingsScreen(
         }
     }
 
-    if (showAdminPanel) AdminPanelSheet { showAdminPanel = false }
-    if (showBotsManager) BotsManagerSheet { showBotsManager = false }
+    if (showDevMenuSheet) {
+        SecretDevMenuSheet(
+            onDismiss = { showDevMenuSheet = false },
+            onNavigateToAppCheckDiagnostic = onNavigateToAppCheckDiagnostic,
+            onOpenAnimationTest = onOpenAnimationTest,
+            onOpenAegisDebug = onOpenAegisDebug,
+            onOpenFlagFlipper = onOpenFlagFlipper,
+            showDebugIds = showDebugIds,
+            onToggleDebugIds = { themeViewModel.setShowDebugIds(it) },
+            versionString = versionString,
+            clientFlagsId = remember(flags) { flagsRepository.getClientFlagsId() },
+            hapticEnabled = hapticEnabled
+        )
+    }
     if (showBugReportSheet) BugReportSheet(onDismiss = { showBugReportSheet = false })
     if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { showLogoutDialog = false; authViewModel.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
@@ -771,9 +877,15 @@ fun ChangePasswordDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> U
 @Composable
 private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, proState: ProUiState, hapticEnabled: Boolean) {
     VlSettingsSection(title = stringResource(R.string.pro_title), isPremium = true) {
-        val expirySubtitle = if (profile.isProActive() && profile.proUntil != null) {
-            val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(profile.proUntil.toDate())
-            "Активен до $dateStr"
+        val expirySubtitle = if (profile.isProActive()) {
+            val until = profile.proUntil
+            val isEternal = until == null || (until.toDate().time - System.currentTimeMillis() > 365L * 24 * 3600 * 1000)
+            if (isEternal) {
+                "бесконечный PRO"
+            } else {
+                val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(until.toDate())
+                "Активен до $dateStr"
+            }
         } else null
 
         VlSettingsItem(
@@ -788,13 +900,15 @@ private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, pr
         )
 
         if (!profile.isProActive()) {
+            val isLiquid = rememberLiquidEnabled()
+            val buttonShape = if (isLiquid) RoundedCornerShape(20.dp) else RoundedCornerShape(12.dp)
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 if (!profile.trialUsed) {
                     OutlinedButton(
                         onClick = { proViewModel.buyPro(true) },
                         enabled = !proState.isLoading,
                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = buttonShape
                     ) {
                         Text("Попробовать PRO бесплатно (1 день)")
                     }
@@ -803,7 +917,7 @@ private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, pr
                     onClick = { proViewModel.buyPro(false) },
                     enabled = !proState.isLoading,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = buttonShape
                 ) {
                     if (proState.isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
@@ -829,6 +943,147 @@ private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, pr
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SecretDevMenuSheet(
+    onDismiss: () -> Unit,
+    onNavigateToAppCheckDiagnostic: () -> Unit,
+    onOpenAnimationTest: () -> Unit,
+    onOpenAegisDebug: () -> Unit,
+    onOpenFlagFlipper: () -> Unit,
+    showDebugIds: Boolean,
+    onToggleDebugIds: (Boolean) -> Unit,
+    versionString: String,
+    clientFlagsId: String,
+    hapticEnabled: Boolean,
+) {
+    val context = LocalContext.current
+    val haptic = rememberHaptic()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Build,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "Режим разработчика",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+
+            VlSettingsItem(
+                icon = Icons.Default.VerifiedUser,
+                iconColor = Color(0xFF10B981),
+                title = "App Check Диагностика",
+                subtitle = "Проверка целостности и токенов Play Integrity / Debug",
+                onClick = {
+                    onDismiss()
+                    onNavigateToAppCheckDiagnostic()
+                }
+            )
+
+            VlSettingsItem(
+                icon = Icons.Default.AutoAwesome,
+                iconColor = MaterialTheme.colorScheme.primary,
+                title = stringResource(R.string.settings_animation_test_title),
+                subtitle = stringResource(R.string.settings_animation_test_subtitle),
+                onClick = {
+                    onDismiss()
+                    onOpenAnimationTest()
+                }
+            )
+
+            VlSettingsItem(
+                icon = Icons.Default.Code,
+                iconColor = MaterialTheme.colorScheme.tertiary,
+                title = stringResource(R.string.settings_debug_show_ids_title),
+                subtitle = stringResource(R.string.settings_debug_show_ids_desc),
+                trailing = {
+                    VlSwitch(
+                        checked = showDebugIds,
+                        onCheckedChange = { onToggleDebugIds(it) }
+                    )
+                }
+            )
+
+            VlSettingsItem(
+                icon = Icons.Default.Terminal,
+                iconColor = Color(0xFF6366F1),
+                title = "Aegis Project Debug",
+                subtitle = "Отладка локальной базы данных и логов Aegis",
+                onClick = {
+                    onDismiss()
+                    onOpenAegisDebug()
+                }
+            )
+
+            VlSettingsItem(
+                icon = Icons.Default.ToggleOn,
+                iconColor = Color(0xFFEC4899),
+                title = "Flag Flipper",
+                subtitle = "Управление Feature Flags в реальном времени",
+                onClick = {
+                    onDismiss()
+                    onOpenFlagFlipper()
+                }
+            )
+
+            VlSettingsItem(
+                icon = Icons.Default.Fingerprint,
+                iconColor = MaterialTheme.colorScheme.secondary,
+                title = "ID клиента",
+                subtitle = clientFlagsId,
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Client Flags ID", clientFlagsId))
+                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                    Toast.makeText(context, "ID клиента скопирован в буфер обмена", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            VlSettingsItem(
+                icon = Icons.Default.Info,
+                title = "Копировать данные сборки",
+                subtitle = versionString,
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("Version", versionString))
+                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                    Toast.makeText(context, "Версия скопирована", Toast.LENGTH_SHORT).show()
+                }
+            )
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

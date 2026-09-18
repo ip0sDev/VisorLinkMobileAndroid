@@ -51,9 +51,13 @@ import org.visorlink.app.data.model.SendStatus
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import org.visorlink.app.utils.UsageRankManager
+import org.visorlink.app.ui.components.liquidPopIn
+import org.visorlink.app.ui.components.rememberLiquidEnabled
+import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.motionSpec
 import org.koin.compose.koinInject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.floor
 import kotlin.math.sqrt
@@ -96,10 +100,11 @@ fun MessageActionOverlay(
 
     val usageRankManager: UsageRankManager = koinInject()
     val rankedReactions by usageRankManager.rankedReactionsFlow.collectAsState()
+    val isLiquidEnabled = rememberLiquidEnabled()
 
     val alpha by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = tween(200),
+        animationSpec = if (isLiquidEnabled) spring(dampingRatio = 0.9f, stiffness = 420f) else tween(200),
         label = "overlay_bg"
     )
 
@@ -117,6 +122,7 @@ fun MessageActionOverlay(
                 currentDragOffset = currentDragOffset,
                 canReact = canReact,
                 rankedReactions = rankedReactions,
+                liquidEnabled = isLiquidEnabled,
                 onAction = { action, emoji ->
                     when (action) {
                         "reply" -> onReply()
@@ -136,6 +142,7 @@ fun MessageActionOverlay(
                 canReact = canReact,
                 currentUid = currentUid,
                 rankedReactions = rankedReactions,
+                liquidEnabled = isLiquidEnabled,
                 onDismiss = onDismiss,
                 onReply = onReply,
                 onEdit = onEdit,
@@ -160,6 +167,7 @@ private fun NormalMessageMenu(
     canReact: Boolean,
     currentUid: String,
     rankedReactions: List<String> = QUICK_REACTIONS,
+    liquidEnabled: Boolean = false,
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onEdit: () -> Unit,
@@ -225,6 +233,13 @@ private fun NormalMessageMenu(
         label = "menu_slide"
     )
 
+    // Меню «вырастает» из пузыря: точка трансформации — тот угол, откуда пришло касание
+    val popProgress = rememberLiquidPopProgress(liquidEnabled)
+    val popOrigin = TransformOrigin(
+        pivotFractionX = if (alignRight) 1f else 0f,
+        pivotFractionY = if (showAbove) 1f else 0f
+    )
+
     Surface(
         modifier = Modifier
             .offset {
@@ -234,6 +249,7 @@ private fun NormalMessageMenu(
                 )
             }
             .width(260.dp)
+            .liquidPopIn(popProgress, liquidEnabled, popOrigin)
             .onGloballyPositioned { menuSize = it.size },
         shape = VlTheme.tokens.shapes.card,
         color = cs.surface,
@@ -357,6 +373,7 @@ private fun GestureMessageMenu(
     currentDragOffset: Offset,
     canReact: Boolean,
     rankedReactions: List<String> = QUICK_REACTIONS,
+    liquidEnabled: Boolean = false,
     onAction: (action: String, emoji: String?) -> Unit
 ) {
     val haptic = rememberHaptic()
@@ -515,10 +532,29 @@ private fun GestureMessageMenu(
         label = "enter_scale"
     )
 
+    // Карточки действий разлетаются каскадом — жидкость выбрасывает их одну за другой
+    var revealedCount by remember { mutableIntStateOf(if (liquidEnabled) 0 else actions.size) }
+    LaunchedEffect(liquidEnabled, actions.size) {
+        if (!liquidEnabled) {
+            revealedCount = actions.size
+            return@LaunchedEffect
+        }
+        repeat(actions.size) { index ->
+            revealedCount = index + 1
+            delay(26)
+        }
+    }
+
     Box(Modifier.fillMaxSize()) {
         val isCancelSelected = currentSelection == "cancel"
         val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else cs.surface
-        val cancelScale by animateFloatAsState(if (isCancelSelected) 1.15f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "cancel_scale")
+        val cancelScale by animateFloatAsState(
+            if (isCancelSelected) 1.15f else 1f,
+            if (liquidEnabled) spring(dampingRatio = 0.42f, stiffness = 520f)
+            else VlTheme.tokens.motion.motionSpec<Float>(),
+            label = "cancel_scale"
+        )
+        val cancelSkew = if (liquidEnabled) (cancelScale - 1f) * 0.35f else 0f
 
         Box(
             Modifier.offset { IntOffset((menuOrigin.x - btnHalfW).toInt(), (menuOrigin.y - btnHalfH).toInt()) }
@@ -528,8 +564,8 @@ private fun GestureMessageMenu(
                     .width(cardWidth)
                     .height(cardHeight)
                     .graphicsLayer {
-                        scaleX = cancelScale * enterScale
-                        scaleY = cancelScale * enterScale
+                        scaleX = (cancelScale + cancelSkew) * enterScale
+                        scaleY = (cancelScale - cancelSkew) * enterScale
                     },
                 shape = VlTheme.tokens.shapes.card,
                 color = cancelColor,
@@ -549,7 +585,7 @@ private fun GestureMessageMenu(
             }
         }
 
-        actions.forEach { action ->
+        actions.forEachIndexed { index, action ->
             val isSelected = currentSelection == action || (action == "react" && currentSelection.startsWith("react_"))
             val center = actionCenters[action] ?: Offset.Zero
 
@@ -579,7 +615,22 @@ private fun GestureMessageMenu(
             } else cs.surface
 
             val contentColor = if (isSelected) Color.White else color
-            val actionScale by animateFloatAsState(if (isSelected) 1.15f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "action_scale")
+            val actionScale by animateFloatAsState(
+                if (isSelected) 1.15f else 1f,
+                if (liquidEnabled) spring(dampingRatio = 0.42f, stiffness = 520f)
+                else VlTheme.tokens.motion.motionSpec<Float>(),
+                label = "action_scale"
+            )
+
+            // Каскадное появление: без флага все карточки приходят вместе, как раньше
+            val appearScale by animateFloatAsState(
+                targetValue = if (index < revealedCount) 1f else 0f,
+                animationSpec = spring(dampingRatio = 0.50f, stiffness = 520f),
+                label = "action_appear"
+            )
+            val actionEnter = if (liquidEnabled) appearScale else enterScale
+            // Желейный перекос: карточка шире по X ровно настолько, насколько ниже по Y
+            val jellySkew = if (liquidEnabled) (actionScale - 1f) * 0.35f else 0f
 
             Box(
                 Modifier.offset { IntOffset((center.x - btnHalfW).toInt(), (center.y - btnHalfH).toInt()) }
@@ -589,8 +640,8 @@ private fun GestureMessageMenu(
                         .width(cardWidth)
                         .height(cardHeight)
                         .graphicsLayer {
-                            scaleX = actionScale * enterScale
-                            scaleY = actionScale * enterScale
+                            scaleX = (actionScale + jellySkew) * actionEnter
+                            scaleY = (actionScale - jellySkew) * actionEnter
                         },
                     shape = VlTheme.tokens.shapes.card,
                     color = bgColor,
@@ -613,7 +664,12 @@ private fun GestureMessageMenu(
 
         if (hasGrid) {
             val showGrid = currentSelection == "react" || currentSelection.startsWith("react_")
-            val gridScale by animateFloatAsState(if (showGrid) 1f else 0f, VlTheme.tokens.motion.motionSpec<Float>(), label = "grid_scale")
+            val gridScale by animateFloatAsState(
+                if (showGrid) 1f else 0f,
+                if (liquidEnabled) spring(dampingRatio = 0.55f, stiffness = 480f)
+                else VlTheme.tokens.motion.motionSpec<Float>(),
+                label = "grid_scale"
+            )
 
             Box(
                 Modifier.offset { IntOffset(gridLeftX.toInt(), gridTopY.toInt()) }

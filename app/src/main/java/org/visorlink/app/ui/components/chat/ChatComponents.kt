@@ -62,10 +62,15 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.Message
 import org.visorlink.app.data.model.MessageType
 import org.visorlink.app.data.model.SendStatus
+import org.visorlink.app.ui.components.liquidDragStretch
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.rememberLiquidJellyState
+import org.visorlink.app.ui.components.rubberBand
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.VoicePlaybackState
 import org.visorlink.app.utils.rememberHaptic
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlRaised
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -309,14 +314,19 @@ fun SwipeableMessage(
     isMine: Boolean,
     hapticEnabled: Boolean,
     onReply: () -> Unit,
+    liquidEnabled: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val haptic = rememberHaptic()
+    val tokens = VlTheme.tokens
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val triggerThreshold = 80f
     val maxOffset = 110f
     var didTrigger by remember { mutableStateOf(false) }
+
+    // Пузырь пружинит в момент срабатывания реплая — визуальная пара к тактильному отклику
+    val bubbleJelly = rememberLiquidJellyState(softness = 0.07f, damping = 0.55f, stiffness = 340f)
 
     val replyIconAlpha by animateFloatAsState(
         targetValue = if (abs(offsetX.value) > 20f) (abs(offsetX.value) / triggerThreshold).coerceIn(0f, 1f) else 0f,
@@ -324,7 +334,9 @@ fun SwipeableMessage(
     )
     val replyIconScale by animateFloatAsState(
         targetValue = if (abs(offsetX.value) >= triggerThreshold) 1.15f else if (abs(offsetX.value) > 20f) (0.6f + 0.4f * (abs(offsetX.value) / triggerThreshold)).coerceIn(0.6f, 1.15f) else 0.6f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy), label = "reply_icon_scale",
+        animationSpec = if (liquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+                        else spring(Spring.DampingRatioMediumBouncy),
+        label = "reply_icon_scale",
     )
 
     val replyIconColor = MaterialTheme.colorScheme.primary
@@ -332,26 +344,55 @@ fun SwipeableMessage(
     val align = if (offsetX.value > 0) Alignment.CenterStart else if (offsetX.value < 0) Alignment.CenterEnd else (if (isMine) Alignment.CenterEnd else Alignment.CenterStart)
 
     Box(modifier = Modifier.fillMaxWidth()) {
+        val dropShape = tokens.shapes.indicator
         Box(
             modifier = Modifier
                 .align(align)
-                .padding(horizontal = 16.dp).size(36.dp).scale(replyIconScale)
-                .background(replyIconColor.copy(alpha = replyIconAlpha * 0.12f), VlTheme.tokens.shapes.indicator),
+                .padding(horizontal = 16.dp)
+                .then(
+                    // Капля догоняет палец с отставанием — жидкость тянется следом
+                    if (liquidEnabled) Modifier.offset { IntOffset((offsetX.value * 0.22f).roundToInt(), 0) }
+                    else Modifier
+                )
+                .size(36.dp).scale(replyIconScale)
+                .then(
+                    // Неоморфный рельеф превращает иконку в стеклянную каплю (в M3E — no-op).
+                    // Прозрачность накручивается снаружи: vlRaised рисует тень независимо от
+                    // цвета фона, иначе рельеф висел бы на каждой строке в покое.
+                    if (liquidEnabled) Modifier
+                        .alpha(replyIconAlpha)
+                        .vlRaised(tokens.structure, dropShape)
+                    else Modifier
+                )
+                .background(
+                    replyIconColor.copy(alpha = if (liquidEnabled) 0.12f else replyIconAlpha * 0.12f),
+                    dropShape
+                ),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Default.Reply, stringResource(R.string.chat_reply), tint = replyIconColor.copy(alpha = replyIconAlpha), modifier = Modifier.size(20.dp))
+            Icon(
+                Icons.Default.Reply,
+                stringResource(R.string.chat_reply),
+                tint = replyIconColor.copy(alpha = if (liquidEnabled) 1f else replyIconAlpha),
+                modifier = Modifier.size(20.dp)
+            )
         }
 
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .pointerInput(message.id) {
+                .liquidDragStretch(offsetX.value, maxOffset, enabled = liquidEnabled, maxStretch = 0.05f)
+                .liquidJelly(bubbleJelly, enabled = liquidEnabled)
+                .pointerInput(message.id, liquidEnabled) {
                     var totalDragX = 0f
                     var totalDragY = 0f
+                    // Сырое смещение до резинки: именно его копит палец
+                    var rawOffsetX = 0f
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         totalDragX = 0f
                         totalDragY = 0f
+                        rawOffsetX = 0f
                         didTrigger = false
                         var isDragging = false
                         var isVertical = false
@@ -380,26 +421,48 @@ fun SwipeableMessage(
                                 isDragging = true
                                 change.consume()
 
-                                val target = (offsetX.value + dragDeltaX).coerceIn(-maxOffset, maxOffset)
+                                rawOffsetX += dragDeltaX
+                                val target = if (liquidEnabled) {
+                                    // За порогом реплая ход вязнет, но не упирается в стену
+                                    rubberBand(
+                                        offset = rawOffsetX,
+                                        softLimit = triggerThreshold,
+                                        maxOverflow = maxOffset - triggerThreshold
+                                    )
+                                } else {
+                                    (offsetX.value + dragDeltaX).coerceIn(-maxOffset, maxOffset)
+                                }
                                 scope.launch { offsetX.snapTo(target) }
 
                                 if (abs(offsetX.value) >= triggerThreshold && !didTrigger) {
                                     didTrigger = true
                                     haptic.perform(HapticType.SELECTION, hapticEnabled)
                                     onReply()
+                                    if (liquidEnabled) bubbleJelly.pulse(0.07f)
 
                                     val bounceBackTarget = if (offsetX.value > 0) triggerThreshold * 0.5f else -triggerThreshold * 0.5f
                                     scope.launch {
                                         offsetX.animateTo(bounceBackTarget, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
                                         delay(100)
-                                        offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy))
+                                        offsetX.animateTo(
+                                            0f,
+                                            if (liquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+                                            else spring(Spring.DampingRatioMediumBouncy)
+                                        )
                                     }
+                                    rawOffsetX = bounceBackTarget
                                 }
                             }
                         }
 
                         if (isDragging || offsetX.value != 0f) {
-                            scope.launch { offsetX.animateTo(0f, spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)) }
+                            scope.launch {
+                                offsetX.animateTo(
+                                    0f,
+                                    if (liquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+                                    else spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
+                                )
+                            }
                         }
                     }
                 },

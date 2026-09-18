@@ -33,11 +33,15 @@ fun VlAlertDialog(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
+    val isLiquidEnabled = rememberLiquidEnabled()
 
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(dismissOnBackPress = dismissible, dismissOnClickOutside = dismissible),
     ) {
+        // Диалог «всплывает» каплей: пружина с перелётом вместо мгновенной подстановки
+        val popProgress = rememberLiquidPopProgress(isLiquidEnabled)
+
         val body: @Composable () -> Unit = {
             Column(Modifier.padding(start = 24.dp, top = 24.dp, end = 20.dp, bottom = 12.dp)) {
                 title?.let {
@@ -74,6 +78,7 @@ fun VlAlertDialog(
             val shape = tokens.shapes.card
             Box(
                 modifier = modifier
+                    .liquidPopIn(popProgress, isLiquidEnabled)
                     .vlRaised(tokens.structure, shape)
                     .clip(shape)
                     .background(cs.surfaceContainerHigh, shape)
@@ -81,7 +86,7 @@ fun VlAlertDialog(
             ) { body() }
         } else {
             VlSurface(
-                modifier = modifier,
+                modifier = modifier.liquidPopIn(popProgress, isLiquidEnabled),
                 isInput = false,
                 overrideColor = cs.surface,
             ) { body() }
