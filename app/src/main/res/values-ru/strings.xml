@@ -421,6 +421,13 @@
     <string name="voice_message">🎤 Голосовое Сообщение</string>
     <string name="sticker">🎭 Стикер</string>
     <string name="media">Медиа</string>
+    <string name="media_picker_open_system_picker">Открыть выбор</string>
+    <string name="media_picker_select_desc">Выберите фото (до 10) или 1 видео через системный диалог</string>
+    <string name="media_picker_photos_desc">Выберите до 10 фотографий через системный диалог</string>
+    <string name="media_picker_videos_desc">Выберите 1 видеофайл через системный диалог</string>
+    <string name="error_cannot_mix_photo_video">Нельзя одновременно выбирать фото и видео</string>
+    <string name="error_max_photos_exceeded">Можно выбрать не более %1$d фото</string>
+    <string name="error_max_video_exceeded">Можно выбрать не более одного видео</string>
     <string name="tap_to_reveal">Нажмите чтобы посмотреть</string>
     <string name="image">📷 Изображение</string>
     <!-- VerifyEmailScreen -->

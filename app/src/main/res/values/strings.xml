@@ -419,6 +419,13 @@
     <string name="voice_message">🎤 Voice message</string>
     <string name="sticker">🎭 Sticker</string>
     <string name="media">Media</string>
+    <string name="media_picker_open_system_picker">Open picker</string>
+    <string name="media_picker_select_desc">Select photos (up to 10) or 1 video using Android dialog</string>
+    <string name="media_picker_photos_desc">Select up to 10 photos using Android dialog</string>
+    <string name="media_picker_videos_desc">Select 1 video using Android dialog</string>
+    <string name="error_cannot_mix_photo_video">Cannot select photos and videos at the same time</string>
+    <string name="error_max_photos_exceeded">Cannot select more than %1$d photos</string>
+    <string name="error_max_video_exceeded">Cannot select more than 1 video</string>
     <string name="tap_to_reveal">Tap to reveal</string>
     <string name="image">📷 Image</string>
     <!-- VerifyEmailScreen -->

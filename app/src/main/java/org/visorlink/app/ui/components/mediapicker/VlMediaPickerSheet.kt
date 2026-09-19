@@ -43,6 +43,16 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import org.visorlink.app.R
+import org.visorlink.app.ui.components.VlButton
+import org.visorlink.app.ui.components.VlCard
 
 /**
  * Вкладки медиа-пикера.
@@ -99,16 +109,10 @@ fun VlMediaPickerSheet(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
-    // Загрузка медиа при смене вкладок
+    // Автоматическое разворачивание при переходе на камеру
     LaunchedEffect(currentTab) {
-        when (currentTab) {
-            MediaPickerTab.ALL -> viewModel.loadMedia(MediaFilter.ALL)
-            MediaPickerTab.PHOTOS -> viewModel.loadMedia(MediaFilter.PHOTOS_ONLY)
-            MediaPickerTab.VIDEOS -> viewModel.loadMedia(MediaFilter.VIDEOS_ONLY)
-            MediaPickerTab.CAMERA -> {
-                // При переходе на камеру автоматически разворачиваем на полный экран
-                isExpanded = true
-            }
+        if (currentTab == MediaPickerTab.CAMERA) {
+            isExpanded = true
         }
     }
 
@@ -197,15 +201,80 @@ fun VlMediaPickerViewContent(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
-    // Загрузка медиа при смене вкладок
-    LaunchedEffect(currentTab) {
+    val context = LocalContext.current
+
+    val multiplePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = maxSelection)
+    ) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+
+        val categorized = uris.map { uri ->
+            val mime = context.contentResolver.getType(uri) ?: ""
+            val isVideo = mime.startsWith("video/") || uri.toString().contains("video", ignoreCase = true)
+            uri to if (isVideo) MediaType.VIDEO else MediaType.IMAGE
+        }
+
+        val videos = categorized.filter { it.second == MediaType.VIDEO }
+        val images = categorized.filter { it.second == MediaType.IMAGE }
+
+        // Ограничение 1: запрет одновременного выбора видео и фото
+        if (videos.isNotEmpty() && images.isNotEmpty()) {
+            Toast.makeText(context, context.getString(R.string.error_cannot_mix_photo_video), Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+
+        // Ограничение 2: запрет выбора более одного видео
+        if (videos.size > 1) {
+            Toast.makeText(context, context.getString(R.string.error_max_video_exceeded), Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+
+        // Ограничение 3: запрет выбора фото больше чем размер альбома
+        if (images.size > maxSelection) {
+            Toast.makeText(context, context.getString(R.string.error_max_photos_exceeded, maxSelection), Toast.LENGTH_SHORT).show()
+            return@rememberLauncherForActivityResult
+        }
+
+        val result = (videos + images).map { (uri, type) ->
+            SelectedMediaItem(uri = uri, type = type)
+        }
+        viewModel.clearSelection()
+        onMediaSelected(result)
+    }
+
+    val singleVideoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.clearSelection()
+            onMediaSelected(listOf(SelectedMediaItem(uri = uri, type = MediaType.VIDEO)))
+        }
+    }
+
+    val launchPicker = {
         when (currentTab) {
-            MediaPickerTab.ALL -> viewModel.loadMedia(MediaFilter.ALL)
-            MediaPickerTab.PHOTOS -> viewModel.loadMedia(MediaFilter.PHOTOS_ONLY)
-            MediaPickerTab.VIDEOS -> viewModel.loadMedia(MediaFilter.VIDEOS_ONLY)
-            MediaPickerTab.CAMERA -> {
-                isExpanded = true
+            MediaPickerTab.PHOTOS -> {
+                multiplePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
             }
+            MediaPickerTab.VIDEOS -> {
+                singleVideoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+                )
+            }
+            else -> {
+                multiplePickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
+                )
+            }
+        }
+    }
+
+    // Автоматическое разворачивание при переходе на камеру
+    LaunchedEffect(currentTab) {
+        if (currentTab == MediaPickerTab.CAMERA) {
+            isExpanded = true
         }
     }
 
@@ -227,7 +296,7 @@ fun VlMediaPickerViewContent(
             color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.4f)
         )
 
-        // Основная область контента (сетка медиа или камера)
+        // Основная область контента (кнопка системного пикера или камера)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -248,30 +317,97 @@ fun VlMediaPickerViewContent(
                     )
                 }
                 else -> {
-                    MediaGalleryGrid(
-                        items = mediaItems,
-                        selectedItems = selectedItems,
-                        isLoading = isLoading,
-                        onItemClick = { item ->
-                            viewModel.toggleSelection(item, maxSelection = maxSelection)
-                        },
-                        onItemLongClick = { item ->
-                            if (item.type == MediaType.IMAGE) {
-                                viewModel.clearSelection()
-                                onOpenEditor(item.uri)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        VlCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = tokens.shapes.card
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                val icon = when (currentTab) {
+                                    MediaPickerTab.PHOTOS -> Icons.Outlined.Image
+                                    MediaPickerTab.VIDEOS -> Icons.Outlined.Videocam
+                                    else -> Icons.Outlined.Collections
+                                }
+                                val titleText = when (currentTab) {
+                                    MediaPickerTab.PHOTOS -> stringResource(R.string.photo)
+                                    MediaPickerTab.VIDEOS -> "Видео"
+                                    else -> stringResource(R.string.media)
+                                }
+                                val descText = when (currentTab) {
+                                    MediaPickerTab.PHOTOS -> stringResource(R.string.media_picker_photos_desc)
+                                    MediaPickerTab.VIDEOS -> stringResource(R.string.media_picker_videos_desc)
+                                    else -> stringResource(R.string.media_picker_select_desc)
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .size(68.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.primaryContainer.copy(alpha = 0.65f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = cs.primary,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                }
+
+                                Spacer(Modifier.height(14.dp))
+
+                                Text(
+                                    text = titleText,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = cs.onSurface
+                                )
+
+                                Spacer(Modifier.height(6.dp))
+
+                                Text(
+                                    text = descText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = cs.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+
+                                Spacer(Modifier.height(20.dp))
+
+                                VlButton(
+                                    onClick = launchPicker,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PhotoLibrary,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.media_picker_open_system_picker),
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
-                        },
-                        onReload = {
-                            val filter = when (currentTab) {
-                                MediaPickerTab.PHOTOS -> MediaFilter.PHOTOS_ONLY
-                                MediaPickerTab.VIDEOS -> MediaFilter.VIDEOS_ONLY
-                                else -> MediaFilter.ALL
-                            }
-                            viewModel.loadMedia(filter)
-                        },
-                        gridState = gridState,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                        }
+                    }
                 }
             }
         }
