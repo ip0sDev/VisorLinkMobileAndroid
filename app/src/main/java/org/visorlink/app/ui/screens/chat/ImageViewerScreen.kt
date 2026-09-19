@@ -45,13 +45,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import org.visorlink.app.utils.ImageCache
+import org.visorlink.app.utils.VideoCache
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import org.visorlink.app.R
@@ -115,10 +119,27 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
     val density = androidx.compose.ui.platform.LocalDensity.current
     val maxDragPx = with(density) { maxDragDistance.toPx() }
 
+    var isSaving by remember { mutableStateOf(false) }
+
+    val streamableUrl = remember(url) { VideoCache.getStreamableVideoUrl(url) }
+    val cachedFile = remember(streamableUrl) { VideoCache.getCachedPath(context, streamableUrl) }
+
     val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            repeatMode = if (type == "gif") Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
-        }
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(30000)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(httpDataSourceFactory)
+
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build()
+            .apply {
+                repeatMode = if (type == "gif") Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+            }
     }
 
     val handleBack: () -> Unit = {
@@ -158,8 +179,21 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
 
     var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
 
-    DisposableEffect(url) {
-        exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
+    DisposableEffect(streamableUrl, cachedFile) {
+        val playUri = if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0) {
+            Uri.fromFile(cachedFile)
+        } else {
+            Uri.parse(streamableUrl)
+        }
+        val mediaItem = MediaItem.Builder()
+            .setUri(playUri)
+            .apply {
+                if (playUri.scheme == "http" || playUri.scheme == "https") {
+                    setMimeType(MimeTypes.VIDEO_MP4)
+                }
+            }
+            .build()
+        exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
 
@@ -348,6 +382,30 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
                         navigationIcon = {
                             IconButton(onClick = handleBack) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
+                            }
+                        },
+                        actions = {
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp).padding(end = 16.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                IconButton(onClick = {
+                                    coroutineScope.launch {
+                                        isSaving = true
+                                        val success = VideoCache.saveVideoToGallery(context, streamableUrl)
+                                        isSaving = false
+                                        Toast.makeText(
+                                            context,
+                                            if (success) "Видео сохранено в галерею" else "Ошибка сохранения",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Download, "Сохранить", tint = Color.White)
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)

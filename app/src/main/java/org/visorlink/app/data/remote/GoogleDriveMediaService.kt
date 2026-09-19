@@ -210,7 +210,11 @@ class GoogleDriveMediaService(
         // Делаем файл доступным по ссылке (reader / anyone)
         setFilePublicPermission(accessToken, fileId)
 
-        val directUrl = "https://lh3.googleusercontent.com/d/$fileId"
+        val directUrl = if (mimeType.startsWith("video/")) {
+            "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+        } else {
+            "https://lh3.googleusercontent.com/d/$fileId"
+        }
         val viewUrl = "https://drive.google.com/file/d/$fileId/view?usp=sharing"
         val previewUrl = "https://lh3.googleusercontent.com/d/$fileId=s400"
 

@@ -330,12 +330,15 @@ class SavedMessagesViewModel(
 
     fun disablePin() {
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
             repository.disablePin(currentUid)
             encryptionKey = null
             biometricPinManager.clearSavedPin(currentUid)
             _uiState.update { it.copy(
                 isEncryptionEnabled = false,
-                keystoreSecurityLevel = KeystoreSecurityLevel.UNKNOWN
+                keystoreSecurityLevel = KeystoreSecurityLevel.UNKNOWN,
+                messages = emptyList(),
+                isLoading = false
             ) }
         }
     }

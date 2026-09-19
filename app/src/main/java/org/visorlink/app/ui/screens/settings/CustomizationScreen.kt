@@ -144,44 +144,61 @@ fun CustomizationScreen(
 
 @Composable
 fun ProfilePreview(profile: UserProfile) {
-    val cust = profile.customization
+    val cust = profile.customization ?: emptyMap()
     val bgUrl = cust["bgUrl"] as? String
-    val layout = cust["layout"] as? String ?: "default"
+    val gifUrl = cust["gifUrl"] as? String
+    val bannerUrl = gifUrl ?: bgUrl
     
     VlSurface(
         modifier = Modifier.fillMaxSize()
     ) {
-        if (bgUrl != null) {
-            AsyncImage(
-                model = bgUrl,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.3f)),
-            contentAlignment = if (layout == "banner") Alignment.BottomStart else Alignment.Center
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(
-                horizontalAlignment = if (layout == "banner") Alignment.Start else Alignment.CenterHorizontally,
-                modifier = Modifier.padding(16.dp)
+            if (bannerUrl != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(76.dp)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                ) {
+                    AsyncImage(
+                        model = bannerUrl,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+            
+            Box(
+                modifier = Modifier
+                    .then(if (bannerUrl != null) Modifier.offset(y = (-24).dp) else Modifier.padding(top = 16.dp)),
+                contentAlignment = Alignment.Center
             ) {
                 AvatarWithPresence(
                     avatarUrl = profile.avatarUrl,
                     displayName = profile.displayName,
                     isOnline = true,
-                    size = if (layout == "compact") 48.dp else 64.dp
+                    size = 56.dp
                 )
-                Spacer(Modifier.height(8.dp))
+            }
+            
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.then(if (bannerUrl != null) Modifier.offset(y = (-16).dp) else Modifier)
+            ) {
                 Text(
                     profile.displayName,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
-                    fontSize = if (layout == "compact") 16.sp else 20.sp
+                    fontSize = 16.sp
+                )
+                Text(
+                    "@${profile.username}",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = 13.sp
                 )
             }
         }

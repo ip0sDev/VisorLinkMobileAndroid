@@ -33,15 +33,12 @@ class StickerPackViewModel(
     private val usageRankManager: org.visorlink.app.utils.UsageRankManager? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(StickerPackUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(StickerPackUiState(isLoading = false))
     val uiState: StateFlow<StickerPackUiState> = _uiState.asStateFlow()
 
     val currentUid: String get() = auth.currentUser?.uid ?: ""
 
     init {
-        viewModelScope.launch {
-            repo.refreshPacks()
-        }
         viewModelScope.launch {
             repo.observeUserPacks()
                 .catch { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
@@ -49,6 +46,24 @@ class StickerPackViewModel(
                     val ranked = usageRankManager?.rankPacks(packs) ?: packs
                     _uiState.update { it.copy(packs = ranked, isLoading = false) }
                 }
+        }
+        refreshSilently()
+    }
+
+    /**
+     * Тихое фоновое обновление стикеров с сервера (минуя локальный Firestore кэш).
+     * Не блокирует UI спиннером, если кэш уже загружен.
+     */
+    fun refreshSilently() {
+        viewModelScope.launch {
+            if (_uiState.value.packs.isEmpty()) {
+                _uiState.update { it.copy(isLoading = true) }
+            }
+            try {
+                repo.refreshPacks(forceServer = true)
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
         }
     }
 

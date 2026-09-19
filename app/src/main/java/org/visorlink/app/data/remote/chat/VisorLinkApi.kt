@@ -209,6 +209,12 @@ interface VisorLinkApi {
     @GET("/api/notifications")
     suspend fun getNotifications(): List<NotificationDto>
 
+    @POST("/api/notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: String): SimpleSuccessResponse
+
+    @DELETE("/api/notifications/{id}")
+    suspend fun deleteNotification(@Path("id") id: String): SimpleSuccessResponse
+
     // --- DM Bots ---
 
     @GET("/api/bots/dm")

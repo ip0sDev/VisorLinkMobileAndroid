@@ -42,7 +42,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import org.visorlink.app.utils.VideoCache
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
@@ -624,8 +626,18 @@ internal fun VideoBubble(
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
+    val streamableUrl = remember(resolvedUrl, message.driveFileId) {
+        resolvedUrl?.let { VideoCache.getStreamableVideoUrl(it, message.driveFileId) }
+    }
+    val cachedFile = remember(streamableUrl) {
+        streamableUrl?.let { VideoCache.getCachedPath(context, it) }
+    }
+    val effectiveLocalFile = message.localFile ?: cachedFile
+    val effectiveThumbUrl = message.thumbUrl?.takeIf { it.isNotBlank() } ?: message.previewUrl?.takeIf { it.isNotBlank() }
+    val playTargetUrl = effectiveLocalFile?.let { Uri.fromFile(it).toString() } ?: streamableUrl ?: resolvedUrl
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -634,7 +646,7 @@ internal fun VideoBubble(
         Surface(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
-                onTap = { resolvedUrl?.let { onMediaTap(it, message.type) } },
+                onTap = { playTargetUrl?.let { onMediaTap(it, message.type) } },
                 onDoubleTap = { onReact("❤️") },
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
@@ -644,11 +656,11 @@ internal fun VideoBubble(
         ) {
             Box {
                 ChatVideoViewer(
-                    url = resolvedUrl,
-                    thumbUrl = message.thumbUrl,
-                    localFile = message.localFile,
+                    url = streamableUrl ?: resolvedUrl,
+                    thumbUrl = effectiveThumbUrl,
+                    localFile = effectiveLocalFile,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                    onClick = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onMediaTap(it, message.type) } }
+                    onClick = { playTargetUrl?.let { onMediaTap(it, message.type) } }
                 )
 
                 Column(modifier = Modifier.matchParentSize()) {

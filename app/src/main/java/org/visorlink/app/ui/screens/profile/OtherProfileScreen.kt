@@ -148,193 +148,165 @@ fun OtherProfileScreen(
             val layout = cust["layout"] as? String ?: "default"
             val bgUrl = cust["bgUrl"] as? String
             val gifUrl = cust["gifUrl"] as? String
-            val bannerUrl = gifUrl ?: bgUrl
+            val bannerUrl = (gifUrl ?: bgUrl).takeIf { targetUser.isProActive() } ?: gifUrl ?: bgUrl
 
-            Box(Modifier.fillMaxSize()) {
-                if (bgUrl != null) {
-                    AsyncImage(
-                        model = bgUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .background(if (bgUrl != null) Color.Black.copy(alpha = 0.3f) else Color.Transparent)
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = if (layout == "banner") Alignment.Start else Alignment.CenterHorizontally
-                ) {
-                    if (layout == "banner") {
-                        Box(contentAlignment = Alignment.BottomStart) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                                    .padding(bottom = 40.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            ) {
-                                if (bannerUrl != null) {
-                                    AsyncImage(
-                                        model = bannerUrl,
-                                        contentDescription = null,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                            }
-                            Row(
-                                modifier = Modifier.padding(start = 24.dp),
-                                verticalAlignment = Alignment.Bottom
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(100.dp)
-                                        .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                        .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                        .clip(VlTheme.tokens.shapes.avatar),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AvatarContent(targetUser, 100.dp)
-                                }
-                                Spacer(Modifier.width(16.dp))
-                                Column(Modifier.padding(bottom = 8.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            targetUser.displayName,
-                                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                            color = Color.White
-                                        )
-                                        val emojis = cust["emojis"] as? String
-                                        if (!emojis.isNullOrEmpty()) {
-                                            Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
-                                        }
-                                    }
-                                    Text(
-                                        "@${targetUser.username}",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-                    } else if (layout == "compact") {
-                        Row(
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (layout == "compact") {
+                    if (bannerUrl != null) {
+                        Box(
                             modifier = Modifier
-                                .padding(top = 24.dp, start = 24.dp, end = 24.dp)
-                                .fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                                .fillMaxWidth()
+                                .height(130.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                                    .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                    .clip(VlTheme.tokens.shapes.avatar),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AvatarContent(targetUser, 80.dp)
-                            }
-                            Spacer(Modifier.width(24.dp))
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        targetUser.displayName,
-                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                        color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    val emojis = cust["emojis"] as? String
-                                    if (!emojis.isNullOrEmpty()) {
-                                        Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
-                                    }
-                                }
-                                Text("@${targetUser.username}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                            }
+                            AsyncImage(
+                                model = bannerUrl,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
                         }
-                    } else {
-                        // Default Layout
-                        Column(
-                            modifier = Modifier.padding(top = 24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = if (bannerUrl != null) 16.dp else 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                .clip(VlTheme.tokens.shapes.avatar),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(140.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                    .clip(VlTheme.tokens.shapes.avatar),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AvatarContent(targetUser, 140.dp)
-                            }
-                            Spacer(Modifier.height(16.dp))
+                            AvatarContent(targetUser, 80.dp)
+                        }
+                        Spacer(Modifier.width(20.dp))
+                        Column {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     targetUser.displayName,
                                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                    color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 val emojis = cust["emojis"] as? String
                                 if (!emojis.isNullOrEmpty()) {
-                                    Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
+                                    Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
                                 }
                             }
-                            Text("@${targetUser.username}", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary)
+                            Text("@${targetUser.username}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                } else {
+                    // Default / Banner Layout: полоска баннера НАД аватаркой
+                    if (bannerUrl != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(170.dp),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(170.dp)
+                                    .padding(bottom = 50.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            ) {
+                                AsyncImage(
+                                    model = bannerUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(110.dp)
+                                    .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .clip(VlTheme.tokens.shapes.avatar),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AvatarContent(targetUser, 110.dp)
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 24.dp)
+                                .size(130.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                .clip(VlTheme.tokens.shapes.avatar),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AvatarContent(targetUser, 130.dp)
                         }
                     }
 
-                    // Profile body
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        DebugUidBadge(uid = targetUser.uid)
-                        if (targetUser.online) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Online", style = MaterialTheme.typography.bodyMedium, color = if (bgUrl != null) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(14.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            targetUser.displayName,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val emojis = cust["emojis"] as? String
+                        if (!emojis.isNullOrEmpty()) {
+                            Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
                         }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "@${targetUser.username}",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
-                        if (layout != "banner" && !gifUrl.isNullOrEmpty()) {
-                            Spacer(Modifier.height(24.dp))
-                            AsyncImage(
-                                model = gifUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(120.dp)
-                                    .clip(VlTheme.tokens.shapes.card),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(Modifier.height(32.dp))
+                // Profile body
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    DebugUidBadge(uid = targetUser.uid)
+                    if (targetUser.online) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Online", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
+                        Spacer(Modifier.height(16.dp))
+                    }
 
-                        if (targetUser.isAdmin) {
-                            Spacer(Modifier.height(16.dp))
-                            AdminBadge()
-                        }
+                    if (targetUser.isAdmin) {
+                        Spacer(Modifier.height(16.dp))
+                        AdminBadge()
+                    }
 
-                        if (targetUser.isProActive()) {
-                            Spacer(Modifier.height(12.dp))
-                            ProBadge()
-                        }
+                    if (targetUser.isProActive()) {
+                        Spacer(Modifier.height(12.dp))
+                        ProBadge()
+                    }
 
-                        if (targetUser.bio.isNotEmpty()) {
-                            Spacer(Modifier.height(16.dp))
-                            LinkifiedText(
-                                text = targetUser.bio,
-                                color = if (bgUrl != null) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurface,
-                                linkColor = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center
-                            )
-                        }
+                    if (targetUser.bio.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        LinkifiedText(
+                            text = targetUser.bio,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            linkColor = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textAlign = TextAlign.Center
+                        )
                     }
                 }
             }

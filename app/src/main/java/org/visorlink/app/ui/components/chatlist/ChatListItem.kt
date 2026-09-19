@@ -190,41 +190,47 @@ fun ChatListItem(
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (chatType != ChatType.DIRECT && !isSavedMessages) {
-                        Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
-                    }
-                    val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
-                    val isOfficial = chatType == ChatType.DIRECT && (
-                        otherProfile?.botBadge == "official" ||
-                        otherProfile?.uid == "bot_faultywire" ||
-                        otherUsername == "faultywire"
-                    )
-                    Text(
-                        text = when {
-                            isSavedMessages -> stringResource(R.string.saved_messages_title)
-                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
-                            else -> chat.name
-                        },
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = titleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (isOfficial) {
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = "Official Bot",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(15.dp)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (chatType != ChatType.DIRECT && !isSavedMessages) {
+                            Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
+                        }
+                        val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
+                        val isOfficial = chatType == ChatType.DIRECT && (
+                            otherProfile?.botBadge == "official" ||
+                            otherProfile?.uid == "bot_faultywire" ||
+                            otherUsername == "faultywire"
                         )
+                        Text(
+                            text = when {
+                                isSavedMessages -> stringResource(R.string.saved_messages_title)
+                                chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
+                                else -> chat.name
+                            },
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = titleColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (isOfficial) {
+                            Icon(
+                                imageVector = Icons.Default.Verified,
+                                contentDescription = "Official Bot",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
-                    Spacer(Modifier.weight(1f))
                     chat.lastMessageAt?.let {
+                        Spacer(Modifier.width(8.dp))
                         Text(
                             formatTime(it.toDate()),
                             style = MaterialTheme.typography.labelSmall,
@@ -366,41 +372,47 @@ fun ChatListItemCompact(
 
         Column(modifier = Modifier.weight(1f)) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (chatType != ChatType.DIRECT && !isSavedMessages) {
-                    Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
-                }
-                val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
-                val isOfficial = chatType == ChatType.DIRECT && (
-                    otherProfile?.botBadge == "official" ||
-                    otherProfile?.uid == "bot_faultywire" ||
-                    otherUsername == "faultywire"
-                )
-                Text(
-                    text = when {
-                        isSavedMessages -> stringResource(R.string.saved_messages_title)
-                        chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
-                        else -> chat.name
-                    },
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = titleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (isOfficial) {
-                    Icon(
-                        imageVector = Icons.Default.Verified,
-                        contentDescription = "Official Bot",
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(15.dp)
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    if (chatType != ChatType.DIRECT && !isSavedMessages) {
+                        Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
+                    }
+                    val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
+                    val isOfficial = chatType == ChatType.DIRECT && (
+                        otherProfile?.botBadge == "official" ||
+                        otherProfile?.uid == "bot_faultywire" ||
+                        otherUsername == "faultywire"
                     )
+                    Text(
+                        text = when {
+                            isSavedMessages -> stringResource(R.string.saved_messages_title)
+                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
+                            else -> chat.name
+                        },
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = titleColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isOfficial) {
+                        Icon(
+                            imageVector = Icons.Default.Verified,
+                            contentDescription = "Official Bot",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
                 }
-                Spacer(Modifier.weight(1f))
                 chat.lastMessageAt?.let {
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         formatTime(it.toDate()),
                         style = MaterialTheme.typography.labelSmall,

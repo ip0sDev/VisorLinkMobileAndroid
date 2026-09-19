@@ -4,13 +4,16 @@ import android.content.Context
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Source
 import org.visorlink.app.data.model.StickerItem
 import org.visorlink.app.data.model.StickerPack
 import org.visorlink.app.utils.ChatDataCache
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 
@@ -21,13 +24,29 @@ class StickerPackRepository(
 ) {
     companion object {
         private const val TAG = "StickerPackRepository"
-        const val PREF_STICKER_CACHE_VERSION = "official_curated_v3"
+        const val PREF_STICKER_CACHE_VERSION = "official_curated_v4"
         private const val PREFS_NAME = "sticker_prefs"
         private const val KEY_CACHE_VERSION = "sticker_cache_version"
     }
 
     private val currentUid get() = auth.currentUser?.uid ?: ""
     private val _packsFlow = MutableStateFlow<List<StickerPack>>(emptyList())
+
+    init {
+        // Мгновенная предзагрузка из кэша в фоне при создании синглтона репозитория
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                purgeLegacyCacheIfNeeded()
+                val uid = currentUid.ifBlank { "global" }
+                val cached = ChatDataCache.loadStickerPacks(context, uid)
+                if (cached.isNotEmpty() && _packsFlow.value.isEmpty()) {
+                    _packsFlow.value = cached
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to preload stickers from cache", e)
+            }
+        }
+    }
 
     fun observeUserPacks(): Flow<List<StickerPack>> = _packsFlow.asStateFlow()
 
@@ -41,23 +60,33 @@ class StickerPackRepository(
         }
     }
 
-    suspend fun refreshPacks() = withContext(Dispatchers.IO) {
+    suspend fun refreshPacks(forceServer: Boolean = true) = withContext(Dispatchers.IO) {
         try {
             purgeLegacyCacheIfNeeded()
 
-            val uid = currentUid
-            if (uid.isNotEmpty()) {
+            val uid = currentUid.ifBlank { "global" }
+            // Мгновенно отдаем кэш, если в памяти еще пусто
+            if (_packsFlow.value.isEmpty()) {
                 val cached = ChatDataCache.loadStickerPacks(context, uid)
                 if (cached.isNotEmpty() && _packsFlow.value.isEmpty()) {
                     _packsFlow.value = cached
                 }
             }
 
-            // Запрашиваем только официальные курируемые стикерпаки из Firestore
-            val snapshot = firestore.collection("stickerPacks")
+            // Запрашиваем актуальные официальные курируемые стикерпаки из Firestore (по умолчанию напрямую с сервера)
+            val query = firestore.collection("stickerPacks")
                 .whereEqualTo("isOfficial", true)
-                .get()
-                .await()
+
+            val snapshot = try {
+                if (forceServer) {
+                    query.get(Source.SERVER).await()
+                } else {
+                    query.get().await()
+                }
+            } catch (serverEx: Exception) {
+                Log.w(TAG, "Server sticker query failed, fallback to default source: ${serverEx.message}")
+                query.get().await()
+            }
 
             val packs = snapshot.documents.mapNotNull { doc ->
                 try {
@@ -101,9 +130,7 @@ class StickerPackRepository(
             }
 
             _packsFlow.value = packs
-            if (uid.isNotEmpty()) {
-                ChatDataCache.saveStickerPacks(context, uid, packs)
-            }
+            ChatDataCache.saveStickerPacks(context, uid, packs)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch official sticker packs", e)
         }

@@ -59,7 +59,28 @@ class SavedMessagesRepository(
         isValid
     } catch (e: Exception) { false }
 
+    suspend fun clearAllSavedMessages(uid: String) = withContext(Dispatchers.IO) {
+        try {
+            val messagesRef = db.collection(FirestoreCollections.SAVED_MESSAGES).document(uid).collection(FirestoreCollections.MESSAGES)
+            val snapshot = messagesRef.get().await()
+            val chunks = snapshot.documents.chunked(500)
+            for (chunk in chunks) {
+                val batch = db.batch()
+                for (doc in chunk) {
+                    batch.delete(doc.reference)
+                }
+                batch.commit().await()
+            }
+            context.cacheDir.listFiles()?.forEach { file ->
+                if (file.name.startsWith("decrypted_") || file.name.startsWith("voice_") || file.name.startsWith("upload_") || file.name.startsWith("orig_")) {
+                    file.delete()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     suspend fun disablePin(uid: String) {
+        clearAllSavedMessages(uid)
         db.collection(FirestoreCollections.SAVED_MESSAGES_SETTINGS).document(uid).update(mapOf("pinEnabled" to false, "pinHash" to FieldValue.delete(), "updatedAt" to FieldValue.serverTimestamp())).await()
     }
 
@@ -83,7 +104,9 @@ class SavedMessagesRepository(
                         val isDiary = doc.getBoolean("isDiary") ?: false
                         if (!includeDiary && isDiary) return@mapNotNull null
 
-                        doc.toObject(SavedMessage::class.java)?.copy(id = doc.id)?.let { msg -> decryptIfNeeded(msg, key) }
+                        val msg = doc.toObject(SavedMessage::class.java)?.copy(id = doc.id) ?: return@mapNotNull null
+                        if (msg.encrypted == true && key == null) return@mapNotNull null
+                        decryptIfNeeded(msg, key)
                     } catch (e: Exception) {
                         null
                     }

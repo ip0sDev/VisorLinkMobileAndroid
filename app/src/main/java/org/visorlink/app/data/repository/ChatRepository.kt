@@ -523,20 +523,24 @@ class ChatRepository(
         awaitClose { reg.remove() }
     }
 
+    private val dismissedNotificationIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     fun notificationsFlow(uid: String): Flow<List<AppNotification>> = callbackFlow {
         if (isBackendEnabled()) {
             try {
-                val notifs = api.getNotifications().map {
-                    AppNotification(
-                        id = it.id,
-                        type = it.type,
-                        chatId = (it.data?.get("chatId") as? String) ?: "",
-                        inviteId = (it.data?.get("inviteId") as? String) ?: "",
-                        invitedBy = it.title ?: "",
-                        createdAt = Timestamp(Date(it.createdAt)),
-                        read = it.read
-                    )
-                }
+                val notifs = api.getNotifications()
+                    .filter { !it.read && !dismissedNotificationIds.contains(it.id) }
+                    .map {
+                        AppNotification(
+                            id = it.id,
+                            type = it.type,
+                            chatId = (it.data?.get("chatId") as? String) ?: "",
+                            inviteId = (it.data?.get("inviteId") as? String) ?: "",
+                            invitedBy = it.title ?: "",
+                            createdAt = Timestamp(Date(it.createdAt)),
+                            read = it.read
+                        )
+                    }
                 trySend(notifs)
             } catch (_: Exception) {
                 trySend(emptyList())
@@ -553,6 +557,7 @@ class ChatRepository(
         val reg = db.collection("users").document(uid).collection("notifications").whereEqualTo("read", false)
             .addSnapshotListener { snap, _ ->
                 val notifs = snap?.documents?.mapNotNull { doc ->
+                    if (dismissedNotificationIds.contains(doc.id)) return@mapNotNull null
                     try { doc.toObject(AppNotification::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
                 } ?: emptyList()
                 trySend(notifs)
@@ -709,12 +714,79 @@ class ChatRepository(
         functions.getHttpsCallable("inviteUser").call(mapOf("chatId" to chatId, "targetUsername" to username)).await()
     }
 
-    suspend fun respondToInvite(inviteId: String, accept: Boolean): String? {
+    suspend fun dismissNotification(notificationId: String, uid: String? = null, inviteId: String? = null) {
+        dismissedNotificationIds.add(notificationId)
+        val effectiveUid = uid?.ifEmpty { currentUid } ?: currentUid
+
+        if (isBackendEnabled()) {
+            try {
+                api.markNotificationRead(notificationId)
+            } catch (_: Exception) {
+                try { api.deleteNotification(notificationId) } catch (_: Exception) {}
+            }
+        }
+
+        if (!isFirestoreDisabled() && effectiveUid.isNotBlank()) {
+            val userNotifs = db.collection("users").document(effectiveUid).collection("notifications")
+            try {
+                userNotifs.document(notificationId).update("read", true).await()
+            } catch (_: Exception) {
+                try {
+                    userNotifs.document(notificationId).delete().await()
+                } catch (_: Exception) {}
+            }
+
+            if (!inviteId.isNullOrBlank()) {
+                try {
+                    val query = userNotifs
+                        .whereEqualTo("inviteId", inviteId)
+                        .whereEqualTo("read", false)
+                        .get().await()
+                    for (doc in query.documents) {
+                        dismissedNotificationIds.add(doc.id)
+                        try { doc.reference.update("read", true).await() } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    suspend fun dismissNotificationByInviteId(inviteId: String, uid: String) {
+        if (inviteId.isBlank() || uid.isBlank() || isFirestoreDisabled()) return
+        try {
+            val userNotifs = db.collection("users").document(uid).collection("notifications")
+            val query = userNotifs
+                .whereEqualTo("inviteId", inviteId)
+                .whereEqualTo("read", false)
+                .get().await()
+            for (doc in query.documents) {
+                dismissedNotificationIds.add(doc.id)
+                try { doc.reference.update("read", true).await() } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun respondToInvite(
+        inviteId: String,
+        accept: Boolean,
+        notificationId: String? = null,
+        uid: String? = null
+    ): String? {
+        val effectiveUid = uid?.ifEmpty { currentUid } ?: currentUid
+        if (!notificationId.isNullOrBlank()) {
+            dismissNotification(notificationId, effectiveUid, inviteId)
+        }
         if (isBackendEnabled()) {
             api.respondToInvite(inviteId, RespondInviteRequest(action = if (accept) "accept" else "decline"))
+            if (effectiveUid.isNotBlank()) {
+                dismissNotificationByInviteId(inviteId, effectiveUid)
+            }
             return null
         }
         val result = functions.getHttpsCallable("respondToInvite").call(mapOf("inviteId" to inviteId, "accept" to accept)).await()
+        if (effectiveUid.isNotBlank()) {
+            dismissNotificationByInviteId(inviteId, effectiveUid)
+        }
         return (result.data as Map<*, *>)["chatId"] as? String
     }
 

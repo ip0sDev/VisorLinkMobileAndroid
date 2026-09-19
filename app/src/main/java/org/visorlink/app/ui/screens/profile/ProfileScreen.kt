@@ -166,33 +166,82 @@ fun ProfileScreen(
         val layout = cust["layout"] as? String ?: "default"
         val bgUrl = cust["bgUrl"] as? String
         val gifUrl = cust["gifUrl"] as? String
-        val bannerUrl = gifUrl ?: bgUrl
+        val bannerUrl = (gifUrl ?: bgUrl).takeIf { isPro }
 
-        Box(Modifier.fillMaxSize()) {
-            if (isPro && bgUrl != null) {
-                AsyncImage(
-                    model = bgUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .background(if (isPro && bgUrl != null) Color.Black.copy(alpha = 0.3f) else Color.Transparent)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = if (layout == "banner") Alignment.Start else Alignment.CenterHorizontally
-            ) {
-                if (isPro && bannerUrl != null) {
-                    Box(contentAlignment = Alignment.BottomStart) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (layout == "compact") {
+                if (bannerUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                    ) {
+                        AsyncImage(
+                            model = bannerUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = if (bannerUrl != null) 16.dp else 24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                            .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                            .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
+                            .clip(VlTheme.tokens.shapes.avatar),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AvatarContent(user, 80.dp)
+                    }
+                    Spacer(Modifier.width(20.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                user.displayName,
+                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val emojis = cust["emojis"] as? String
+                            if (!emojis.isNullOrEmpty()) {
+                                Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
+                            }
+                        }
+                        Text(
+                            "@${user.username}",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            } else {
+                // Default / Banner Layout: полоска баннера НАД аватаркой
+                if (bannerUrl != null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(170.dp),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(200.dp)
-                                .padding(bottom = 40.dp)
+                                .height(170.dp)
+                                .padding(bottom = 50.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
                             AsyncImage(
@@ -202,108 +251,52 @@ fun ProfileScreen(
                                 contentScale = ContentScale.Crop
                             )
                         }
-                        Row(
-                            modifier = Modifier.padding(start = 24.dp),
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(100.dp)
-                                    .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                    .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                    .clip(VlTheme.tokens.shapes.avatar),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AvatarContent(user, 100.dp)
-                            }
-                            Spacer(Modifier.width(16.dp))
-                            Column(Modifier.padding(bottom = 8.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        user.displayName,
-                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                        color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
-                                    )
-                                    val emojis = cust["emojis"] as? String
-                                    if (!emojis.isNullOrEmpty()) {
-                                        Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
-                                    }
-                                }
-                                Text(
-                                    "@${user.username}",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                } else if (layout == "compact") {
-                    Row(
-                        modifier = Modifier
-                            .padding(top = 24.dp, start = 24.dp, end = 24.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         Box(
                             modifier = Modifier
-                                .size(80.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                                .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                .clip(VlTheme.tokens.shapes.avatar),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AvatarContent(user, 80.dp)
-                        }
-                        Spacer(Modifier.width(24.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    user.displayName,
-                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                    color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
-                                )
-                                val emojis = cust["emojis"] as? String
-                                if (!emojis.isNullOrEmpty()) {
-                                    Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
-                                }
-                            }
-                            Text("@${user.username}", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                } else {
-                    // Default Layout
-                    Column(
-                        modifier = Modifier.padding(top = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(140.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                .size(110.dp)
+                                .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
                                 .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
                                 .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
                                 .clip(VlTheme.tokens.shapes.avatar),
                             contentAlignment = Alignment.Center
                         ) {
-                            AvatarContent(user, 140.dp)
+                            AvatarContent(user, 110.dp)
                         }
-                        Spacer(Modifier.height(16.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                user.displayName,
-                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                color = if (bgUrl != null) Color.White else MaterialTheme.colorScheme.onSurface
-                            )
-                            val emojis = cust["emojis"] as? String
-                            if (!emojis.isNullOrEmpty()) {
-                                Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
-                            }
-                        }
-                        Text("@${user.username}", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold), color = MaterialTheme.colorScheme.primary)
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 24.dp)
+                            .size(130.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                            .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                            .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
+                            .clip(VlTheme.tokens.shapes.avatar),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AvatarContent(user, 130.dp)
                     }
                 }
+
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        user.displayName,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    val emojis = cust["emojis"] as? String
+                    if (!emojis.isNullOrEmpty()) {
+                        Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "@${user.username}",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
 
                 if (!uiState.isEditing) {
                     // Profile body
@@ -316,23 +309,9 @@ fun ProfileScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
                                 Spacer(Modifier.width(6.dp))
-                                Text("Online", style = MaterialTheme.typography.bodyMedium, color = if (bgUrl != null) Color.White.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Online", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.height(16.dp))
-                        }
-
-                        if (layout != "banner" && !gifUrl.isNullOrEmpty()) {
-                            Spacer(Modifier.height(24.dp))
-                            AsyncImage(
-                                model = gifUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(120.dp)
-                                    .clip(VlTheme.tokens.shapes.card),
-                                contentScale = ContentScale.Crop
-                            )
-                            Spacer(Modifier.height(32.dp))
                         }
 
                         if (user.isAdmin) {
@@ -349,7 +328,7 @@ fun ProfileScreen(
                             Spacer(Modifier.height(16.dp))
                             LinkifiedText(
                                 text = user.bio,
-                                color = if (bgUrl != null) Color.White.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurface,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 linkColor = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center
@@ -512,7 +491,6 @@ fun ProfileScreen(
                 Spacer(Modifier.height(32.dp))
             }
         }
-    }
 
     if (showLogout) {
         AlertDialog(

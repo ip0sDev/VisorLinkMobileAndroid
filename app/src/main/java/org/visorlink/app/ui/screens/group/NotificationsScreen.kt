@@ -40,8 +40,12 @@ fun NotificationsScreen(
 ) {
     val scope = rememberCoroutineScope()
     val uid = auth.currentUser?.uid ?: return
-    val notifications by chatRepository.notificationsFlow(uid)
+    val rawNotifications by chatRepository.notificationsFlow(uid)
         .collectAsState(initial = emptyList())
+    var handledIds by remember { mutableStateOf(setOf<String>()) }
+    val notifications = remember(rawNotifications, handledIds) {
+        rawNotifications.filter { it.id !in handledIds }
+    }
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val haptic = rememberHaptic()
@@ -89,18 +93,32 @@ fun NotificationsScreen(
                         notification = notif,
                         onAccept = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
+                            handledIds = handledIds + notif.id
                             scope.launch {
                                 try {
-                                    val chatId = chatRepository.respondToInvite(notif.inviteId, true)
-                                    if (chatId != null) onOpenChat(chatId)
+                                    val chatId = chatRepository.respondToInvite(
+                                        inviteId = notif.inviteId,
+                                        accept = true,
+                                        notificationId = notif.id,
+                                        uid = uid
+                                    )
+                                    val targetChatId = chatId ?: notif.chatId.takeIf { it.isNotBlank() }
+                                    if (targetChatId != null) onOpenChat(targetChatId)
                                 } catch (_: Exception) {}
                             }
                         },
                         onDecline = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
+                            handledIds = handledIds + notif.id
                             scope.launch {
-                                try { chatRepository.respondToInvite(notif.inviteId, false) }
-                                catch (_: Exception) {}
+                                try {
+                                    chatRepository.respondToInvite(
+                                        inviteId = notif.inviteId,
+                                        accept = false,
+                                        notificationId = notif.id,
+                                        uid = uid
+                                    )
+                                } catch (_: Exception) {}
                             }
                         }
                     )

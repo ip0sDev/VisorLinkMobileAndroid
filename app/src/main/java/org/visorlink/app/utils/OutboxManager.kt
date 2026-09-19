@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 import java.io.File
+import java.io.FileOutputStream
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -382,9 +385,85 @@ class OutboxManager(
                         val folderId = googleDriveMediaService?.getOrCreateVisorLinkFolder(token)
                             ?: throw IllegalStateException("Не удалось получить папку Google Drive.")
 
+                        // 1. Извлекаем метаданные видео (длительность, ширина, высота) и генерируем превью (thumbnail)
+                        var durationSec: Int? = null
+                        var videoWidth: Int? = null
+                        var videoHeight: Int? = null
+                        var thumbFile: File? = null
+
+                        try {
+                            val retriever = MediaMetadataRetriever()
+                            retriever.setDataSource(file.absolutePath)
+                            val durMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()
+                            if (durMs != null && durMs > 0) {
+                                durationSec = (durMs / 1000).toInt()
+                            }
+                            val w = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull()
+                            val h = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
+                            val rot = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                            if (rot == 90 || rot == 270) {
+                                videoWidth = h
+                                videoHeight = w
+                            } else {
+                                videoWidth = w
+                                videoHeight = h
+                            }
+
+                            // Извлекаем фрейм для превью
+                            val frameBitmap = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                ?: retriever.frameAtTime
+
+                            if (frameBitmap != null) {
+                                val maxDim = 720
+                                val scale = if (frameBitmap.width > maxDim || frameBitmap.height > maxDim) {
+                                    maxDim.toFloat() / maxOf(frameBitmap.width, frameBitmap.height)
+                                } else 1f
+
+                                val scaledBitmap = if (scale < 1f) {
+                                    Bitmap.createScaledBitmap(
+                                        frameBitmap,
+                                        (frameBitmap.width * scale).toInt().coerceAtLeast(1),
+                                        (frameBitmap.height * scale).toInt().coerceAtLeast(1),
+                                        true
+                                    )
+                                } else frameBitmap
+
+                                val tempThumb = File(context.cacheDir, "thumb_${System.currentTimeMillis()}.jpg")
+                                FileOutputStream(tempThumb).use { out ->
+                                    scaledBitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
+                                }
+                                thumbFile = tempThumb
+                            }
+                            retriever.release()
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to extract video thumbnail or metadata", e)
+                        }
+
+                        // 2. Если превью сгенерировано — загружаем его на Google Drive как отдельный файл image/jpeg
+                        var thumbUrl: String? = null
+                        var previewUrl: String? = null
+                        if (thumbFile != null && thumbFile.exists()) {
+                            try {
+                                val thumbUpload = googleDriveMediaService.uploadMediaFile(token, folderId, thumbFile, "image/jpeg") {}
+                                thumbUrl = thumbUpload.directUrl
+                                previewUrl = thumbUpload.previewUrl
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to upload video thumbnail", e)
+                            } finally {
+                                thumbFile.delete()
+                            }
+                        }
+
+                        // 3. Загружаем сам видеофайл
                         val uploadResult = googleDriveMediaService.uploadMediaFile(token, folderId, file, "video/mp4") { progress ->
                             scope.launch { updateProgressThrottled(action.id, progress) }
                         }
+
+                        // 4. Кэшируем видео локально в VideoCache для мгновенного локального воспроизведения
+                        val streamUrl = "https://drive.usercontent.google.com/download?id=${uploadResult.fileId}&export=download&confirm=t"
+                        VideoCache.saveToCache(context, streamUrl, file)
+
+                        // 5. Отправляем сообщение
                         chatRepository.sendVideoNow(
                             id = action.id,
                             chatId = action.chatId,
@@ -396,13 +475,13 @@ class OutboxManager(
                             nextSeq = nextSeq,
                             isDirect = isDirect,
                             otherUserId = otherUserId,
-                            duration = null,
-                            width = null,
-                            height = null,
-                            thumbUrl = uploadResult.previewUrl,
+                            duration = durationSec,
+                            width = videoWidth,
+                            height = videoHeight,
+                            thumbUrl = thumbUrl ?: previewUrl,
                             driveFileId = uploadResult.fileId,
-                            driveUrl = uploadResult.directUrl,
-                            previewUrl = uploadResult.previewUrl
+                            driveUrl = streamUrl,
+                            previewUrl = previewUrl ?: thumbUrl
                         )
                         file.delete()
                         lastProgressUpdate.remove(action.id)

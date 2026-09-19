@@ -1,10 +1,13 @@
 package org.visorlink.app.ui.screens.saved
 
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -15,27 +18,27 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.ui.components.VlAmbientGlow
-import org.visorlink.app.ui.components.VlSurface
-import org.visorlink.app.ui.components.VlTextField
+import org.visorlink.app.data.repository.FlagsRepository
+import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SavedMessagesSettingsScreen(
     onNavigateBack: () -> Unit,
-    themeViewModel: ThemeViewModel = koinViewModel()
+    themeViewModel: ThemeViewModel = koinViewModel(),
+    flagsRepository: FlagsRepository = koinInject()
 ) {
     val viewModel: SavedMessagesViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
@@ -43,36 +46,48 @@ fun SavedMessagesSettingsScreen(
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val haptic = rememberHaptic()
 
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+
+    LaunchedEffect(Unit) {
+        if (isLiquidEnabled) {
+            topBarJelly.pulse(0.06f)
+        }
+    }
+
     val pinEnabled = uiState.settings?.pinEnabled == true
     val lockTimeout = uiState.settings?.lockTimeout ?: 5
 
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showDisablePinDialog by remember { mutableStateOf(false) }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text("Настройки Избранного") },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                        onNavigateBack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
-            )
-        }
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            VlAmbientGlow()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        VlAmbientGlow()
 
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                VlTopAppBar(
+                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    title = { Text("Настройки Избранного", fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
+                        }
+                    }
+                )
+            }
+        ) { padding ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -80,70 +95,78 @@ fun SavedMessagesSettingsScreen(
             ) {
                 Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
-                SectionHeader("PIN-защита и шифрование")
-
-                VlSurface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    contentPadding = PaddingValues(vertical = 8.dp)
+                VlSettingsSection(
+                    title = "PIN-защита и шифрование",
+                    modifier = Modifier.liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled)
                 ) {
-                    Column {
-                        ListItem(
-                            modifier = Modifier.clickable {
-                                haptic.perform(HapticType.SELECTION, hapticEnabled)
-                                if (!pinEnabled) showSetPinDialog = true
-                                else showDisablePinDialog = true
-                            },
-                            headlineContent = { Text("PIN-блокировка") },
-                            supportingContent = {
-                                Text(if (pinEnabled) "Включена · шифрование текстов активно" else "Отключена · данные не шифруются")
-                            },
-                            leadingContent = {
-                                Icon(if (pinEnabled) Icons.Default.Lock else Icons.Default.LockOpen, null, tint = MaterialTheme.colorScheme.primary)
-                            },
-                            trailingContent = {
-                                Switch(checked = pinEnabled, onCheckedChange = {
+                    VlSettingsItem(
+                        icon = if (pinEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
+                        iconColor = if (pinEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        title = "PIN-блокировка",
+                        subtitle = if (pinEnabled) "Включена · шифрование текстов активно" else "Отключена · данные не шифруются",
+                        onClick = {
+                            haptic.perform(HapticType.SELECTION, hapticEnabled)
+                            if (!pinEnabled) showSetPinDialog = true
+                            else showDisablePinDialog = true
+                        },
+                        trailing = {
+                            VlSwitch(
+                                checked = pinEnabled,
+                                onCheckedChange = {
                                     haptic.perform(HapticType.SELECTION, hapticEnabled)
                                     if (it) showSetPinDialog = true
                                     else showDisablePinDialog = true
-                                })
-                            },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                                }
+                            )
+                        }
+                    )
+
+                    if (pinEnabled) {
+                        VlSettingsItem(
+                            icon = Icons.Default.Timer,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            title = "Автоблокировка",
+                            subtitle = when (lockTimeout) {
+                                0    -> "Немедленно при выходе"
+                                1    -> "Через 1 минуту"
+                                else -> "Через $lockTimeout минут"
+                            }
                         )
 
-                        if (pinEnabled) {
-                            HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                        // Селектор интервала времени в современном стиле
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val options = listOf(0 to "Сразу", 5 to "5 мин", 15 to "15 мин", 60 to "1 ч")
+                            val cs = MaterialTheme.colorScheme
+                            options.forEach { (value, label) ->
+                                val selected = lockTimeout == value
+                                val chipShape = RoundedCornerShape(16.dp)
+                                val bg = if (selected) cs.primaryContainer else cs.surfaceContainerHigh.copy(alpha = 0.5f)
+                                val contentColor = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant
+                                val border = if (selected) BorderStroke(1.dp, cs.primary.copy(alpha = 0.35f)) else null
 
-                            ListItem(
-                                headlineContent = { Text("Автоблокировка") },
-                                supportingContent = {
-                                    Text(
-                                        when (lockTimeout) {
-                                            0    -> "Немедленно при выходе"
-                                            1    -> "Через 1 минуту"
-                                            else -> "Через $lockTimeout минут"
-                                        }
-                                    )
-                                },
-                                leadingContent = { Icon(Icons.Default.Timer, null, tint = MaterialTheme.colorScheme.primary) },
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
-                            )
-
-                            // Chips выбора времени
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                val options = listOf(0 to "Сразу", 5 to "5 мин", 15 to "15 мин", 60 to "1 ч")
-                                options.forEach { (value, label) ->
-                                    FilterChip(
-                                        selected = lockTimeout == value,
-                                        onClick = {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(chipShape)
+                                        .then(if (border != null) Modifier.border(border, chipShape) else Modifier)
+                                        .background(bg, chipShape)
+                                        .clickable {
                                             haptic.perform(HapticType.SELECTION, hapticEnabled)
                                             viewModel.updateLockTimeout(value)
-                                        },
-                                        label = { Text(label) }
+                                        }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                        color = contentColor
                                     )
                                 }
                             }
@@ -151,8 +174,15 @@ fun SavedMessagesSettingsScreen(
                     }
                 }
 
-                AnimatedVisibility(visible = pinEnabled) {
-                    WarningBanner()
+                AnimatedVisibility(
+                    visible = pinEnabled,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    WarningBanner(
+                        modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
+                        isLiquidEnabled = isLiquidEnabled
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(padding.calculateBottomPadding() + 32.dp))
@@ -170,40 +200,110 @@ fun SavedMessagesSettingsScreen(
     if (showDisablePinDialog) {
         AlertDialog(
             onDismissRequest = { showDisablePinDialog = false },
-            icon = { Icon(Icons.Default.LockOpen, null) },
-            title = { Text("Отключить PIN?") },
-            text  = { Text("Шифрование будет отключено. Уже сохранённые сообщения останутся зашифрованными до удаления.") },
+            shape = RoundedCornerShape(28.dp),
+            icon = {
+                Icon(
+                    Icons.Default.LockOpen,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = { Text("Отключить PIN-код?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "Шифрование будет отключено. Все зашифрованные сообщения из Избранного будут безвозвратно удалены, чтобы не оставалось поврежденных данных.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
             confirmButton = {
-                TextButton(onClick = { viewModel.disablePin(); showDisablePinDialog = false }) {
-                    Text("Отключить", color = MaterialTheme.colorScheme.error)
+                Button(
+                    onClick = {
+                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                        viewModel.disablePin()
+                        showDisablePinDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Удалить и отключить", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDisablePinDialog = false }) { Text("Отмена") }
+                TextButton(
+                    onClick = { showDisablePinDialog = false },
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Отмена")
+                }
             }
         )
     }
 }
 
 @Composable
-private fun WarningBanner() {
+private fun WarningBanner(
+    modifier: Modifier = Modifier,
+    isLiquidEnabled: Boolean = false
+) {
+    val cs = MaterialTheme.colorScheme
+    val shape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else RoundedCornerShape(20.dp)
+
     Surface(
-        shape = VlTheme.tokens.shapes.button,
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+        shape = shape,
+        color = cs.primaryContainer.copy(alpha = 0.35f),
+        border = BorderStroke(1.dp, cs.primary.copy(alpha = 0.25f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Шифрование включено", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(cs.primary.copy(alpha = 0.15f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = cs.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "Шифрование включено",
+                    fontWeight = FontWeight.Bold,
+                    color = cs.primary,
+                    fontSize = 15.sp
+                )
             }
-            Text("Текстовые сообщения зашифрованы на устройстве (AES-GCM-256). Сервер не может их прочитать — только вы, зная PIN.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+            Text(
+                text = "Текстовые сообщения зашифрованы на устройстве (AES-GCM-256). Сервер не может их прочитать — только вы, зная PIN.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = cs.onSurface
+            )
+            HorizontalDivider(color = cs.primary.copy(alpha = 0.15f))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Фото и голосовые НЕ шифруются.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = cs.error,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Фото и голосовые НЕ шифруются.",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = cs.error
+                )
             }
         }
     }
@@ -220,13 +320,20 @@ private fun SetPinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon  = { Icon(Icons.Default.Lock, null) },
-        title = { Text("Установить PIN-код") },
-        text  = {
+        shape = RoundedCornerShape(28.dp),
+        icon = {
+            Icon(
+                Icons.Default.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = { Text("Установить PIN-код", fontWeight = FontWeight.Bold) },
+        text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    "PIN используется для блокировки Избранного. " +
-                            "Текстовые сообщения будут зашифрованы на устройстве.",
+                    "PIN используется для блокировки Избранного. Текстовые сообщения будут зашифрованы на устройстве.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -255,21 +362,19 @@ private fun SetPinDialog(
         confirmButton = {
             Button(
                 onClick = { onConfirm(pin) },
-                enabled = pin.length >= 4 && !mismatch && confirmPin == pin
-            ) { Text("Установить") }
+                enabled = pin.length >= 4 && !mismatch && confirmPin == pin,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Установить", fontWeight = FontWeight.Bold)
+            }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Отмена")
+            }
         }
-    )
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 4.dp)
     )
 }

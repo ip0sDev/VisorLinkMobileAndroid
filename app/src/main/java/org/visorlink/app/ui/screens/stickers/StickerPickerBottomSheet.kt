@@ -60,6 +60,11 @@ fun StickerPickerBottomSheet(
     val uiState by viewModel.uiState.collectAsState()
     val appTheme by themeVm.appTheme.collectAsState()
 
+    // При каждом открытии шторки втихую обновляем список стикеров с сервера
+    LaunchedEffect(Unit) {
+        viewModel.refreshSilently()
+    }
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     ModalBottomSheet(
@@ -97,9 +102,16 @@ internal fun StickerPickerContent(
     var selectedPackIndex by remember { mutableIntStateOf(if (packs.isNotEmpty()) 0 else -1) }
     var showDeleteConfirm by remember { mutableStateOf<StickerPack?>(null) }
 
-    LaunchedEffect(packs.size) {
-        if (selectedPackIndex >= packs.size) selectedPackIndex = if (packs.isNotEmpty()) 0 else -1
-        if (selectedPackIndex == -1 && packs.isNotEmpty()) selectedPackIndex = 0
+    LaunchedEffect(packs) {
+        if (packs.isNotEmpty()) {
+            if (selectedPackIndex >= packs.size) {
+                selectedPackIndex = 0
+            } else if (selectedPackIndex == -1) {
+                selectedPackIndex = 0
+            }
+        } else {
+            selectedPackIndex = -1
+        }
     }
 
     val selectedPack = if (selectedPackIndex in packs.indices) packs[selectedPackIndex] else null

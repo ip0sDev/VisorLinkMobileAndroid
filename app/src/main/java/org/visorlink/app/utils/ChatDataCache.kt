@@ -397,12 +397,13 @@ object ChatDataCache {
         withContext(Dispatchers.IO) {
             try {
                 val db = getDb(context).writableDatabase
+                val effectiveUid = uid.ifBlank { "global" }
                 db.beginTransaction()
                 try {
-                    db.delete("stickers", "uid=?", arrayOf(uid))
+                    db.delete("stickers", "uid=? OR uid='global'", arrayOf(effectiveUid))
                     val stmt = db.compileStatement("INSERT INTO stickers (uid, pack_id, data) VALUES (?, ?, ?)")
                     packs.forEach { pack ->
-                        stmt.bindString(1, uid)
+                        stmt.bindString(1, effectiveUid)
                         stmt.bindString(2, pack.id)
                         stmt.bindString(3, pack.toJson().toString())
                         stmt.executeInsert()
@@ -419,7 +420,8 @@ object ChatDataCache {
             val list = mutableListOf<StickerPack>()
             try {
                 val db = getDb(context).readableDatabase
-                db.rawQuery("SELECT data FROM stickers WHERE uid=?", arrayOf(uid)).use { cursor ->
+                val effectiveUid = uid.ifBlank { "global" }
+                db.rawQuery("SELECT data FROM stickers WHERE uid=? OR uid='global'", arrayOf(effectiveUid)).use { cursor ->
                     while (cursor.moveToNext()) {
                         try { list.add(JSONObject(cursor.getString(0)).toStickerPack()) } catch(_: Exception) {}
                     }
