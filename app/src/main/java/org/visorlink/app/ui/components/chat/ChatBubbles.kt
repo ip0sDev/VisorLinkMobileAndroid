@@ -377,7 +377,19 @@ fun MessageBubble(
     ) {
         Box(modifier = uploadProgressModifier) {
             if (!message.deleted && isLegacyMediaMessage(message)) {
-                LegacyMediaPlaceholder(modifier = Modifier.widthIn(max = 280.dp))
+                LegacyMediaPlaceholder(
+                    message = message,
+                    isMine = isMine,
+                    chatType = chatType,
+                    showSenderName = showSenderName,
+                    isReadByOther = isReadByOther,
+                    hapticEnabled = hapticEnabled,
+                    onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                    onLongPressDrag = onLongPressDrag,
+                    onLongPressEnd = onLongPressEnd,
+                    onReact = onReact,
+                    onReplyClick = onReplyClick
+                )
                 return@Box
             }
             when {

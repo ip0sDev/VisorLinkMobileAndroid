@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -24,7 +25,7 @@ class StickerPackRepository(
 ) {
     companion object {
         private const val TAG = "StickerPackRepository"
-        const val PREF_STICKER_CACHE_VERSION = "official_curated_v4"
+        const val PREF_STICKER_CACHE_VERSION = "official_curated_v5"
         private const val PREFS_NAME = "sticker_prefs"
         private const val KEY_CACHE_VERSION = "sticker_cache_version"
     }
@@ -114,6 +115,8 @@ class StickerPackRepository(
                         )
                     }.sortedBy { it.sortOrder }
 
+                    if (stickers.isEmpty()) return@mapNotNull null
+
                     StickerPack(
                         id = id,
                         name = name,
@@ -176,6 +179,8 @@ class StickerPackRepository(
                 )
             }.sortedBy { it.sortOrder }
 
+            if (stickers.isEmpty()) return@withContext null
+
             StickerPack(
                 id = doc.id,
                 name = name,
@@ -197,6 +202,15 @@ class StickerPackRepository(
     }
 
     suspend fun deletePack(packId: String, isOwner: Boolean) = withContext(Dispatchers.IO) {
-        refreshPacks()
+        try {
+            _packsFlow.update { list -> list.filter { it.id != packId } }
+            ChatDataCache.deleteStickerPack(context, packId)
+            if (isOwner) {
+                firestore.collection("stickerPacks").document(packId).delete().await()
+            }
+            refreshPacks(forceServer = true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete pack $packId", e)
+        }
     }
 }

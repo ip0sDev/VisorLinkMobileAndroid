@@ -222,6 +222,11 @@ fun VlMediaPickerViewContent(
             onClearSelection = { viewModel.clearSelection() }
         )
 
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.4f)
+        )
+
         // Основная область контента (сетка медиа или камера)
         Box(
             modifier = Modifier
@@ -395,17 +400,31 @@ private fun MediaPickerTopBar(
 
         // Центральный заголовок или счетчик выбора
         if (selectedCount > 0 && currentTab != MediaPickerTab.CAMERA) {
-            Surface(
-                color = cs.primaryContainer,
-                shape = CircleShape,
-                modifier = Modifier.padding(horizontal = 8.dp)
+            val tokens = VlTheme.tokens
+            val pillShape = CircleShape
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .then(
+                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, pillShape)
+                        else Modifier
+                    )
+                    .clip(pillShape)
+                    .background(
+                        if (tokens.isBiolume) cs.primary.copy(alpha = 0.18f) else cs.primaryContainer,
+                        pillShape
+                    )
+                    .then(
+                        if (tokens.structure.enabled) Modifier.vlHairline(cs.primary.copy(alpha = 0.40f), pillShape)
+                        else Modifier
+                    )
+                    .padding(horizontal = 14.dp, vertical = 5.dp)
             ) {
                 Text(
                     text = "Выбрано: $selectedCount/$maxSelection",
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = cs.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                    color = cs.primary
                 )
             }
         } else {
@@ -521,6 +540,7 @@ private fun BiolumeTabItem(
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val isDark = cs.surface.luminance() < 0.5f
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -556,10 +576,19 @@ private fun BiolumeTabItem(
         label = "tab_scale"
     )
 
+    val pillShape = CircleShape
     Box(
         modifier = modifier
-            .clip(CircleShape)
-            .background(pillColor)
+            .then(
+                if (selected && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, pillShape)
+                else Modifier
+            )
+            .clip(pillShape)
+            .background(pillColor, pillShape)
+            .then(
+                if (selected && tokens.structure.enabled) Modifier.vlHairline(cs.primary.copy(alpha = 0.40f), pillShape)
+                else Modifier
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

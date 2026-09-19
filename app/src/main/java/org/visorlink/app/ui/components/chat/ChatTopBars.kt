@@ -64,25 +64,16 @@ fun ChatTopBar(
     val isLiquidEnabled = flags.isEnabled("animation_test")
     val haptic = rememberHaptic()
 
-    val statusKey = when (uiState.topbarStatus) {
-        is TopbarStatus.Typing -> "typing"
-        is TopbarStatus.Online -> "online"
-        is TopbarStatus.Connecting -> "connecting"
-        is TopbarStatus.Updating -> "updating"
-        is TopbarStatus.WaitingForNetwork -> "waiting"
-        else -> "idle"
-    }
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
-    if (isLiquidEnabled) {
-        LaunchedEffect(statusKey) {
-            topBarJelly.pulse(0.08f)
-        }
-    }
 
     VlTopAppBar(
         modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
         navigationIcon = {
-            IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
+            IconButton(onClick = {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                if (isLiquidEnabled) topBarJelly.press(0.06f)
+                onNavigateBack()
+            }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
             }
         },
@@ -243,7 +234,7 @@ fun ChatTopBar(
             if (canSetWallpaper) {
                 IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onWallpaperClick() }) {
                     Icon(Icons.Default.Wallpaper, contentDescription = stringResource(R.string.wallpaper),
-                        tint = if (uiState.wallpaperUrl != null) MaterialTheme.colorScheme.primary
+                        tint = if (uiState.wallpaperMode != "none") MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface)
                 }
             }

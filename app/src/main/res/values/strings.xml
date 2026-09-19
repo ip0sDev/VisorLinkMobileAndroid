@@ -399,6 +399,13 @@
     <string name="online">" · %1$d online"</string>
     <string name="subscribers">%1$d subscribers</string>
     <string name="wallpaper">Wallpaper</string>
+    <string name="chat_wallpaper_title">Chat Wallpaper</string>
+    <string name="chat_wallpaper_subtitle">Choose wallpaper to display in this chat</string>
+    <string name="chat_wallpaper_mine">My wallpaper</string>
+    <string name="chat_wallpaper_other">Other user\'s wallpaper</string>
+    <string name="chat_wallpaper_other_named">Wallpaper from %1$s</string>
+    <string name="chat_wallpaper_disable">Disable wallpaper in chat</string>
+    <string name="chat_wallpaper_not_set">Not set in profile</string>
     <string name="settings">Settings</string>
     <string name="leave">Leave</string>
     <string name="last_seen_topbar">Last seen %1$s</string>

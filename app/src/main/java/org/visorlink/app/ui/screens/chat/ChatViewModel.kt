@@ -69,6 +69,7 @@ data class ChatUiState(
     val musicPlayback: MusicPlayerState = MusicPlayerState(),
     val musicDownloadProgress: Map<String, Float> = emptyMap(),
     val wallpaperUrl: String? = null,
+    val wallpaperMode: String = "mine", // "mine", "other", "none"
     val showUnofficialClientWarning: Boolean = false,
     val hasDismissedUnofficialWarning: Boolean = false,
     val albumDraft: List<AlbumImageLocal> = emptyList(),
@@ -131,6 +132,7 @@ class ChatViewModel(
     private var otherUserObservationJob: Job? = null
     private var observedOtherUid: String? = null
     private val activeUploadJobs = java.util.concurrent.ConcurrentHashMap<String, Job>()
+    private val wallpaperPrefs = context.getSharedPreferences("visorlink_chat_wallpaper_prefs", Context.MODE_PRIVATE)
 
     val effectiveOtherUid: String
         get() = observedOtherUid
@@ -257,6 +259,9 @@ class ChatViewModel(
     }
 
     init {
+        val initialMode = wallpaperPrefs.getString("mode_$chatId", "mine") ?: "mine"
+        _uiState.update { it.copy(wallpaperMode = initialMode) }
+
         viewModelScope.launch {
             voicePlayer.state.collect { playbackState ->
                 _uiState.update { it.copy(voicePlayback = playbackState) }
@@ -509,6 +514,11 @@ class ChatViewModel(
                 _uiState.update { it.copy(isUploading = false) }
             }
         }
+    }
+
+    fun setWallpaperMode(mode: String) {
+        wallpaperPrefs.edit().putString("mode_$chatId", mode).apply()
+        _uiState.update { it.copy(wallpaperMode = mode) }
     }
 
     fun onImagesPicked(uris: List<Uri>) {

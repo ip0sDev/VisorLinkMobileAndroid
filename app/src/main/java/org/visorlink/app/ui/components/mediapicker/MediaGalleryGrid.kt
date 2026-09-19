@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import org.visorlink.app.data.model.MediaType
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlRaised
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -220,10 +221,14 @@ private fun MediaGridItem(
         modifier = modifier
             .aspectRatio(1f)
             .scale(scale)
+            .then(
+                if (isSelected && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, itemShape)
+                else Modifier
+            )
             .clip(itemShape)
             .then(
                 if (isSelected) Modifier.border(2.5.dp, cs.primary, itemShape)
-                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.4f), itemShape)
+                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), itemShape)
                 else Modifier
             )
             .combinedClickable(
@@ -261,9 +266,16 @@ private fun MediaGridItem(
                 Box(
                     modifier = Modifier
                         .size(26.dp)
+                        .then(
+                            if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, CircleShape)
+                            else Modifier
+                        )
                         .clip(CircleShape)
                         .background(cs.primary)
-                        .border(2.dp, cs.surface, CircleShape),
+                        .then(
+                            if (tokens.structure.enabled) Modifier.vlHairline(Color.White.copy(alpha = 0.6f), CircleShape)
+                            else Modifier
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(

@@ -273,10 +273,14 @@ fun ChatScreen(
 
     val otherUser = uiState.otherUser
     val currentUser = uiState.currentUser
-    val isOtherPro = otherUser?.isProActive() == true
-    val applyCustom = isOtherPro && (currentUser?.ignoreCustomizations != true) && (uiState.chatType == ChatType.DIRECT)
-    val cust = if (applyCustom) otherUser?.customization ?: emptyMap() else emptyMap()
-    val chatBgUrl = cust["bgUrl"] as? String ?: uiState.wallpaperUrl
+    val myBg = (currentUser?.customization?.get("bgUrl") as? String)?.takeIf { it.isNotBlank() }
+    val otherBg = (otherUser?.customization?.get("bgUrl") as? String)?.takeIf { it.isNotBlank() }
+
+    val chatBgUrl = when (uiState.wallpaperMode) {
+        "none" -> null
+        "other" -> otherBg
+        else -> myBg
+    }
     val isSecureChat = uiState.chat?.settings?.noForwards == true || uiState.chat?.type == "secret"
 
     SecureScreen(enabled = isSecureChat) {
@@ -287,12 +291,7 @@ fun ChatScreen(
                     model = chatBgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop, alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.6f else 0.8f
                 )
-            } else if (uiState.wallpaperUrl != null && !applyCustom) {
-                AsyncImage(
-                    model = uiState.wallpaperUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(), alpha = 0.5f
-                )
-            } else if (!applyCustom) {
+            } else {
                 VlAmbientGlow()
             }
             Scaffold(
@@ -600,11 +599,13 @@ fun ChatScreen(
 
     if (showWallpaperSheet) {
         WallpaperBottomSheet(
-            hasWallpaper = uiState.wallpaperUrl != null,
+            currentMode = uiState.wallpaperMode,
             isGroupOrChannel = uiState.chatType != ChatType.DIRECT,
-            onDismiss = { showWallpaperSheet = false },
-            onPickWallpaper = { showWallpaperSheet = false; wallpaperPicker.launch("image/*") },
-            onRemoveWallpaper = { showWallpaperSheet = false; viewModel.removeWallpaper() },
+            otherUserName = otherUser?.displayName,
+            hasMyWallpaper = !myBg.isNullOrBlank(),
+            hasOtherWallpaper = !otherBg.isNullOrBlank(),
+            onSelectMode = { mode -> viewModel.setWallpaperMode(mode) },
+            onDismiss = { showWallpaperSheet = false }
         )
     }
 

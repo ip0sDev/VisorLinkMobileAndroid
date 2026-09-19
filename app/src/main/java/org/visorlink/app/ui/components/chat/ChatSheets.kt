@@ -72,11 +72,13 @@ import kotlin.math.sqrt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WallpaperBottomSheet(
-    hasWallpaper: Boolean,
+    currentMode: String,
     isGroupOrChannel: Boolean,
-    onDismiss: () -> Unit,
-    onPickWallpaper: () -> Unit,
-    onRemoveWallpaper: () -> Unit
+    otherUserName: String? = null,
+    hasMyWallpaper: Boolean = false,
+    hasOtherWallpaper: Boolean = false,
+    onSelectMode: (String) -> Unit,
+    onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -94,33 +96,65 @@ fun WallpaperBottomSheet(
                 .padding(bottom = 24.dp, top = 8.dp)
         ) {
             Text(
-                text = "Обои чата",
+                text = stringResource(R.string.chat_wallpaper_title),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
             )
-            if (isGroupOrChannel) {
-                Text(
-                    text = "Применяются для всех участников чата.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 12.dp)
-                )
-            }
+            Text(
+                text = stringResource(R.string.chat_wallpaper_subtitle),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 12.dp)
+            )
 
+            // 1. Мои обои
             ListItem(
-                headlineContent = { Text("Выбрать из галереи") },
-                leadingContent = { Icon(Icons.Default.Image, null, tint = MaterialTheme.colorScheme.primary) },
-                modifier = Modifier.clickable { onPickWallpaper() }
+                headlineContent = { Text(stringResource(R.string.chat_wallpaper_mine)) },
+                supportingContent = if (!hasMyWallpaper) {
+                    { Text(stringResource(R.string.chat_wallpaper_not_set), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                } else null,
+                leadingContent = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary) },
+                trailingContent = { RadioButton(selected = currentMode == "mine", onClick = null) },
+                modifier = Modifier.clickable {
+                    onSelectMode("mine")
+                    onDismiss()
+                }
             )
 
-            if (hasWallpaper) {
+            // 2. Обои собеседника (только в direct чатах)
+            if (!isGroupOrChannel) {
                 ListItem(
-                    headlineContent = { Text("Удалить обои", color = MaterialTheme.colorScheme.error) },
-                    leadingContent = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                    modifier = Modifier.clickable { onRemoveWallpaper() }
+                    headlineContent = {
+                        val text = if (!otherUserName.isNullOrBlank()) {
+                            stringResource(R.string.chat_wallpaper_other_named, otherUserName)
+                        } else {
+                            stringResource(R.string.chat_wallpaper_other)
+                        }
+                        Text(text)
+                    },
+                    supportingContent = if (!hasOtherWallpaper) {
+                        { Text(stringResource(R.string.chat_wallpaper_not_set), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else null,
+                    leadingContent = { Icon(Icons.Default.AccountCircle, null, tint = MaterialTheme.colorScheme.secondary) },
+                    trailingContent = { RadioButton(selected = currentMode == "other", onClick = null) },
+                    modifier = Modifier.clickable {
+                        onSelectMode("other")
+                        onDismiss()
+                    }
                 )
             }
+
+            // 3. Отключить обои в чате
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.chat_wallpaper_disable)) },
+                leadingContent = { Icon(Icons.Default.Wallpaper, null, tint = MaterialTheme.colorScheme.outline) },
+                trailingContent = { RadioButton(selected = currentMode == "none", onClick = null) },
+                modifier = Modifier.clickable {
+                    onSelectMode("none")
+                    onDismiss()
+                }
+            )
         }
     }
 }

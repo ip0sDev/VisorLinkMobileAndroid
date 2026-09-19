@@ -9,7 +9,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -106,18 +109,36 @@ class MainActivity : AppCompatActivity() {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {
                         LegalConsentGuard(authViewModel = authViewModel) {
-                            Box {
-                                VisorLinkNavGraph(
-                                    authViewModel = authViewModel,
-                                    themeViewModel = themeViewModel,
-                                    pendingChatId = pendingOpenChatId.value,
-                                    pendingSenderUid = pendingOpenSenderUid.value,
-                                    onPendingChatOpened = {
-                                        pendingOpenChatId.value = null
-                                        pendingOpenSenderUid.value = null
-                                    }
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                // Изолированная полоска статусбара на уровне всего приложения
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .windowInsetsTopHeight(WindowInsets.statusBars)
+                                        .background(MaterialTheme.colorScheme.background)
                                 )
-                                FlagsOverlay()
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .consumeWindowInsets(WindowInsets.statusBars)
+                                ) {
+                                    VisorLinkNavGraph(
+                                        authViewModel = authViewModel,
+                                        themeViewModel = themeViewModel,
+                                        pendingChatId = pendingOpenChatId.value,
+                                        pendingSenderUid = pendingOpenSenderUid.value,
+                                        onPendingChatOpened = {
+                                            pendingOpenChatId.value = null
+                                            pendingOpenSenderUid.value = null
+                                        }
+                                    )
+                                    FlagsOverlay()
+                                }
                             }
                         }
                     }

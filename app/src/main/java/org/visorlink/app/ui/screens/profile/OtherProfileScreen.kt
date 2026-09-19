@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.data.repository.UserRepository
 import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.theme.*
@@ -53,6 +55,17 @@ fun OtherProfileScreen(
     val viewModel: OtherProfileViewModel = koinViewModel(parameters = { parametersOf(uid) })
     val user by viewModel.user.collectAsState()
     val currentUser by userRepository.currentUserFlow().collectAsState(initial = null)
+    val flagsRepository: FlagsRepository = koinInject()
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+
+    LaunchedEffect(Unit) {
+        if (isLiquidEnabled) {
+            topBarJelly.pulse(0.06f)
+        }
+    }
+
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -62,102 +75,132 @@ fun OtherProfileScreen(
     var showBlockConfirm by remember { mutableStateOf(false) }
     val isBlocked = currentUser?.blockedUserIds?.contains(uid) == true
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.profile_title), fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = null)
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.action_report)) },
-                            leadingIcon = { Icon(Icons.Default.Report, contentDescription = null) },
-                            onClick = {
-                                showMenu = false
-                                showReportDialog = true
-                            }
-                        )
-                        if (isBlocked) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_unblock_user)) },
-                                leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
-                                onClick = {
-                                    showMenu = false
-                                    scope.launch {
-                                        userRepository.unblockUser(uid)
-                                        Toast.makeText(context, context.getString(R.string.user_unblocked_toast), Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            )
-                        } else {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_block_user), color = MaterialTheme.colorScheme.error) },
-                                leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-                                onClick = {
-                                    showMenu = false
-                                    showBlockConfirm = true
-                                }
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                )
+    val targetUser = user
+    val cust = if (targetUser != null && CustomizationHelper.shouldApplyCustomization(targetUser, currentUser)) {
+        targetUser.customization ?: emptyMap()
+    } else emptyMap()
+
+    val layout = cust["layout"] as? String ?: "default"
+    val bgUrl = (cust["bgUrl"] as? String)?.takeIf { it.isNotBlank() }
+    val gifUrl = (cust["gifUrl"] as? String)?.takeIf { it.isNotBlank() }
+    val bannerUrl = gifUrl?.takeIf { targetUser?.isProActive() == true } ?: gifUrl
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        if (bgUrl != null) {
+            AsyncImage(
+                model = bgUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-        },
-        floatingActionButton = {
-            if (user != null) {
-                VlFab(
-                    text = stringResource(R.string.other_profile_message),
-                    icon = Icons.Default.Chat,
-                    onClick = {
-                        scope.launch {
-                            val chatId = viewModel.openOrCreateChat()
-                            onOpenChat(chatId, viewModel.targetUid)
-                        }
-                    },
-                    hapticEnabled = hapticEnabled
-                )
-            }
-        }
-    ) { padding ->
-        val targetUser = user
-        if (targetUser == null) {
-            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            val cust = if (CustomizationHelper.shouldApplyCustomization(targetUser, currentUser)) {
-                targetUser.customization ?: emptyMap()
-            } else emptyMap()
-
-            val layout = cust["layout"] as? String ?: "default"
-            val bgUrl = cust["bgUrl"] as? String
-            val gifUrl = cust["gifUrl"] as? String
-            val bannerUrl = (gifUrl ?: bgUrl).takeIf { targetUser.isProActive() } ?: gifUrl ?: bgUrl
-
-            Column(
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (layout == "compact") {
+                    .background(
+                        if (isDark) Color.Black.copy(alpha = 0.40f)
+                        else Color.White.copy(alpha = 0.20f)
+                    )
+            )
+        } else {
+            VlAmbientGlow()
+        }
+
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                VlTopAppBar(
+                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    title = { Text(stringResource(R.string.profile_title), fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            showMenu = true
+                        }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.action_report)) },
+                                leadingIcon = { Icon(Icons.Default.Report, contentDescription = null) },
+                                onClick = {
+                                    showMenu = false
+                                    showReportDialog = true
+                                }
+                            )
+                            if (isBlocked) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_unblock_user)) },
+                                    leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        scope.launch {
+                                            userRepository.unblockUser(uid)
+                                            Toast.makeText(context, context.getString(R.string.user_unblocked_toast), Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_block_user), color = MaterialTheme.colorScheme.error) },
+                                    leadingIcon = { Icon(Icons.Default.Block, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                    onClick = {
+                                        showMenu = false
+                                        showBlockConfirm = true
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
+            },
+            floatingActionButton = {
+                if (user != null) {
+                    VlFab(
+                        text = stringResource(R.string.other_profile_message),
+                        icon = Icons.Default.Chat,
+                        onClick = {
+                            scope.launch {
+                                val chatId = viewModel.openOrCreateChat()
+                                onOpenChat(chatId, viewModel.targetUid)
+                            }
+                        },
+                        hapticEnabled = hapticEnabled
+                    )
+                }
+            }
+        ) { padding ->
+            if (targetUser == null) {
+                Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (layout == "compact") {
                     if (bannerUrl != null) {
                         Box(
                             modifier = Modifier
@@ -275,7 +318,9 @@ fun OtherProfileScreen(
 
                 // Profile body
                 Column(
-                    modifier = Modifier.padding(24.dp),
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     DebugUidBadge(uid = targetUser.uid)
@@ -300,18 +345,33 @@ fun OtherProfileScreen(
 
                     if (targetUser.bio.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
-                        LinkifiedText(
-                            text = targetUser.bio,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            linkColor = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center
-                        )
+                        VlCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            shape = VlTheme.tokens.shapes.card
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                LinkifiedText(
+                                    text = targetUser.bio,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    linkColor = MaterialTheme.colorScheme.primary,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
+}
 
     if (showReportDialog) {
         ReportContentDialog(

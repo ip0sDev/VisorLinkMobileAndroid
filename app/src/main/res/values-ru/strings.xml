@@ -401,6 +401,13 @@
     <string name="online">" · %1$d Онлайн"</string>
     <string name="subscribers">%1$d Подписчиков</string>
     <string name="wallpaper">Обои</string>
+    <string name="chat_wallpaper_title">Обои чата</string>
+    <string name="chat_wallpaper_subtitle">Выберите отображаемые обои для этого чата</string>
+    <string name="chat_wallpaper_mine">Мои обои</string>
+    <string name="chat_wallpaper_other">Обои собеседника</string>
+    <string name="chat_wallpaper_other_named">Обои от %1$s</string>
+    <string name="chat_wallpaper_disable">Отключить обои в чате</string>
+    <string name="chat_wallpaper_not_set">Не установлены в профиле</string>
     <string name="settings">Настройки</string>
     <string name="leave">Выйти</string>
     <string name="last_seen_topbar">Был в сети в %1$s</string>

@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -40,11 +41,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
 import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import coil.compose.AsyncImage
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -95,7 +98,25 @@ fun ProfileScreen(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.uploadAvatar(it) } }
 
-    val currentUser = uiState.user
+    val flagsRepository: FlagsRepository = koinInject()
+    val flags by flagsRepository.flags.collectAsState()
+    val isLiquidEnabled = flags.isEnabled("animation_test")
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+
+    LaunchedEffect(Unit) {
+        if (isLiquidEnabled) {
+            topBarJelly.pulse(0.06f)
+        }
+    }
+
+    val user = uiState.user ?: UserProfile()
+    val isPro = user.isProActive()
+    val cust = user.customization ?: emptyMap()
+    val layout = cust["layout"] as? String ?: "default"
+    val bgUrl = (cust["bgUrl"] as? String)?.takeIf { it.isNotBlank() }
+    val gifUrl = (cust["gifUrl"] as? String)?.takeIf { it.isNotBlank() }
+    val bannerUrl = gifUrl?.takeIf { isPro }
+
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val haptic = rememberHaptic()
 
@@ -106,76 +127,94 @@ fun ProfileScreen(
         uiState.error?.let { snackbar.showSnackbar(it); viewModel.clearMessages() }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    val titleText = if (uiState.isEditing) stringResource(R.string.profile_edit_title)
-                    else stringResource(R.string.profile_title)
-                    Text(titleText, fontWeight = FontWeight.Bold)
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                        if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
-                    }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
-                    }
-                },
-                actions = {
-                    if (!uiState.isEditing) {
-                        IconButton(onClick = {
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            viewModel.startEditing()
-                        }) {
-                            Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
-                        }
-
-                        IconButton(onClick = {
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            showLogout = true
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.Logout, null, tint = MaterialTheme.colorScheme.error)
-                        }
-                    } else {
-                        TextButton(
-                            onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                viewModel.saveProfile()
-                            },
-                            enabled = !uiState.isLoading,
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
-                )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        if (bgUrl != null) {
+            AsyncImage(
+                model = bgUrl,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-        },
-        snackbarHost = { SnackbarHost(snackbar) }
-    ) { padding ->
-        val user = uiState.user ?: UserProfile()
-        val isPro = user.isProActive()
-        val cust = user.customization ?: emptyMap()
-        val layout = cust["layout"] as? String ?: "default"
-        val bgUrl = cust["bgUrl"] as? String
-        val gifUrl = cust["gifUrl"] as? String
-        val bannerUrl = (gifUrl ?: bgUrl).takeIf { isPro }
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        if (isDark) Color.Black.copy(alpha = 0.40f)
+                        else Color.White.copy(alpha = 0.20f)
+                    )
+            )
+        } else {
+            VlAmbientGlow()
+        }
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (layout == "compact") {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            topBar = {
+                VlTopAppBar(
+                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    title = {
+                        val titleText = if (uiState.isEditing) stringResource(R.string.profile_edit_title)
+                        else stringResource(R.string.profile_title)
+                        Text(titleText, fontWeight = FontWeight.Bold)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
+                        }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                        }
+                    },
+                    actions = {
+                        if (!uiState.isEditing) {
+                            IconButton(onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                viewModel.startEditing()
+                            }) {
+                                Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
+                            }
+
+                            IconButton(onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                showLogout = true
+                            }) {
+                                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = MaterialTheme.colorScheme.error)
+                            }
+                        } else {
+                            TextButton(
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                    viewModel.saveProfile()
+                                },
+                                enabled = !uiState.isLoading,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                )
+            },
+            snackbarHost = { SnackbarHost(snackbar) }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (layout == "compact") {
                 if (bannerUrl != null) {
                     Box(
                         modifier = Modifier
@@ -301,7 +340,9 @@ fun ProfileScreen(
                 if (!uiState.isEditing) {
                     // Profile body
                     Column(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         DebugUidBadge(uid = user.uid)
@@ -326,99 +367,25 @@ fun ProfileScreen(
 
                         if (user.bio.isNotEmpty()) {
                             Spacer(Modifier.height(16.dp))
-                            LinkifiedText(
-                                text = user.bio,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                linkColor = MaterialTheme.colorScheme.primary,
-                                style = MaterialTheme.typography.bodyLarge,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        // Telegram Section
-                        Spacer(Modifier.height(32.dp))
-                        VlCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = { /* Do nothing */ }
-                        ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        Icons.Default.Link,
-                                        null,
-                                        tint = Color(0xFF24A1DE),
-                                        modifier = Modifier.size(24.dp)
+                            VlCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 4.dp),
+                                shape = VlTheme.tokens.shapes.card
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    LinkifiedText(
+                                        text = user.bio,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        linkColor = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        textAlign = TextAlign.Center
                                     )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(
-                                        "Telegram",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Spacer(Modifier.height(8.dp))
-
-                                if (user.tg_username != null) {
-                                    Text(
-                                        "Привязан: @${user.tg_username}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-                                    VlButton(
-                                        onClick = {
-                                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                                            viewModel.unbindTelegram()
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        isDestructive = true
-                                    ) {
-                                        if (uiState.isLoading) {
-                                            CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
-                                        } else {
-                                            Text("Отвязать", fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                } else {
-                                    Text(
-                                        "Telegram не привязан. Используйте код для привязки через бота.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(Modifier.height(12.dp))
-
-                                    if (uiState.tgCode != null) {
-                                        SelectionContainer {
-                                            Text(
-                                                uiState.tgCode ?: "",
-                                                style = MaterialTheme.typography.headlineMedium,
-                                                fontWeight = FontWeight.Black,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.fillMaxWidth(),
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                        Text(
-                                            "Введите этот код боту @VisorLinkBot",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Center
-                                        )
-                                    } else {
-                                        VlButton(
-                                            onClick = {
-                                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                                viewModel.generateTgCode()
-                                            },
-                                            modifier = Modifier.fillMaxWidth(),
-                                            enabled = !uiState.isGeneratingCode
-                                        ) {
-                                            if (uiState.isGeneratingCode) {
-                                                CircularProgressIndicator(Modifier.size(24.dp), color = Color.White, strokeWidth = 2.dp)
-                                            } else {
-                                                Text("Привязать Telegram", fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -428,7 +395,8 @@ fun ProfileScreen(
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 24.dp),
+                            .padding(horizontal = 24.dp, vertical = 24.dp)
+                            .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         VlTextField(
@@ -491,6 +459,7 @@ fun ProfileScreen(
                 Spacer(Modifier.height(32.dp))
             }
         }
+    }
 
     if (showLogout) {
         AlertDialog(

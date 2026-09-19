@@ -400,7 +400,8 @@ object ChatDataCache {
                 val effectiveUid = uid.ifBlank { "global" }
                 db.beginTransaction()
                 try {
-                    db.delete("stickers", "uid=? OR uid='global'", arrayOf(effectiveUid))
+                    // Полностью вычищаем старые стикеры, чтобы удаленные на сервере не оставались в SQLite
+                    db.delete("stickers", null, null)
                     val stmt = db.compileStatement("INSERT INTO stickers (uid, pack_id, data) VALUES (?, ?, ?)")
                     packs.forEach { pack ->
                         stmt.bindString(1, effectiveUid)
@@ -414,6 +415,15 @@ object ChatDataCache {
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to save sticker packs", e) }
         }
+
+    suspend fun deleteStickerPack(context: Context, packId: String) = withContext(Dispatchers.IO) {
+        try {
+            val db = getDb(context).writableDatabase
+            db.delete("stickers", "pack_id=?", arrayOf(packId))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete sticker pack $packId from cache", e)
+        }
+    }
 
     suspend fun loadStickerPacks(context: Context, uid: String): List<StickerPack> =
         withContext(Dispatchers.IO) {

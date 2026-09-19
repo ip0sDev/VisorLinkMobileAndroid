@@ -66,12 +66,15 @@ fun StickerPickerBottomSheet(
     }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = null,
-        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = if (tokens.isBiolume) cs.surfaceContainerLow else cs.surface,
         contentWindowInsets = { WindowInsets(0) }
     ) {
         StickerPickerContent(
@@ -101,6 +104,8 @@ internal fun StickerPickerContent(
 ) {
     var selectedPackIndex by remember { mutableIntStateOf(if (packs.isNotEmpty()) 0 else -1) }
     var showDeleteConfirm by remember { mutableStateOf<StickerPack?>(null) }
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
 
     LaunchedEffect(packs) {
         if (packs.isNotEmpty()) {
@@ -134,8 +139,8 @@ internal fun StickerPickerContent(
                     .width(36.dp)
                     .height(4.dp)
                     .background(
-                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-                        VlTheme.tokens.shapes.indicator
+                        cs.outlineVariant.copy(alpha = 0.4f),
+                        CircleShape
                     )
             )
         }
@@ -168,12 +173,16 @@ internal fun StickerPickerContent(
                 Text(
                     "Стикеры",
                     style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
 
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.5f)
+        )
 
         // ── Нижняя полоса с иконками паков ────────────────────────────────────
         PackTabBar(
@@ -182,7 +191,10 @@ internal fun StickerPickerContent(
             onSelect = { selectedPackIndex = it }
         )
 
-        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.5f)
+        )
 
         // ── Контент ────────────────────────────────────────────────────────────
         Box(modifier = Modifier.weight(1f)) {
@@ -239,6 +251,9 @@ private fun PackTabBar(
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val pillShape = tokens.shapes.chip
 
     Row(
         modifier = Modifier
@@ -256,10 +271,24 @@ private fun PackTabBar(
                 .padding(horizontal = 4.dp)
                 .size(46.dp)
                 .scale(scale)
-                .clip(VlTheme.tokens.shapes.chip)
-                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.chip)
-                .clip(VlTheme.tokens.shapes.chip)
+                .then(
+                    if (isSelected && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, pillShape)
+                    else Modifier
+                )
+                .clip(pillShape)
+                .background(
+                    if (isSelected) {
+                        if (tokens.isBiolume) cs.primary.copy(alpha = 0.18f) else cs.primaryContainer
+                    } else {
+                        if (tokens.isBiolume) cs.surfaceContainer.copy(alpha = 0.5f) else cs.surfaceContainerLow
+                    },
+                    pillShape
+                )
+                .then(
+                    if (isSelected && tokens.structure.enabled) Modifier.vlHairline(cs.primary.copy(alpha = 0.45f), pillShape)
+                    else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.25f), pillShape)
+                    else Modifier
+                )
                 .clickable {
                     haptic.perform(HapticType.SELECTION, true)
                     onSelect(index)
@@ -270,10 +299,10 @@ private fun PackTabBar(
                 if (pack.stickers.isNotEmpty()) {
                     AsyncImage(
                         model = pack.stickers.first().url, contentDescription = pack.name,
-                        contentScale = ContentScale.Fit, modifier = Modifier.size(34.dp)
+                        contentScale = ContentScale.Fit, modifier = Modifier.size(32.dp)
                     )
                 } else {
-                    Text(pack.emoji, fontSize = 24.sp)
+                    Text(pack.emoji, fontSize = 22.sp)
                 }
             }
         }
@@ -286,10 +315,24 @@ private fun PackTabBar(
             .padding(horizontal = 4.dp)
             .size(46.dp)
             .scale(addScale)
-            .clip(VlTheme.tokens.shapes.chip)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
-            .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.chip)
-            .clip(VlTheme.tokens.shapes.chip)
+            .then(
+                if (isAddSelected && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, pillShape)
+                else Modifier
+            )
+            .clip(pillShape)
+            .background(
+                if (isAddSelected) {
+                    if (tokens.isBiolume) cs.primary.copy(alpha = 0.18f) else cs.primaryContainer
+                } else {
+                    if (tokens.isBiolume) cs.surfaceContainer.copy(alpha = 0.5f) else cs.surfaceContainerLow
+                },
+                pillShape
+            )
+            .then(
+                if (isAddSelected && tokens.structure.enabled) Modifier.vlHairline(cs.primary.copy(alpha = 0.45f), pillShape)
+                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.25f), pillShape)
+                else Modifier
+            )
             .clickable {
                 haptic.perform(HapticType.SELECTION, true)
                 onSelect(-1)
@@ -297,7 +340,7 @@ private fun PackTabBar(
 
         Box(modifier = addMod, contentAlignment = Alignment.Center) {
             Icon(Icons.Default.GridView, null,
-                tint = if (isAddSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = if (isAddSelected) cs.primary else cs.onSurfaceVariant,
                 modifier = Modifier.size(22.dp)
             )
         }
@@ -337,6 +380,8 @@ private fun PackListRow(
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val haptic = rememberHaptic()
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -354,10 +399,22 @@ private fun PackListRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Аватарка пака
+        val avatarShape = tokens.shapes.chip
         val avatarMod = Modifier
             .size(58.dp)
-            .clip(VlTheme.tokens.shapes.chip)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, avatarShape)
+                else Modifier
+            )
+            .clip(avatarShape)
+            .background(
+                if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceVariant,
+                avatarShape
+            )
+            .then(
+                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), avatarShape)
+                else Modifier
+            )
 
         Box(modifier = avatarMod, contentAlignment = Alignment.Center) {
             if (pack.stickers.isNotEmpty()) {
@@ -374,7 +431,7 @@ private fun PackListRow(
             Spacer(Modifier.height(4.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 pack.stickers.take(4).forEach { sticker ->
-                    AsyncImage(model = sticker.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(VlTheme.tokens.shapes.indicator))
+                    AsyncImage(model = sticker.url, contentDescription = null, contentScale = ContentScale.Fit, modifier = Modifier.size(28.dp).clip(tokens.shapes.indicator))
                 }
                 if (pack.stickers.isEmpty()) {
                     Text("Стикеров нет", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -450,31 +507,51 @@ private fun StickerCell(
     sticker: StickerItem,
     onTap: () -> Unit
 ) {
+    val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+    val itemShape = RoundedCornerShape(16.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (isPressed) 0.85f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f))
+    val scale by animateFloatAsState(if (isPressed) 0.88f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f))
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
             .scale(scale)
-            .clip(VlTheme.tokens.shapes.chip)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .then(
+                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, itemShape)
+                else Modifier
+            )
+            .clip(itemShape)
+            .background(
+                if (tokens.isBiolume) cs.surfaceContainer.copy(alpha = 0.65f)
+                else cs.surfaceVariant.copy(alpha = 0.4f),
+                itemShape
+            )
+            .then(
+                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), itemShape)
+                else Modifier
+            )
             .combinedClickable(interactionSource = interactionSource, indication = null, onClick = onTap),
         contentAlignment = Alignment.Center
     ) {
         AsyncImage(
             model = sticker.url, contentDescription = sticker.emoji,
-            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(12.dp)
+            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(10.dp)
         )
 
         val emojiMod = Modifier
             .align(Alignment.BottomEnd)
             .padding(6.dp)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.75f), VlTheme.tokens.shapes.indicator)
-            .padding(3.dp)
+            .clip(CircleShape)
+            .background(cs.surface.copy(alpha = if (tokens.isBiolume) 0.85f else 0.75f))
+            .then(
+                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                else Modifier
+            )
+            .padding(horizontal = 5.dp, vertical = 2.dp)
 
-        Text(sticker.emoji, fontSize = 12.sp, modifier = emojiMod)
+        Text(sticker.emoji, fontSize = 11.sp, modifier = emojiMod)
     }
 }
 
