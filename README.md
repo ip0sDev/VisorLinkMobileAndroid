@@ -84,7 +84,7 @@ VisorLink is built with **100% Jetpack Compose** without legacy XML layouts or F
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/VisorLinkMobileAndroid.git
+git clone https://github.com/ip0sDev/VisorLinkMobileAndroid.git
 cd VisorLinkMobileAndroid
 ```
 
@@ -147,7 +147,7 @@ VisorLinkMobileAndroid/
 
 Contributions are warmly welcome! Please review our [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md) before submitting pull requests.
 
-To report bugs or suggest new features, feel free to open an [Issue](https://github.com/your-username/VisorLinkMobileAndroid/issues).
+To report bugs or suggest new features, feel free to open an [Issue](https://github.com/ip0sDev/VisorLinkMobileAndroid/issues).
 
 ---
 
