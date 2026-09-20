@@ -39,6 +39,14 @@ release/
 release.keystore
 debug.keystore
 
+# Firebase configuration (use google-services.json.example as a template)
+google-services.json
+app/google-services.json
+
+# Scratch scripts and temporary files
+scratch*.kt
+scratch/
+
 # Android Studio / IntelliJ IDEA
 *.iml
 .idea/
