@@ -13,6 +13,8 @@ jobs:
   release:
     name: Build, Sign, Deploy & Release
     runs-on: ubuntu-latest
+    env:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout repository
@@ -117,7 +119,7 @@ jobs:
 
       - name: Sign APK (if Keystore is configured)
         id: sign_app
-        if: ${{ secrets.KEYSTORE_BASE64 != '' }}
+        if: env.KEYSTORE_BASE64 != ''
         env:
           BUILD_TOOLS_VERSION: "34.0.0"
         uses: r0adkll/sign-android-release@v1
