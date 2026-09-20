@@ -84,7 +84,7 @@ VisorLink на **100% написан на Jetpack Compose** без XML-разм�
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/your-username/VisorLinkMobileAndroid.git
+git clone https://github.com/ip0sDev/VisorLinkMobileAndroid.git
 cd VisorLinkMobileAndroid
 ```
 
@@ -147,7 +147,7 @@ VisorLinkMobileAndroid/
 
 Мы приветствуем вклад сообщества в проект! Пожалуйста, ознакомьтесь с [Руководством контрибьютора](CONTRIBUTING.ru.md) и [Кодексом поведения](CODE_OF_CONDUCT.md).
 
-Нашли ошибку или хотите предложить улучшение? Откройте [Issue](https://github.com/your-username/VisorLinkMobileAndroid/issues).
+Нашли ошибку или хотите предложить улучшение? Откройте [Issue](https://github.com/ip0sDev/VisorLinkMobileAndroid/issues).
 
 ---
 
