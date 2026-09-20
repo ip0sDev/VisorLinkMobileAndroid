@@ -98,6 +98,7 @@ class MainActivity : AppCompatActivity() {
                         Log.e("MainActivity", "FCM token sync failed on launch", e)
                     }
                 }
+                org.visorlink.app.utils.UpdateManager.onAppForegroundCheck(this@MainActivity)
             }
 
             VisorLinkTheme(
@@ -138,6 +139,7 @@ class MainActivity : AppCompatActivity() {
                                         }
                                     )
                                     FlagsOverlay()
+                                    org.visorlink.app.utils.UpdateManager.UpdateHost()
                                 }
                             }
                         }

@@ -91,7 +91,7 @@ jobs:
         # Убрали --no-daemon и добавили --configuration-cache
         # Используем '\' для удобного переноса строк
         run: |
-          ./gradlew testDebugUnitTest assembleRelease \
+          ./gradlew testStandaloneDebugUnitTest assembleStandaloneRelease \
             -PcommitId=${{ steps.commit.outputs.commit_id }} \
             --parallel \
             --build-cache \
@@ -102,7 +102,7 @@ jobs:
         id: sign_app
         uses: r0adkll/sign-android-release@v1
         with:
-          releaseDirectory: app/build/outputs/apk/release
+          releaseDirectory: app/build/outputs/apk/standalone/release
           signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -112,7 +112,7 @@ jobs:
         run: |
           APK_SRC="${{ steps.sign_app.outputs.signedReleaseFile }}"
           APK_NAME="visorlink-${{ env.CHANNEL }}-${{ steps.commit.outputs.commit_id }}.apk"
-          APK_DEST="app/build/outputs/apk/release/$APK_NAME"
+          APK_DEST="app/build/outputs/apk/standalone/release/$APK_NAME"
           mv "$APK_SRC" "$APK_DEST"
 
           echo "APK_PATH=$APK_DEST" >> $GITHUB_ENV

@@ -99,21 +99,25 @@ cp app/google-services.json.example app/google-services.json
 > [!NOTE]
 > Если вы планируете использовать собственный проект Firebase, замените содержимое файла данными из [Firebase Console](https://console.firebase.google.com/).
 
-### 3. Сборка и тестирование
+### 3. Варианты сборки и команды
+
+VisorLink поддерживает два варианта дистрибуции (Product Flavors):
+- **`play`** *(По умолчанию в Android Studio)*: Чистая сборка для Google Play (без разрешений на установку APK и без внешних модулей самообновления).
+- **`standalone`** *(GitHub Actions и прямой APK)*: Сборка для GitHub Releases с интегрированным модулем самообновлений Ipos Store SDK и поддержкой установки APK.
 
 ```bash
 # Запуск юнит-тестов JVM
-./gradlew testDebugUnitTest
+./gradlew testPlayDebugUnitTest testStandaloneDebugUnitTest
 
-# Сборка Debug APK
-./gradlew assembleDebug
+# Сборка Debug APK для Google Play
+./gradlew assemblePlayDebug
 
-# Сборка Release APK (с оптимизацией R8)
-./gradlew assembleRelease
+# Сборка Release APK со встроенным самообновлением
+./gradlew assembleStandaloneRelease
 ```
 
-Готовый файл Debug APK будет находиться по пути:
-`app/build/outputs/apk/debug/app-debug.apk`
+Собранные APK-файлы находятся в:
+`app/build/outputs/apk/<flavor>/<buildType>/`
 
 ---
 

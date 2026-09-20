@@ -35,6 +35,17 @@ android {
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
 
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("play") {
+            dimension = "distribution"
+            isDefault = true
+        }
+        create("standalone") {
+            dimension = "distribution"
+        }
+    }
+
     buildTypes {
         debug {
             isDebuggable = true
@@ -85,6 +96,9 @@ sentry {
 }
 
 dependencies {
+    // ── Ipos Store In-App Updates SDK (Только для standalone сборок через Actions) ─
+    "standaloneImplementation"(files("libs/ipos-store-sdk-release.aar"))
+
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui.geometry)
@@ -162,3 +176,19 @@ dependencies {
     testImplementation(libs.mockito.kotlin)          // Для mock, whenever, any, verify
     testImplementation(libs.mockito.core)            // Ядро Mockito
 }
+
+// Автоматическое создание app/google-services.json из шаблона при клонировании репозитория
+tasks.register("ensureGoogleServices") {
+    doFirst {
+        val target = file("google-services.json")
+        val example = file("google-services.json.example")
+        if (!target.exists() && example.exists()) {
+            example.copyTo(target)
+            logger.lifecycle("Автоматически создан app/google-services.json из шаблона.")
+        }
+    }
+}
+tasks.matching { it.name.startsWith("process") && it.name.endsWith("GoogleServices") }.configureEach {
+    dependsOn("ensureGoogleServices")
+}
+

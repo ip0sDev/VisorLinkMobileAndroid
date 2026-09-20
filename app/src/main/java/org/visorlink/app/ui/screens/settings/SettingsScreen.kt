@@ -56,6 +56,7 @@ import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.AppLanguage
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.StealthManager
+import org.visorlink.app.utils.UpdateManager
 import org.visorlink.app.utils.rememberHaptic
 import com.google.firebase.Firebase
 import com.google.firebase.auth.EmailAuthProvider
@@ -130,6 +131,7 @@ fun SettingsScreen(
     var showDeleteAccountDialog by remember { mutableStateOf(false) }
     var showLegalDialog by remember { mutableStateOf(false) }
     var showBugReportSheet by remember { mutableStateOf(false) }
+    var showChannelDialog by remember { mutableStateOf(false) }
 
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
@@ -147,6 +149,8 @@ fun SettingsScreen(
     val colorEmail = Color(0xFF64748B)
     val colorPassword = Color(0xFFF43F5E)
     val colorSecurity = Color(0xFF10B981)
+    val colorUpdateChan = Color(0xFF6366F1)
+    val colorUpdateCheck = Color(0xFF10B981)
 
     val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
@@ -517,6 +521,59 @@ fun SettingsScreen(
                     )
                 }
 
+                if (UpdateManager.isSupported) {
+                    VlSettingsSection(
+                        title = stringResource(R.string.settings_section_updates),
+                        modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
+                    ) {
+                        VlSettingsItem(
+                            icon = Icons.Default.Storefront,
+                            iconColor = colorUpdateChan,
+                            title = "Ipos Store",
+                            subtitle = if (UpdateManager.isStoreInstalled()) "Клиент установлен (фоновые обновления)" else "Не установлен (нажмите для скачивания)",
+                            onClick = {
+                                if (!UpdateManager.isStoreInstalled()) {
+                                    UpdateManager.openStoreDownload()
+                                }
+                            }
+                        )
+                        val channelSubtitle = when (UpdateManager.getSavedChannel(context)) {
+                            "release" -> stringResource(R.string.settings_update_channel_release)
+                            "beta" -> stringResource(R.string.settings_update_channel_beta)
+                            "nightly" -> stringResource(R.string.settings_update_channel_nightly)
+                            else -> UpdateManager.getSavedChannel(context)
+                        }
+                        VlSettingsItem(
+                            icon = Icons.Default.Tune,
+                            iconColor = colorUpdateChan,
+                            title = stringResource(R.string.settings_update_channel),
+                            subtitle = channelSubtitle,
+                            onClick = {
+                                showChannelDialog = true
+                            }
+                        )
+                        VlSettingsItem(
+                            icon = Icons.Default.Sync,
+                            iconColor = colorUpdateCheck,
+                            title = stringResource(R.string.settings_check_updates),
+                            subtitle = stringResource(R.string.settings_check_updates_sub),
+                            onClick = {
+                                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                                Toast.makeText(context, context.getString(R.string.settings_checking_updates), Toast.LENGTH_SHORT).show()
+                                scope.launch {
+                                    UpdateManager.checkUpdate(context) { isAvailable, msg ->
+                                        if (!isAvailable && UpdateManager.isStoreInstalled()) {
+                                            Toast.makeText(context, context.getString(R.string.settings_up_to_date), Toast.LENGTH_SHORT).show()
+                                        } else if (msg != null) {
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+
                 VlSettingsSection(
                     title = "О приложении",
                     modifier = Modifier.liquidPillCardSlideOut(index = 12, enabled = isLiquidEnabled)
@@ -758,6 +815,53 @@ fun SettingsScreen(
             legalRepository = legalRepo,
             isReadOnly = true,
             onDismissReadOnly = { showLegalDialog = false }
+        )
+    }
+
+    if (showChannelDialog && UpdateManager.isSupported) {
+        val channels = UpdateManager.getAvailableChannels(context)
+        VlAlertDialog(
+            onDismissRequest = { showChannelDialog = false },
+            title = { Text(stringResource(R.string.settings_update_channel_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    channels.forEach { (chKey, label) ->
+                        val isSelected = UpdateManager.getSavedChannel(context) == chKey
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    UpdateManager.setChannel(context, chKey)
+                                    showChannelDialog = false
+                                    Toast.makeText(context, label, Toast.LENGTH_SHORT).show()
+                                },
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                            color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            actions = {
+                VlDialogButton(onClick = { showChannelDialog = false }) {
+                    Text(stringResource(R.string.btn_cancel))
+                }
+            }
         )
     }
 }

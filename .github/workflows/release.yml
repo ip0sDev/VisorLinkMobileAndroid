@@ -70,7 +70,7 @@ jobs:
 
       - name: Run Tests and Assemble Release APK
         run: |
-          ./gradlew testDebugUnitTest assembleRelease \
+          ./gradlew testStandaloneDebugUnitTest assembleStandaloneRelease \
             -PcommitId=${{ steps.info.outputs.commit_id }} \
             --parallel \
             --build-cache
@@ -82,7 +82,7 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         uses: r0adkll/sign-android-release@v1
         with:
-          releaseDirectory: app/build/outputs/apk/release
+          releaseDirectory: app/build/outputs/apk/standalone/release
           signingKeyBase64: ${{ secrets.KEYSTORE_BASE64 }}
           alias: ${{ secrets.KEY_ALIAS }}
           keyStorePassword: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -95,14 +95,14 @@ jobs:
           DEST_NAME="VisorLink-v${{ steps.info.outputs.version_name }}-${{ steps.info.outputs.commit_id }}.apk"
 
           if [ -n "$SIGNED_APK" ] && [ -f "$SIGNED_APK" ]; then
-            mv "$SIGNED_APK" "app/build/outputs/apk/release/$DEST_NAME"
+            mv "$SIGNED_APK" "app/build/outputs/apk/standalone/release/$DEST_NAME"
           else
             # Если ключа подписи в секретах нет, берем сгенерированный apk
-            UNSIGNED_APK=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
-            mv "$UNSIGNED_APK" "app/build/outputs/apk/release/$DEST_NAME"
+            UNSIGNED_APK=$(find app/build/outputs/apk/standalone/release -name "*.apk" | head -n 1)
+            mv "$UNSIGNED_APK" "app/build/outputs/apk/standalone/release/$DEST_NAME"
           fi
 
-          echo "apk_path=app/build/outputs/apk/release/$DEST_NAME" >> $GITHUB_OUTPUT
+          echo "apk_path=app/build/outputs/apk/standalone/release/$DEST_NAME" >> $GITHUB_OUTPUT
           echo "apk_name=$DEST_NAME" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release

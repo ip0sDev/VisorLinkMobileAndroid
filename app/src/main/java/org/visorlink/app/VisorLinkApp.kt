@@ -99,6 +99,13 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         // ─── Некритичные инициализации в фоне ────────────────
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         appScope.launch {
+            // 1. In-App Updates (активен только в standalone-сборках)
+            try {
+                org.visorlink.app.utils.UpdateManager.init(this@VisorLinkApp)
+            } catch (e: Exception) {
+                Log.e("VisorLinkApp", "Failed to init UpdateManager", e)
+            }
+
             // 2. Очистка кэша
             try {
                 cacheManager.evictIfNeeded()

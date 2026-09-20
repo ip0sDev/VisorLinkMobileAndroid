@@ -99,21 +99,25 @@ cp app/google-services.json.example app/google-services.json
 > [!NOTE]
 > If you are connecting to your own Firebase instance, replace the dummy values in `app/google-services.json` with the file downloaded from your [Firebase Console](https://console.firebase.google.com/).
 
-### 3. Build & Test
+### 3. Build Variants & Commands
+
+VisorLink supports two distribution flavors:
+- **`play`** *(Default in Android Studio)*: Clean build for Google Play Console compliance (no package installation permissions, no external self-update engine).
+- **`standalone`** *(GitHub Actions & direct APK)*: Built for GitHub Releases with integrated Ipos Store In-App Updates SDK and APK installer support.
 
 ```bash
 # Run JVM Unit Tests
-./gradlew testDebugUnitTest
+./gradlew testPlayDebugUnitTest testStandaloneDebugUnitTest
 
-# Assemble Debug APK
-./gradlew assembleDebug
+# Assemble Google Play Debug APK
+./gradlew assemblePlayDebug
 
-# Assemble Release APK (Minified with R8)
-./gradlew assembleRelease
+# Assemble Standalone Release APK (with In-App Updates SDK)
+./gradlew assembleStandaloneRelease
 ```
 
-The generated debug APK will be located at:
-`app/build/outputs/apk/debug/app-debug.apk`
+Generated APKs are located under:
+`app/build/outputs/apk/<flavor>/<buildType>/`
 
 ---
 
