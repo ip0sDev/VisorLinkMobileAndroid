@@ -19,29 +19,28 @@ val commitId: String = if (project.hasProperty("commitId")) {
 val currentChannel = "BETA"
 
 android {
-    namespace = "by.iposdev.visorlink"
+    namespace = "org.visorlink.app"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "by.iposdev.visorlink"
+        applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 147
-        versionName = "3.7.00"
+        versionCode = 164
+        versionName = "4.0.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"BETA\"")
-        buildConfigField("boolean", "InternalBuild", "false")
+        buildConfigField("boolean", "InternalBuild", "true")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
 
     buildTypes {
         debug {
-            // Canary — только debug-сборка
             isDebuggable = true
             isMinifyEnabled = false
-            applicationIdSuffix = ".canary"
-            versionNameSuffix = "-canary+$commitId"
+            // applicationIdSuffix = ".canary"
+            versionNameSuffix = "-debug"
         }
         release {
             if (currentChannel == "CANARY") {
@@ -86,9 +85,6 @@ sentry {
 }
 
 dependencies {
-    // ── Ipos Store In-App Updates SDK ─────────────────────────────────────────
-    implementation(files("libs/ipos-store-sdk-release.aar"))
-
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui.geometry)
@@ -136,6 +132,7 @@ dependencies {
 
     // ── Other ────────────────────────────────────────────────────────────────
     implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.play.services.auth)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.accompanist.permissions)

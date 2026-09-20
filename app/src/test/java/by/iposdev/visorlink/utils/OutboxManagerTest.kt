@@ -1,9 +1,9 @@
-package by.iposdev.visorlink.utils
+package org.visorlink.app.utils
 
 import android.content.Context
-import by.iposdev.visorlink.data.repository.ChatRepository
-import by.iposdev.visorlink.data.repository.FeedRepository
-import by.iposdev.visorlink.data.repository.UserRepository
+import org.visorlink.app.data.repository.ChatRepository
+import org.visorlink.app.data.repository.FeedRepository
+import org.visorlink.app.data.repository.UserRepository
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,6 +15,9 @@ import org.junit.Test
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import org.mockito.kotlin.*
+import org.visorlink.app.data.remote.GoogleDriveMediaService
+import org.visorlink.app.data.remote.GoogleDriveUploadResult
+import org.visorlink.app.utils.GoogleDriveAuthManager
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -30,7 +33,8 @@ class OutboxManagerTest {
     private val functions: FirebaseFunctions = mock()
     private val networkMonitor: NetworkMonitor = mock()
     private val outboxDataSource: OutboxDataSource = mock()
-    private val cdnUploader: CdnUploader = mock()
+    private val googleDriveAuthManager: GoogleDriveAuthManager = mock()
+    private val googleDriveMediaService: GoogleDriveMediaService = mock()
 
     private val isOnline = MutableStateFlow(true)
 
@@ -51,8 +55,16 @@ class OutboxManagerTest {
             .thenReturn(emptyList())
 
         val outboxManager = OutboxManager(
-            context, chatRepository, userRepository, feedRepository, functions, 
-            networkMonitor, outboxDataSource, cdnUploader, testDispatcher
+            context = context,
+            chatRepository = chatRepository,
+            userRepository = userRepository,
+            feedRepository = feedRepository,
+            functions = functions,
+            networkMonitor = networkMonitor,
+            outboxDataSource = outboxDataSource,
+            coroutineContext = testDispatcher,
+            googleDriveAuthManager = googleDriveAuthManager,
+            googleDriveMediaService = googleDriveMediaService
         )
         
         testScheduler.advanceTimeBy(100)
@@ -83,7 +95,9 @@ class OutboxManagerTest {
         val concurrentCount = AtomicInteger(0)
         val maxConcurrent = AtomicInteger(0)
 
-        whenever(cdnUploader.uploadFile(any(), any(), any())).thenAnswer {
+        whenever(googleDriveAuthManager.getValidAccessToken()).thenReturn("test_token")
+        whenever(googleDriveMediaService.getOrCreateVisorLinkFolder(any())).thenReturn("folder_123")
+        whenever(googleDriveMediaService.uploadMediaFile(any(), any(), any(), any(), anyOrNull())).thenAnswer {
             val current = concurrentCount.incrementAndGet()
             if (current > maxConcurrent.get()) {
                 maxConcurrent.set(current)
@@ -91,18 +105,34 @@ class OutboxManagerTest {
             // Имитируем работу
             Thread.sleep(10) 
             concurrentCount.decrementAndGet()
-            "mediaId"
+            GoogleDriveUploadResult(
+                fileId = "gdrive_id",
+                directUrl = "https://lh3.googleusercontent.com/d/gdrive_id",
+                viewUrl = "https://drive.google.com/file/d/gdrive_id/view",
+                previewUrl = "https://lh3.googleusercontent.com/d/gdrive_id=s400",
+                fileName = "f.jpg",
+                fileSize = 1024L,
+                mimeType = "image/jpeg"
+            )
         }
 
         val outboxManager = OutboxManager(
-            context, chatRepository, userRepository, feedRepository, functions, 
-            networkMonitor, outboxDataSource, cdnUploader, testDispatcher
+            context = context,
+            chatRepository = chatRepository,
+            userRepository = userRepository,
+            feedRepository = feedRepository,
+            functions = functions,
+            networkMonitor = networkMonitor,
+            outboxDataSource = outboxDataSource,
+            coroutineContext = testDispatcher,
+            googleDriveAuthManager = googleDriveAuthManager,
+            googleDriveMediaService = googleDriveMediaService
         )
         
         testScheduler.advanceTimeBy(100)
         testScheduler.runCurrent()
         
-        verify(cdnUploader, timeout(2000).atLeast(2)).uploadFile(any(), any(), any())
+        verify(googleDriveMediaService, timeout(2000).atLeast(2)).uploadMediaFile(any(), any(), any(), any(), anyOrNull())
         outboxManager.stopProcessing()
     }
 

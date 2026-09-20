@@ -1,4 +1,4 @@
-package by.iposdev.visorlink
+package org.visorlink.app
 
 import org.junit.Assert.fail
 import org.junit.Test

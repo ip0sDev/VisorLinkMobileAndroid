@@ -11,8 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Unit tests (JVM, no device)
 ./gradlew testDebugUnitTest
-./gradlew testDebugUnitTest --tests "by.iposdev.visorlink.utils.OutboxManagerTest"
-./gradlew testDebugUnitTest --tests "by.iposdev.visorlink.ui.screens.auth.AuthViewModelTest.login with blank email sets error"
+./gradlew testDebugUnitTest --tests "org.visorlink.app.utils.OutboxManagerTest"
+./gradlew testDebugUnitTest --tests "org.visorlink.app.ui.screens.auth.AuthViewModelTest.login with blank email sets error"
 
 # Instrumented tests (needs device/emulator)
 ./gradlew connectedDebugAndroidTest
@@ -30,7 +30,7 @@ Toolchain: Gradle 9.7, daemon JVM 21 (auto-provisioned via foojay), AGP 9.3.1, K
 
 ## Architecture
 
-Single Gradle module `:app`, package `by.iposdev.visorlink`. 100% Kotlin + Compose (no Fragments, no XML layouts beyond the launcher theme). `MainActivity` is an `AppCompatActivity` with one `setContent`.
+Single Gradle module `:app`, package `org.visorlink.app`. 100% Kotlin + Compose (no Fragments, no XML layouts beyond the launcher theme). `MainActivity` is an `AppCompatActivity` with one `setContent`.
 
 ### Composition root
 

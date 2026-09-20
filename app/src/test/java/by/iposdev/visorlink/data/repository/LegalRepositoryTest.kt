@@ -1,10 +1,10 @@
-package by.iposdev.visorlink.data.repository
+package org.visorlink.app.data.repository
 
 import android.content.Context
 import android.content.res.AssetManager
 import androidx.compose.ui.graphics.Color
-import by.iposdev.visorlink.data.model.UserProfile
-import by.iposdev.visorlink.ui.screens.legal.buildAnnotatedStringFromHtml
+import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.ui.screens.legal.buildAnnotatedStringFromHtml
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
 import org.junit.Assert.*
@@ -119,5 +119,32 @@ class LegalRepositoryTest {
         val urlAnnotations = annotated.getStringAnnotations("URL", 0, annotated.length)
         assertEquals(1, urlAnnotations.size)
         assertEquals("mailto:test@visorlink.org", urlAnnotations[0].item)
+    }
+
+    @Test
+    fun `compareSemVer compares versions and normalizes correctly`() {
+        assertEquals(0, repository.compareSemVer("1.0.0", "1.0.0"))
+        assertEquals(0, repository.compareSemVer("1.0", "1.0.0"))
+        assertEquals(0, repository.compareSemVer("v1.2", "1.2.0"))
+        assertTrue(repository.compareSemVer("1.2.0", "1.0.0") > 0)
+        assertTrue(repository.compareSemVer("1.0.0", "1.2.0") < 0)
+        assertTrue(repository.compareSemVer("1.2.1", "1.2.0") > 0)
+        assertTrue(repository.compareSemVer("2.0.0", "1.9.9") > 0)
+    }
+
+    @Test
+    fun `isConsentRequired follows ANDROID_COMPLIANCE rule remote greater than accepted`() {
+        // Если пользователь не принимал версию (null/blank) -> обязательно требуется согласие
+        assertTrue(repository.isConsentRequired("1.0.0", null))
+        assertTrue(repository.isConsentRequired("1.0.0", ""))
+
+        // Если пользователь зарегистрировался на ПК и уже принял актуальную версию -> согласие НЕ требуется
+        assertFalse(repository.isConsentRequired("1.0.0", "1.0.0"))
+        assertFalse(repository.isConsentRequired("1.0.0", "1.0"))
+        assertFalse(repository.isConsentRequired("1.0.0", "1.2.0"))
+
+        // Если вышла новая версия документов (remote > user) -> повторное согласие обязательно
+        assertTrue(repository.isConsentRequired("1.3.0", "1.2.0"))
+        assertTrue(repository.isConsentRequired("2.0.0", "1.0.0"))
     }
 }

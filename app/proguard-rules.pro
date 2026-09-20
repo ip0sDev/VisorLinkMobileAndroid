@@ -1,6 +1,6 @@
 # Firebase Firestore — keep all data model classes
--keep class by.iposdev.visorlink.data.model.** { *; }
--keepclassmembers class by.iposdev.visorlink.data.model.** { *; }
+-keep class org.visorlink.app.data.model.** { *; }
+-keepclassmembers class org.visorlink.app.data.model.** { *; }
 
 # Firebase
 -keep class com.google.firebase.** { *; }
@@ -42,5 +42,5 @@
 -keepclassmembers class * {
     @com.google.gson.annotations.SerializedName <fields>;
 }
--keep class by.iposdev.visorlink.data.remote.** { *; }
--keepclassmembers class by.iposdev.visorlink.data.remote.** { *; }
+-keep class org.visorlink.app.data.remote.** { *; }
+-keepclassmembers class org.visorlink.app.data.remote.** { *; }

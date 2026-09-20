@@ -22,8 +22,8 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="by.iposdev.visorlink.canary" />
-                  <option name="mobileSdkAppId" value="1:18511020064:android:fa476334205d7791b97c45" />
+                  <option name="appId" value="org.visorlink.app" />
+                  <option name="mobileSdkAppId" value="1:18511020064:android:462be962ccbcdbf2b97c45" />
                   <option name="projectId" value="visorlink-f9484" />
                   <option name="projectNumber" value="18511020064" />
                 </ConnectionSetting>

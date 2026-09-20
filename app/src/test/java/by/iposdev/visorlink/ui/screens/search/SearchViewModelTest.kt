@@ -1,9 +1,9 @@
-package by.iposdev.visorlink.ui.screens.search
+package org.visorlink.app.ui.screens.search
 
-import by.iposdev.visorlink.data.model.TagSearchResult
-import by.iposdev.visorlink.data.model.UserProfile
-import by.iposdev.visorlink.data.repository.ChatRepository
-import by.iposdev.visorlink.data.repository.UserRepository
+import org.visorlink.app.data.model.TagSearchResult
+import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.data.repository.ChatRepository
+import org.visorlink.app.data.repository.UserRepository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.Dispatchers

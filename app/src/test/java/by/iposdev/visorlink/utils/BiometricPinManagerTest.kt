@@ -1,4 +1,4 @@
-package by.iposdev.visorlink.utils
+package org.visorlink.app.utils
 
 import android.content.Context
 import android.content.SharedPreferences

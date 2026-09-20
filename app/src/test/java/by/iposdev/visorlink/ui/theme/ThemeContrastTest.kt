@@ -1,9 +1,9 @@
-package by.iposdev.visorlink.ui.theme
+package org.visorlink.app.ui.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
-import by.iposdev.visorlink.data.model.AppTheme
-import by.iposdev.visorlink.data.model.ColorPreset
+import org.visorlink.app.data.model.AppTheme
+import org.visorlink.app.data.model.ColorPreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
