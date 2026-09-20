@@ -23,9 +23,9 @@
               <option name="connection">
                 <ConnectionSetting>
                   <option name="appId" value="org.visorlink.app" />
-                  <option name="mobileSdkAppId" value="1:18511020064:android:462be962ccbcdbf2b97c45" />
-                  <option name="projectId" value="visorlink-f9484" />
-                  <option name="projectNumber" value="18511020064" />
+                  <option name="mobileSdkAppId" value="1:123456789012:android:0123456789abcdef012345" />
+                  <option name="projectId" value="your-project-id" />
+                  <option name="projectNumber" value="123456789012" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
