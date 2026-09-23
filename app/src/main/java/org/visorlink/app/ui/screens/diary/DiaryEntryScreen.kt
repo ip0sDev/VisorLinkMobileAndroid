@@ -48,6 +48,18 @@ import org.visorlink.app.ui.theme.ThemeViewModel
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.liquidRevealEnter
+import org.visorlink.app.ui.components.liquidRevealExit
+import org.visorlink.app.ui.components.rememberLiquidEnabled
+import org.visorlink.app.ui.components.rememberLiquidJellyState
+import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlRaised
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DiaryEntryScreen(
@@ -56,8 +68,14 @@ fun DiaryEntryScreen(
     viewModel: DiaryViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
+    val isLiquidEnabled = rememberLiquidEnabled()
     val uiState by viewModel.uiState.collectAsState()
-    val primaryColor = MaterialTheme.colorScheme.primary
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.surface.luminance() < 0.5f
+    val primaryColor = cs.primary
+
+    val saveJelly = rememberLiquidJellyState(softness = 0.12f, damping = 0.65f)
 
     val initialText = remember(entryId, uiState.entries) {
         if (entryId != null) {
@@ -94,11 +112,15 @@ fun DiaryEntryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        viewModel.saveEntry(textFieldValue.text) { success, _ ->
-                            if (success) onNavigateBack()
-                        }
-                    }) {
+                    IconButton(
+                        onClick = {
+                            if (isLiquidEnabled) saveJelly.pulse(0.14f)
+                            viewModel.saveEntry(textFieldValue.text) { success, _ ->
+                                if (success) onNavigateBack()
+                            }
+                        },
+                        modifier = Modifier.liquidJelly(saveJelly, enabled = isLiquidEnabled)
+                    ) {
                         Icon(Icons.Default.Check, stringResource(R.string.action_save))
                     }
                 },
@@ -109,16 +131,53 @@ fun DiaryEntryScreen(
             )
         },
         bottomBar = {
-            Surface(
-                tonalElevation = 4.dp,
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = RoundedCornerShape(topStart = VlTheme.tokens.shapes.cardRadius, topEnd = VlTheme.tokens.shapes.cardRadius)
+            val dockShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else RoundedCornerShape(topStart = tokens.shapes.cardRadius, topEnd = tokens.shapes.cardRadius)
+
+            val dockBrush = remember(isLiquidEnabled, isDark, cs) {
+                if (isLiquidEnabled) {
+                    val top = if (isDark) cs.surfaceContainerHigh.copy(alpha = 0.96f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+                    val bottom = if (isDark) cs.surfaceContainer.copy(alpha = 0.92f) else cs.surfaceContainerHigh.copy(alpha = 0.94f)
+                    Brush.verticalGradient(listOf(top, bottom))
+                } else null
+            }
+
+            val dockBorder = remember(isLiquidEnabled, isDark, cs) {
+                if (isLiquidEnabled) {
+                    val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.60f)
+                    val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+                    BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
+                } else null
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .then(
+                        if (isLiquidEnabled) Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                        else Modifier
+                    )
+                    .then(
+                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, dockShape)
+                        else Modifier
+                    )
+                    .clip(dockShape)
+                    .then(
+                        if (dockBrush != null) Modifier.background(dockBrush, dockShape)
+                        else Modifier.background(cs.surfaceContainerHigh, dockShape)
+                    )
+                    .then(
+                        if (dockBorder != null) Modifier.border(dockBorder, dockShape)
+                        else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, dockShape)
+                        else Modifier
+                    )
             ) {
-                Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     AnimatedVisibility(
                         visible = showColorPicker,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
+                        enter = if (isLiquidEnabled) liquidRevealEnter(fromBottom = true) else (expandVertically() + fadeIn()),
+                        exit = if (isLiquidEnabled) liquidRevealExit(toBottom = true) else (shrinkVertically() + fadeOut())
                     ) {
                         val colors = listOf("#FF5252", "#FF4081", "#E040FB", "#7C4DFF", "#536DFE", "#448AFF", "#40C4FF", "#18FFFF", "#64FFDA", "#69F0AE", "#B2FF59", "#EEFF41", "#FFFF00", "#FFD740", "#FFAB40", "#FF6E40")
                         LazyRow(
@@ -127,12 +186,19 @@ fun DiaryEntryScreen(
                         ) {
                             items(colors) { hex ->
                                 val c = try { Color(android.graphics.Color.parseColor(hex)) } catch(_:Exception) { Color.Unspecified }
+                                val dotJelly = rememberLiquidJellyState(softness = 0.16f)
                                 Box(
                                     modifier = Modifier
                                         .size(40.dp)
-                                        .clip(VlTheme.tokens.shapes.indicator)
+                                        .liquidJelly(dotJelly, enabled = isLiquidEnabled)
+                                        .clip(tokens.shapes.indicator)
                                         .background(c)
+                                        .then(
+                                            if (isLiquidEnabled) Modifier.border(1.dp, Color.White.copy(alpha = 0.4f), tokens.shapes.indicator)
+                                            else Modifier
+                                        )
                                         .clickable {
+                                            if (isLiquidEnabled) dotJelly.pulse(0.20f)
                                             textFieldValue = toggleMarkdownTag(textFieldValue, "{color:$hex}", "{/color}")
                                             showColorPicker = false
                                         }

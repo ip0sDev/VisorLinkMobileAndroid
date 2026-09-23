@@ -769,6 +769,27 @@
     <string name="music_save_to_library">Save to library</string>
     <string name="music_downloading">Downloading track…</string>
     <string name="music_download_complete">Track saved to library</string>
+    <string name="music_queue_title">Queue</string>
+    <string name="music_queue_empty">Queue is empty</string>
+    <string name="music_up_next">Up next</string>
+    <string name="music_mode_cover">Cover</string>
+    <string name="music_mode_vinyl">Vinyl</string>
+    <string name="music_mode_visualizer">Wave</string>
+    <string name="music_sleep_timer">Sleep timer</string>
+    <string name="music_sleep_timer_set">Sleep timer set</string>
+    <string name="music_sleep_timer_cancelled">Sleep timer cancelled</string>
+    <string name="music_sleep_off">Off</string>
+    <string name="music_sleep_15m">15 min</string>
+    <string name="music_sleep_30m">30 min</string>
+    <string name="music_sleep_45m">45 min</string>
+    <string name="music_sleep_60m">1 hour</string>
+    <string name="music_sleep_end_of_track">End of track</string>
+
+    <!-- Мини-плеер -->
+    <string name="music_mini_play">Play</string>
+    <string name="music_mini_pause">Pause</string>
+    <string name="music_mini_next">Next track</string>
+    <string name="music_mini_close">Close player</string>
 
     <!-- Debug Mode -->
     <string name="settings_debug_show_ids_title">Debug Mode (IDs &amp; seq)</string>

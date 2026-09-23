@@ -722,6 +722,7 @@ object ChatDataCache {
         put("authorId", authorId)
         put("authorName", authorName)
         put("stickerCount", stickerCount)
+        put("isOfficial", isOfficial)
         val sArr = JSONArray()
         stickers.forEach { s ->
             sArr.put(JSONObject().apply {
@@ -754,6 +755,7 @@ object ChatDataCache {
             authorId = getString("authorId"),
             authorName = getString("authorName"),
             stickerCount = getInt("stickerCount"),
+            isOfficial = optBoolean("isOfficial", false),
             stickers = sList
         )
     }

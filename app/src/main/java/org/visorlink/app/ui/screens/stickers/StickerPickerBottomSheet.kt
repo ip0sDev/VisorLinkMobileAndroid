@@ -78,14 +78,16 @@ fun StickerPickerBottomSheet(
         contentWindowInsets = { WindowInsets(0) }
     ) {
         StickerPickerContent(
-            packs = uiState.packs,
+            userPacks = uiState.userPacks,
+            storePacks = uiState.storePacks,
             isLoading = uiState.isLoading,
             currentUid = viewModel.currentUid,
             onStickerSelected = { packId, sticker ->
                 viewModel.recordPackUsage(packId)
                 onStickerSelected(packId, sticker)
             },
-            onDeletePack = { packId, isOwner -> viewModel.deletePack(packId, isOwner) }
+            onDeletePack = { packId, isOwner -> viewModel.deletePack(packId, isOwner) },
+            onInstallPack = { packId -> viewModel.addForeignPack(packId) {} }
         )
     }
 }
@@ -96,22 +98,27 @@ fun StickerPickerBottomSheet(
 
 @Composable
 internal fun StickerPickerContent(
-    packs: List<StickerPack>,
+    userPacks: List<StickerPack>,
+    storePacks: List<StickerPack>,
     isLoading: Boolean,
     currentUid: String,
     onStickerSelected: (packId: String, sticker: StickerItem) -> Unit,
-    onDeletePack: (packId: String, isOwner: Boolean) -> Unit
+    onDeletePack: (packId: String, isOwner: Boolean) -> Unit,
+    onInstallPack: (packId: String) -> Unit
 ) {
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = My Stickers, 1 = Store
+    val packs = if (selectedTab == 0) userPacks else storePacks
+
     var selectedPackIndex by remember { mutableIntStateOf(if (packs.isNotEmpty()) 0 else -1) }
     var showDeleteConfirm by remember { mutableStateOf<StickerPack?>(null) }
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
-    LaunchedEffect(packs) {
+    LaunchedEffect(packs, selectedTab) {
         if (packs.isNotEmpty()) {
             if (selectedPackIndex >= packs.size) {
                 selectedPackIndex = 0
-            } else if (selectedPackIndex == -1) {
+            } else if (selectedPackIndex == -1 && selectedTab == 0) {
                 selectedPackIndex = 0
             }
         } else {
@@ -142,6 +149,29 @@ internal fun StickerPickerContent(
                         cs.outlineVariant.copy(alpha = 0.4f),
                         CircleShape
                     )
+            )
+        }
+
+        androidx.compose.material3.TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+            contentColor = cs.primary,
+            indicator = { tabPositions ->
+                val modifier = with(androidx.compose.material3.TabRowDefaults) { Modifier.tabIndicatorOffset(tabPositions[selectedTab]) }
+                androidx.compose.material3.TabRowDefaults.Indicator(
+                    modifier = modifier
+                )
+            }
+        ) {
+            androidx.compose.material3.Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Мои стикеры") }
+            )
+            androidx.compose.material3.Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("Магазин") }
             )
         }
 
@@ -212,6 +242,11 @@ internal fun StickerPickerContent(
                 selectedPack != null -> PackContentGrid(
                     pack = selectedPack,
                     currentUid = currentUid,
+                    isInstalled = userPacks.any { it.id == selectedPack.id },
+                    onInstallPack = {
+                        onInstallPack(selectedPack.id)
+                        selectedTab = 0 // switch back to my stickers
+                    },
                     onStickerTap = { sticker -> onStickerSelected(selectedPack.id, sticker) }
                 )
             }
@@ -467,6 +502,8 @@ private fun PackListRow(
 private fun PackContentGrid(
     pack: StickerPack,
     currentUid: String,
+    isInstalled: Boolean,
+    onInstallPack: () -> Unit,
     onStickerTap: (StickerItem) -> Unit
 ) {
     val haptic = rememberHaptic()
@@ -489,6 +526,16 @@ private fun PackContentGrid(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        if (!isInstalled) {
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(4) }) {
+                org.visorlink.app.ui.components.VlButton(
+                    onClick = onInstallPack,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                ) {
+                    Text("Добавить пак")
+                }
+            }
+        }
         items(pack.stickers, key = { it.id }) { sticker ->
             StickerCell(
                 sticker = sticker,

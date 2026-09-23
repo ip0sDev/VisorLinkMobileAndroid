@@ -1,10 +1,15 @@
-# Biolume — дизайн-система (v2.1)
+# Biolume — дизайн-система (v2.2)
 
 **Статус:** платформенно-независимый документ. Значения токенов выражены в нейтральных единицах и нотации; рецепты для конкретных стеков собраны в §9 «Реализация на платформах».
 **Дизайн-база:** Material 3 Expressive / Material You — анатомия компонентов, роли токенов и шкала форм берутся из спецификации M3E буквально, не «по мотивам». M3E — источник проектных решений, а не зависимость от Android: цветовые роли и type scale переносимы на любую платформу.
 **Надстройка:** два независимых слоя глубины (неоморфная структура + редкий сигнальный неон), парная типографика, два разных «физических режима» освещения по темам.
 
 **Единицы.** Размеры указаны в базовых единицах без масштаба: Android — dp, веб — px при devicePixelRatio = 1, iOS — pt; численно они совпадают. Запись `x y blur color` описывает смещённую тень (смещения по X/Y, радиус размытия, цвет с уже вложенной альфой); приставка `inset` — вдавленный вариант той же тени.
+
+### Что изменилось в v2.2
+- Раздел 7 значительно расширен: добавлен исчерпывающий каталог компонентов с детальным описанием.
+- Добавлен раздел 9.5 для реализации на платформе Flutter Desktop (Windows / macOS / Linux).
+- Добавлен раздел 11 со сводной таблицей быстрого поиска токенов.
 
 ### Что изменилось в v2.1
 - Документ отвязан от платформы: моушн описан параметрически вместо веб-сниппета, Compose-код перенесён из тела гайда в платформенное приложение §9.
@@ -188,17 +193,75 @@
 
 ---
 
-## 7. Компоненты (кратко, с учётом слоёв)
+## 7. Компоненты
 
-- **Filled-кнопка:** заливка `primary`, форма stadium, лёгкая обычная тень (не цветная) в покое, `glowPrimary` — только hover/press. При `:active` радиус слегка уменьшается (shape-morph, см. §2).
-- **Tonal / Outlined-кнопка:** neumorphic-raised, без цвета в покое.
-- **FAB:** асимметричная M3E-форма, neumorphic-raised + статичный слабый `glowPrimary` (единственное исключение «всегда чуть светится», т.к. это главное CTA экрана) — но **без пульса**.
-- **Карточка:** neumorphic-raised + `outlineVariant` (гибрид Elevated/Outlined из M3, см. §2).
-- **Текстовое поле:** neumorphic-inset в покое → + контур/glow `primary` при фокусе.
-- **Чип:** neumorphic-raised в покое → neumorphic-inset + `*Container` заливка при выборе, без glow.
-- **Нижняя навигация:** плавающий stadium-контейнер — neumorphic-raised + нейтральная грань `outlineVariant`; активный пункт — **плоская** заливка `selectionFill` за иконкой (не inset: на низком pill ≈30 ед. высотой вдавленность читается грязью), без glow. Индикатор — sibling иконки, не её родитель (масштабирование родителя незаметно уменьшает иконку).
-- **Бабблы чата:** без рельефа вовсе — в тесных контейнерах мягкие тени соседей накладываются и читаются грязными полосами. «Свой» — плотная подмешанная заливка (`surfaceContainer` + primary ≈22 % Abyss / ≈14 % Tidepool), «чужой» — нейтральный `surfaceContainer`.
-- **Зазор под рельеф:** вокруг raised-элемента держать ≥6–8 ед. воздуха — мягкая тень рисуется вне границ компонента и срезается плотным родителем; где воздуха нет (плотные списочные ряды) — только грань `outlineVariant` без тени.
+### VlSurface
+Основополагающий (foundational) контейнер. Динамически переключается между `vlRaised`, `vlInset` или плоским (flat) состоянием в зависимости от параметра `isInput`, состояния взаимодействия (`isPressed`) и активного в текущей теме стиля нажатия `VlPressStyle`. Скругление углов вычисляется на основе позиции в группе (индекс/всего).
+
+### VlButton
+Главный CTA (Call to Action). Форма — stadium. В состоянии покоя свечение отсутствует (только `vlRaised`), при нажатии получает `glowPrimary`. В теме Biolume при нажатии срабатывает M3E shape-morph (радиус слегка уменьшается). Варианты:
+- **Filled:** фон primary.
+- **Tonal:** фон `surfaceContainer`, приподнятая (raised) глубина.
+- **Outlined:** прозрачный фон, 1dp (hairline) граница, приподнятая глубина.
+- **Text:** без контейнера.
+
+### VlCard
+Гибридная карточка Biolume: `vlRaised` + `vlHairline` (нейтральная граница 1dp цвета `outlineVariant`). Никогда не светится. Используется для элементов чата, постов в ленте, секций настроек.
+
+### VlTextField
+В состоянии покоя: `vlInset`. При фокусе: добавляет `vlSignalBorder` (1dp кольцо цвета primary) + `vlSignalGlow`. Текст плейсхолдера цвета `onSurfaceVariant`.
+
+### VlFab
+Главный CTA экрана. Асимметричная форма скруглённого прямоугольника (M3E). Исключение из «Правила одного»: имеет постоянное статичное свечение в покое (`fabRestAlpha`), но БЕЗ пульса. Глубина — raised.
+
+### VlTopAppBar
+В теме Biolume: плавающая приподнятая (raised) пилюля (форма `inputPanel`) с мягким градиентом и hairline-границей. В Forge: сплошной блок с нижним разделителем. В M3E: стандартный M3 TopAppBar.
+
+### VlNavigationBar (VlNavBar)
+Плавающий stadium-контейнер — raised + нейтральная грань `outlineVariant`. Активный пункт: плоская (не inset) пилюля `selectionFill` за иконкой (вдавленность на пилюле слишком мала, чтобы хорошо читаться). Использует `LiquidRunnerState` для физики желейного растяжения (jelly stretch) при переходе между вкладками. Элементы вкладок: иконка + опциональная метка.
+
+### VlSwitch
+Трек: `vlInset`. Ползунок (thumb): `vlRaised`. При переключении: ползунок скользит с физикой сжатия/растяжения (squash/stretch) `LiquidJellyState`. Цвет трека меняется на `primaryContainer` во включенном состоянии.
+
+### VlSegmentedControl
+Ряд сегментов в приподнятом (raised) контейнере. Выбранный сегмент получает `selectionFill` + лёгкий inset. Невыбранные: плоские внутри родителя.
+
+### VlChip
+В состоянии покоя: raised. При выборе: inset + заливка `*Container`. Без свечения.
+
+### VlLiveIndicator (VlLiveDot / VlPresenceDot)
+ЕДИНСТВЕННЫЙ компонент с анимированным свечением (`vlBiopulse`). Ритмично расширяющееся кольцо (2400 мс) для статуса онлайн/запись/активен. При системном ограничении анимаций (reduce-motion) откатывается к статичному пиковому свечению.
+
+### AvatarWithPresence
+Круглый аватар с наложением `VlPresenceDot`. Несколько вариантов размера.
+
+### Chat Bubbles (VlBubbleTokens)
+Строго БЕЗ неоморфного рельефа — в плотных списках тени перекрываются и выглядят грязно. Цвета: свои = `surfaceContainer` + подмешанный `primary` (~22% в Abyss, ~14% в Tidepool), чужие = нейтральный `surfaceContainer`. Скругленные углы с хвостиком.
+
+### AudioMessageBubble
+Специализированный баббл чата для голосовых сообщений. Содержит визуализацию волны, кнопку play/pause. Продолжительность отображается типографикой `dataMedium`.
+
+### VlGlassPanel
+Панель с эффектом размытого стекла. Принимает параметр радиуса. Используется для оверлеев и штор (sheets).
+
+### VlSettingsSection / VlSettingsItem / VlOptionRow
+Компоненты интерфейса настроек. Section: сгруппированный контейнер с заголовком. Item: одиночная строка с иконкой, меткой и замыкающим виджетом (тумблер, шеврон, значение). OptionRow: выбор в стиле радиокнопки.
+
+### VlIconTray
+Горизонтальный ряд кнопок-иконок с равными отступами.
+
+### VlTapFeedback
+Обертка, применяющая анимацию нажатия (scale, inset, stamp) в зависимости от активной темы.
+
+### LiquidPhysics Components
+- **LiquidJellyState:** Физика пружины со сжатием и растяжением (squash & stretch) для тумблеров и переключателей.
+- **LiquidRunnerState:** Желейный бегунок для индикатора панели навигации.
+- **Modifier.liquidJelly:** Желейная деформация при взаимодействии.
+- **Modifier.liquidDragStretch:** Эластичный отклик при перетаскивании.
+- **Modifier.liquidPopIn:** Анимация появления «поп».
+- **Modifier.liquidPillCardSlideOut:** Смахивание-слайд для скрытия (dismissal).
+- **NeumorphicLiquidBridge:** Вязкая соединительная нить между элементами.
+- **NeumorphicMetaballsCanvas:** Непрерывно сливающиеся (C1) метасферы для органических индикаторов.
 
 ---
 
@@ -249,6 +312,25 @@
 - Inset нативного аналога не имеет: эмулируется двумя смещёнными копиями фигуры под маской (`.overlay` + `blendMode`) либо отрисовкой в `Canvas`/`GraphicsContext` c `Shadow`.
 - Биопульс — `TimelineView`/`PhaseAnimator`, управляющие радиусом и альфой тех же shadow-слоёв; пауза по `UIAccessibility.isReduceMotionEnabled`.
 
+### 9.5 Flutter Desktop (Windows / macOS / Linux)
+
+- Токены раздаются через `ThemeExtension<VlTokens>`, подключаемый к `ThemeData`. Компоненты читают их через `Theme.of(context).extension<VlTokens>()` или обёртку `VlTheme.of(context)`.
+- Структура (raised/inset) — `CustomPainter` с `Canvas.drawShadow` либо `Paint` с `MaskFilter.blur(BlurStyle.normal, sigma)`. Два прохода: тёмная тень снизу-справа, светлая контр-подсветка сверху-слева.
+- Inset-теней нативно нет — рисуются через `CustomPainter`: увеличенная смещённая копия фигуры отсекается по границам контейнера (`clipRect`/`clipRRect`), создавая иллюзию вдавленности.
+- Сигнальный glow — несмещённая внешняя тень через `ImageFilter.blur` на `Paint.color` = акцент с альфой.
+- Сигнальная граница — `Paint` с `style = PaintingStyle.stroke`, `strokeWidth = 1dp`, цвет = акцент.
+- Биопульс — `AnimationController` с продолжительностью 2400 мс, `CurvedAnimation` с `Curves.easeInOut`. Управляет радиусом размытия и альфой тени. Уважает `MediaQuery.disableAnimations`.
+- Стили нажатия:
+  - SCALE (M3E): `AnimatedScale` с пружинной симуляцией (damping 0.75, stiffness 400).
+  - INSET (Biolume): Анимация перехода между параметрами raised- и inset-теней.
+  - STAMP (Forge): `AnimatedContainer` с линейной кривой 220 мс, элемент смещается в собственную жёсткую тень.
+- Типографика — `GoogleFonts.inter()`, `GoogleFonts.spaceGrotesk()`, `GoogleFonts.jetBrainsMono()`. Кегли и интерлиньяж берутся из M3 type scale без изменений.
+- Формы — все формы из `VlShapeTokens` отображаются на `RoundedRectangleBorder` / `StadiumBorder` / кастомные подклассы `OutlinedBorder`.
+- LiquidPhysics — `SpringSimulation` через `AnimationController` с кастомным `SpringDescription`. Сжатие/растяжение через `Transform.scale` с раздельными коэффициентами по x/y.
+- Hover-состояния — все raised-элементы при наведении мыши слегка увеличивают тень (blur +2 ед.). Это десктоп-эксклюзивное дополнение, отсутствующее на мобильных платформах.
+- Фокусные кольца — при Tab-навигации фокусируемые элементы получают `vlSignalBorder`.
+- Десктоп-специфичное: смена курсора мыши (`SystemMouseCursors.click` на кнопках, `SystemMouseCursors.text` на полях), задержки тултипов, контекстные меню по правой кнопке мыши.
+
 > Если платформенная техника не воспроизводит точный параметр (нет inset-теней, нет второго источника света) — допускается визуальное приближение, но не подмена смысла: inset обязан читаться вдавленностью, сигнал — свечением, а не обводкой.
 
 ---
@@ -268,3 +350,33 @@
 - Не путать outlineVariant (нейтральная грань) с сигнальным контуром (`primary`/`secondary`/`tertiary`) — это разные по смыслу токены.
 - Не делать неоморфную тень на дефолтном фоне чистого `#000000`/`#FFFFFF` — рельеф не прочитается без разницы тонов.
 - Не выдавать `primaryContainer` (полупрозрачный, alpha .10–.14) за индикацию выбора — для этого существует плотная непрозрачная `selectionFill`.
+
+---
+
+## 11. Таблица быстрого поиска токенов
+
+| Токен | M3E | Biolume (Abyss) | Biolume (Tidepool) | Forge |
+|---|---|---|---|---|
+| `structure.enabled` | false | true | true | true |
+| `structure.shadowDark` (raised) | — | rgba(0,0,0,.45) | rgba(0,0,0,.08) | rgba(0,0,0,.6) |
+| `structure.shadowLight` (raised) | — | rgba(255,255,255,.025) | rgba(255,255,255,.9) | — |
+| `structure.hardEdge` | false | false | false | true |
+| `signal.enabled` | false | true | true | false |
+| `signal.glowBlur` | — | 12 | 10 | — |
+| `signal.glowAlpha` | — | .28 | .18 | — |
+| `signal.fabRestAlpha` | — | .15 | .10 | — |
+| `signal.focusBorder` | — | 1dp | 1dp | 2dp |
+| `signal.pulsePeriodMs` | — | 2400 | 2400 | — |
+| `press` | SCALE | INSET | INSET | STAMP |
+| `shape.button` | Stadium | Stadium | Stadium | Rect (0dp) |
+| `shape.card` | 12dp | 16dp | 16dp | 0dp |
+| `shape.field` | 12dp | 16dp | 16dp | 0dp |
+| `shape.fab` | Circle | Asymm.Rounded | Asymm.Rounded | Rect (0dp) |
+| `shape.bar` | 28dp pill | 28dp pill | 28dp pill | 0dp |
+| `motion.dampingRatio` | 0.75 | 0.75 | 0.75 | — |
+| `motion.stiffness` | 400 | 400 | 400 | — |
+| `motion.linearDurationMs` | — | — | — | 220 |
+
+**Значения `selectionFill` (используются для выделенных элементов, вкладок, сегментов):**
+- **Abyss:** `surfaceContainer` + `primary` @ 20% opacity → ~#1D2E34
+- **Tidepool:** `surfaceContainer` + `primary` @ 14% opacity → ~#DEE6E4

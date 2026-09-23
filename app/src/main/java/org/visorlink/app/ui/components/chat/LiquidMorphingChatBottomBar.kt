@@ -253,7 +253,8 @@ fun LiquidMorphingChatBottomBar(
                                 .fillMaxWidth()
                         ) {
                             StickerPickerContent(
-                                packs = stickerUiState.packs,
+                                userPacks = stickerUiState.userPacks,
+                                storePacks = stickerUiState.storePacks,
                                 isLoading = stickerUiState.isLoading,
                                 currentUid = stickerVm.currentUid,
                                 onStickerSelected = { packId, sticker ->
@@ -263,7 +264,8 @@ fun LiquidMorphingChatBottomBar(
                                 },
                                 onDeletePack = { packId, isOwner ->
                                     stickerVm.deletePack(packId, isOwner)
-                                }
+                                },
+                                onInstallPack = { packId -> stickerVm.addForeignPack(packId) {} }
                             )
                         }
                     }

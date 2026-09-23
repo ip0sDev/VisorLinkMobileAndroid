@@ -13,7 +13,8 @@ import kotlinx.coroutines.launch
 // ─── UI State ────────────────────────────────────────────────────────────────
 
 data class StickerPackUiState(
-    val packs: List<StickerPack> = emptyList(),
+    val userPacks: List<StickerPack> = emptyList(),
+    val storePacks: List<StickerPack> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -44,7 +45,14 @@ class StickerPackViewModel(
                 .catch { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
                 .collect { packs ->
                     val ranked = usageRankManager?.rankPacks(packs) ?: packs
-                    _uiState.update { it.copy(packs = ranked, isLoading = false) }
+                    _uiState.update { it.copy(userPacks = ranked, isLoading = false) }
+                }
+        }
+        viewModelScope.launch {
+            repo.observeStorePacks()
+                .catch { e -> _uiState.update { it.copy(error = e.message, isLoading = false) } }
+                .collect { packs ->
+                    _uiState.update { it.copy(storePacks = packs, isLoading = false) }
                 }
         }
         refreshSilently()
@@ -56,7 +64,7 @@ class StickerPackViewModel(
      */
     fun refreshSilently() {
         viewModelScope.launch {
-            if (_uiState.value.packs.isEmpty()) {
+            if (_uiState.value.userPacks.isEmpty() && _uiState.value.storePacks.isEmpty()) {
                 _uiState.update { it.copy(isLoading = true) }
             }
             try {
@@ -73,7 +81,7 @@ class StickerPackViewModel(
     fun recordPackUsage(packId: String) {
         usageRankManager?.recordPackUsage(packId)
         _uiState.update { state ->
-            state.copy(packs = usageRankManager?.rankPacks(state.packs) ?: state.packs)
+            state.copy(userPacks = usageRankManager?.rankPacks(state.userPacks) ?: state.userPacks)
         }
     }
 

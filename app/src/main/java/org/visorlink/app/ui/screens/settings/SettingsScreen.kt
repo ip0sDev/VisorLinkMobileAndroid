@@ -480,9 +480,7 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
                 ) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
-                    if (flags.isEnabled("2fa_enabled")) {
-                        VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
-                    }
+                    VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
                     VlSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
                         iconColor = Color(0xFF2AABEE),

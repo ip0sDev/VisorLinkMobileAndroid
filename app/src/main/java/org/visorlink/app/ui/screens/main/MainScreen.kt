@@ -46,6 +46,7 @@ import org.visorlink.app.ui.screens.music.MusicViewModel
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
 import org.visorlink.app.ui.components.music.MusicOnboardingDialog
 import org.visorlink.app.ui.components.chat.AudioPlaybackDockBar
+import org.visorlink.app.ui.components.chat.DockAnchor
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.MusicPlayerManager
 import org.visorlink.app.data.repository.MusicRepository
@@ -231,32 +232,18 @@ fun MainScreen(
                             .fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // "Выдувание" мини-плеера из навбара на вкладке музыки или при активном треке
-                        AnimatedVisibility(
-                            visible = selectedTab == 3 && musicPlayback.currentTrack != null,
-                            enter = slideInVertically(
-                                initialOffsetY = { it },
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            ) + expandVertically(
-                                expandFrom = Alignment.Bottom,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
-                            ) + fadeIn(animationSpec = tween(250)),
-                            exit = slideOutVertically(
-                                targetOffsetY = { it },
-                                animationSpec = tween(200)
-                            ) + shrinkVertically(
-                                shrinkTowards = Alignment.Bottom,
-                                animationSpec = tween(200)
-                            ) + fadeOut(animationSpec = tween(150))
-                        ) {
-                            AudioPlaybackDockBar(
-                                musicPlayback = musicPlayback,
-                                onTogglePlayPause = { musicPlayerManager.togglePlayPause() },
-                                onClose = { musicPlayerManager.stop() },
-                                onOpenFullscreen = { musicPlayerManager.openFullscreenPlayer() },
-                                isFloating = true
-                            )
-                        }
+                        // Мини-плеер сам наливается из-за навбара и выливается обратно,
+                        // поэтому внешний AnimatedVisibility ему не нужен
+                        AudioPlaybackDockBar(
+                            musicPlayback = musicPlayback,
+                            onTogglePlayPause = { musicPlayerManager.togglePlayPause() },
+                            onClose = { musicPlayerManager.dismiss() },
+                            onOpenFullscreen = { musicPlayerManager.openFullscreenPlayer() },
+                            anchor = DockAnchor.Bottom,
+                            visible = selectedTab == 3,
+                            onSeek = { musicPlayerManager.seekTo(it) },
+                            onNext = { musicPlayerManager.playNext() }
+                        )
 
                         VlNavigationBar(
                             selectedTab = selectedTab,

@@ -17,6 +17,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import com.google.firebase.firestore.Query
 
 class StickerPackRepository(
     private val auth: FirebaseAuth,
@@ -31,25 +34,111 @@ class StickerPackRepository(
     }
 
     private val currentUid get() = auth.currentUser?.uid ?: ""
-    private val _packsFlow = MutableStateFlow<List<StickerPack>>(emptyList())
+    private val _storePacksFlow = MutableStateFlow<List<StickerPack>>(emptyList())
+    private val _userPacksFlow = MutableStateFlow<List<StickerPack>>(emptyList())
+    private var listenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
 
     init {
-        // Мгновенная предзагрузка из кэша в фоне при создании синглтона репозитория
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 purgeLegacyCacheIfNeeded()
                 val uid = currentUid.ifBlank { "global" }
                 val cached = ChatDataCache.loadStickerPacks(context, uid)
-                if (cached.isNotEmpty() && _packsFlow.value.isEmpty()) {
-                    _packsFlow.value = cached
+                if (cached.isNotEmpty()) {
+                    _storePacksFlow.value = cached.filter { it.isOfficial }
+                    val userPackIds = ChatDataCache.loadProfile(context, uid)?.stickerPackIds ?: emptyList()
+                    _userPacksFlow.value = cached.filter { it.id in userPackIds || (it.authorId == uid && !it.isOfficial) }.toMutableList()
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to preload stickers from cache", e)
             }
         }
+        startListening()
     }
 
-    fun observeUserPacks(): Flow<List<StickerPack>> = _packsFlow.asStateFlow()
+    private fun startListening() {
+        val query = firestore.collection("stickerPacks").whereEqualTo("isOfficial", true)
+        listenerRegistration?.remove()
+        listenerRegistration = query.addSnapshotListener { snapshot, error ->
+            if (error != null) {
+                Log.e(TAG, "Sticker pack listen failed", error)
+                return@addSnapshotListener
+            }
+            if (snapshot != null) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    processSnapshot(snapshot)
+                }
+            }
+        }
+    }
+
+    private suspend fun processSnapshot(snapshot: com.google.firebase.firestore.QuerySnapshot) = withContext(Dispatchers.IO) {
+        val uid = currentUid.ifBlank { "global" }
+        try {
+            val packs = snapshot.documents.map { doc ->
+                async {
+                    try {
+                        val id = doc.id
+                        val name = doc.getString("name") ?: "Sticker Pack"
+                        val emoji = doc.getString("emoji") ?: "✨"
+                        val authorId = doc.getString("authorId") ?: "official"
+                        val authorName = doc.getString("authorName") ?: doc.getString("author") ?: "VisorLink Official"
+                        val isOfficial = doc.getBoolean("isOfficial") ?: true
+
+                        val stickersSnapshot = try {
+                            firestore.collection("stickerPacks").document(id).collection("stickers")
+                                .orderBy("createdAt", Query.Direction.ASCENDING).get().await()
+                        } catch (e: Exception) {
+                            firestore.collection("stickerPacks").document(id).collection("stickers").get().await()
+                        }
+
+                        val stickers = stickersSnapshot.documents.mapNotNull { sDoc ->
+                            val url = sDoc.getString("url") ?: return@mapNotNull null
+                            if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage"))) {
+                                return@mapNotNull null
+                            }
+                            StickerItem(
+                                id = sDoc.id,
+                                url = url,
+                                emoji = sDoc.getString("emoji") ?: "🎭",
+                                storagePath = sDoc.getString("storagePath") ?: "",
+                                sortOrder = sDoc.getLong("sortOrder")?.toInt() ?: 0
+                            )
+                        }.sortedBy { it.sortOrder }
+
+                        if (stickers.isEmpty()) return@async null
+
+                        StickerPack(
+                            id = id,
+                            name = name,
+                            emoji = emoji,
+                            authorId = authorId,
+                            authorName = authorName,
+                            stickerCount = stickers.size,
+                            isOfficial = isOfficial,
+                            stickers = stickers
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error parsing sticker pack doc ${doc.id}", e)
+                        null
+                    }
+                }
+            }.awaitAll().filterNotNull()
+
+            val profile = ChatDataCache.loadProfile(context, uid)
+            val userPackIds = profile?.stickerPackIds ?: emptyList()
+
+            _storePacksFlow.value = packs.filter { it.isOfficial }
+            _userPacksFlow.value = packs.filter { it.id in userPackIds || (it.authorId == currentUid && !it.isOfficial) }.toMutableList()
+
+            ChatDataCache.saveStickerPacks(context, uid, packs)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to process snapshot", e)
+        }
+    }
+
+    fun observeStorePacks(): Flow<List<StickerPack>> = _storePacksFlow.asStateFlow()
+    fun observeUserPacks(): Flow<List<StickerPack>> = _userPacksFlow.asStateFlow()
 
     private suspend fun purgeLegacyCacheIfNeeded() = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -64,20 +153,7 @@ class StickerPackRepository(
     suspend fun refreshPacks(forceServer: Boolean = true) = withContext(Dispatchers.IO) {
         try {
             purgeLegacyCacheIfNeeded()
-
-            val uid = currentUid.ifBlank { "global" }
-            // Мгновенно отдаем кэш, если в памяти еще пусто
-            if (_packsFlow.value.isEmpty()) {
-                val cached = ChatDataCache.loadStickerPacks(context, uid)
-                if (cached.isNotEmpty() && _packsFlow.value.isEmpty()) {
-                    _packsFlow.value = cached
-                }
-            }
-
-            // Запрашиваем актуальные официальные курируемые стикерпаки из Firestore (по умолчанию напрямую с сервера)
-            val query = firestore.collection("stickerPacks")
-                .whereEqualTo("isOfficial", true)
-
+            val query = firestore.collection("stickerPacks").whereEqualTo("isOfficial", true)
             val snapshot = try {
                 if (forceServer) {
                     query.get(Source.SERVER).await()
@@ -88,69 +164,24 @@ class StickerPackRepository(
                 Log.w(TAG, "Server sticker query failed, fallback to default source: ${serverEx.message}")
                 query.get().await()
             }
-
-            val packs = snapshot.documents.mapNotNull { doc ->
-                try {
-                    val id = doc.id
-                    val name = doc.getString("name") ?: "Sticker Pack"
-                    val emoji = doc.getString("emoji") ?: "✨"
-                    val authorId = doc.getString("authorId") ?: "official"
-                    val authorName = doc.getString("authorName") ?: doc.getString("author") ?: "VisorLink Official"
-
-                    @Suppress("UNCHECKED_CAST")
-                    val rawStickers = doc.get("stickers") as? List<Map<String, Any?>> ?: emptyList()
-                    val stickers = rawStickers.mapNotNull { map ->
-                        val sId = (map["id"] as? String) ?: return@mapNotNull null
-                        val url = (map["url"] as? String) ?: ""
-                        // Отсекаем старый CDN и относительные пути /f/
-                        if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage") && !url.contains("googleusercontent.com"))) {
-                            return@mapNotNull null
-                        }
-                        StickerItem(
-                            id = sId,
-                            url = url,
-                            emoji = (map["emoji"] as? String) ?: "🎭",
-                            storagePath = (map["storagePath"] as? String) ?: "",
-                            sortOrder = ((map["sortOrder"] as? Number)?.toInt()) ?: 0
-                        )
-                    }.sortedBy { it.sortOrder }
-
-                    if (stickers.isEmpty()) return@mapNotNull null
-
-                    StickerPack(
-                        id = id,
-                        name = name,
-                        emoji = emoji,
-                        authorId = authorId,
-                        authorName = authorName,
-                        stickerCount = stickers.size,
-                        stickers = stickers
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error parsing sticker pack doc ${doc.id}", e)
-                    null
-                }
-            }
-
-            _packsFlow.value = packs
-            ChatDataCache.saveStickerPacks(context, uid, packs)
+            processSnapshot(snapshot)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch official sticker packs", e)
         }
     }
 
     suspend fun getPackById(packId: String): StickerPack? {
-        val inMemory = _packsFlow.value.find { it.id == packId }
+        val inMemory = _storePacksFlow.value.find { it.id == packId } ?: _userPacksFlow.value.find { it.id == packId }
         if (inMemory != null) return inMemory
         return fetchPackDetails(packId)
     }
 
     suspend fun hasPack(packId: String): Boolean {
-        return _packsFlow.value.any { it.id == packId }
+        return _userPacksFlow.value.any { it.id == packId }
     }
 
     suspend fun fetchPackDetails(packId: String): StickerPack? = withContext(Dispatchers.IO) {
-        val local = _packsFlow.value.find { it.id == packId }
+        val local = _storePacksFlow.value.find { it.id == packId } ?: _userPacksFlow.value.find { it.id == packId }
         if (local != null) return@withContext local
 
         try {
@@ -161,21 +192,26 @@ class StickerPackRepository(
             val emoji = doc.getString("emoji") ?: "✨"
             val authorId = doc.getString("authorId") ?: "official"
             val authorName = doc.getString("authorName") ?: doc.getString("author") ?: "VisorLink Official"
+            val isOfficial = doc.getBoolean("isOfficial") ?: true
 
-            @Suppress("UNCHECKED_CAST")
-            val rawStickers = doc.get("stickers") as? List<Map<String, Any?>> ?: emptyList()
-            val stickers = rawStickers.mapNotNull { map ->
-                val sId = (map["id"] as? String) ?: return@mapNotNull null
-                val url = (map["url"] as? String) ?: ""
-                if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage") && !url.contains("googleusercontent.com"))) {
+            val stickersSnapshot = try {
+                firestore.collection("stickerPacks").document(packId).collection("stickers")
+                    .orderBy("createdAt", Query.Direction.ASCENDING).get().await()
+            } catch (e: Exception) {
+                firestore.collection("stickerPacks").document(packId).collection("stickers").get().await()
+            }
+
+            val stickers = stickersSnapshot.documents.mapNotNull { sDoc ->
+                val url = sDoc.getString("url") ?: return@mapNotNull null
+                if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage"))) {
                     return@mapNotNull null
                 }
                 StickerItem(
-                    id = sId,
+                    id = sDoc.id,
                     url = url,
-                    emoji = (map["emoji"] as? String) ?: "🎭",
-                    storagePath = (map["storagePath"] as? String) ?: "",
-                    sortOrder = ((map["sortOrder"] as? Number)?.toInt()) ?: 0
+                    emoji = sDoc.getString("emoji") ?: "🎭",
+                    storagePath = sDoc.getString("storagePath") ?: "",
+                    sortOrder = sDoc.getLong("sortOrder")?.toInt() ?: 0
                 )
             }.sortedBy { it.sortOrder }
 
@@ -188,6 +224,7 @@ class StickerPackRepository(
                 authorId = authorId,
                 authorName = authorName,
                 stickerCount = stickers.size,
+                isOfficial = isOfficial,
                 stickers = stickers
             )
         } catch (e: Exception) {
@@ -197,18 +234,49 @@ class StickerPackRepository(
     }
 
     suspend fun addPackToUser(packId: String): String = withContext(Dispatchers.IO) {
-        refreshPacks()
+        val uid = currentUid.ifBlank { return@withContext "Error" }
+        try {
+            firestore.collection("users").document(uid).set(
+                mapOf("stickerPackIds" to com.google.firebase.firestore.FieldValue.arrayUnion(packId)),
+                com.google.firebase.firestore.SetOptions.merge()
+            ).await()
+            val profile = ChatDataCache.loadProfile(context, uid)
+            if (profile != null) {
+                val newList = profile.stickerPackIds.toMutableList()
+                if (!newList.contains(packId)) newList.add(packId)
+                ChatDataCache.saveProfile(context, profile.copy(stickerPackIds = newList))
+            } else {
+                // If profile is null, fetch it directly
+                val userDoc = firestore.collection("users").document(uid).get().await()
+                val newIds = userDoc.get("stickerPackIds") as? List<String> ?: listOf(packId)
+                val newProfile = org.visorlink.app.data.model.UserProfile(uid = uid, stickerPackIds = newIds)
+                ChatDataCache.saveProfile(context, newProfile)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to add pack to user", e)
+        }
+        refreshPacks(forceServer = false)
         "Pack Added"
     }
 
     suspend fun deletePack(packId: String, isOwner: Boolean) = withContext(Dispatchers.IO) {
+        val uid = currentUid.ifBlank { return@withContext }
         try {
-            _packsFlow.update { list -> list.filter { it.id != packId } }
-            ChatDataCache.deleteStickerPack(context, packId)
+            _userPacksFlow.update { list -> list.filter { it.id != packId } }
+            
+            firestore.collection("users").document(uid)
+                .update("stickerPackIds", com.google.firebase.firestore.FieldValue.arrayRemove(packId)).await()
+            
+            val profile = ChatDataCache.loadProfile(context, uid)
+            if (profile != null) {
+                ChatDataCache.saveProfile(context, profile.copy(stickerPackIds = profile.stickerPackIds - packId))
+            }
+
             if (isOwner) {
                 firestore.collection("stickerPacks").document(packId).delete().await()
+                _storePacksFlow.update { list -> list.filter { it.id != packId } }
             }
-            refreshPacks(forceServer = true)
+            refreshPacks(forceServer = false)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete pack $packId", e)
         }

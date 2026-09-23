@@ -25,15 +25,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import org.visorlink.app.data.repository.FlagsRepository
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sign
 
 /**
@@ -361,5 +371,168 @@ fun Modifier.liquidPillCardSlideOut(
         }
     }
 }
+
+// ── Перелив (вливание / выливание) ───────────────────────────────────────────
+
+/**
+ * Прогресс «перелива» панели: 0 — резервуар пуст, 1 — жидкость на месте.
+ *
+ * Вливание пружинит с лёгким перелётом (жидкость плещет о дальнюю стенку),
+ * выливание уходит короткой линейной струёй без отскока: вытекает содержимое
+ * охотнее, чем заполняется.
+ *
+ * Значение читается как состояние, поэтому вызывающий может держать контент
+ * смонтированным, пока прогресс не дойдёт до нуля, и увидеть анимацию ухода.
+ */
+@Composable
+fun rememberLiquidPourProgress(
+    visible: Boolean,
+    liquid: Boolean = true
+): Float {
+    val anim = remember { Animatable(if (visible) 1f else 0f) }
+    LaunchedEffect(visible, liquid) {
+        when {
+            !liquid -> anim.animateTo(
+                if (visible) 1f else 0f,
+                tween(durationMillis = 220, easing = FastOutSlowInEasing)
+            )
+            visible -> anim.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 320f))
+            else -> anim.animateTo(0f, tween(durationMillis = 260, easing = FastOutSlowInEasing))
+        }
+    }
+    return anim.value
+}
+
+/**
+ * Панель наливается в свои границы и выливается обратно за край, к которому
+ * пришвартована ([fromTop] — из-под шапки вниз, иначе — снизу вверх).
+ *
+ * Механика:
+ *  - высота резерва в лэйауте равна [progress] от измеренной, контент прибит к
+ *    краю-источнику, поэтому соседи плавно расступаются и сходятся;
+ *  - содержимое обрезается по синусоидальному фронту жидкости, амплитуда которого
+ *    максимальна на середине перелива и равна нулю в покое (в покое не дрожит
+ *    ничего — это же правило, что и «в покое не светится ничего»);
+ *  - по фронту идёт мениск, а перед ним отрываются капли.
+ *
+ * Модификаторы рисования стоят ДО [layout] в цепочке сознательно: draw-нода
+ * должна получить уже урезанный размер, иначе волна считалась бы от полной
+ * высоты контента.
+ */
+fun Modifier.liquidPour(
+    progress: Float,
+    fromTop: Boolean,
+    accent: Color,
+    waves: Boolean = true
+): Modifier {
+    val clamped = progress.coerceIn(0f, 1f)
+    return this
+        .graphicsLayer {
+            val turbulence = pourTurbulence(progress)
+            // Струя уже панели: на пике перелива горлышко поджимается
+            scaleX = 1f - turbulence * 0.045f
+            transformOrigin = TransformOrigin(0.5f, if (fromTop) 0f else 1f)
+            alpha = (clamped * 2.4f).coerceIn(0f, 1f)
+        }
+        .then(
+            if (!waves) {
+                // Без волны обрезаем строго по резерву: layout сам контент не режет,
+                // и панель наезжала бы на соседей всё время перелива
+                Modifier.clipToBounds()
+            } else Modifier.drawWithContent {
+                val turbulence = pourTurbulence(progress)
+                if (turbulence <= 0.001f || size.width <= 0f || size.height <= 0f) {
+                    drawContent()
+                    return@drawWithContent
+                }
+                val amplitude = turbulence * 8.dp.toPx()
+                val front = if (fromTop) size.height else 0f
+                val body = liquidFrontPath(size.width, size.height, amplitude, front, fromTop)
+                clipPath(body) { this@drawWithContent.drawContent() }
+
+                // Мениск — тонкая светлая линия по поверхности жидкости
+                val edge = liquidFrontPath(size.width, size.height, amplitude, front, fromTop, edgeOnly = true)
+                drawPath(
+                    path = edge,
+                    color = accent.copy(alpha = 0.55f * turbulence.coerceAtMost(1f)),
+                    style = Stroke(width = 1.5.dp.toPx())
+                )
+
+                // Оторвавшиеся капли летят за фронтом, в сторону источника перелива
+                val dir = if (fromTop) 1f else -1f
+                val dropAlpha = (turbulence * 0.85f).coerceIn(0f, 1f)
+                DropSpots.forEach { (fx, lead) ->
+                    val radius = (2f + 1.6f * lead) * turbulence * density
+                    if (radius < 0.5f) return@forEach
+                    drawCircle(
+                        color = accent.copy(alpha = dropAlpha * (1f - lead * 0.45f)),
+                        radius = radius,
+                        center = Offset(
+                            x = size.width * fx,
+                            y = front + dir * (amplitude + lead * turbulence * 22.dp.toPx())
+                        )
+                    )
+                }
+            }
+        )
+        .layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val height = (placeable.height * clamped).roundToInt().coerceAtLeast(0)
+            layout(placeable.width, height) {
+                placeable.place(0, if (fromTop) 0 else height - placeable.height)
+            }
+        }
+}
+
+/** Доля ширины и «опережение» каждой капли. */
+private val DropSpots = listOf(0.26f to 0f, 0.52f to 0.55f, 0.78f to 0.25f)
+
+/**
+ * Возмущение поверхности: ноль в обоих покоях (пусто / налито), максимум на
+ * середине перелива, плюс всплеск на пружинном перелёте.
+ */
+private fun pourTurbulence(progress: Float): Float {
+    val clamped = progress.coerceIn(0f, 1f)
+    val splash = (progress - 1f).coerceAtLeast(0f) * 1.5f
+    return kotlin.math.sin(PI.toFloat() * clamped) + splash
+}
+
+/**
+ * Силуэт жидкости (или только её поверхность при [edgeOnly]) с синусоидальным
+ * фронтом около [front].
+ */
+private fun liquidFrontPath(
+    width: Float,
+    height: Float,
+    amplitude: Float,
+    front: Float,
+    fromTop: Boolean,
+    edgeOnly: Boolean = false
+): Path {
+    val path = Path()
+    val periods = 1.75f
+    val step = (width / 32f).coerceAtLeast(1f)
+    fun waveAt(x: Float) = front + amplitude * kotlin.math.sin((x / width) * periods * 2f * PI.toFloat())
+
+    if (!edgeOnly) {
+        val back = if (fromTop) 0f else height
+        path.moveTo(0f, back)
+    } else {
+        path.moveTo(0f, waveAt(0f))
+    }
+    path.lineTo(0f, waveAt(0f))
+    var x = step
+    while (x < width) {
+        path.lineTo(x, waveAt(x))
+        x += step
+    }
+    path.lineTo(width, waveAt(width))
+    if (!edgeOnly) {
+        path.lineTo(width, if (fromTop) 0f else height)
+        path.close()
+    }
+    return path
+}
+
 
 

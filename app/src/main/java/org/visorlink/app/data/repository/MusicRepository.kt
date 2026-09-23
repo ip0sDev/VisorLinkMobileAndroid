@@ -200,29 +200,31 @@ class MusicRepository(private val context: Context) {
     }
 
     suspend fun saveTrack(track: MusicTrack): Boolean = withContext(Dispatchers.IO) {
+        val resolvedUrl = org.visorlink.app.data.model.resolveStreamableAudioUrl(track.url, track.cdnMediaId) ?: track.url
+        val normalizedTrack = if (resolvedUrl != track.url) track.copy(url = resolvedUrl) else track
         val db = dbHelper.writableDatabase
         val values = ContentValues().apply {
-            put("id", track.id)
-            put("title", track.title)
-            put("performer", track.performer)
-            put("duration", track.duration)
-            put("file_size", track.fileSize)
-            put("url", track.url)
-            put("cdn_media_id", track.cdnMediaId)
-            put("local_path", track.localPath)
-            put("cover_url", track.coverUrl)
-            put("cover_cdn_media_id", track.coverCdnMediaId)
-            put("cover_local_path", track.coverLocalPath)
-            put("is_favorite", if (track.isFavorite) 1 else 0)
-            put("source_type", track.sourceType)
-            put("chat_id", track.chatId)
-            put("message_id", track.messageId)
-            put("added_at", track.addedAt)
+            put("id", normalizedTrack.id)
+            put("title", normalizedTrack.title)
+            put("performer", normalizedTrack.performer)
+            put("duration", normalizedTrack.duration)
+            put("file_size", normalizedTrack.fileSize)
+            put("url", normalizedTrack.url)
+            put("cdn_media_id", normalizedTrack.cdnMediaId)
+            put("local_path", normalizedTrack.localPath)
+            put("cover_url", normalizedTrack.coverUrl)
+            put("cover_cdn_media_id", normalizedTrack.coverCdnMediaId)
+            put("cover_local_path", normalizedTrack.coverLocalPath)
+            put("is_favorite", if (normalizedTrack.isFavorite) 1 else 0)
+            put("source_type", normalizedTrack.sourceType)
+            put("chat_id", normalizedTrack.chatId)
+            put("message_id", normalizedTrack.messageId)
+            put("added_at", normalizedTrack.addedAt)
         }
         val result = db.insertWithOnConflict("music_tracks", null, values, android.database.sqlite.SQLiteDatabase.CONFLICT_REPLACE)
         if (result != -1L) {
             notifyChanged()
-            triggerAutoDownload(track)
+            triggerAutoDownload(normalizedTrack)
             true
         } else {
             false
@@ -413,28 +415,73 @@ class MusicRepository(private val context: Context) {
             return@withContext track
         }
 
-        val downloadUrl = track.url
-        if (downloadUrl.isNullOrBlank()) return@withContext track
+        val dir = File(context.filesDir, "music")
+        if (!dir.exists()) dir.mkdirs()
+
+        val safeId = track.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        // Проверяем, может файл уже есть на диске в каталоге музыки
+        val existingCachedFile = dir.listFiles()?.firstOrNull { it.name.startsWith("track_${safeId}.") && it.length() > 0L }
+        if (existingCachedFile != null) {
+            val updatedTrack = track.copy(
+                localPath = existingCachedFile.absolutePath,
+                fileSize = existingCachedFile.length()
+            )
+            saveTrack(updatedTrack)
+            return@withContext updatedTrack
+        }
+
+        val rawUrl = track.url
+        val downloadUrl = org.visorlink.app.data.model.resolveStreamableAudioUrl(rawUrl, track.cdnMediaId)
+        if (downloadUrl.isNullOrBlank()) {
+            Log.w(TAG, "No valid download URL for track ${track.id}")
+            return@withContext track
+        }
 
         try {
             _downloadProgress.update { it + (track.id to 0.01f) }
 
-            val dir = File(context.filesDir, "music")
-            if (!dir.exists()) dir.mkdirs()
-
-            val ext = downloadUrl.substringBefore('?').substringAfterLast('.', "mp3").take(5)
-            val fileName = "track_${track.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")}.$ext"
+            val ext = downloadUrl.substringBefore('?').substringAfterLast('.', "mp3")
+                .take(5).filter { it.isLetterOrDigit() }.ifEmpty { "mp3" }
+            val fileName = "track_${safeId}.$ext"
             val targetFile = File(dir, fileName)
 
             if (!targetFile.exists() || targetFile.length() == 0L) {
                 val tmpFile = File(dir, "$fileName.tmp")
-                val conn = URL(downloadUrl).openConnection() as HttpURLConnection
-                conn.connectTimeout = 15_000
-                conn.readTimeout = 60_000
-                conn.instanceFollowRedirects = true
-                conn.connect()
+                var currentUrl = downloadUrl
+                var activeConn: HttpURLConnection? = null
+                var redirectCount = 0
+                val maxRedirects = 6
 
-                if (conn.responseCode in 200..299) {
+                while (redirectCount < maxRedirects) {
+                    val urlObj = URL(currentUrl)
+                    val c = (urlObj.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 20_000
+                        readTimeout = 60_000
+                        instanceFollowRedirects = true
+                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36")
+                    }
+                    c.connect()
+                    val code = c.responseCode
+                    if (code in listOf(HttpURLConnection.HTTP_MOVED_PERM, HttpURLConnection.HTTP_MOVED_TEMP, HttpURLConnection.HTTP_SEE_OTHER, 307, 308)) {
+                        val redirectLocation = c.getHeaderField("Location")
+                        c.disconnect()
+                        if (!redirectLocation.isNullOrBlank()) {
+                            currentUrl = if (redirectLocation.startsWith("http")) redirectLocation else URL(urlObj, redirectLocation).toString()
+                            redirectCount++
+                            continue
+                        }
+                    }
+                    activeConn = c
+                    break
+                }
+
+                val conn = activeConn ?: throw IOException("Failed to connect to $downloadUrl")
+                try {
+                    val responseCode = conn.responseCode
+                    if (responseCode !in 200..299) {
+                        throw IOException("HTTP error $responseCode: ${conn.responseMessage}")
+                    }
+
                     val totalBytes = conn.contentLengthLong
                     var downloadedBytes = 0L
                     var lastReported = 0f
@@ -456,9 +503,14 @@ class MusicRepository(private val context: Context) {
                             }
                         }
                     }
-                    tmpFile.renameTo(targetFile)
+                    if (tmpFile.exists() && tmpFile.length() > 0L) {
+                        if (targetFile.exists()) targetFile.delete()
+                        tmpFile.renameTo(targetFile)
+                    }
+                } finally {
+                    conn.disconnect()
+                    if (tmpFile.exists()) tmpFile.delete()
                 }
-                conn.disconnect()
             }
 
             if (targetFile.exists() && targetFile.length() > 0L) {
@@ -471,9 +523,11 @@ class MusicRepository(private val context: Context) {
                 saveTrack(updatedTrack)
                 _downloadProgress.update { it - track.id }
                 return@withContext updatedTrack
+            } else {
+                Log.e(TAG, "Target file does not exist after download for ${track.id}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to download track ${track.id}", e)
+            Log.e(TAG, "Failed to download track ${track.id} from $downloadUrl", e)
         } finally {
             _downloadProgress.update { it - track.id }
         }

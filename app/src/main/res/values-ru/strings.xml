@@ -771,6 +771,27 @@
     <string name="music_save_to_library">Сохранить в медиатеку</string>
     <string name="music_downloading">Скачивание трека…</string>
     <string name="music_download_complete">Трек сохранен в медиатеку</string>
+    <string name="music_queue_title">Очередь воспроизведения</string>
+    <string name="music_queue_empty">Очередь пуста</string>
+    <string name="music_up_next">Далее в очереди</string>
+    <string name="music_mode_cover">Обложка</string>
+    <string name="music_mode_vinyl">Винил</string>
+    <string name="music_mode_visualizer">Волна</string>
+    <string name="music_sleep_timer">Таймер сна</string>
+    <string name="music_sleep_timer_set">Таймер сна установлен</string>
+    <string name="music_sleep_timer_cancelled">Таймер сна выключен</string>
+    <string name="music_sleep_off">Выключен</string>
+    <string name="music_sleep_15m">15 минут</string>
+    <string name="music_sleep_30m">30 минут</string>
+    <string name="music_sleep_45m">45 минут</string>
+    <string name="music_sleep_60m">1 час</string>
+    <string name="music_sleep_end_of_track">В конце этого трека</string>
+
+    <!-- Мини-плеер -->
+    <string name="music_mini_play">Воспроизвести</string>
+    <string name="music_mini_pause">Пауза</string>
+    <string name="music_mini_next">Следующий трек</string>
+    <string name="music_mini_close">Закрыть плеер</string>
 
     <!-- Debug Mode -->
     <string name="settings_debug_show_ids_title">Режим отладки (ID и seq)</string>

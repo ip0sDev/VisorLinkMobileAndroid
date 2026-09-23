@@ -15,7 +15,8 @@ class MusicPlayerReceiver : BroadcastReceiver(), KoinComponent {
             MusicPlayerManager.ACTION_TOGGLE -> player.togglePlayPause()
             MusicPlayerManager.ACTION_PREV -> player.playPrevious()
             MusicPlayerManager.ACTION_NEXT -> player.playNext()
-            MusicPlayerManager.ACTION_STOP -> player.stop()
+            // Крестик в шторке закрывает плеер целиком, а не ставит его на паузу
+            MusicPlayerManager.ACTION_STOP -> player.dismiss()
         }
     }
 }

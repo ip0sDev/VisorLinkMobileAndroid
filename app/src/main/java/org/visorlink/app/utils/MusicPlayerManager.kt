@@ -14,6 +14,11 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.media.app.NotificationCompat.MediaStyle
+import android.widget.Toast
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
@@ -68,6 +73,14 @@ class MusicPlayerManager(private val context: Context) {
     private var originalQueue: List<MusicTrack> = emptyList()
     private var progressRunnable: Runnable? = null
 
+    // Таймер сна
+    private var sleepTimerJob: Job? = null
+    private var isSleepAtEndOfTrack: Boolean = false
+    private val _sleepTimerMinutesLeft = MutableStateFlow<Int?>(null)
+    val sleepTimerMinutesLeft: StateFlow<Int?> = _sleepTimerMinutesLeft.asStateFlow()
+    private val _isSleepAtEndOfTrackFlow = MutableStateFlow(false)
+    val isSleepAtEndOfTrackFlow: StateFlow<Boolean> = _isSleepAtEndOfTrackFlow.asStateFlow()
+
     companion object {
         private const val CHANNEL_ID = "music_playback"
         private const val NOTIF_ID = 9002
@@ -87,7 +100,23 @@ class MusicPlayerManager(private val context: Context) {
 
     private fun initExoPlayer() {
         if (exoPlayer != null) return
-        exoPlayer = ExoPlayer.Builder(context).build().apply {
+
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(20000)
+            .setReadTimeoutMs(60000)
+
+        // Оборачиваем в DefaultDataSource.Factory, чтобы локальные файлы (file://), контент (content://)
+        // и сетевые потоки (http://, https://) корректно маршрутизировались без ClassCastException
+        val defaultDataSourceFactory = DefaultDataSource.Factory(context, httpDataSourceFactory)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(context)
+            .setDataSourceFactory(defaultDataSourceFactory)
+
+        exoPlayer = ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaSourceFactory)
+            .build().apply {
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     when (playbackState) {
@@ -125,13 +154,32 @@ class MusicPlayerManager(private val context: Context) {
 
                 override fun onPlayerError(error: PlaybackException) {
                     Log.e(TAG, "ExoPlayer error: ${error.message}", error)
+                    val cause = error.cause
+                    val errorMsg = when {
+                        cause is HttpDataSource.InvalidResponseCodeException && cause.responseCode == 403 ->
+                            "Доступ к файлу ограничен (HTTP 403)"
+                        cause is HttpDataSource.InvalidResponseCodeException && cause.responseCode == 404 ->
+                            "Файл не найден на сервере (HTTP 404)"
+                        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED ||
+                        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
+                            "Ошибка сети при загрузке аудио"
+                        error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ->
+                            "Сервер недоступен (${error.message})"
+                        error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED ||
+                        error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ->
+                            "Неподдерживаемый формат аудиофайла"
+                        else -> "Ошибка источника: ${cause?.message ?: error.message ?: "Сбой аудиопотока"}"
+                    }
                     _state.value = _state.value.copy(
                         isLoading = false,
                         isPlaying = false,
-                        error = error.localizedMessage ?: "Playback error"
+                        error = errorMsg
                     )
                     stopProgressUpdates()
                     updateMediaSession()
+                    handler.post {
+                        Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                    }
                 }
             })
         }
@@ -173,19 +221,35 @@ class MusicPlayerManager(private val context: Context) {
         initExoPlayer()
         val player = exoPlayer ?: return
 
+        val safeId = track.id.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+        val localCached = File(context.filesDir, "music").listFiles()?.firstOrNull {
+            it.name.startsWith("track_${safeId}.") && it.length() > 0L
+        }
+
         val uriString = when {
-            !track.localPath.isNullOrBlank() && File(track.localPath).exists() -> {
+            !track.localPath.isNullOrBlank() && File(track.localPath).exists() && File(track.localPath).length() > 0L -> {
                 Uri.fromFile(File(track.localPath)).toString()
             }
-            !track.url.isNullOrBlank() -> track.url
+            localCached != null -> {
+                Uri.fromFile(localCached).toString()
+            }
+            !track.url.isNullOrBlank() -> {
+                org.visorlink.app.data.model.resolveStreamableAudioUrl(track.url, track.cdnMediaId) ?: track.url
+            }
+            !track.cdnMediaId.isNullOrBlank() -> {
+                org.visorlink.app.data.model.resolveStreamableAudioUrl(null, track.cdnMediaId)
+            }
             else -> null
         }
 
-        if (uriString == null) {
+        if (uriString.isNullOrBlank()) {
             _state.value = _state.value.copy(
                 isLoading = false,
                 error = "Не найден источник для воспроизведения"
             )
+            handler.post {
+                Toast.makeText(context, "Не найден источник для воспроизведения", Toast.LENGTH_SHORT).show()
+            }
             return
         }
 
@@ -200,6 +264,9 @@ class MusicPlayerManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error playing track: ${track.id}", e)
             _state.value = _state.value.copy(isLoading = false, error = e.localizedMessage)
+            handler.post {
+                Toast.makeText(context, "Ошибка запуска: ${e.localizedMessage ?: "Сбой"}", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -231,6 +298,30 @@ class MusicPlayerManager(private val context: Context) {
         _state.value = _state.value.copy(isPlaying = false, progress = 0f, currentMs = 0L)
         hideNotification()
         mediaSession?.isActive = false
+    }
+
+    /**
+     * Полное закрытие плеера по крестику: глушит звук И убирает трек из состояния.
+     *
+     * [stop] оставляет `currentTrack` на месте (конец очереди — плеер просто встаёт
+     * на паузу в начале трека), поэтому мини-плеер, который живёт на условии
+     * `currentTrack != null`, после него никуда не девался.
+     */
+    fun dismiss() {
+        cancelSleepTimer()
+        stopProgressUpdates()
+        exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
+        originalQueue = emptyList()
+        _showFullscreenPlayer.value = false
+        // Пользовательские настройки воспроизведения переживают закрытие плеера
+        _state.value = MusicPlayerState(
+            speed = _state.value.speed,
+            repeatMode = _state.value.repeatMode,
+            isShuffle = _state.value.isShuffle
+        )
+        mediaSession?.isActive = false
+        hideNotification()
     }
 
     fun seekTo(fraction: Float) {
@@ -359,7 +450,44 @@ class MusicPlayerManager(private val context: Context) {
         _state.value = _state.value.copy(playlist = updatedPlaylist)
     }
 
+    fun setSleepTimer(minutes: Int) {
+        cancelSleepTimer()
+        if (minutes <= 0) return
+        _sleepTimerMinutesLeft.value = minutes
+        sleepTimerJob = scope.launch {
+            var remaining = minutes
+            while (remaining > 0) {
+                kotlinx.coroutines.delay(60_000L)
+                remaining--
+                if (remaining > 0) {
+                    _sleepTimerMinutesLeft.value = remaining
+                }
+            }
+            _sleepTimerMinutesLeft.value = null
+            pause()
+        }
+    }
+
+    fun setSleepAtEndOfTrack(enabled: Boolean = true) {
+        cancelSleepTimer()
+        isSleepAtEndOfTrack = enabled
+        _isSleepAtEndOfTrackFlow.value = enabled
+    }
+
+    fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        _sleepTimerMinutesLeft.value = null
+        isSleepAtEndOfTrack = false
+        _isSleepAtEndOfTrackFlow.value = false
+    }
+
     private fun onTrackEnded() {
+        if (isSleepAtEndOfTrack) {
+            cancelSleepTimer()
+            stop()
+            return
+        }
         when (_state.value.repeatMode) {
             MusicRepeatMode.ONE -> {
                 seekToMs(0L)

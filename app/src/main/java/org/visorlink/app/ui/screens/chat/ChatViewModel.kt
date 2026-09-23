@@ -1273,7 +1273,17 @@ class ChatViewModel(
 
     fun playAudio(message: Message) {
         viewModelScope.launch {
-            val resolvedUrl = message.url ?: ""
+            val rawUrl = when {
+                !message.url.isNullOrBlank() -> message.url
+                !message.driveUrl.isNullOrBlank() -> message.driveUrl
+                !message.driveFileId.isNullOrBlank() -> "https://drive.usercontent.google.com/download?id=${message.driveFileId}&export=download&confirm=t"
+                else -> ""
+            }
+            val resolvedUrl = org.visorlink.app.data.model.resolveStreamableAudioUrl(rawUrl, message.driveFileId ?: message.cdnMediaId) ?: rawUrl
+            val resolvedLocalPath = when {
+                message.localFile?.exists() == true -> message.localFile.absolutePath
+                else -> null
+            }
             val resolvedCoverUrl = message.coverUrl
             val track = MusicTrack(
                 id = message.id,
@@ -1282,6 +1292,7 @@ class ChatViewModel(
                 duration = message.duration ?: 0,
                 fileSize = message.fileSize ?: 0L,
                 url = resolvedUrl,
+                localPath = resolvedLocalPath,
                 cdnMediaId = message.cdnMediaId,
                 coverUrl = resolvedCoverUrl,
                 coverCdnMediaId = message.coverCdnMediaId,
@@ -1307,6 +1318,14 @@ class ChatViewModel(
 
     fun stopAudio() {
         musicPlayerManager.stop()
+    }
+
+    /**
+     * Закрытие мини-плеера крестиком: в отличие от [stopAudio] убирает трек из
+     * состояния, иначе панель остаётся на экране с заглушённым звуком.
+     */
+    fun dismissAudio() {
+        musicPlayerManager.dismiss()
     }
 
     fun openFullscreenAudio() {

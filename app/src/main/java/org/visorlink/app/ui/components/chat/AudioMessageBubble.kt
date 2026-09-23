@@ -293,13 +293,25 @@ fun AudioMessageBubble(
                     } else {
                         IconButton(
                             onClick = {
+                                val rawUrl = when {
+                                    !message.url.isNullOrBlank() -> message.url
+                                    !message.driveUrl.isNullOrBlank() -> message.driveUrl
+                                    !message.driveFileId.isNullOrBlank() -> "https://drive.usercontent.google.com/download?id=${message.driveFileId}&export=download&confirm=t"
+                                    else -> null
+                                }
+                                val resolvedUrl = org.visorlink.app.data.model.resolveStreamableAudioUrl(rawUrl, message.driveFileId ?: message.cdnMediaId) ?: rawUrl
+                                val resolvedLocalPath = when {
+                                    message.localFile?.exists() == true -> message.localFile.absolutePath
+                                    else -> null
+                                }
                                 val track = MusicTrack(
                                     id = message.id,
                                     title = title,
                                     performer = performer,
                                     duration = totalSec,
                                     fileSize = message.fileSize ?: 0L,
-                                    url = message.url,
+                                    url = resolvedUrl,
+                                    localPath = resolvedLocalPath,
                                     cdnMediaId = message.cdnMediaId,
                                     coverUrl = message.coverUrl,
                                     coverCdnMediaId = message.coverCdnMediaId,

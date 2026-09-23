@@ -7,12 +7,14 @@ import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -23,8 +25,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -38,10 +41,19 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.MusicPlaylist
 import org.visorlink.app.data.model.MusicTrack
 import org.visorlink.app.ui.components.CachedImage
+import org.visorlink.app.ui.components.NeumorphicLiquidSegmentedControl
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlTopAppBar
-import org.visorlink.app.ui.components.chat.AudioPlaybackDockBar
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.liquidPillCardSlideOut
+import org.visorlink.app.ui.components.liquidPopIn
+import org.visorlink.app.ui.components.rememberLiquidEnabled
+import org.visorlink.app.ui.components.rememberLiquidJellyState
+import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlInset
+import org.visorlink.app.ui.theme.vlRaised
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,8 +61,12 @@ fun MusicLibraryScreen(
     viewModel: MusicViewModel,
     onNavigateBack: (() -> Unit)? = null
 ) {
+    val isLiquidEnabled = rememberLiquidEnabled()
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+    val addJelly = rememberLiquidJellyState()
 
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_AUDIO
@@ -80,6 +96,7 @@ fun MusicLibraryScreen(
             topBar = {
                 Column {
                     VlTopAppBar(
+                        modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
                         title = {
                             Text(
                                 text = uiState.selectedPlaylist?.title ?: stringResource(R.string.music_title),
@@ -88,6 +105,7 @@ fun MusicLibraryScreen(
                         },
                         navigationIcon = {
                             IconButton(onClick = {
+                                if (isLiquidEnabled) topBarJelly.press(0.06f)
                                 if (uiState.selectedPlaylist != null) {
                                     viewModel.selectPlaylist(null)
                                 } else {
@@ -99,7 +117,13 @@ fun MusicLibraryScreen(
                         },
                         actions = {
                             if (uiState.selectedTab == 0 && uiState.selectedPlaylist == null) {
-                                IconButton(onClick = { showCreatePlaylistDialog = true }) {
+                                IconButton(
+                                    onClick = {
+                                        if (isLiquidEnabled) addJelly.pulse(0.12f)
+                                        showCreatePlaylistDialog = true
+                                    },
+                                    modifier = Modifier.liquidJelly(addJelly, enabled = isLiquidEnabled)
+                                ) {
                                     Icon(Icons.Default.Add, contentDescription = "Create playlist")
                                 }
                             }
@@ -108,26 +132,45 @@ fun MusicLibraryScreen(
 
                     // Вкладки отображаются, только если не выбран отдельный плейлист
                     if (uiState.selectedPlaylist == null) {
-                        TabRow(
-                            selectedTabIndex = uiState.selectedTab,
-                            containerColor = Color.Transparent,
-                            contentColor = MaterialTheme.colorScheme.primary
-                        ) {
-                            Tab(
-                                selected = uiState.selectedTab == 0,
-                                onClick = { viewModel.setTab(0) },
-                                text = { Text(stringResource(R.string.music_tab_playlists)) }
+                        if (isLiquidEnabled) {
+                            val tabTitles = listOf(
+                                stringResource(R.string.music_tab_playlists),
+                                stringResource(R.string.music_tab_all_tracks),
+                                stringResource(R.string.music_tab_device)
                             )
-                            Tab(
-                                selected = uiState.selectedTab == 1,
-                                onClick = { viewModel.setTab(1) },
-                                text = { Text(stringResource(R.string.music_tab_all_tracks)) }
-                            )
-                            Tab(
-                                selected = uiState.selectedTab == 2,
-                                onClick = { viewModel.setTab(2) },
-                                text = { Text(stringResource(R.string.music_tab_device)) }
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                NeumorphicLiquidSegmentedControl(
+                                    tabs = tabTitles,
+                                    selectedIndex = uiState.selectedTab,
+                                    onTabSelected = { viewModel.setTab(it) }
+                                )
+                            }
+                        } else {
+                            TabRow(
+                                selectedTabIndex = uiState.selectedTab,
+                                containerColor = Color.Transparent,
+                                contentColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Tab(
+                                    selected = uiState.selectedTab == 0,
+                                    onClick = { viewModel.setTab(0) },
+                                    text = { Text(stringResource(R.string.music_tab_playlists)) }
+                                )
+                                Tab(
+                                    selected = uiState.selectedTab == 1,
+                                    onClick = { viewModel.setTab(1) },
+                                    text = { Text(stringResource(R.string.music_tab_all_tracks)) }
+                                )
+                                Tab(
+                                    selected = uiState.selectedTab == 2,
+                                    onClick = { viewModel.setTab(2) },
+                                    text = { Text(stringResource(R.string.music_tab_device)) }
+                                )
+                            }
                         }
                     }
                 }
@@ -146,17 +189,20 @@ fun MusicLibraryScreen(
                         currentTrackId = uiState.playerState.currentTrack?.id,
                         isPlaying = uiState.playerState.isPlaying,
                         downloadProgress = uiState.downloadProgress,
+                        isLiquidEnabled = isLiquidEnabled,
                         onTrackClick = { track ->
                             viewModel.playTrack(track, uiState.selectedPlaylistTracks)
                         },
                         onRemoveTrack = { trackId ->
                             viewModel.removeTrackFromPlaylist(uiState.selectedPlaylist!!.id, trackId)
-                        }
+                        },
+                        onDownloadTrack = { viewModel.downloadTrack(it) }
                     )
                 } else {
                     when (uiState.selectedTab) {
                         0 -> PlaylistsTabView(
                             playlists = uiState.playlists,
+                            isLiquidEnabled = isLiquidEnabled,
                             onPlaylistClick = { playlist -> viewModel.selectPlaylist(playlist) },
                             onDeletePlaylist = { id -> viewModel.deletePlaylist(id) }
                         )
@@ -166,9 +212,11 @@ fun MusicLibraryScreen(
                             currentTrackId = uiState.playerState.currentTrack?.id,
                             isPlaying = uiState.playerState.isPlaying,
                             downloadProgress = uiState.downloadProgress,
+                            isLiquidEnabled = isLiquidEnabled,
                             onSearchChange = { viewModel.setSearchQuery(it) },
                             onTrackClick = { track -> viewModel.playTrack(track, uiState.allTracks) },
-                            onToggleFavorite = { viewModel.toggleFavorite(it) }
+                            onToggleFavorite = { viewModel.toggleFavorite(it) },
+                            onDownloadTrack = { viewModel.downloadTrack(it) }
                         )
                         2 -> DeviceTracksTabView(
                             tracks = uiState.deviceTracks,
@@ -177,6 +225,7 @@ fun MusicLibraryScreen(
                             currentTrackId = uiState.playerState.currentTrack?.id,
                             isPlaying = uiState.playerState.isPlaying,
                             downloadProgress = uiState.downloadProgress,
+                            isLiquidEnabled = isLiquidEnabled,
                             onRequestPermission = { permissionLauncher.launch(audioPermission) },
                             onSearchChange = { viewModel.setSearchQuery(it) },
                             onTrackClick = { track -> viewModel.playTrack(track, uiState.deviceTracks) },
@@ -190,28 +239,42 @@ fun MusicLibraryScreen(
 
     // Диалог создания плейлиста
     if (showCreatePlaylistDialog) {
+        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.65f, stiffness = 420f)
+        val dialogShape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.extraLarge
         AlertDialog(
             onDismissRequest = { showCreatePlaylistDialog = false },
-            title = { Text(stringResource(R.string.music_playlist_create)) },
+            modifier = Modifier.liquidPopIn(popProgress, isLiquidEnabled),
+            shape = dialogShape,
+            title = {
+                Text(
+                    stringResource(R.string.music_playlist_create),
+                    fontWeight = FontWeight.Bold
+                )
+            },
             text = {
                 OutlinedTextField(
                     value = newPlaylistName,
                     onValueChange = { newPlaylistName = it },
                     label = { Text(stringResource(R.string.music_playlist_name)) },
                     singleLine = true,
+                    shape = if (isLiquidEnabled) RoundedCornerShape(16.dp) else RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
             },
             confirmButton = {
-                TextButton(
+                val confirmJelly = rememberLiquidJellyState()
+                Button(
                     onClick = {
+                        if (isLiquidEnabled) confirmJelly.pulse(0.12f)
                         val name = newPlaylistName.trim()
                         if (name.isNotEmpty()) {
                             viewModel.createPlaylist(name)
                             newPlaylistName = ""
                             showCreatePlaylistDialog = false
                         }
-                    }
+                    },
+                    modifier = Modifier.liquidJelly(confirmJelly, enabled = isLiquidEnabled),
+                    shape = if (isLiquidEnabled) RoundedCornerShape(16.dp) else ButtonDefaults.shape
                 ) {
                     Text("Создать")
                 }
@@ -225,11 +288,65 @@ fun MusicLibraryScreen(
     }
 }
 
+// ── Поисковая панель ─────────────────────────────────────────────────────────
+
+@Composable
+private fun MusicSearchBar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    placeholder: String,
+    isLiquidEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val shape = if (isLiquidEnabled) RoundedCornerShape(26.dp) else RoundedCornerShape(12.dp)
+    val clearJelly = rememberLiquidJellyState()
+
+    OutlinedTextField(
+        value = searchQuery,
+        onValueChange = onSearchChange,
+        placeholder = { Text(placeholder) },
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null, tint = cs.primary)
+        },
+        trailingIcon = {
+            if (searchQuery.isNotEmpty()) {
+                IconButton(
+                    onClick = {
+                        if (isLiquidEnabled) clearJelly.pulse(0.15f)
+                        onSearchChange("")
+                    },
+                    modifier = Modifier.liquidJelly(clearJelly, enabled = isLiquidEnabled)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear", tint = cs.onSurfaceVariant)
+                }
+            }
+        },
+        singleLine = true,
+        shape = shape,
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = if (isLiquidEnabled) cs.surfaceContainerHigh.copy(alpha = 0.5f) else Color.Transparent,
+            unfocusedContainerColor = if (isLiquidEnabled) cs.surfaceContainerLow.copy(alpha = 0.5f) else Color.Transparent,
+            focusedBorderColor = cs.primary,
+            unfocusedBorderColor = if (isLiquidEnabled) cs.outlineVariant.copy(alpha = 0.35f) else cs.outline
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .then(
+                if (isLiquidEnabled && tokens.structure.enabled) Modifier.vlInset(tokens.structure, shape)
+                else Modifier
+            )
+    )
+}
+
 // ── Вкладка 0: Плейлисты ─────────────────────────────────────────────────────
 
 @Composable
 private fun PlaylistsTabView(
     playlists: List<MusicPlaylist>,
+    isLiquidEnabled: Boolean,
     onPlaylistClick: (MusicPlaylist) -> Unit,
     onDeletePlaylist: (String) -> Unit
 ) {
@@ -244,56 +361,101 @@ private fun PlaylistsTabView(
         return
     }
 
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.surface.luminance() < 0.5f
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 140.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(playlists, key = { it.id }) { playlist ->
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        itemsIndexed(playlists, key = { _, it -> it.id }) { index, playlist ->
+            val cardShape = if (isLiquidEnabled) RoundedCornerShape(22.dp) else RoundedCornerShape(12.dp)
+            val cardJelly = rememberLiquidJellyState(softness = 0.06f)
+
+            val border = remember(isLiquidEnabled, isDark, cs) {
+                if (isLiquidEnabled) {
+                    val top = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.55f)
+                    val bot = if (isDark) cs.outlineVariant.copy(alpha = 0.03f) else cs.outlineVariant.copy(alpha = 0.10f)
+                    BorderStroke(1.dp, Brush.verticalGradient(listOf(top, bot)))
+                } else null
+            }
+
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onPlaylistClick(playlist) }
+                    .liquidPillCardSlideOut(index = index, enabled = isLiquidEnabled, triggerKey = "playlists")
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Surface(
+                    shape = cardShape,
+                    color = if (isLiquidEnabled) {
+                        if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow
+                    } else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .liquidJelly(cardJelly, enabled = isLiquidEnabled)
+                        .then(
+                            if (isLiquidEnabled && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, cardShape)
+                            else Modifier
+                        )
+                        .clip(cardShape)
+                        .then(
+                            if (border != null) Modifier.border(border, cardShape)
+                            else if (isLiquidEnabled && tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, cardShape)
+                            else Modifier
+                        )
+                        .clickable {
+                            if (isLiquidEnabled) cardJelly.pulse(0.08f)
+                            onPlaylistClick(playlist)
+                        }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.primaryContainer),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(text = playlist.icon, fontSize = 24.sp)
-                    }
+                        Box(
+                            modifier = Modifier
+                                .size(52.dp)
+                                .clip(if (isLiquidEnabled) RoundedCornerShape(16.dp) else RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.primaryContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = playlist.icon, fontSize = 26.sp)
+                        }
 
-                    Spacer(Modifier.width(16.dp))
+                        Spacer(Modifier.width(16.dp))
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = playlist.title,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${playlist.trackCount} треков",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
-                    }
-
-                    if (!playlist.isDefault) {
-                        IconButton(onClick = { onDeletePlaylist(playlist.id) }) {
-                            Icon(
-                                imageVector = Icons.Default.DeleteOutline,
-                                contentDescription = "Delete playlist",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = playlist.title,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "${playlist.trackCount} треков",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+
+                        if (!playlist.isDefault) {
+                            val deleteJelly = rememberLiquidJellyState(softness = 0.14f)
+                            IconButton(
+                                onClick = {
+                                    if (isLiquidEnabled) deleteJelly.pulse(0.15f)
+                                    onDeletePlaylist(playlist.id)
+                                },
+                                modifier = Modifier.liquidJelly(deleteJelly, enabled = isLiquidEnabled)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteOutline,
+                                    contentDescription = "Delete playlist",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
                         }
                     }
                 }
@@ -311,9 +473,11 @@ private fun AllTracksTabView(
     currentTrackId: String?,
     isPlaying: Boolean,
     downloadProgress: Map<String, Float> = emptyMap(),
+    isLiquidEnabled: Boolean = false,
     onSearchChange: (String) -> Unit,
     onTrackClick: (MusicTrack) -> Unit,
-    onToggleFavorite: (MusicTrack) -> Unit
+    onToggleFavorite: (MusicTrack) -> Unit,
+    onDownloadTrack: ((MusicTrack) -> Unit)? = null
 ) {
     val filtered = remember(tracks, searchQuery) {
         if (searchQuery.isBlank()) tracks
@@ -324,16 +488,11 @@ private fun AllTracksTabView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text("Поиск треков…") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp)
+        MusicSearchBar(
+            searchQuery = searchQuery,
+            onSearchChange = onSearchChange,
+            placeholder = "Поиск треков…",
+            isLiquidEnabled = isLiquidEnabled
         )
 
         if (filtered.isEmpty()) {
@@ -348,17 +507,29 @@ private fun AllTracksTabView(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filtered, key = { it.id }) { track ->
-                    TrackRowItem(
-                        track = track,
-                        isCurrent = track.id == currentTrackId,
-                        isPlaying = isPlaying && track.id == currentTrackId,
-                        downloadProgress = downloadProgress[track.id],
-                        onClick = { onTrackClick(track) },
-                        onToggleFavorite = { onToggleFavorite(track) }
-                    )
+                itemsIndexed(filtered, key = { _, track -> track.id }) { index, track ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .liquidPillCardSlideOut(
+                                index = index,
+                                enabled = isLiquidEnabled,
+                                triggerKey = searchQuery
+                            )
+                    ) {
+                        TrackRowItem(
+                            track = track,
+                            isCurrent = track.id == currentTrackId,
+                            isPlaying = isPlaying && track.id == currentTrackId,
+                            downloadProgress = downloadProgress[track.id],
+                            isLiquidEnabled = isLiquidEnabled,
+                            onClick = { onTrackClick(track) },
+                            onToggleFavorite = { onToggleFavorite(track) },
+                            onDownload = onDownloadTrack?.let { { it(track) } }
+                        )
+                    }
                 }
             }
         }
@@ -375,12 +546,14 @@ private fun DeviceTracksTabView(
     currentTrackId: String?,
     isPlaying: Boolean,
     downloadProgress: Map<String, Float> = emptyMap(),
+    isLiquidEnabled: Boolean = false,
     onRequestPermission: () -> Unit,
     onSearchChange: (String) -> Unit,
     onTrackClick: (MusicTrack) -> Unit,
     onToggleFavorite: (MusicTrack) -> Unit
 ) {
     if (!hasPermission) {
+        val permJelly = rememberLiquidJellyState()
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -402,7 +575,14 @@ private fun DeviceTracksTabView(
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
-                Button(onClick = onRequestPermission) {
+                Button(
+                    onClick = {
+                        if (isLiquidEnabled) permJelly.pulse(0.12f)
+                        onRequestPermission()
+                    },
+                    modifier = Modifier.liquidJelly(permJelly, enabled = isLiquidEnabled),
+                    shape = if (isLiquidEnabled) RoundedCornerShape(18.dp) else ButtonDefaults.shape
+                ) {
                     Text(stringResource(R.string.music_grant_permission))
                 }
             }
@@ -419,16 +599,11 @@ private fun DeviceTracksTabView(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text("Поиск на устройстве…") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            shape = RoundedCornerShape(12.dp)
+        MusicSearchBar(
+            searchQuery = searchQuery,
+            onSearchChange = onSearchChange,
+            placeholder = "Поиск на устройстве…",
+            isLiquidEnabled = isLiquidEnabled
         )
 
         if (filtered.isEmpty()) {
@@ -443,17 +618,28 @@ private fun DeviceTracksTabView(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 140.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filtered, key = { it.id }) { track ->
-                    TrackRowItem(
-                        track = track,
-                        isCurrent = track.id == currentTrackId,
-                        isPlaying = isPlaying && track.id == currentTrackId,
-                        downloadProgress = downloadProgress[track.id],
-                        onClick = { onTrackClick(track) },
-                        onToggleFavorite = { onToggleFavorite(track) }
-                    )
+                itemsIndexed(filtered, key = { _, track -> track.id }) { index, track ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .liquidPillCardSlideOut(
+                                index = index,
+                                enabled = isLiquidEnabled,
+                                triggerKey = searchQuery
+                            )
+                    ) {
+                        TrackRowItem(
+                            track = track,
+                            isCurrent = track.id == currentTrackId,
+                            isPlaying = isPlaying && track.id == currentTrackId,
+                            downloadProgress = downloadProgress[track.id],
+                            isLiquidEnabled = isLiquidEnabled,
+                            onClick = { onTrackClick(track) },
+                            onToggleFavorite = { onToggleFavorite(track) }
+                        )
+                    }
                 }
             }
         }
@@ -469,8 +655,10 @@ private fun PlaylistTracksView(
     currentTrackId: String?,
     isPlaying: Boolean,
     downloadProgress: Map<String, Float> = emptyMap(),
+    isLiquidEnabled: Boolean = false,
     onTrackClick: (MusicTrack) -> Unit,
-    onRemoveTrack: (String) -> Unit
+    onRemoveTrack: (String) -> Unit,
+    onDownloadTrack: ((MusicTrack) -> Unit)? = null
 ) {
     if (tracks.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -484,19 +672,69 @@ private fun PlaylistTracksView(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 140.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(tracks, key = { it.id }) { track ->
-                TrackRowItem(
-                    track = track,
-                    isCurrent = track.id == currentTrackId,
-                    isPlaying = isPlaying && track.id == currentTrackId,
-                    downloadProgress = downloadProgress[track.id],
-                    onClick = { onTrackClick(track) },
-                    onDelete = { onRemoveTrack(track.id) }
-                )
+            itemsIndexed(tracks, key = { _, track -> track.id }) { index, track ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .liquidPillCardSlideOut(
+                            index = index,
+                            enabled = isLiquidEnabled,
+                            triggerKey = playlist.id
+                        )
+                ) {
+                    TrackRowItem(
+                        track = track,
+                        isCurrent = track.id == currentTrackId,
+                        isPlaying = isPlaying && track.id == currentTrackId,
+                        downloadProgress = downloadProgress[track.id],
+                        isLiquidEnabled = isLiquidEnabled,
+                        onClick = { onTrackClick(track) },
+                        onDelete = { onRemoveTrack(track.id) },
+                        onDownload = onDownloadTrack?.let { { it(track) } }
+                    )
+                }
             }
         }
+    }
+}
+
+// ── Анимированный эквалайзер трека ──────────────────────────────────────────
+
+@Composable
+private fun MiniEqualizerIndicator(
+    isPlaying: Boolean,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "eq_bars")
+    val h1 by infiniteTransition.animateFloat(
+        initialValue = 0.2f, targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(tween(420, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "h1"
+    )
+    val h2 by infiniteTransition.animateFloat(
+        initialValue = 0.9f, targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(tween(360, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "h2"
+    )
+    val h3 by infiniteTransition.animateFloat(
+        initialValue = 0.35f, targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(tween(510, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "h3"
+    )
+    Row(
+        modifier = modifier.height(14.dp).width(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        val effH1 = if (isPlaying) h1 else 0.35f
+        val effH2 = if (isPlaying) h2 else 0.6f
+        val effH3 = if (isPlaying) h3 else 0.25f
+        Box(Modifier.weight(1f).fillMaxHeight(effH1).clip(RoundedCornerShape(1.dp)).background(color))
+        Box(Modifier.weight(1f).fillMaxHeight(effH2).clip(RoundedCornerShape(1.dp)).background(color))
+        Box(Modifier.weight(1f).fillMaxHeight(effH3).clip(RoundedCornerShape(1.dp)).background(color))
     }
 }
 
@@ -508,29 +746,69 @@ private fun TrackRowItem(
     isCurrent: Boolean,
     isPlaying: Boolean,
     downloadProgress: Float? = null,
+    isLiquidEnabled: Boolean = false,
     onClick: () -> Unit,
     onToggleFavorite: (() -> Unit)? = null,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null
 ) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val isDark = cs.surface.luminance() < 0.5f
+    val trackShape = if (isLiquidEnabled) RoundedCornerShape(18.dp) else RoundedCornerShape(10.dp)
+    val itemJelly = rememberLiquidJellyState(softness = 0.05f)
+
+    val border = remember(isLiquidEnabled, isCurrent, isDark, cs) {
+        if (isLiquidEnabled) {
+            if (isCurrent) {
+                BorderStroke(1.5.dp, cs.primary.copy(alpha = 0.60f))
+            } else {
+                val top = if (isDark) cs.outlineVariant.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.50f)
+                val bot = if (isDark) cs.outlineVariant.copy(alpha = 0.03f) else cs.outlineVariant.copy(alpha = 0.08f)
+                BorderStroke(1.dp, Brush.verticalGradient(listOf(top, bot)))
+            }
+        } else null
+    }
+
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = trackShape,
+        color = if (isCurrent) {
+            if (isLiquidEnabled) cs.primary.copy(alpha = 0.16f) else cs.primary.copy(alpha = 0.12f)
+        } else {
+            if (isLiquidEnabled) {
+                if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow
+            } else cs.surfaceVariant.copy(alpha = 0.4f)
+        },
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .liquidJelly(itemJelly, enabled = isLiquidEnabled)
+            .then(
+                if (isLiquidEnabled && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, trackShape)
+                else Modifier
+            )
+            .clip(trackShape)
+            .then(
+                if (border != null) Modifier.border(border, trackShape)
+                else if (isLiquidEnabled && tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, trackShape)
+                else Modifier
+            )
+            .clickable {
+                if (isLiquidEnabled) itemJelly.pulse(0.06f)
+                onClick()
+            }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = if (isLiquidEnabled) 10.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Мини-обложка или винил
+            val coverShape = if (isLiquidEnabled) RoundedCornerShape(12.dp) else CircleShape
             Box(
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
+                    .size(44.dp)
+                    .clip(coverShape)
                     .background(Color(0xFF1E1E20)),
                 contentAlignment = Alignment.Center
             ) {
@@ -543,21 +821,21 @@ private fun TrackRowItem(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    Text("🎵", fontSize = 16.sp)
+                    Text("🎵", fontSize = 18.sp)
                 }
 
                 if (isCurrent) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f)),
+                            .background(Color.Black.copy(alpha = 0.45f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
@@ -566,20 +844,28 @@ private fun TrackRowItem(
             Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = track.displayTitle,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
-                    ),
-                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = track.displayTitle,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium
+                        ),
+                        color = if (isCurrent) cs.primary else cs.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isCurrent && isPlaying) {
+                        Spacer(Modifier.width(6.dp))
+                        MiniEqualizerIndicator(isPlaying = true, color = cs.primary)
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = track.displayPerformer,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        color = cs.onSurfaceVariant.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -589,8 +875,8 @@ private fun TrackRowItem(
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Downloaded",
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            modifier = Modifier.size(12.dp)
+                            tint = cs.primary.copy(alpha = 0.85f),
+                            modifier = Modifier.size(13.dp)
                         )
                     }
                 }
@@ -608,7 +894,7 @@ private fun TrackRowItem(
                         progress = { downloadProgress },
                         modifier = Modifier.size(18.dp),
                         strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
+                        color = cs.primary
                     )
                 }
             }
@@ -617,28 +903,69 @@ private fun TrackRowItem(
                 Text(
                     text = String.format("%d:%02d", track.duration / 60, track.duration % 60),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    color = cs.onSurfaceVariant.copy(alpha = 0.65f),
                     modifier = Modifier.padding(horizontal = 8.dp)
                 )
             }
 
+            if (onDownload != null && track.sourceType == MusicTrack.SOURCE_CHAT) {
+                val isDownloaded = track.localPath != null && java.io.File(track.localPath).exists()
+                if (!isDownloaded && (downloadProgress == null || downloadProgress !in 0.0f..1.0f)) {
+                    val downJelly = rememberLiquidJellyState(softness = 0.14f)
+                    IconButton(
+                        onClick = {
+                            if (isLiquidEnabled) downJelly.pulse(0.15f)
+                            onDownload()
+                        },
+                        modifier = Modifier
+                            .size(34.dp)
+                            .liquidJelly(downJelly, enabled = isLiquidEnabled)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Download",
+                            tint = cs.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
             if (onToggleFavorite != null) {
-                IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
+                val favJelly = rememberLiquidJellyState(softness = 0.16f)
+                IconButton(
+                    onClick = {
+                        if (isLiquidEnabled) favJelly.pulse(0.18f)
+                        onToggleFavorite()
+                    },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .liquidJelly(favJelly, enabled = isLiquidEnabled)
+                ) {
                     Icon(
                         imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = "Favorite",
-                        tint = if (track.isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        tint = if (track.isFavorite) Color.Red else cs.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
             }
 
             if (onDelete != null) {
-                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                val delJelly = rememberLiquidJellyState(softness = 0.14f)
+                IconButton(
+                    onClick = {
+                        if (isLiquidEnabled) delJelly.pulse(0.15f)
+                        onDelete()
+                    },
+                    modifier = Modifier
+                        .size(34.dp)
+                        .liquidJelly(delJelly, enabled = isLiquidEnabled)
+                ) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        tint = cs.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -646,3 +973,4 @@ private fun TrackRowItem(
         }
     }
 }
+

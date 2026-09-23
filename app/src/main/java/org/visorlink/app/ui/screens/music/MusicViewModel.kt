@@ -101,6 +101,12 @@ class MusicViewModel(
         playerManager.openFullscreenPlayer()
     }
 
+    fun downloadTrack(track: MusicTrack) {
+        viewModelScope.launch {
+            musicRepository.downloadTrackFile(track)
+        }
+    }
+
     fun toggleFavorite(track: MusicTrack) {
         viewModelScope.launch {
             val isFav = musicRepository.toggleFavorite(track)

@@ -40,11 +40,14 @@ import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.chat.*
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerSheet
+import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
 import org.visorlink.app.ui.screens.stickers.StickerPickerBottomSheet
 import org.visorlink.app.ui.theme.*
+import org.visorlink.app.data.repository.MusicRepository
 import org.visorlink.app.utils.ActiveChatTracker
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.ImageCache
+import org.visorlink.app.utils.MusicPlayerManager
 import org.visorlink.app.utils.NotificationHelper
 import org.visorlink.app.utils.rememberHaptic
 import coil.compose.AsyncImage
@@ -314,8 +317,10 @@ fun ChatScreen(
                         AudioPlaybackDockBar(
                             musicPlayback = uiState.musicPlayback,
                             onTogglePlayPause = { viewModel.toggleAudioPlayback() },
-                            onClose = { viewModel.stopAudio() },
-                            onOpenFullscreen = { viewModel.openFullscreenAudio() }
+                            onClose = { viewModel.dismissAudio() },
+                            onOpenFullscreen = { viewModel.openFullscreenAudio() },
+                            anchor = DockAnchor.Top,
+                            onSeek = { viewModel.seekAudio(it) }
                         )
                     }
                 },
@@ -606,6 +611,19 @@ fun ChatScreen(
             hasOtherWallpaper = !otherBg.isNullOrBlank(),
             onSelectMode = { mode -> viewModel.setWallpaperMode(mode) },
             onDismiss = { showWallpaperSheet = false }
+        )
+    }
+
+    // Тап по мини-плееру раскрывает полноэкранный: раньше его рисовал только
+    // MainScreen, и в чате openFullscreenAudio() ни к чему не приводил
+    val musicPlayerManager: MusicPlayerManager = koinInject()
+    val musicRepository: MusicRepository = koinInject()
+    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsState()
+    if (showFullscreenPlayer) {
+        FullscreenPlayerDialog(
+            playerManager = musicPlayerManager,
+            musicRepository = musicRepository,
+            onDismiss = { musicPlayerManager.closeFullscreenPlayer() }
         )
     }
 

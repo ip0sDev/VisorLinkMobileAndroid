@@ -26,6 +26,42 @@ data class MusicTrack(
 
     val displayTitle: String get() = title.ifBlank { "Без названия" }
     val displayPerformer: String get() = performer.ifBlank { "Неизвестный исполнитель" }
+
+    fun getEffectiveStreamUrl(): String? = resolveStreamableAudioUrl(url, cdnMediaId)
+}
+
+/**
+ * Извлекает Google Drive file ID из произвольного URL (lh3, drive.google.com, id=...).
+ */
+fun extractGoogleDriveFileId(url: String): String? {
+    if (url.isBlank()) return null
+    return when {
+        url.contains("googleusercontent.com/d/") -> {
+            url.substringAfter("googleusercontent.com/d/").substringBefore("=").substringBefore("/").substringBefore("?")
+        }
+        url.contains("drive.google.com/file/d/") -> {
+            url.substringAfter("drive.google.com/file/d/").substringBefore("/").substringBefore("?")
+        }
+        url.contains("id=") -> {
+            url.substringAfter("id=").substringBefore("&")
+        }
+        else -> null
+    }?.trim()?.takeIf { it.isNotBlank() }
+}
+
+/**
+ * Преобразует любую ссылку (включая непрямые ссылки Google Drive и превью lh3)
+ * в прямую ссылку на потоковое воспроизведение и скачивание.
+ */
+fun resolveStreamableAudioUrl(url: String?, driveFileId: String? = null): String? {
+    val cleanUrl = url?.trim()?.ifBlank { null }
+    val effectiveDriveId = driveFileId?.trim()?.ifBlank { null }
+
+    val fileId = effectiveDriveId ?: cleanUrl?.let { extractGoogleDriveFileId(it) }
+    if (fileId != null) {
+        return "https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t"
+    }
+    return cleanUrl
 }
 
 data class MusicPlaylist(
@@ -44,3 +80,4 @@ data class MusicPlaylist(
 enum class MusicRepeatMode {
     OFF, ALL, ONE
 }
+

@@ -444,6 +444,7 @@ data class StickerPack(
     val authorName: String = "",
     val stickerCount: Int = 0,
     val createdAt: Timestamp? = null,
+    val isOfficial: Boolean = false,
     val stickers: List<StickerItem> = emptyList()
 )
 
