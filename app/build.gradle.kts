@@ -26,8 +26,8 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 167
-        versionName = "4.1.01.dev1"
+        versionCode = 168
+        versionName = "4.1.01.dev2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
@@ -195,5 +195,12 @@ tasks.matching { it.name.startsWith("process") && it.name.endsWith("GoogleServic
 // Позволяет использовать Compose 1.13-alpha без принудительного обновления локального SDK до 37.1
 tasks.matching { it.name.contains("AarMetadata") }.configureEach {
     enabled = false
+}
+
+// Алиас для запуска юнит-тестов без ошибки неоднозначности флейворов (play/standalone)
+tasks.register("testDebugUnitTest") {
+    dependsOn("testPlayDebugUnitTest")
+    description = "Runs unit tests for the default (playDebug) variant"
+    group = "verification"
 }
 

@@ -35,8 +35,11 @@ jobs:
             cp app/google-services.json.example app/google-services.json
           fi
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Run JVM Unit Tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+        run: ./gradlew testPlayDebugUnitTest --no-daemon
 
       - name: Assemble Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assemblePlayDebug --no-daemon
