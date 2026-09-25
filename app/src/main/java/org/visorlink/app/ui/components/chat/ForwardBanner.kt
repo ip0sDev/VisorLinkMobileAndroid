@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.text.font.FontWeight
@@ -91,16 +92,14 @@ fun TelegramForwardBanner(
             .padding(bottom = 4.dp)
             .drawBehind {
                 drawIntoCanvas { canvas ->
-                    val paint = Paint().apply {
-                        asFrameworkPaint().apply {
-                            color = android.graphics.Color.TRANSPARENT
-                            setShadowLayer(
-                                12.dp.toPx(), 0f, 4.dp.toPx(),
-                                android.graphics.Color.argb((0.35f * 255).toInt(), 42, 171, 238)
-                            )
-                        }
+                    val paint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.TRANSPARENT
+                        setShadowLayer(
+                            12.dp.toPx(), 0f, 4.dp.toPx(),
+                            android.graphics.Color.argb((0.35f * 255).toInt(), 42, 171, 238)
+                        )
                     }
-                    canvas.drawRoundRect(0f, 0f, size.width, size.height, 6.dp.toPx(), 6.dp.toPx(), paint)
+                    canvas.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, 6.dp.toPx(), 6.dp.toPx(), paint)
                 }
             }
             .background(

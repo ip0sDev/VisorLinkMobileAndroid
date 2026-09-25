@@ -38,6 +38,7 @@ import org.visorlink.app.ui.aegis.AegisLifeViewModel
 import org.visorlink.app.ui.components.SecureScreen
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
+import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chat.*
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerSheet
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
@@ -455,7 +456,13 @@ fun ChatScreen(
                         LazyColumn(
                             state = listState, reverseLayout = true,
                             userScrollEnabled = contextMenuData == null,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .progressiveEdgeBlur(
+                                    topBlur = 10.dp,
+                                    bottomBlur = 10.dp,
+                                    enabled = !VlTheme.tokens.reduceMotion
+                                ),
                             contentPadding = PaddingValues(
                                 top = innerPadding.calculateTopPadding() + 8.dp,
                                 bottom = innerPadding.calculateBottomPadding() + 8.dp,

@@ -3,7 +3,7 @@ agp = "9.4.1"
 biometric = "1.2.0-alpha05"
 coilVideo = "2.7.0"
 kotlin = "2.4.20"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -13,13 +13,14 @@ activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 media3Exoplayer = "1.11.1"
 media3Ui = "1.11.1"
-navigationCompose = "2.10.1"
+navigationCompose = "2.10.2"
 mediaVersion = "1.8.0"
-animation = "1.12.1"
-foundationLayout = "1.12.1"
+composeUi = "1.13.0-alpha03"
+animation = "1.13.0-alpha03"
+foundationLayout = "1.13.0-alpha03"
 materialIconsExtended = "1.7.8"
-sentry-sdk = "8.57.0"
-sentry-plugin = "6.22.0"
+sentry-sdk = "8.58.0"
+sentry-plugin = "6.23.0"
 securityCrypto = "1.1.0"
 
 koin = "4.2.2"
@@ -37,11 +38,11 @@ playServicesAuth = "22.0.0"
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 coroutinesTest = "1.11.0"
-mockitoKotlin = "6.3.0"
-mockitoCore = "5.23.0"
-uiText = "1.12.1"
-foundation = "1.12.1"
-uiGeometry = "1.12.1"
+mockitoKotlin = "6.4.0"
+mockitoCore = "5.24.0"
+uiText = "1.13.0-alpha03"
+foundation = "1.13.0-alpha03"
+uiGeometry = "1.13.0-alpha03"
 cameraX = "1.6.2"
 
 [libraries]
@@ -60,12 +61,12 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 
 # --- Compose ---
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
-androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "composeUi" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "composeUi" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "composeUi" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "composeUi" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "composeUi" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "composeUi" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "animation" }

@@ -31,6 +31,7 @@ import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chatlist.*
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.HapticType
@@ -247,7 +248,13 @@ fun ChatListScreen(
                 } else {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .progressiveEdgeBlur(
+                                topBlur = 10.dp,
+                                bottomBlur = 10.dp,
+                                enabled = !VlTheme.tokens.reduceMotion
+                            ),
                         contentPadding = PaddingValues(
                             top = padding.calculateTopPadding(),
                             bottom = padding.calculateBottomPadding() + 88.dp

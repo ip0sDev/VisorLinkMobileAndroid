@@ -194,7 +194,16 @@ fun SettingsScreen(
                 )
             }
         ) { padding ->
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .progressiveEdgeBlur(
+                        topBlur = 10.dp,
+                        bottomBlur = 10.dp,
+                        enabled = !VlTheme.tokens.reduceMotion
+                    )
+                    .verticalScroll(rememberScrollState())
+            ) {
                 Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
                 profile?.let { p ->
