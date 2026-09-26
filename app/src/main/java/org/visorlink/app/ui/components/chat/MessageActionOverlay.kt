@@ -4,11 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,8 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.automirrored.filled.Forward
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -26,13 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -44,39 +47,47 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.visorlink.app.R
 import org.visorlink.app.data.model.Message
 import org.visorlink.app.data.model.MessageType
+import org.visorlink.app.data.model.Reaction
 import org.visorlink.app.data.model.SendStatus
-import org.visorlink.app.utils.HapticType
-import org.visorlink.app.utils.rememberHaptic
-import org.visorlink.app.utils.UsageRankManager
 import org.visorlink.app.ui.components.liquidPopIn
 import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.ui.theme.motionSpec
-import org.koin.compose.koinInject
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.floor
+import org.visorlink.app.utils.HapticType
+import org.visorlink.app.utils.UsageRankManager
+import org.visorlink.app.utils.rememberHaptic
 import kotlin.math.sqrt
 
-// Вспомогательная функция для расчета дистанции
+// Вспомогательная функция для расчета евклидова расстояния
 private fun Offset.getDistanceVector(): Float = sqrt(this.x * this.x + this.y * this.y)
 
-// Данные о вызове меню
+/**
+ * Модель данных контекстного меню сообщения.
+ */
 data class ContextMenuData(
     val message: Message,
     val isMine: Boolean,
     val startOffset: Offset
 )
 
+/**
+ * Современный жидкостный оверлей контекстного меню сообщений:
+ * - Парящая капсула реакций (LiquidReactionCapsule) с эффектом магнитной линзы (Dock Magnification).
+ * - Компактная стеклянная карточка действий (ActionGlassCard) с неоморфической стилизацией.
+ * - Двойная модель взаимодействия: "Hold & Drag to React" (протянуть палец и отпустить)
+ *   и "Tap & Choose" (отпустить палец и нажать нужный пункт).
+ */
 @Composable
 fun MessageActionOverlay(
     contextMenuData: ContextMenuData,
-    currentDragOffset: Offset,
-    isGestureMode: Boolean,
+    currentDragOffset: Offset = Offset.Zero,
+    isDragging: Boolean = false,
+    isGestureMode: Boolean = false,
     canReact: Boolean,
     currentUid: String,
     onDismiss: () -> Unit,
@@ -93,6 +104,11 @@ fun MessageActionOverlay(
     onReport: (() -> Unit)? = null,
     onBlockUser: (() -> Unit)? = null,
 ) {
+    // Закрытие меню по системной кнопке "Назад"
+    BackHandler(enabled = true) {
+        onDismiss()
+    }
+
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
         keyboardController?.hide()
@@ -101,659 +117,695 @@ fun MessageActionOverlay(
     val usageRankManager: UsageRankManager = koinInject()
     val rankedReactions by usageRankManager.rankedReactionsFlow.collectAsState()
     val isLiquidEnabled = rememberLiquidEnabled()
+    val haptic = rememberHaptic()
+    val context = LocalContext.current
+    val density = LocalDensity.current
 
-    val alpha by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = if (isLiquidEnabled) spring(dampingRatio = 0.9f, stiffness = 420f) else tween(200),
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val screenWidthPx = with(density) { screenWidth.toPx() }
+    val screenHeightPx = with(density) { screenHeight.toPx() }
+
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val effectiveScreenHeightPx = screenHeightPx - imeBottom
+
+    val tapX = contextMenuData.startOffset.x
+    val tapY = contextMenuData.startOffset.y
+    val isMine = contextMenuData.isMine
+
+    // Выравнивание по стороне пузыря сообщения (входящие слева, исходящие справа)
+    val alignRight = when {
+        tapX > screenWidthPx * 0.55f -> true
+        tapX < screenWidthPx * 0.45f -> false
+        else -> isMine
+    }
+
+    // Текущая позиция пальца при жесте с удержанием
+    val fingerPos = contextMenuData.startOffset + currentDragOffset
+
+    // Безопасные отступы экрана
+    val safeTop = with(density) { 56.dp.toPx() }
+    val safeBottom = effectiveScreenHeightPx - with(density) { 56.dp.toPx() }
+
+    // Положение контейнера относительно сообщения (сверху или снизу)
+    val showAbove = tapY > (effectiveScreenHeightPx * 0.52f)
+
+    var containerHeightPx by remember { mutableFloatStateOf(0f) }
+    val estimatedHeightPx = with(density) { ((if (canReact) 56.dp + 10.dp else 0.dp) + 290.dp).toPx() }
+    val actualOrEstimatedH = if (containerHeightPx > 0f) containerHeightPx else estimatedHeightPx
+    val maxCardHeightDp = with(density) { maxOf(180.dp.toPx(), safeBottom - safeTop - 68.dp.toPx()).toDp() }
+
+    val containerY = if (showAbove) {
+        (tapY - actualOrEstimatedH - with(density) { 12.dp.toPx() })
+            .coerceIn(safeTop, (safeBottom - actualOrEstimatedH).coerceAtLeast(safeTop))
+    } else {
+        (tapY + with(density) { 12.dp.toPx() })
+            .coerceIn(safeTop, (safeBottom - actualOrEstimatedH).coerceAtLeast(safeTop))
+    }
+
+    // Отслеживание наведения при drag-жесте
+    var hoveredReaction by remember { mutableStateOf<String?>(null) }
+    var hoveredAction by remember { mutableStateOf<String?>(null) }
+
+    // Тактильный щелчок при смене наведенной реакции
+    var lastVibratedReaction by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(hoveredReaction) {
+        if (hoveredReaction != null && hoveredReaction != lastVibratedReaction) {
+            haptic.perform(HapticType.SELECTION, true)
+            lastVibratedReaction = hoveredReaction
+        } else if (hoveredReaction == null) {
+            lastVibratedReaction = null
+        }
+    }
+
+    // Функция быстрого копирования текста
+    val copyTextAction: () -> Unit = {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val textToCopy = contextMenuData.message.text ?: contextMenuData.message.caption ?: ""
+        clipboard.setPrimaryClip(ClipData.newPlainText("message", textToCopy))
+        Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
+        onDismiss()
+    }
+
+    // Обработка отпускания пальца после перетаскивания (Hold & Drag)
+    var wasDragging by remember { mutableStateOf(false) }
+    LaunchedEffect(isDragging) {
+        if (wasDragging && !isDragging) {
+            val selectedEmoji = hoveredReaction
+            val selectedAction = hoveredAction
+            if (selectedEmoji != null) {
+                haptic.perform(HapticType.REACTION, true)
+                onReact(selectedEmoji)
+                onDismiss()
+            } else if (selectedAction != null) {
+                haptic.perform(HapticType.CLICK, true)
+                when (selectedAction) {
+                    "reply" -> onReply()
+                    "edit" -> onEdit()
+                    "copy" -> copyTextAction()
+                    "forward" -> onForward?.invoke()
+                    "save_image" -> onSaveImage()
+                    "open_image" -> onOpenImage()
+                    "save_voice" -> onSaveVoice()
+                    "retry" -> onRetry?.invoke()
+                    "cancel_sending" -> onCancelSending()
+                    "delete" -> onDelete()
+                    "report" -> onReport?.invoke()
+                    "block" -> onBlockUser?.invoke()
+                    "cancel" -> { /* onDismiss() вызывается ниже */ }
+                }
+                onDismiss()
+            }
+        }
+        wasDragging = isDragging
+    }
+
+    // Анимация плавного затемнения фона
+    var isVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { isVisible = true }
+
+    val bgAlpha by animateFloatAsState(
+        targetValue = if (isVisible) 1f else 0f,
+        animationSpec = if (isLiquidEnabled) spring(dampingRatio = 0.85f, stiffness = 420f) else tween(200),
         label = "overlay_bg"
+    )
+
+    val popProgress = rememberLiquidPopProgress(isLiquidEnabled)
+    val popOrigin = TransformOrigin(
+        pivotFractionX = if (alignRight) 0.85f else 0.15f,
+        pivotFractionY = if (showAbove) 1f else 0f
     )
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.4f * alpha))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+            .background(Color.Black.copy(alpha = 0.45f * bgAlpha))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
                 onDismiss()
             }
     ) {
-        if (isGestureMode) {
-            GestureMessageMenu(
-                data = contextMenuData,
-                currentDragOffset = currentDragOffset,
-                canReact = canReact,
-                rankedReactions = rankedReactions,
-                liquidEnabled = isLiquidEnabled,
-                onAction = { action, emoji ->
-                    when (action) {
-                        "reply" -> onReply()
-                        "edit" -> onEdit()
-                        "delete" -> onDelete()
-                        "cancel_sending" -> onCancelSending()
-                        "forward" -> onForward?.invoke()
-                        "react" -> emoji?.let { onReact(it) }
-                        "report" -> onReport?.invoke()
-                        "block" -> onBlockUser?.invoke()
-                    }
+        // Единый вертикальный контейнер меню, исключающий наложение карточки на капсулу
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .offset { IntOffset(0, containerY.toInt()) }
+                .liquidPopIn(popProgress, isLiquidEnabled, popOrigin)
+                .onGloballyPositioned { containerHeightPx = it.size.height.toFloat() },
+            horizontalAlignment = if (alignRight) Alignment.End else Alignment.Start,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (showAbove) {
+                // Если меню над сообщением: карточка действий сверху, капсула реакций снизу (ближе к пальцу/пузырю)
+                Box(
+                    modifier = Modifier
+                        .width(240.dp)
+                        .heightIn(max = maxCardHeightDp)
+                ) {
+                    ActionGlassCard(
+                        message = contextMenuData.message,
+                        isMine = contextMenuData.isMine,
+                        fingerPos = fingerPos,
+                        isDragging = isDragging,
+                        hoveredAction = hoveredAction,
+                        onHoverActionChanged = { hoveredAction = it },
+                        onReply = onReply,
+                        onEdit = onEdit,
+                        onCopy = copyTextAction,
+                        onDelete = onDelete,
+                        onCancelSending = onCancelSending,
+                        onSaveImage = onSaveImage,
+                        onSaveVoice = onSaveVoice,
+                        onOpenImage = onOpenImage,
+                        onForward = onForward,
+                        onRetry = onRetry,
+                        onReport = onReport,
+                        onBlockUser = onBlockUser,
+                        onDismiss = onDismiss
+                    )
                 }
-            )
-        } else {
-            NormalMessageMenu(
-                data = contextMenuData,
-                canReact = canReact,
-                currentUid = currentUid,
-                rankedReactions = rankedReactions,
-                liquidEnabled = isLiquidEnabled,
-                onDismiss = onDismiss,
-                onReply = onReply,
-                onEdit = onEdit,
-                onDelete = onDelete,
-                onCancelSending = onCancelSending,
-                onSaveImage = onSaveImage,
-                onSaveVoice = onSaveVoice,
-                onOpenImage = onOpenImage,
-                onForward = onForward,
-                onReact = onReact,
-                onRetry = onRetry,
-                onReport = onReport,
-                onBlockUser = onBlockUser
-            )
+
+                if (canReact && !contextMenuData.message.deleted) {
+                    LiquidReactionCapsule(
+                        rankedReactions = rankedReactions.ifEmpty { QUICK_REACTIONS },
+                        currentUid = currentUid,
+                        existingReactions = contextMenuData.message.parsedReactions,
+                        isDragging = isDragging,
+                        fingerPos = fingerPos,
+                        isLiquidEnabled = isLiquidEnabled,
+                        onHoverReactionChanged = { hoveredReaction = it },
+                        onSelectReaction = { emoji ->
+                            haptic.perform(HapticType.REACTION, true)
+                            onReact(emoji)
+                            onDismiss()
+                        }
+                    )
+                }
+            } else {
+                // Если меню под сообщением: капсула реакций сверху (ближе к сообщению), карточка действий снизу
+                if (canReact && !contextMenuData.message.deleted) {
+                    LiquidReactionCapsule(
+                        rankedReactions = rankedReactions.ifEmpty { QUICK_REACTIONS },
+                        currentUid = currentUid,
+                        existingReactions = contextMenuData.message.parsedReactions,
+                        isDragging = isDragging,
+                        fingerPos = fingerPos,
+                        isLiquidEnabled = isLiquidEnabled,
+                        onHoverReactionChanged = { hoveredReaction = it },
+                        onSelectReaction = { emoji ->
+                            haptic.perform(HapticType.REACTION, true)
+                            onReact(emoji)
+                            onDismiss()
+                        }
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(240.dp)
+                        .heightIn(max = maxCardHeightDp)
+                ) {
+                    ActionGlassCard(
+                        message = contextMenuData.message,
+                        isMine = contextMenuData.isMine,
+                        fingerPos = fingerPos,
+                        isDragging = isDragging,
+                        hoveredAction = hoveredAction,
+                        onHoverActionChanged = { hoveredAction = it },
+                        onReply = onReply,
+                        onEdit = onEdit,
+                        onCopy = copyTextAction,
+                        onDelete = onDelete,
+                        onCancelSending = onCancelSending,
+                        onSaveImage = onSaveImage,
+                        onSaveVoice = onSaveVoice,
+                        onOpenImage = onOpenImage,
+                        onForward = onForward,
+                        onRetry = onRetry,
+                        onReport = onReport,
+                        onBlockUser = onBlockUser,
+                        onDismiss = onDismiss
+                    )
+                }
+            }
         }
     }
 }
 
+/**
+ * Парящая капсула быстрых реакций с эффектом линзы дока (Dock Magnification).
+ * При перетаскивании пальца ближайший смайлик увеличивается с эффектом Squash & Stretch.
+ */
 @Composable
-private fun NormalMessageMenu(
-    data: ContextMenuData,
-    canReact: Boolean,
+private fun LiquidReactionCapsule(
+    rankedReactions: List<String>,
     currentUid: String,
-    rankedReactions: List<String> = QUICK_REACTIONS,
-    liquidEnabled: Boolean = false,
-    onDismiss: () -> Unit,
+    existingReactions: List<Reaction>,
+    isDragging: Boolean,
+    fingerPos: Offset,
+    isLiquidEnabled: Boolean,
+    onHoverReactionChanged: (String?) -> Unit,
+    onSelectReaction: (String) -> Unit
+) {
+    val density = LocalDensity.current
+    val cs = MaterialTheme.colorScheme
+    val emojiBounds = remember { mutableStateMapOf<String, Rect>() }
+    var showAllReactions by remember { mutableStateOf(false) }
+
+    // Расчет наведения при перетаскивании
+    val currentHovered = remember(fingerPos, isDragging, emojiBounds.toMap()) {
+        if (!isDragging) null
+        else {
+            val hitRadius = with(density) { 56.dp.toPx() }
+            emojiBounds.entries
+                .map { it.key to (fingerPos - it.value.center).getDistanceVector() }
+                .filter { it.second < hitRadius }
+                .minByOrNull { it.second }
+                ?.first
+        }
+    }
+
+    LaunchedEffect(currentHovered) {
+        onHoverReactionChanged(currentHovered)
+    }
+
+    Column {
+        Surface(
+            shape = RoundedCornerShape(26.dp),
+            color = cs.surface.copy(alpha = 0.94f),
+            tonalElevation = 8.dp,
+            shadowElevation = 8.dp,
+            border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.25f)),
+            modifier = Modifier
+                .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
+        ) {
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Отображаем первые 7 реакций
+                val visibleReactions = rankedReactions.take(7)
+                visibleReactions.forEach { emoji ->
+                    val isUserReacted = existingReactions.any { it.emoji == emoji && it.uids.contains(currentUid) }
+                    val center = emojiBounds[emoji]?.center
+                    val dist = if (isDragging && center != null) (fingerPos - center).getDistanceVector() else Float.MAX_VALUE
+                    val maxRadius = with(density) { 72.dp.toPx() }
+                    val proximity = if (dist < maxRadius) (1f - dist / maxRadius).coerceIn(0f, 1f) else 0f
+
+                    val targetScale = 1.0f + (if (isLiquidEnabled) 0.45f else 0.25f) * (proximity * proximity)
+                    val targetSquashX = if (isLiquidEnabled) 1.0f + 0.08f * proximity else 1.0f
+                    val targetSquashY = if (isLiquidEnabled) 1.0f - 0.08f * proximity else 1.0f
+
+                    val animScale by animateFloatAsState(
+                        targetValue = targetScale,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 550f),
+                        label = "dock_scale_$emoji"
+                    )
+                    val animSquashX by animateFloatAsState(
+                        targetValue = targetSquashX,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 550f),
+                        label = "dock_squash_x_$emoji"
+                    )
+                    val animSquashY by animateFloatAsState(
+                        targetValue = targetSquashY,
+                        animationSpec = spring(dampingRatio = 0.55f, stiffness = 550f),
+                        label = "dock_squash_y_$emoji"
+                    )
+                    val liftY = if (isLiquidEnabled) -(animScale - 1f) * with(density) { 16.dp.toPx() } else 0f
+
+                    EmojiDockItem(
+                        emoji = emoji,
+                        scale = animScale,
+                        squashX = animSquashX,
+                        squashY = animSquashY,
+                        translationY = liftY,
+                        isUserReacted = isUserReacted,
+                        onPositioned = { bounds -> emojiBounds[emoji] = bounds },
+                        onClick = { onSelectReaction(emoji) }
+                    )
+                }
+
+                // Кнопка "+" для показа всех реакций
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(if (showAllReactions) cs.primaryContainer else cs.surfaceVariant.copy(alpha = 0.7f))
+                        .clickable { showAllReactions = !showAllReactions },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (showAllReactions) Icons.Default.Close else Icons.Default.Add,
+                        contentDescription = "Show more reactions",
+                        tint = if (showAllReactions) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // Выпадающая сетка дополнительных реакций при нажатии "+"
+        AnimatedVisibility(
+            visible = showAllReactions,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Surface(
+                shape = VlTheme.tokens.shapes.card,
+                color = cs.surface.copy(alpha = 0.96f),
+                tonalElevation = 10.dp,
+                shadowElevation = 10.dp,
+                border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.25f)),
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .width(280.dp)
+            ) {
+                Column(Modifier.padding(10.dp)) {
+                    val remainingReactions = rankedReactions.drop(7).ifEmpty { QUICK_REACTIONS.drop(7) }
+                    remainingReactions.chunked(5).forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceAround
+                        ) {
+                            row.forEach { emoji ->
+                                val isUserReacted = existingReactions.any { it.emoji == emoji && it.uids.contains(currentUid) }
+                                Box(
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isUserReacted) cs.primaryContainer else Color.Transparent)
+                                        .clickable { onSelectReaction(emoji) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(emoji, fontSize = 22.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Отдельный элемент эмодзи в парящей капсуле с поддержкой анимации желейного отскока.
+ */
+@Composable
+private fun EmojiDockItem(
+    emoji: String,
+    scale: Float,
+    squashX: Float,
+    squashY: Float,
+    translationY: Float,
+    isUserReacted: Boolean,
+    onPositioned: (Rect) -> Unit,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val clickBounce = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .onGloballyPositioned { onPositioned(it.boundsInWindow()) }
+            .graphicsLayer {
+                scaleX = scale * squashX * clickBounce.value
+                scaleY = scale * squashY * clickBounce.value
+                this.translationY = translationY
+            }
+            .clip(CircleShape)
+            .background(if (isUserReacted) cs.primaryContainer.copy(alpha = 0.85f) else Color.Transparent)
+            .clickable {
+                scope.launch {
+                    clickBounce.animateTo(0.75f, tween(70))
+                    clickBounce.animateTo(1.25f, spring(dampingRatio = 0.45f, stiffness = 600f))
+                    clickBounce.animateTo(1.0f, tween(90))
+                    onClick()
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = emoji,
+            fontSize = 22.sp,
+            modifier = Modifier.scale(if (isUserReacted) 1.05f else 1.0f)
+        )
+    }
+}
+
+private data class MenuActionItem(
+    val key: String,
+    val icon: ImageVector,
+    val label: String,
+    val destructive: Boolean = false,
+    val onClick: () -> Unit
+)
+
+/**
+ * Компактная неоморфическая карточка контекстных действий над сообщением.
+ * Форма крайних кнопок строго повторяет скругления окна (`cardRadius`),
+ * а внизу меню всегда присутствует кнопка «Отмена».
+ */
+@Composable
+private fun ActionGlassCard(
+    message: Message,
+    isMine: Boolean,
+    fingerPos: Offset,
+    isDragging: Boolean,
+    hoveredAction: String?,
+    onHoverActionChanged: (String?) -> Unit,
     onReply: () -> Unit,
     onEdit: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit,
     onCancelSending: () -> Unit,
     onSaveImage: () -> Unit,
     onSaveVoice: () -> Unit,
     onOpenImage: () -> Unit,
     onForward: (() -> Unit)?,
-    onReact: (String) -> Unit,
-    onRetry: (() -> Unit)? = null,
-    onReport: (() -> Unit)? = null,
-    onBlockUser: (() -> Unit)? = null
+    onRetry: (() -> Unit)?,
+    onReport: (() -> Unit)?,
+    onBlockUser: (() -> Unit)?,
+    onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
-    val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
+    val actionBounds = remember { mutableStateMapOf<String, Rect>() }
 
-    var menuSize by remember { mutableStateOf(IntSize.Zero) }
-    val density = LocalDensity.current
-    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-
-    val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
-
-    val canEdit = data.isMine && !data.message.deleted && !isSending && 
-            (data.message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
-            (data.message.type == MessageType.TEXT || data.message.caption != null)
-
-    val screenWidthPx = with(density) { screenWidth.toPx() }
-    val alignRight = when {
-        data.startOffset.x > screenWidthPx * 0.58f -> true
-        data.startOffset.x < screenWidthPx * 0.42f -> false
-        else -> data.isMine
+    // Отслеживание наведения пальца при перетаскивании вниз на пункты меню
+    val currentHovered = remember(fingerPos, isDragging, actionBounds.toMap()) {
+        if (!isDragging) null
+        else {
+            actionBounds.entries.firstOrNull { it.value.contains(fingerPos) }?.key
+        }
     }
 
-    val expectedWidthPx = with(density) { 260.dp.toPx() }
-    val xOffset = if (alignRight) {
-        screenWidthPx - expectedWidthPx - with(density) { 16.dp.toPx() }
-    } else {
-        with(density) { 16.dp.toPx() }
+    LaunchedEffect(currentHovered) {
+        onHoverActionChanged(currentHovered)
     }
 
-    val imeBottom = WindowInsets.ime.getBottom(density)
-    val effectiveScreenHeightPx = with(density) { screenHeight.toPx() } - imeBottom
+    val isSending = message.status == SendStatus.SENDING || 
+                    message.status == SendStatus.QUEUED || 
+                    message.status == SendStatus.ERROR
 
-    val tapY = data.startOffset.y
-    var yOffset = tapY - with(density) { 20.dp.toPx() }
-    var showAbove = true
-    if (yOffset < with(density) { 150.dp.toPx() }) {
-        yOffset = tapY + with(density) { 20.dp.toPx() }
-        showAbove = false
+    val canEdit = isMine && !message.deleted && !isSending &&
+            (message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
+            (message.type == MessageType.TEXT || message.caption != null)
+
+    // Формируем полный структурированный список всех доступных действий
+    val actionList = buildList {
+        if (isSending) {
+            if (message.status == SendStatus.ERROR && onRetry != null) {
+                add(MenuActionItem("retry", Icons.Default.Refresh, stringResource(R.string.action_retry_send)) {
+                    onDismiss(); onRetry()
+                })
+            }
+            add(MenuActionItem("cancel_sending", Icons.Default.Close, stringResource(R.string.action_cancel_send), destructive = true) {
+                onDismiss(); onCancelSending()
+            })
+            if (message.type == MessageType.TEXT || !message.text.isNullOrEmpty()) {
+                add(MenuActionItem("copy", Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
+                    onCopy()
+                })
+            }
+        } else {
+            if (!message.deleted) {
+                add(MenuActionItem("reply", Icons.AutoMirrored.Filled.Reply, stringResource(R.string.action_reply)) {
+                    onDismiss(); onReply()
+                })
+
+                if (canEdit) {
+                    add(MenuActionItem("edit", Icons.Default.Edit, stringResource(R.string.action_edit)) {
+                        onDismiss(); onEdit()
+                    })
+                }
+
+                if (message.type == MessageType.TEXT || !message.text.isNullOrEmpty() || !message.caption.isNullOrEmpty()) {
+                    add(MenuActionItem("copy", Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
+                        onCopy()
+                    })
+                }
+
+                if (message.type == MessageType.IMAGE) {
+                    add(MenuActionItem("open_image", Icons.Default.ZoomIn, stringResource(R.string.action_view_image)) {
+                        onDismiss(); onOpenImage()
+                    })
+                    add(MenuActionItem("save_image", Icons.Default.Download, stringResource(R.string.action_save_gallery)) {
+                        onDismiss(); onSaveImage()
+                    })
+                }
+
+                if (message.type == MessageType.VOICE) {
+                    add(MenuActionItem("save_voice", Icons.Default.Download, stringResource(R.string.action_save_voice)) {
+                        onDismiss(); onSaveVoice()
+                    })
+                }
+
+                if (onForward != null) {
+                    add(MenuActionItem("forward", Icons.AutoMirrored.Filled.Forward, stringResource(R.string.action_forward)) {
+                        onDismiss(); onForward()
+                    })
+                }
+            }
+
+            if (isMine && !message.deleted) {
+                add(MenuActionItem("delete", Icons.Default.Delete, stringResource(R.string.action_delete_message), destructive = true) {
+                    onDismiss(); onDelete()
+                })
+            }
+
+            if (!isMine && !message.deleted) {
+                if (onReport != null) {
+                    add(MenuActionItem("report", Icons.Default.ReportProblem, stringResource(R.string.action_report)) {
+                        onDismiss(); onReport()
+                    })
+                }
+                if (onBlockUser != null) {
+                    add(MenuActionItem("block", Icons.Default.Block, stringResource(R.string.action_block_user), destructive = true) {
+                        onDismiss(); onBlockUser()
+                    })
+                }
+            }
+        }
+
+        // Кнопка "Отмена" всегда замыкает меню действий
+        add(MenuActionItem("cancel", Icons.Default.Close, stringResource(R.string.action_cancel)) {
+            onDismiss()
+        })
     }
-    val maxY = effectiveScreenHeightPx - (menuSize.height) - with(density) { 16.dp.toPx() }
-    if (yOffset > maxY && menuSize.height > 0) yOffset = maxY
 
-    var isVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { isVisible = true }
-
-    val translateY by animateFloatAsState(
-        targetValue = if (isVisible) 0f else 1f,
-        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
-        label = "menu_slide"
-    )
-
-    // Меню «вырастает» из пузыря: точка трансформации — тот угол, откуда пришло касание
-    val popProgress = rememberLiquidPopProgress(liquidEnabled)
-    val popOrigin = TransformOrigin(
-        pivotFractionX = if (alignRight) 1f else 0f,
-        pivotFractionY = if (showAbove) 1f else 0f
-    )
+    val cardRadius = VlTheme.tokens.shapes.cardRadius
+    val windowShape = RoundedCornerShape(cardRadius)
 
     Surface(
-        modifier = Modifier
-            .offset {
-                IntOffset(
-                    x = xOffset.toInt(),
-                    y = (yOffset + (if (showAbove) 50f else -50f) * translateY).toInt()
-                )
-            }
-            .width(260.dp)
-            .liquidPopIn(popProgress, liquidEnabled, popOrigin)
-            .onGloballyPositioned { menuSize = it.size },
-        shape = VlTheme.tokens.shapes.card,
-        color = cs.surface,
+        shape = windowShape,
+        color = cs.surface.copy(alpha = 0.95f),
         tonalElevation = 8.dp,
-        border = borderStroke(cs)
+        shadowElevation = 8.dp,
+        border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.25f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(windowShape)
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
     ) {
-        Column(Modifier.fillMaxWidth()) {
-            if (isSending) {
-                if (data.message.status == SendStatus.ERROR) {
-                    ActionItem(Icons.Default.Refresh, "Повторить отправку") {
-                        haptic.perform(HapticType.CLICK, true)
-                        onDismiss()
-                        onRetry?.invoke()
-                    }
-                }
-                ActionItem(Icons.Default.Close, "Отменить отправку", destructive = true) {
-                    haptic.perform(HapticType.CLICK, true); onDismiss(); onCancelSending()
-                }
-                if (data.message.type == MessageType.TEXT) {
-                    ActionItem(Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
-                        haptic.perform(HapticType.CLICK, true)
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("message", data.message.text ?: ""))
-                        Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
-                        onDismiss()
-                    }
-                }
-            } else {
-                if (canReact && !data.message.deleted) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
-                            .padding(horizontal = 8.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rankedReactions.forEach { emoji ->
-                            val alreadyReacted = data.message.parsedReactions.find { it.emoji == emoji }?.uids?.contains(currentUid) == true
-                            EmojiReactionButton(
-                                emoji = emoji, isSelected = alreadyReacted,
-                                onClick = {
-                                    haptic.perform(HapticType.REACTION, true)
-                                    onReact(emoji)
-                                    onDismiss()
-                                }
-                            )
-                        }
-                    }
-                    HorizontalDivider(color = cs.outlineVariant.copy(0.2f))
-                }
-
-                if (!data.message.deleted) {
-                    ActionItem(Icons.AutoMirrored.Filled.Reply, stringResource(R.string.action_reply)) {
-                        haptic.perform(HapticType.CLICK, true); onDismiss(); onReply()
-                    }
-
-                    if (canEdit) {
-                        ActionItem(Icons.Default.Edit, stringResource(R.string.action_edit)) {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onEdit()
-                        }
-                    }
-
-                    when (data.message.type) {
-                        MessageType.TEXT -> {
-                            ActionItem(Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
-                                haptic.perform(HapticType.CLICK, true)
-                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                clipboard.setPrimaryClip(ClipData.newPlainText("message", data.message.text ?: ""))
-                                Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
-                                onDismiss()
-                            }
-                        }
-                        MessageType.IMAGE -> {
-                            ActionItem(Icons.Default.ZoomIn, stringResource(R.string.action_view_image)) {
-                                haptic.perform(HapticType.CLICK, true); onDismiss(); onOpenImage()
-                            }
-                            ActionItem(Icons.Default.Download, stringResource(R.string.action_save_gallery)) {
-                                haptic.perform(HapticType.CLICK, true); onDismiss(); onSaveImage()
-                            }
-                        }
-                        MessageType.VOICE -> {
-                            ActionItem(Icons.Default.Download, stringResource(R.string.action_save_voice)) {
-                                haptic.perform(HapticType.CLICK, true); onDismiss(); onSaveVoice()
-                            }
-                        }
-                    }
-
-                    if (onForward != null) {
-                        ActionItem(Icons.AutoMirrored.Filled.Forward, "Переслать") {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onForward()
-                        }
-                    }
-                }
-
-                if (data.isMine && !data.message.deleted) {
-                    ActionItem(Icons.Default.Delete, stringResource(R.string.action_delete_message), destructive = true) {
-                        haptic.perform(HapticType.LONG_PRESS, true); onDismiss(); onDelete()
-                    }
-                }
-
-                if (!data.isMine && !data.message.deleted) {
-                    if (onReport != null) {
-                        ActionItem(Icons.Default.ReportProblem, stringResource(R.string.action_report)) {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onReport()
-                        }
-                    }
-                    if (onBlockUser != null) {
-                        ActionItem(Icons.Default.Block, stringResource(R.string.action_block_user), destructive = true) {
-                            haptic.perform(HapticType.CLICK, true); onDismiss(); onBlockUser()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun GestureMessageMenu(
-    data: ContextMenuData,
-    currentDragOffset: Offset,
-    canReact: Boolean,
-    rankedReactions: List<String> = QUICK_REACTIONS,
-    liquidEnabled: Boolean = false,
-    onAction: (action: String, emoji: String?) -> Unit
-) {
-    val haptic = rememberHaptic()
-    val context = LocalContext.current
-    val cs = MaterialTheme.colorScheme
-
-    val screenWidthPx = with(LocalDensity.current) { LocalConfiguration.current.screenWidthDp.dp.toPx() }
-    val screenHeightPx = with(LocalDensity.current) { LocalConfiguration.current.screenHeightDp.dp.toPx() }
-    val density = LocalDensity.current
-
-    val isSending = data.message.status == SendStatus.SENDING || data.message.status == SendStatus.QUEUED || data.message.status == SendStatus.ERROR
-    val canEdit = data.isMine && !data.message.deleted && !isSending && 
-            (data.message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
-            (data.message.type == MessageType.TEXT || data.message.caption != null)
-
-    val actions = mutableListOf<String>()
-    if (isSending) {
-        actions.add("cancel_sending")
-        if (data.message.type == MessageType.TEXT) actions.add("copy")
-    } else {
-        if (canReact) actions.add("react")
-        actions.add("reply")
-        if (canEdit) actions.add("edit")
-        if (data.message.type == MessageType.TEXT) actions.add("copy")
-        actions.add("forward")
-        if (data.isMine) actions.add("delete")
-    }
-
-    val cardWidth = 156.dp
-    val cardHeight = 42.dp
-    val btnHalfW = with(density) { (cardWidth / 2).toPx() }
-    val btnHalfH = with(density) { (cardHeight / 2).toPx() }
-    val gridW = with(density) { (4 * 36 + 20).dp.toPx() }
-    val gridH = with(density) { (((rankedReactions.size / 4) * 36) + 20).dp.toPx() }
-    val actionStep = with(density) { 52.dp.toPx() }
-    val margin = with(density) { 16.dp.toPx() }
-
-    val imeBottom = WindowInsets.ime.getBottom(density)
-    val effectiveScreenHeightPx = screenHeightPx - imeBottom
-
-    val alignRight = when {
-        data.startOffset.x > screenWidthPx * 0.58f -> true
-        data.startOffset.x < screenWidthPx * 0.42f -> false
-        else -> data.isMine
-    }
-    val dirX = if (alignRight) -1 else 1
-    val growDown = data.startOffset.y < (effectiveScreenHeightPx / 2f)
-    val hasGrid = actions.contains("react")
-
-    val menuOriginX = if (alignRight) {
-        screenWidthPx - margin - btnHalfW
-    } else {
-        margin + btnHalfW
-    }
-
-    val totalActionH = actions.size * actionStep
-    val maxNeededH = maxOf(totalActionH, if (hasGrid) gridH else 0f)
-
-    val rawMaxY = if (growDown) effectiveScreenHeightPx - margin - maxNeededH - btnHalfH else effectiveScreenHeightPx - margin - btnHalfH
-    val rawMinY = if (growDown) margin + btnHalfH else margin + maxNeededH + btnHalfH
-
-    val safeMinY = minOf(rawMinY, rawMaxY)
-    val safeMaxY = maxOf(rawMinY, rawMaxY)
-    val menuOriginY = data.startOffset.y.coerceIn(safeMinY, safeMaxY)
-
-    val menuOrigin = Offset(menuOriginX, menuOriginY)
-
-    val actionCenters = actions.mapIndexed { i, action ->
-        val yPos = (if (growDown) 1 else -1) * actionStep * (i + 1)
-        action to Offset(menuOrigin.x, menuOrigin.y + yPos)
-    }.toMap()
-
-    val gridLeftX = if (hasGrid) {
-        val idealX = if (dirX == 1) menuOrigin.x + btnHalfW + margin
-        else menuOrigin.x - btnHalfW - gridW - margin
-        idealX.coerceIn(margin, screenWidthPx - gridW - margin)
-    } else 0f
-
-    val gridTopY = if (hasGrid) {
-        val reactCenterY = actionCenters["react"]?.y ?: 0f
-        val gTop = reactCenterY - (gridH / 2f)
-        gTop.coerceIn(margin, effectiveScreenHeightPx - margin - gridH)
-    } else 0f
-
-    val gridBounds = if (hasGrid) Rect(gridLeftX, gridTopY, gridLeftX + gridW, gridTopY + gridH) else null
-    val virtualFingerPos = menuOrigin + currentDragOffset
-
-    val currentSelection = remember(virtualFingerPos, actions) {
-        var newSel = "cancel"
-        var foundInGrid = false
-
-        var closestAction = "cancel"
-        var minDistance = (virtualFingerPos - menuOrigin).getDistanceVector()
-
-        actionCenters.forEach { (action, center) ->
-            val dist = (virtualFingerPos - center).getDistanceVector()
-            if (dist < minDistance) {
-                minDistance = dist
-                closestAction = action
-            }
-        }
-
-        if (hasGrid && gridBounds != null) {
-            val hitBounds = Rect(
-                left = gridBounds.left - 40f, top = gridBounds.top - 40f,
-                right = gridBounds.right + 40f, bottom = gridBounds.bottom + 40f
-            )
-            if (hitBounds.contains(virtualFingerPos)) {
-                val dxInside = virtualFingerPos.x - gridBounds.left - with(density) { 10.dp.toPx() }
-                val dyInside = virtualFingerPos.y - gridBounds.top - with(density) { 10.dp.toPx() }
-
-                val col = floor(dxInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, 3)
-                val row = floor(dyInside / with(density) { 36.dp.toPx() }).toInt().coerceIn(0, (rankedReactions.size / 4) - 1)
-
-                val idx = (row * 4 + col).toInt().coerceIn(0, rankedReactions.size - 1)
-                newSel = "react_${rankedReactions[idx]}"
-                foundInGrid = true
-            }
-        }
-
-        if (!foundInGrid) newSel = closestAction
-        newSel
-    }
-
-    LaunchedEffect(currentSelection) {
-        when {
-            currentSelection == "delete" -> haptic.perform(HapticType.LONG_PRESS, true)
-            currentSelection == "cancel" -> haptic.perform(HapticType.CLICK, true)
-            currentSelection.startsWith("react_") -> haptic.perform(HapticType.CLICK, true)
-            else -> haptic.perform(HapticType.SELECTION, true)
-        }
-    }
-
-    val finalSelection by rememberUpdatedState(currentSelection)
-
-    DisposableEffect(Unit) {
-        onDispose {
-            if (finalSelection != "cancel") {
-                if (finalSelection == "copy") {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("message", data.message.text ?: ""))
-                    Toast.makeText(context, context.getString(R.string.toast_copied), Toast.LENGTH_SHORT).show()
-                } else {
-                    val emoji = if (finalSelection.startsWith("react_")) finalSelection.removePrefix("react_") else null
-                    onAction(if (finalSelection.startsWith("react_")) "react" else finalSelection, emoji)
-                }
-            }
-        }
-    }
-
-    var isVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { isVisible = true }
-    val enterScale by animateFloatAsState(
-        targetValue = if (isVisible) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f),
-        label = "enter_scale"
-    )
-
-    // Карточки действий разлетаются каскадом — жидкость выбрасывает их одну за другой
-    var revealedCount by remember { mutableIntStateOf(if (liquidEnabled) 0 else actions.size) }
-    LaunchedEffect(liquidEnabled, actions.size) {
-        if (!liquidEnabled) {
-            revealedCount = actions.size
-            return@LaunchedEffect
-        }
-        repeat(actions.size) { index ->
-            revealedCount = index + 1
-            delay(26)
-        }
-    }
-
-    Box(Modifier.fillMaxSize()) {
-        val isCancelSelected = currentSelection == "cancel"
-        val cancelColor = if (isCancelSelected) Color(0xFFFFC107) else cs.surface
-        val cancelScale by animateFloatAsState(
-            if (isCancelSelected) 1.15f else 1f,
-            if (liquidEnabled) spring(dampingRatio = 0.42f, stiffness = 520f)
-            else VlTheme.tokens.motion.motionSpec<Float>(),
-            label = "cancel_scale"
-        )
-        val cancelSkew = if (liquidEnabled) (cancelScale - 1f) * 0.35f else 0f
-
-        Box(
-            Modifier.offset { IntOffset((menuOrigin.x - btnHalfW).toInt(), (menuOrigin.y - btnHalfH).toInt()) }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(windowShape)
         ) {
-            Surface(
-                modifier = Modifier
-                    .width(cardWidth)
-                    .height(cardHeight)
-                    .graphicsLayer {
-                        scaleX = (cancelScale + cancelSkew) * enterScale
-                        scaleY = (cancelScale - cancelSkew) * enterScale
-                    },
-                shape = VlTheme.tokens.shapes.card,
-                color = cancelColor,
-                tonalElevation = if (isCancelSelected) 12.dp else 4.dp,
-                border = borderStroke(cs)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.Close, null, tint = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Отмена", color = if (isCancelSelected) Color.Black else cs.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            actionList.forEachIndexed { index, action ->
+                val isFirst = index == 0
+                val isLast = index == actionList.lastIndex
+                val itemShape = when {
+                    actionList.size == 1 -> RoundedCornerShape(cardRadius)
+                    isFirst -> RoundedCornerShape(topStart = cardRadius, topEnd = cardRadius, bottomStart = 0.dp, bottomEnd = 0.dp)
+                    isLast -> RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = cardRadius, bottomEnd = cardRadius)
+                    else -> RectangleShape
                 }
-            }
-        }
 
-        actions.forEachIndexed { index, action ->
-            val isSelected = currentSelection == action || (action == "react" && currentSelection.startsWith("react_"))
-            val center = actionCenters[action] ?: Offset.Zero
+                ActionRowItem(
+                    icon = action.icon,
+                    label = action.label,
+                    destructive = action.destructive,
+                    isHovered = hoveredAction == action.key,
+                    shape = itemShape,
+                    onPositioned = { actionBounds[action.key] = it },
+                    onClick = action.onClick
+                )
 
-            val icon = when(action) {
-                "react" -> Icons.Default.AddReaction
-                "reply" -> Icons.AutoMirrored.Filled.Reply
-                "edit" -> Icons.Default.Edit
-                "copy" -> Icons.Default.ContentCopy
-                "forward" -> Icons.AutoMirrored.Filled.Forward
-                "delete" -> Icons.Default.Delete
-                "cancel_sending" -> Icons.Default.Close
-                else -> Icons.Default.Warning
-            }
-            val text = when(action) {
-                "react" -> "Реакция"
-                "reply" -> stringResource(R.string.action_reply)
-                "edit" -> "Изменить"
-                "copy" -> "Копировать"
-                "forward" -> "Переслать"
-                "delete" -> "Удалить"
-                "cancel_sending" -> "Отменить"
-                else -> ""
-            }
-            val color = if (action == "delete" || action == "cancel_sending") cs.error else cs.onSurface
-            val bgColor = if (isSelected) {
-                if (action == "delete" || action == "cancel_sending") cs.error else cs.primary
-            } else cs.surface
-
-            val contentColor = if (isSelected) Color.White else color
-            val actionScale by animateFloatAsState(
-                if (isSelected) 1.15f else 1f,
-                if (liquidEnabled) spring(dampingRatio = 0.42f, stiffness = 520f)
-                else VlTheme.tokens.motion.motionSpec<Float>(),
-                label = "action_scale"
-            )
-
-            // Каскадное появление: без флага все карточки приходят вместе, как раньше
-            val appearScale by animateFloatAsState(
-                targetValue = if (index < revealedCount) 1f else 0f,
-                animationSpec = spring(dampingRatio = 0.50f, stiffness = 520f),
-                label = "action_appear"
-            )
-            val actionEnter = if (liquidEnabled) appearScale else enterScale
-            // Желейный перекос: карточка шире по X ровно настолько, насколько ниже по Y
-            val jellySkew = if (liquidEnabled) (actionScale - 1f) * 0.35f else 0f
-
-            Box(
-                Modifier.offset { IntOffset((center.x - btnHalfW).toInt(), (center.y - btnHalfH).toInt()) }
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .width(cardWidth)
-                        .height(cardHeight)
-                        .graphicsLayer {
-                            scaleX = (actionScale + jellySkew) * actionEnter
-                            scaleY = (actionScale - jellySkew) * actionEnter
-                        },
-                    shape = VlTheme.tokens.shapes.card,
-                    color = bgColor,
-                    tonalElevation = if (isSelected) 12.dp else 4.dp,
-                    border = borderStroke(cs)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(icon, null, tint = contentColor, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(10.dp))
-                        Text(text, color = contentColor, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    }
-                }
-            }
-        }
-
-        if (hasGrid) {
-            val showGrid = currentSelection == "react" || currentSelection.startsWith("react_")
-            val gridScale by animateFloatAsState(
-                if (showGrid) 1f else 0f,
-                if (liquidEnabled) spring(dampingRatio = 0.55f, stiffness = 480f)
-                else VlTheme.tokens.motion.motionSpec<Float>(),
-                label = "grid_scale"
-            )
-
-            Box(
-                Modifier.offset { IntOffset(gridLeftX.toInt(), gridTopY.toInt()) }
-            ) {
-                Surface(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            transformOrigin = TransformOrigin(if (dirX == 1) 0f else 1f, 0.5f)
-                            scaleX = gridScale * enterScale
-                            scaleY = gridScale * enterScale
-                        },
-                    shape = VlTheme.tokens.shapes.card,
-                    color = cs.surface,
-                    tonalElevation = 6.dp,
-                    border = borderStroke(cs)
-                ) {
-                    Column(Modifier.padding(10.dp)) {
-                        rankedReactions.chunked(4).forEach { row ->
-                            Row {
-                                row.forEach { emoji ->
-                                    val isSelected = currentSelection == "react_$emoji"
-                                    val emojiScale by animateFloatAsState(if (isSelected) 1.5f else 1f, VlTheme.tokens.motion.motionSpec<Float>(), label = "emoji_scale")
-                                    Box(
-                                        Modifier.size(36.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            Modifier
-                                                .scale(emojiScale)
-                                                .background(if (isSelected) cs.primary.copy(0.4f) else Color.Transparent, VlTheme.tokens.shapes.indicator)
-                                                .padding(4.dp)
-                                        ) {
-                                            Text(text = emoji, fontSize = 18.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                if (!isLast) {
+                    ActionRowDivider()
                 }
             }
         }
     }
 }
 
+/**
+ * Пункт списка действий с визуальной подсветкой и идеальным повторением формы окна (`shape`).
+ */
 @Composable
-private fun ActionItem(icon: ImageVector, label: String, destructive: Boolean = false, onClick: () -> Unit) {
-    val color = if (destructive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
+private fun ActionRowItem(
+    icon: ImageVector,
+    label: String,
+    destructive: Boolean = false,
+    isHovered: Boolean = false,
+    shape: Shape = RectangleShape,
+    onPositioned: (Rect) -> Unit,
+    onClick: () -> Unit
+) {
+    val cs = MaterialTheme.colorScheme
+    val haptic = rememberHaptic()
+    val color = if (destructive) cs.error else cs.onSurface
+    val bgColor = if (isHovered) {
+        if (destructive) cs.errorContainer.copy(alpha = 0.35f) else cs.primaryContainer.copy(alpha = 0.35f)
+    } else Color.Transparent
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .onGloballyPositioned { onPositioned(it.boundsInWindow()) }
+            .clip(shape)
+            .background(bgColor, shape)
+            .clickable {
+                haptic.perform(if (destructive) HapticType.LONG_PRESS else HapticType.CLICK, true)
+                onClick()
+            }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(16.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = color)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = color,
+            maxLines = 1
+        )
     }
 }
 
+/**
+ * Тонкий аккуратный разделитель между пунктами контекстного меню.
+ */
 @Composable
-private fun EmojiReactionButton(emoji: String, isSelected: Boolean, onClick: () -> Unit) {
-    val scale = remember { Animatable(1f) }
-    val scope = rememberCoroutineScope()
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant, VlTheme.tokens.shapes.indicator)
-            .clickable {
-                scope.launch {
-                    scale.animateTo(0.75f)
-                    scale.animateTo(1.2f)
-                    scale.animateTo(1f)
-                }
-                onClick()
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(emoji, fontSize = 22.sp, modifier = Modifier.scale(if (isSelected) 1.1f else 1f).scale(scale.value))
-    }
+private fun ActionRowDivider() {
+    HorizontalDivider(
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.15f),
+        thickness = 0.5.dp,
+        modifier = Modifier.padding(horizontal = 14.dp)
+    )
 }
 
-@Composable
-private fun borderStroke(cs: ColorScheme) = BorderStroke(
-    1.dp, cs.outlineVariant.copy(alpha = 0.3f)
-)

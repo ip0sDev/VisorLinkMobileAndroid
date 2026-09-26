@@ -165,7 +165,7 @@ fun ChatListItem(
                     SavedMessagesIcon(size = 52.dp)
                 } else {
                     when (chatType) {
-                        ChatType.DIRECT -> {
+                        ChatType.DIRECT, ChatType.EMERGENCY -> {
                             val otherUsername = chat.otherUsername(currentUid)
                             val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
                             AvatarWithPresence(
@@ -198,10 +198,12 @@ fun ChatListItem(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        if (chatType != ChatType.DIRECT && !isSavedMessages) {
+                        if (chatType == ChatType.EMERGENCY) {
+                            Text("🛡️", fontSize = 12.sp)
+                        } else if (chatType != ChatType.DIRECT && !isSavedMessages) {
                             Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
                         }
-                        val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
+                        val otherUsername = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) chat.otherUsername(currentUid) else ""
                         val isOfficial = chatType == ChatType.DIRECT && (
                             otherProfile?.botBadge == "official" ||
                             otherProfile?.uid == "bot_faultywire" ||
@@ -210,6 +212,10 @@ fun ChatListItem(
                         Text(
                             text = when {
                                 isSavedMessages -> stringResource(R.string.saved_messages_title)
+                                chatType == ChatType.EMERGENCY -> {
+                                    val name = chat.otherDisplayName(currentUid).ifEmpty { chat.name }
+                                    "$name [SOS]"
+                                }
                                 chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
                                 else -> chat.name
                             },
@@ -347,7 +353,7 @@ fun ChatListItemCompact(
                 SavedMessagesIcon(size = 54.dp)
             } else {
                 when (chatType) {
-                    ChatType.DIRECT -> {
+                    ChatType.DIRECT, ChatType.EMERGENCY -> {
                         val otherUsername = chat.otherUsername(currentUid)
                         val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
                         AvatarWithPresence(
@@ -380,10 +386,12 @@ fun ChatListItemCompact(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    if (chatType != ChatType.DIRECT && !isSavedMessages) {
+                    if (chatType == ChatType.EMERGENCY) {
+                        Text("🛡️", fontSize = 12.sp)
+                    } else if (chatType != ChatType.DIRECT && !isSavedMessages) {
                         Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
                     }
-                    val otherUsername = if (chatType == ChatType.DIRECT) chat.otherUsername(currentUid) else ""
+                    val otherUsername = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) chat.otherUsername(currentUid) else ""
                     val isOfficial = chatType == ChatType.DIRECT && (
                         otherProfile?.botBadge == "official" ||
                         otherProfile?.uid == "bot_faultywire" ||
@@ -392,6 +400,10 @@ fun ChatListItemCompact(
                     Text(
                         text = when {
                             isSavedMessages -> stringResource(R.string.saved_messages_title)
+                            chatType == ChatType.EMERGENCY -> {
+                                val name = chat.otherDisplayName(currentUid).ifEmpty { chat.name }
+                                "$name [SOS]"
+                            }
                             chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
                             else -> chat.name
                         },

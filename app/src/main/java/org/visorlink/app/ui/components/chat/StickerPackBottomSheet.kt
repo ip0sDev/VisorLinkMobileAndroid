@@ -1,6 +1,8 @@
 package org.visorlink.app.ui.components.chat
 
 import android.widget.Toast
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -21,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
 import org.visorlink.app.data.model.StickerPack
 import org.visorlink.app.data.repository.StickerPackRepository
 import org.visorlink.app.ui.components.CachedImage
@@ -30,7 +33,7 @@ import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun StickerPackBottomSheet(
     packId: String,
@@ -125,6 +128,8 @@ fun StickerPackBottomSheet(
                 }
             } else {
                 val stickers = pack?.stickers ?: emptyList()
+                var previewSticker by remember { mutableStateOf<org.visorlink.app.data.model.StickerItem?>(null) }
+
                 if (stickers.isNotEmpty()) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(4),
@@ -138,6 +143,11 @@ fun StickerPackBottomSheet(
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .combinedClickable(
+                                        onClick = { previewSticker = item },
+                                        onLongClick = { previewSticker = item }
+                                    )
                                     .padding(4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -150,6 +160,13 @@ fun StickerPackBottomSheet(
                             }
                         }
                     }
+                }
+
+                previewSticker?.let { sticker ->
+                    StickerPreviewDialog(
+                        sticker = sticker,
+                        onDismiss = { previewSticker = null }
+                    )
                 }
             }
 

@@ -126,12 +126,42 @@ class StickerPackRepository(
             }.awaitAll().filterNotNull()
 
             val profile = ChatDataCache.loadProfile(context, uid)
-            val userPackIds = profile?.stickerPackIds ?: emptyList()
+            var userPackIds = profile?.stickerPackIds ?: emptyList()
+
+            // Если в кэше профиля список пуст, подгружаем актуальные ID из Firestore
+            if (userPackIds.isEmpty() && uid.isNotBlank() && uid != "global") {
+                try {
+                    val userDoc = firestore.collection("users").document(uid).get().await()
+                    val ids = (userDoc.get("stickerPackIds") as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+                    if (ids.isNotEmpty()) {
+                        userPackIds = ids
+                        val currentProf = profile ?: org.visorlink.app.data.model.UserProfile(uid = uid)
+                        ChatDataCache.saveProfile(context, currentProf.copy(stickerPackIds = ids))
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load user pack IDs from Firestore", e)
+                }
+            }
+
+            // Объединяем с ID паков в памяти, чтобы не стереть оптимистичные обновления
+            val memoryUserPackIds = _userPacksFlow.value.map { it.id }
+            val allUserPackIds = (userPackIds + memoryUserPackIds).toSet()
 
             _storePacksFlow.value = packs.filter { it.isOfficial }
-            _userPacksFlow.value = packs.filter { it.id in userPackIds || (it.authorId == currentUid && !it.isOfficial) }.toMutableList()
 
-            ChatDataCache.saveStickerPacks(context, uid, packs)
+            val officialOrAuthorPacks = packs.filter { it.id in allUserPackIds || (it.authorId == currentUid && !it.isOfficial) }
+            val existingUserPacks = _userPacksFlow.value.filter { it.id in allUserPackIds }
+
+            val missingPackIds = allUserPackIds - officialOrAuthorPacks.map { it.id }.toSet() - existingUserPacks.map { it.id }.toSet()
+            val extraPacks = missingPackIds.map { pId ->
+                async { fetchPackDetails(pId) }
+            }.awaitAll().filterNotNull()
+
+            val updatedUserPacks = (officialOrAuthorPacks + existingUserPacks + extraPacks).distinctBy { it.id }
+            _userPacksFlow.value = updatedUserPacks
+
+            val allKnownPacks = (packs + updatedUserPacks).distinctBy { it.id }
+            ChatDataCache.saveStickerPacks(context, uid, allKnownPacks)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process snapshot", e)
         }
@@ -235,28 +265,40 @@ class StickerPackRepository(
 
     suspend fun addPackToUser(packId: String): String = withContext(Dispatchers.IO) {
         val uid = currentUid.ifBlank { return@withContext "Error" }
+
+        // 1. Оптимистичное обновление в памяти
+        val targetPack = _storePacksFlow.value.find { it.id == packId }
+            ?: _userPacksFlow.value.find { it.id == packId }
+            ?: fetchPackDetails(packId)
+
+        if (targetPack != null) {
+            _userPacksFlow.update { current ->
+                if (current.none { it.id == packId }) current + targetPack else current
+            }
+        }
+
+        // 2. Обновление локального профиля
+        val profile = ChatDataCache.loadProfile(context, uid)
+        val currentIds = profile?.stickerPackIds ?: emptyList()
+        val newIds = if (!currentIds.contains(packId)) currentIds + packId else currentIds
+        val updatedProfile = (profile ?: org.visorlink.app.data.model.UserProfile(uid = uid)).copy(stickerPackIds = newIds)
+        ChatDataCache.saveProfile(context, updatedProfile)
+
+        // 3. Сохранение в SQLite кэш стикеров
+        val allKnownPacks = (_storePacksFlow.value + _userPacksFlow.value).distinctBy { it.id }
+        ChatDataCache.saveStickerPacks(context, uid, allKnownPacks)
+
+        // 4. Синхронизация с Firestore
         try {
             firestore.collection("users").document(uid).set(
                 mapOf("stickerPackIds" to com.google.firebase.firestore.FieldValue.arrayUnion(packId)),
                 com.google.firebase.firestore.SetOptions.merge()
             ).await()
-            val profile = ChatDataCache.loadProfile(context, uid)
-            if (profile != null) {
-                val newList = profile.stickerPackIds.toMutableList()
-                if (!newList.contains(packId)) newList.add(packId)
-                ChatDataCache.saveProfile(context, profile.copy(stickerPackIds = newList))
-            } else {
-                // If profile is null, fetch it directly
-                val userDoc = firestore.collection("users").document(uid).get().await()
-                val newIds = userDoc.get("stickerPackIds") as? List<String> ?: listOf(packId)
-                val newProfile = org.visorlink.app.data.model.UserProfile(uid = uid, stickerPackIds = newIds)
-                ChatDataCache.saveProfile(context, newProfile)
-            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add pack to user", e)
+            Log.e(TAG, "Failed to add pack to user in firestore", e)
         }
-        refreshPacks(forceServer = false)
-        "Pack Added"
+
+        targetPack?.name ?: "Pack Added"
     }
 
     suspend fun deletePack(packId: String, isOwner: Boolean) = withContext(Dispatchers.IO) {
@@ -264,19 +306,24 @@ class StickerPackRepository(
         try {
             _userPacksFlow.update { list -> list.filter { it.id != packId } }
             
-            firestore.collection("users").document(uid)
-                .update("stickerPackIds", com.google.firebase.firestore.FieldValue.arrayRemove(packId)).await()
-            
             val profile = ChatDataCache.loadProfile(context, uid)
             if (profile != null) {
                 ChatDataCache.saveProfile(context, profile.copy(stickerPackIds = profile.stickerPackIds - packId))
             }
 
             if (isOwner) {
-                firestore.collection("stickerPacks").document(packId).delete().await()
                 _storePacksFlow.update { list -> list.filter { it.id != packId } }
             }
-            refreshPacks(forceServer = false)
+
+            val allKnownPacks = (_storePacksFlow.value + _userPacksFlow.value).distinctBy { it.id }
+            ChatDataCache.saveStickerPacks(context, uid, allKnownPacks)
+
+            firestore.collection("users").document(uid)
+                .update("stickerPackIds", com.google.firebase.firestore.FieldValue.arrayRemove(packId)).await()
+
+            if (isOwner) {
+                firestore.collection("stickerPacks").document(packId).delete().await()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete pack $packId", e)
         }

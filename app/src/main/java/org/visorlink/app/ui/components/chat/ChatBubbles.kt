@@ -61,11 +61,19 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.*
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.components.CachedImage
+import org.visorlink.app.ui.components.VlAnimatedMedia
+import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.rememberLiquidJellyState
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.cos
+import kotlin.math.sin
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.MusicPlayerState
 import org.visorlink.app.utils.VoicePlaybackState
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlRaised
@@ -131,9 +139,16 @@ fun Modifier.messageGestures(
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
 
+    val currentOnTap by rememberUpdatedState(onTap)
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+    val currentHapticEnabled by rememberUpdatedState(hapticEnabled)
+    val currentOnLongPressStart by rememberUpdatedState(onLongPressStart)
+    val currentOnLongPressDrag by rememberUpdatedState(onLongPressDrag)
+    val currentOnLongPressEnd by rememberUpdatedState(onLongPressEnd)
+
     this
         .onGloballyPositioned { globalPos = it.positionInWindow() }
-        .pointerInput(messageId + "_tap") {
+        .pointerInput(messageId, currentOnDoubleTap != null, currentOnTap != null) {
             detectTapGestures(
                 onPress = {
                     val press = PressInteraction.Press(it)
@@ -144,26 +159,149 @@ fun Modifier.messageGestures(
                         else interactionSource.emit(PressInteraction.Cancel(press))
                     }
                 },
-                onDoubleTap = onDoubleTap?.let { action ->
-                    {
-                        haptic.perform(HapticType.CLICK, hapticEnabled)
-                        action()
+                onDoubleTap = if (currentOnDoubleTap != null) {
+                    { _ ->
+                        haptic.perform(HapticType.CLICK, currentHapticEnabled)
+                        currentOnDoubleTap?.invoke()
                     }
-                },
-                onTap = { onTap?.invoke() }
+                } else null,
+                onTap = if (currentOnTap != null) { { currentOnTap?.invoke() } } else null
             )
         }
-        .pointerInput(messageId + "_drag") {
+        .pointerInput(messageId) {
             detectDragGesturesAfterLongPress(
-                onDragStart = { local -> onLongPressStart(globalPos + local) },
+                onDragStart = { local -> currentOnLongPressStart(globalPos + local) },
                 onDrag = { change, amount ->
                     change.consume()
-                    onLongPressDrag(amount)
+                    currentOnLongPressDrag(amount)
                 },
-                onDragEnd = onLongPressEnd,
-                onDragCancel = onLongPressEnd
+                onDragEnd = { currentOnLongPressEnd() },
+                onDragCancel = { currentOnLongPressEnd() }
             )
         }
+}
+
+/**
+ * Жидкая анимация сердечка при двойном тапе по сообщению.
+ * Воспроизводит эффект пульсации/отскока с последующим мягким затуханием,
+ * желейной деформацией Squash & Stretch и всплеском микро-капель.
+ */
+@Composable
+internal fun DoubleTapHeartAnimation(
+    triggerKey: Int,
+    modifier: Modifier = Modifier,
+    liquidEnabled: Boolean = true
+) {
+    var isPlaying by remember { mutableStateOf(false) }
+    val progress = remember { Animatable(0f) }
+
+    LaunchedEffect(triggerKey) {
+        if (triggerKey > 0) {
+            isPlaying = true
+            progress.snapTo(0f)
+            progress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 720, easing = LinearEasing)
+            )
+            isPlaying = false
+        }
+    }
+
+    if (!isPlaying) return
+
+    val p = progress.value
+
+    // Фаза 1 (0..0.30): взрывной рост капли сердца с вытягиванием по X
+    // Фаза 2 (0.30..0.65): упругие затухающие колебания (Squash & Stretch)
+    // Фаза 3 (0.65..1.0): всплывание вверх и растворение
+    val (scaleX, scaleY, alpha, offsetY) = remember(p, liquidEnabled) {
+        if (!liquidEnabled) {
+            val s = if (p < 0.4f) (p / 0.4f) * 1.15f else 1.15f + (p - 0.4f) * 0.2f
+            val a = if (p > 0.65f) (1f - (p - 0.65f) / 0.35f).coerceIn(0f, 1f) else 1f
+            listOf(s, s, a, 0f)
+        } else {
+            when {
+                p < 0.30f -> {
+                    val sub = p / 0.30f
+                    val sX = 0.2f + 1.15f * sub
+                    val sY = 0.2f + 0.95f * sub
+                    listOf(sX, sY, sub.coerceIn(0f, 1f), 0f)
+                }
+                p < 0.65f -> {
+                    val sub = (p - 0.30f) / 0.35f
+                    val bounce = kotlin.math.sin(sub * Math.PI.toFloat() * 2f) * 0.12f * (1f - sub)
+                    listOf(1.10f + bounce, 1.10f - bounce * 0.8f, 1f, 0f)
+                }
+                else -> {
+                    val sub = (p - 0.65f) / 0.35f
+                    val sX = 1.10f + sub * 0.15f
+                    val sY = 1.10f + sub * 0.15f
+                    val a = (1f - sub).coerceIn(0f, 1f)
+                    val y = -sub * 28f
+                    listOf(sX, sY, a, y)
+                }
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Микро-капли (Metaball Droplets Splash) при liquid-режиме
+        if (liquidEnabled && p in 0.12f..0.85f) {
+            val splashProgress = ((p - 0.12f) / 0.73f).coerceIn(0f, 1f)
+            Canvas(modifier = Modifier.size(110.dp)) {
+                val dropletCount = 6
+                val center = Offset(size.width / 2f, size.height / 2f + offsetY)
+                val baseDistance = 22.dp.toPx() + splashProgress * 26.dp.toPx()
+                val dropAlpha = (1f - splashProgress) * 0.85f
+
+                for (i in 0 until dropletCount) {
+                    val angle = (i * (360f / dropletCount) + 15f) * (Math.PI.toFloat() / 180f)
+                    val dist = baseDistance * (0.85f + (i % 3) * 0.15f)
+                    val radius = (3.5f.dp.toPx() * (1f - splashProgress * 0.7f)).coerceAtLeast(0.5f)
+                    val dropCenter = Offset(
+                        x = center.x + kotlin.math.cos(angle) * dist,
+                        y = center.y + kotlin.math.sin(angle) * dist
+                    )
+                    drawCircle(
+                        color = Color(0xFFFF2D55).copy(alpha = dropAlpha),
+                        radius = radius,
+                        center = dropCenter
+                    )
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    this.scaleX = scaleX
+                    this.scaleY = scaleY
+                    this.alpha = alpha
+                    this.translationY = offsetY
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = Color.Black.copy(alpha = 0.30f * alpha),
+                modifier = Modifier
+                    .size(66.dp)
+                    .offset(y = 2.dp)
+            )
+            Icon(
+                imageVector = Icons.Filled.Favorite,
+                contentDescription = null,
+                tint = Color(0xFFFF2D55),
+                modifier = Modifier.size(64.dp)
+            )
+        }
+    }
 }
 
 // ── Components ───────────────────────────────────────────────────────────────
@@ -218,7 +356,8 @@ private fun AlbumGrid(
     images: List<AlbumImage>,
     revealedIndices: Set<Int>,
     onReveal: (Int) -> Unit,
-    onClick: (Int) -> Unit
+    onClick: (Int) -> Unit,
+    onDoubleTap: (() -> Unit)? = null
 ) {
     val count = images.size
     if (count == 0) return
@@ -239,6 +378,7 @@ private fun AlbumGrid(
                 isRevealed = 0 in revealedIndices,
                 onReveal = { onReveal(0) },
                 onClick = { onClick(0) },
+                onDoubleTap = onDoubleTap,
                 modifier = Modifier.wrapContentSize(),
                 useCardShape = false
             )
@@ -257,6 +397,7 @@ private fun AlbumGrid(
                         isRevealed = index in revealedIndices,
                         onReveal = { onReveal(index) },
                         onClick = { onClick(index) },
+                        onDoubleTap = onDoubleTap,
                         modifier = Modifier
                             .weight(1f)
                             .wrapContentHeight(),
@@ -288,6 +429,7 @@ private fun AlbumGrid(
                             isRevealed = index in revealedIndices,
                             onReveal = { onReveal(index) },
                             onClick = { onClick(index) },
+                            onDoubleTap = onDoubleTap,
                             modifier = Modifier.fillMaxSize(),
                             useCardShape = false
                         )
@@ -309,15 +451,28 @@ private fun AlbumImageItem(
     isRevealed: Boolean,
     onReveal: () -> Unit,
     onClick: () -> Unit,
+    onDoubleTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     useCardShape: Boolean = true
 ) {
     val resolvedUrl = resolveCdnUrl(image.cdnMediaId, image.url) ?: image.url
     val showBlur = image.spoiler && !isRevealed
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnReveal by rememberUpdatedState(onReveal)
 
     Box(modifier
         .then(if (useCardShape) Modifier.clip(VlTheme.tokens.shapes.card) else Modifier)
-        .clickable { if (showBlur) onReveal() else onClick() }
+        .pointerInput(image.url, showBlur, currentOnDoubleTap != null) {
+            detectTapGestures(
+                onTap = {
+                    if (showBlur) currentOnReveal() else currentOnClick()
+                },
+                onDoubleTap = if (currentOnDoubleTap != null) {
+                    { _ -> currentOnDoubleTap?.invoke() }
+                } else null
+            )
+        }
     ) {
         CachedImage(
             model = resolvedUrl,
@@ -363,9 +518,20 @@ fun MessageBubble(
     chat: Chat? = null,
     onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
     onCancelUpload: ((String) -> Unit)? = null,
+    liquidEnabled: Boolean = true,
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
+    var heartAnimKey by remember { mutableIntStateOf(0) }
+    val bubbleJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.55f, stiffness = 320f)
+    val onDoubleTapLike = {
+        heartAnimKey++
+        haptic.perform(HapticType.REACTION, hapticEnabled)
+        if (liquidEnabled) {
+            bubbleJelly.pulse(0.08f)
+        }
+        onReact("❤️")
+    }
 
     val uploadProgressModifier = if (message.uploadProgress != null) {
         Modifier.alpha(0.6f)
@@ -375,27 +541,37 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Box(modifier = uploadProgressModifier) {
-            if (!message.deleted && isLegacyMediaMessage(message)) {
-                LegacyMediaPlaceholder(
-                    message = message,
-                    isMine = isMine,
-                    chatType = chatType,
-                    showSenderName = showSenderName,
-                    isReadByOther = isReadByOther,
-                    hapticEnabled = hapticEnabled,
-                    onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
-                    onLongPressDrag = onLongPressDrag,
-                    onLongPressEnd = onLongPressEnd,
-                    onReact = onReact,
-                    onReplyClick = onReplyClick
-                )
-                return@Box
-            }
+        Box(modifier = uploadProgressModifier.liquidJelly(bubbleJelly, enabled = liquidEnabled)) {
             when {
+                !message.deleted && isLegacyMediaMessage(message) -> {
+                    LegacyMediaPlaceholder(
+                        message = message,
+                        isMine = isMine,
+                        chatType = chatType,
+                        showSenderName = showSenderName,
+                        isReadByOther = isReadByOther,
+                        hapticEnabled = hapticEnabled,
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag,
+                        onLongPressEnd = onLongPressEnd,
+                        onReact = onReact,
+                        onReplyClick = onReplyClick,
+                        onDoubleTap = onDoubleTapLike,
+                    )
+                }
                 message.type == MessageType.GIFT && !message.deleted -> {
                     GiftMessage(message = message, chatId = chat?.id ?: "")
-                    return@Box
+                }
+                // Универсальная отрисовка Lottie-анимаций и GIF (даже при неизвестном типе сообщения)
+                (message.isLottieMedia || (message.isGifMedia && message.url?.substringBefore("?")?.endsWith(".gif", ignoreCase = true) == true) || message.type == MessageType.STICKER) && !message.deleted -> {
+                    StickerBubble(
+                        message = message, isMine = isMine, currentUid = currentUid,
+                        hapticEnabled = hapticEnabled,
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd, onReact = onReact,
+                        onStickerClick = onStickerClick,
+                        onDoubleTap = onDoubleTapLike,
+                    )
                 }
                 (message.type == MessageType.VIDEO || message.type == MessageType.GIF) && !message.deleted -> {
                     VideoBubble(
@@ -405,9 +581,9 @@ fun MessageBubble(
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onMediaTap = onMediaTap,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
-                        onCancelUpload = onCancelUpload
+                        onCancelUpload = onCancelUpload,
+                        onDoubleTap = onDoubleTapLike,
                     )
-                    return@Box
                 }
                 message.type.equals(MessageType.ALBUM, ignoreCase = true) && !message.deleted -> {
                     AlbumBubble(
@@ -417,9 +593,9 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
-                        onCancelUpload = onCancelUpload
+                        onCancelUpload = onCancelUpload,
+                        onDoubleTap = onDoubleTapLike,
                     )
-                    return@Box
                 }
                 message.type == MessageType.IMAGE && !message.deleted -> {
                     ImageBubble(
@@ -429,19 +605,9 @@ fun MessageBubble(
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onOpenComments = onOpenComments, chat = chat,
-                        onCancelUpload = onCancelUpload
+                        onCancelUpload = onCancelUpload,
+                        onDoubleTap = onDoubleTapLike,
                     )
-                    return@Box
-                }
-                message.type == MessageType.STICKER && !message.deleted -> {
-                    StickerBubble(
-                        message = message, isMine = isMine, currentUid = currentUid,
-                        hapticEnabled = hapticEnabled,
-                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
-                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd, onReact = onReact,
-                        onStickerClick = onStickerClick,
-                    )
-                    return@Box
                 }
                 else -> {
                     TextBubble(
@@ -459,10 +625,17 @@ fun MessageBubble(
                         onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
                         onReact = onReact, onReplyClick = onReplyClick, onMentionClick = onMentionClick,
                         onOpenComments = onOpenComments, chat = chat,
-                        onCancelUpload = onCancelUpload
+                        onCancelUpload = onCancelUpload,
+                        onDoubleTap = onDoubleTapLike,
                     )
                 }
             }
+
+            DoubleTapHeartAnimation(
+                triggerKey = heartAnimKey,
+                modifier = Modifier.matchParentSize(),
+                liquidEnabled = liquidEnabled
+            )
         }
     }
 }
@@ -485,10 +658,12 @@ internal fun TextBubble(
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit,
     onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val bubbleColor = resolveBubbleColor(isMine)
     val textColor   = resolveBubbleTextColor(isMine)
     val linkColor   = resolveLinkColor(isMine)
+    val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
 
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -502,7 +677,7 @@ internal fun TextBubble(
                 messageId = message.id,
                 interactionSource = interactionSource,
                 onTap = null,
-                onDoubleTap = { onReact("❤️") },
+                onDoubleTap = currentDoubleTap,
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart,
                 onLongPressDrag = onLongPressDrag,
@@ -537,7 +712,7 @@ internal fun TextBubble(
                 if (message.deleted) {
                     Text(stringResource(R.string.chat_message_deleted), style = MaterialTheme.typography.bodyMedium, fontStyle = FontStyle.Italic, color = textColor.copy(alpha = 0.6f))
                 } else when (message.type) {
-                    MessageType.TEXT  -> LinkifiedText(text = message.text ?: "", color = textColor, linkColor = linkColor, onMentionClick = onMentionClick)
+                    MessageType.TEXT  -> LinkifiedText(text = message.text ?: "", color = textColor, linkColor = linkColor, onMentionClick = onMentionClick, onDoubleTap = currentDoubleTap)
                     MessageType.VOICE -> {
                         val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
                         VoiceBubble(
@@ -567,6 +742,18 @@ internal fun TextBubble(
                             onOpenFullscreen = { onOpenFullscreenAudio?.invoke() },
                             onCancelUpload = onCancelUpload?.let { { it(message.id) } }
                         )
+                    }
+                    else -> {
+                        if (!message.text.isNullOrBlank()) {
+                            LinkifiedText(text = message.text, color = textColor, linkColor = linkColor, onMentionClick = onMentionClick, onDoubleTap = currentDoubleTap)
+                        } else {
+                            Text(
+                                text = stringResource(R.string.msg_unknown_type, message.type),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontStyle = FontStyle.Italic,
+                                color = textColor.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
 
@@ -637,8 +824,10 @@ internal fun VideoBubble(
     onMediaTap: (String, String) -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
     val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
     val streamableUrl = remember(resolvedUrl, message.driveFileId) {
@@ -659,7 +848,7 @@ internal fun VideoBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { playTargetUrl?.let { onMediaTap(it, message.type) } },
-                onDoubleTap = { onReact("❤️") },
+                onDoubleTap = currentDoubleTap,
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
@@ -672,7 +861,7 @@ internal fun VideoBubble(
                     thumbUrl = effectiveThumbUrl,
                     localFile = effectiveLocalFile,
                     modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                    onClick = { playTargetUrl?.let { onMediaTap(it, message.type) } }
+                    onClick = null
                 )
 
                 Column(modifier = Modifier.matchParentSize()) {
@@ -723,8 +912,10 @@ internal fun ImageBubble(
     onTap: (String) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
     val modelSource = message.localFile ?: resolvedUrl
 
@@ -736,7 +927,7 @@ internal fun ImageBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onTap(it) } },
-                onDoubleTap = { onReact("❤️") },
+                onDoubleTap = currentDoubleTap,
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
@@ -799,8 +990,10 @@ internal fun AlbumBubble(
     onAlbumTap: (List<AlbumImage>, Int) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
     val revealedIndices = remember { mutableStateOf(setOf<Int>()) }
     val isReadByOther = (chat?.participants?.find { it != currentUid } ?: "") in message.readBy
 
@@ -812,7 +1005,7 @@ internal fun AlbumBubble(
             modifier = Modifier.widthIn(max = 280.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = null,
-                onDoubleTap = { onReact("❤️") },
+                onDoubleTap = currentDoubleTap,
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
@@ -823,7 +1016,8 @@ internal fun AlbumBubble(
                 AlbumGrid(
                     images = message.images, revealedIndices = revealedIndices.value,
                     onReveal = { idx -> revealedIndices.value = revealedIndices.value + idx },
-                    onClick = { idx -> onAlbumTap(message.images, idx) }
+                    onClick = { idx -> onAlbumTap(message.images, idx) },
+                    onDoubleTap = currentDoubleTap,
                 )
 
                 Column(modifier = Modifier.matchParentSize()) {
@@ -881,8 +1075,10 @@ internal fun StickerBubble(
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onReact: (String) -> Unit,
     onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
@@ -893,7 +1089,7 @@ internal fun StickerBubble(
             modifier = Modifier.size(160.dp).messageGestures(
                 messageId = message.id, interactionSource = interactionSource,
                 onTap = { onStickerClick?.invoke(message.packId, message.stickerId) },
-                onDoubleTap = { onReact("❤️") },
+                onDoubleTap = currentDoubleTap,
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
             ),
@@ -926,7 +1122,13 @@ internal fun StickerBubble(
                     }
                 }
             } else {
-                CachedImage(model = message.url, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                VlAnimatedMedia(
+                    url = message.url,
+                    contentDescription = message.packName ?: message.text,
+                    isLottie = message.isLottieMedia,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
+                )
             }
         }
 
@@ -1011,7 +1213,11 @@ internal fun InlinedReactionRow(
 
 @Composable
 internal fun LinkifiedText(
-    text: String, color: Color, linkColor: Color, onMentionClick: (String) -> Unit,
+    text: String,
+    color: Color,
+    linkColor: Color,
+    onMentionClick: (String) -> Unit,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     val uriHandler = LocalUriHandler.current
     val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -1020,27 +1226,48 @@ internal fun LinkifiedText(
         org.visorlink.app.utils.MarkdownTextParser.parse(text, linkColor)
     }
 
-    Text(
-        text = annotatedString, color = color, style = MaterialTheme.typography.bodyMedium,
-        onTextLayout = { layoutResult.value = it },
-        modifier = Modifier.pointerInput(annotatedString) {
-            detectTapGestures { pos ->
-                layoutResult.value?.let { layout ->
-                    if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
-                        val offset = layout.getOffsetForPosition(pos)
-                        annotatedString.getStringAnnotations("URL", offset, offset)
-                            .firstOrNull()?.let { annotation ->
-                                try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
-                                return@detectTapGestures
-                            }
-                        annotatedString.getStringAnnotations("MENTION", offset, offset)
-                            .firstOrNull()?.let { annotation ->
-                                onMentionClick(annotation.item.removePrefix("@"))
-                                return@detectTapGestures
-                            }
+    val hasInteractiveAnnotations = remember(annotatedString) {
+        annotatedString.getStringAnnotations("URL", 0, annotatedString.length).isNotEmpty() ||
+            annotatedString.getStringAnnotations("MENTION", 0, annotatedString.length).isNotEmpty()
+    }
+
+    val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
+    val currentOnMentionClick by rememberUpdatedState(onMentionClick)
+
+    val textModifier = if (hasInteractiveAnnotations) {
+        Modifier.pointerInput(annotatedString, currentOnDoubleTap != null) {
+            detectTapGestures(
+                onDoubleTap = if (currentOnDoubleTap != null) {
+                    { _ -> currentOnDoubleTap?.invoke() }
+                } else null,
+                onTap = { pos ->
+                    layoutResult.value?.let { layout ->
+                        if (pos.x >= 0 && pos.x <= layout.size.width && pos.y >= 0 && pos.y <= layout.size.height) {
+                            val offset = layout.getOffsetForPosition(pos)
+                            annotatedString.getStringAnnotations("URL", offset, offset)
+                                .firstOrNull()?.let { annotation ->
+                                    try { uriHandler.openUri(annotation.item) } catch (_: Exception) {}
+                                    return@detectTapGestures
+                                }
+                            annotatedString.getStringAnnotations("MENTION", offset, offset)
+                                .firstOrNull()?.let { annotation ->
+                                    currentOnMentionClick(annotation.item.removePrefix("@"))
+                                    return@detectTapGestures
+                                }
+                        }
                     }
                 }
-            }
-        },
+            )
+        }
+    } else {
+        Modifier
+    }
+
+    Text(
+        text = annotatedString,
+        color = color,
+        style = MaterialTheme.typography.bodyMedium,
+        onTextLayout = { layoutResult.value = it },
+        modifier = textModifier,
     )
 }

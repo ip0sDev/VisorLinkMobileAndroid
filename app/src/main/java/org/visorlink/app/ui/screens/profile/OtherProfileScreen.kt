@@ -146,6 +146,23 @@ fun OtherProfileScreen(
                                     showReportDialog = true
                                 }
                             )
+                            if (flags.isEnabled("enable_alternative_outbox")) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.emergency_chat_title)) },
+                                    leadingIcon = { Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                                    onClick = {
+                                        showMenu = false
+                                        scope.launch {
+                                            try {
+                                                val emerChatId = viewModel.openOrCreateEmergencyChat()
+                                                onOpenChat(emerChatId, viewModel.targetUid)
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, e.message ?: "Failed to open emergency chat", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                             if (isBlocked) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.action_unblock_user)) },

@@ -40,4 +40,11 @@ class OtherProfileViewModel(
             ?: throw Exception("Not logged in")
         return chatRepository.findOrCreateChat(me, targetUid)
     }
+
+    suspend fun openOrCreateEmergencyChat(): String {
+        val target = _user.value ?: userRepository.getUserProfile(targetUid)
+            ?: throw Exception("User profile not found")
+        val chat = chatRepository.getOrCreateEmergencyChat(target)
+        return chat.id
+    }
 }

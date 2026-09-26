@@ -26,8 +26,8 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 168
-        versionName = "4.1.01.dev2"
+        versionCode = 170
+        versionName = "4.2.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"CANARY\"")
@@ -149,6 +149,7 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.lottie.compose)
     implementation(libs.accompanist.permissions)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.media3.exoplayer) // или 1.3.0+

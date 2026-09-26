@@ -146,6 +146,9 @@
     <string name="action_save_gallery">Save to gallery</string>
     <string name="action_save_voice">Save voice message</string>
     <string name="action_reply">Reply</string>
+    <string name="action_forward">Forward</string>
+    <string name="action_retry_send">Retry sending</string>
+    <string name="action_cancel_send">Cancel sending</string>
     <string name="action_delete_message">Delete</string>
     <string name="action_preview_photo">📷 Photo</string>
     <string name="action_preview_voice">🎤 Voice message</string>
@@ -887,6 +890,7 @@
     <!-- Google Drive & Storage Spec -->
     <string name="msg_unsupported_media">Unsupported media format (Archived attachment unavailable)</string>
     <string name="msg_sticker_unavailable">Sticker unavailable</string>
+    <string name="msg_unknown_type">Unsupported message format (%1$s)</string>
     <string name="storage_gdrive_title">Google Drive Storage</string>
     <string name="storage_gdrive_connected">Connected</string>
     <string name="storage_gdrive_not_connected">Not connected</string>
@@ -897,4 +901,19 @@
     <string name="storage_firebase_cloud_desc">Avatars, profile covers, and stickers are stored in the secure VisorLink cloud and do not consume space on your Google Drive.</string>
     <string name="storage_gdrive_required_title">Google Drive Required</string>
     <string name="storage_gdrive_required_desc">To send media, please connect your Google Drive in Storage Settings.</string>
+    <string name="storage_yandex_relay_title">Emergency Relay (Yandex Disk)</string>
+    <string name="storage_yandex_relay_desc">Autonomous message delivery via Yandex Disk (WebDAV/REST) during severe network blocks and backend outages. Messages are protected with end-to-end encryption (E2EE).</string>
+    <string name="storage_yandex_relay_ready">Relay ready</string>
+    <string name="storage_yandex_relay_disabled">Relay disabled</string>
+    <string name="storage_yandex_relay_token_btn">Custom Token</string>
+    <string name="storage_yandex_relay_token_dialog_title">Yandex Disk OAuth Token</string>
+    <string name="storage_yandex_relay_token_dialog_desc">By default, the server relay token is used. You can optionally specify your own OAuth token or App Password for Yandex Disk.</string>
+    <string name="emergency_chat_title">Emergency Chat (Yandex Disk)</string>
+    <string name="emergency_chat_badge">Emergency</string>
+    <string name="emergency_sync_vault_success">Emergency vault synced</string>
+    <string name="storage_yandex_relay_login_btn">Sign in with Yandex ID</string>
+    <string name="storage_yandex_relay_disconnect_btn">Disconnect Yandex ID</string>
+    <string name="storage_yandex_relay_manual_btn">Configure manually</string>
+    <string name="storage_yandex_relay_custom_connected">Personal Yandex ID connected</string>
+    <string name="storage_yandex_relay_client_id_label">Yandex Client ID</string>
 </resources>

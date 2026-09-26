@@ -38,6 +38,7 @@ import org.visorlink.app.ui.components.VlAlertDialog
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.VlDialogButton
 import org.visorlink.app.ui.components.VlTextField
+import org.visorlink.app.ui.components.VlAnimatedMedia
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
@@ -68,27 +69,39 @@ fun StickerPickerBottomSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val targetHeight = remember(configuration.screenHeightDp) {
+        minOf(540.dp, configuration.screenHeightDp.dp * 0.70f)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = null,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
         containerColor = if (tokens.isBiolume) cs.surfaceContainerLow else cs.surface,
         contentWindowInsets = { WindowInsets(0) }
     ) {
-        StickerPickerContent(
-            userPacks = uiState.userPacks,
-            storePacks = uiState.storePacks,
-            isLoading = uiState.isLoading,
-            currentUid = viewModel.currentUid,
-            onStickerSelected = { packId, sticker ->
-                viewModel.recordPackUsage(packId)
-                onStickerSelected(packId, sticker)
-            },
-            onDeletePack = { packId, isOwner -> viewModel.deletePack(packId, isOwner) },
-            onInstallPack = { packId -> viewModel.addForeignPack(packId) {} }
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(targetHeight)
+                .navigationBarsPadding()
+        ) {
+            StickerPickerContent(
+                userPacks = uiState.userPacks,
+                storePacks = uiState.storePacks,
+                isLoading = uiState.isLoading,
+                currentUid = viewModel.currentUid,
+                onStickerSelected = { packId, sticker ->
+                    viewModel.recordPackUsage(packId)
+                    onStickerSelected(packId, sticker)
+                },
+                onDeletePack = { packId, isOwner -> viewModel.deletePack(packId, isOwner) },
+                onInstallPack = { packId -> viewModel.addForeignPack(packId) {} },
+                onClose = onDismiss
+            )
+        }
     }
 }
 
@@ -104,22 +117,36 @@ internal fun StickerPickerContent(
     currentUid: String,
     onStickerSelected: (packId: String, sticker: StickerItem) -> Unit,
     onDeletePack: (packId: String, isOwner: Boolean) -> Unit,
-    onInstallPack: (packId: String) -> Unit
+    onInstallPack: (packId: String) -> Unit,
+    onClose: (() -> Unit)? = null
 ) {
     var selectedTab by remember { mutableIntStateOf(0) } // 0 = My Stickers, 1 = Store
     val packs = if (selectedTab == 0) userPacks else storePacks
 
+    var selectedPackId by remember { mutableStateOf<String?>(null) }
     var selectedPackIndex by remember { mutableIntStateOf(if (packs.isNotEmpty()) 0 else -1) }
     var showDeleteConfirm by remember { mutableStateOf<StickerPack?>(null) }
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
+    val haptic = rememberHaptic()
 
-    LaunchedEffect(packs, selectedTab) {
+    LaunchedEffect(packs, selectedTab, selectedPackId) {
         if (packs.isNotEmpty()) {
-            if (selectedPackIndex >= packs.size) {
-                selectedPackIndex = 0
-            } else if (selectedPackIndex == -1 && selectedTab == 0) {
-                selectedPackIndex = 0
+            if (selectedPackId != null) {
+                val idx = packs.indexOfFirst { it.id == selectedPackId }
+                if (idx != -1) {
+                    selectedPackIndex = idx
+                } else if (selectedPackIndex !in packs.indices) {
+                    selectedPackIndex = 0
+                    selectedPackId = packs[0].id
+                }
+            } else {
+                if (selectedPackIndex !in packs.indices && selectedTab == 0) {
+                    selectedPackIndex = 0
+                }
+                if (selectedPackIndex in packs.indices) {
+                    selectedPackId = packs[selectedPackIndex].id
+                }
             }
         } else {
             selectedPackIndex = -1
@@ -130,104 +157,147 @@ internal fun StickerPickerContent(
 
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(460.dp)
-            .navigationBarsPadding()
+            .fillMaxSize()
     ) {
-        // ── Drag handle ───────────────────────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 10.dp, bottom = 6.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .width(36.dp)
-                    .height(4.dp)
-                    .background(
-                        cs.outlineVariant.copy(alpha = 0.4f),
-                        CircleShape
-                    )
-            )
-        }
-
-        androidx.compose.material3.TabRow(
-            selectedTabIndex = selectedTab,
-            containerColor = Color.Transparent,
-            contentColor = cs.primary,
-            indicator = { tabPositions ->
-                val modifier = with(androidx.compose.material3.TabRowDefaults) { Modifier.tabIndicatorOffset(tabPositions[selectedTab]) }
-                androidx.compose.material3.TabRowDefaults.Indicator(
-                    modifier = modifier
-                )
-            }
-        ) {
-            androidx.compose.material3.Tab(
-                selected = selectedTab == 0,
-                onClick = { selectedTab = 0 },
-                text = { Text("Мои стикеры") }
-            )
-            androidx.compose.material3.Tab(
-                selected = selectedTab == 1,
-                onClick = { selectedTab = 1 },
-                text = { Text("Магазин") }
-            )
-        }
-
-        // ── Заголовок строки с кнопками ───────────────────────────────────────
+        // ── Единая компактная верхняя панель (Переключатель + Название пака + Действия) ──
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selectedPackIndex >= 0 && packs.isNotEmpty()) {
-                IconButton(onClick = { selectedPackIndex = -1 }) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                }
-                Spacer(Modifier.width(12.dp))
-                Text(
-                    selectedPack?.let { "${it.emoji} ${it.name}" } ?: "",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            // Компактный переключатель [Мои] [Магазин]
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerHigh,
+                modifier = Modifier.height(34.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val mySelected = selectedTab == 0
+                    val storeSelected = selectedTab == 1
 
-                // Кнопка удаления доступна всегда (для своих - удалить, для чужих - убрать из библиотеки)
-                IconButton(onClick = { showDeleteConfirm = selectedPack }) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(
+                                if (mySelected) {
+                                    if (tokens.isBiolume) cs.primary.copy(alpha = 0.22f) else cs.primaryContainer
+                                } else Color.Transparent
+                            )
+                            .clickable {
+                                haptic.perform(HapticType.SELECTION, true)
+                                selectedTab = 0
+                            }
+                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Мои",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (mySelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (mySelected) cs.onPrimaryContainer else cs.onSurfaceVariant
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(
+                                if (storeSelected) {
+                                    if (tokens.isBiolume) cs.primary.copy(alpha = 0.22f) else cs.primaryContainer
+                                } else Color.Transparent
+                            )
+                            .clickable {
+                                haptic.perform(HapticType.SELECTION, true)
+                                selectedTab = 1
+                            }
+                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Магазин",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = if (storeSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (storeSelected) cs.onPrimaryContainer else cs.onSurfaceVariant
+                        )
+                    }
                 }
-            } else {
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // Название выбранного пака
+            if (selectedPack != null && selectedPackIndex != -1) {
                 Text(
-                    "Стикеры",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    text = "${selectedPack.emoji} ${selectedPack.name}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
+            } else {
+                Spacer(Modifier.weight(1f))
+            }
+
+            // Кнопка удаления пака (для установленных паков или созданных пользователем)
+            val canDelete = selectedPack != null && selectedPackIndex != -1 &&
+                ((selectedTab == 0 && userPacks.any { it.id == selectedPack.id }) || (selectedPack.authorId == currentUid))
+            if (canDelete) {
+                IconButton(
+                    onClick = { showDeleteConfirm = selectedPack },
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        Icons.Default.DeleteOutline,
+                        contentDescription = "Удалить пак",
+                        tint = cs.error,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Кнопка закрытия панели (если передана)
+            if (onClose != null) {
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(34.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Закрыть",
+                        tint = cs.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
 
         HorizontalDivider(
             thickness = 0.5.dp,
-            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.5f)
+            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.4f)
         )
 
-        // ── Нижняя полоса с иконками паков ────────────────────────────────────
+        // ── Нижняя компактная полоса с иконками паков ─────────────────────────
         PackTabBar(
             packs = packs,
             selectedIndex = selectedPackIndex,
-            onSelect = { selectedPackIndex = it }
+            onSelect = { idx ->
+                selectedPackIndex = idx
+                selectedPackId = if (idx in packs.indices) packs[idx].id else null
+            }
         )
 
         HorizontalDivider(
             thickness = 0.5.dp,
-            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.5f)
+            color = if (tokens.isBiolume) cs.outlineVariant.copy(alpha = 0.25f) else cs.outlineVariant.copy(alpha = 0.4f)
         )
 
-        // ── Контент ────────────────────────────────────────────────────────────
-        Box(modifier = Modifier.weight(1f)) {
+        // ── Основная рабочая область со стикерами ──────────────────────────────
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when {
                 isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(modifier = Modifier.size(32.dp))
@@ -236,7 +306,10 @@ internal fun StickerPickerContent(
                 selectedPackIndex == -1 -> PackListView(
                     packs = packs,
                     currentUid = currentUid,
-                    onSelectPack = { idx -> selectedPackIndex = idx },
+                    onSelectPack = { idx ->
+                        selectedPackIndex = idx
+                        selectedPackId = if (idx in packs.indices) packs[idx].id else null
+                    },
                     onDeletePack = { showDeleteConfirm = it }
                 )
                 selectedPack != null -> PackContentGrid(
@@ -244,8 +317,10 @@ internal fun StickerPickerContent(
                     currentUid = currentUid,
                     isInstalled = userPacks.any { it.id == selectedPack.id },
                     onInstallPack = {
-                        onInstallPack(selectedPack.id)
-                        selectedTab = 0 // switch back to my stickers
+                        val packId = selectedPack.id
+                        selectedPackId = packId
+                        onInstallPack(packId)
+                        selectedTab = 0 // переключаемся на «Мои стикеры»
                     },
                     onStickerTap = { sticker -> onStickerSelected(selectedPack.id, sticker) }
                 )
@@ -253,7 +328,7 @@ internal fun StickerPickerContent(
         }
     }
 
-    // ── Dialogs & Sheets ───────────────────────────────────────────────────────
+    // ── Диалог подтверждения удаления ──────────────────────────────────────────
 
     showDeleteConfirm?.let { pack ->
         val isOwner = pack.authorId == currentUid
@@ -266,7 +341,10 @@ internal fun StickerPickerContent(
                 VlDialogButton(isDestructive = true, onClick = {
                     onDeletePack(pack.id, isOwner)
                     showDeleteConfirm = null
-                    if (selectedPack?.id == pack.id) selectedPackIndex = -1
+                    if (selectedPack?.id == pack.id) {
+                        selectedPackId = null
+                        selectedPackIndex = -1
+                    }
                 }) { Text("Удалить") }
             }
         )
@@ -293,9 +371,9 @@ private fun PackTabBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .height(42.dp)
             .horizontalScroll(scrollState)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         packs.forEachIndexed { index, pack ->
@@ -303,8 +381,8 @@ private fun PackTabBar(
             val scale by animateFloatAsState(if (isSelected) 0.95f else 1f, spring(dampingRatio = 0.6f), label = "tab_scale")
 
             val mod = Modifier
-                .padding(horizontal = 4.dp)
-                .size(46.dp)
+                .padding(horizontal = 3.dp)
+                .size(34.dp)
                 .scale(scale)
                 .then(
                     if (isSelected && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, pillShape)
@@ -327,17 +405,17 @@ private fun PackTabBar(
                 .clickable {
                     haptic.perform(HapticType.SELECTION, true)
                     onSelect(index)
-                    scope.launch { scrollState.animateScrollTo(index * 52) }
+                    scope.launch { scrollState.animateScrollTo(index * 40) }
                 }
 
             Box(modifier = mod, contentAlignment = Alignment.Center) {
                 if (pack.stickers.isNotEmpty()) {
                     AsyncImage(
                         model = pack.stickers.first().url, contentDescription = pack.name,
-                        contentScale = ContentScale.Fit, modifier = Modifier.size(32.dp)
+                        contentScale = ContentScale.Fit, modifier = Modifier.size(24.dp)
                     )
                 } else {
-                    Text(pack.emoji, fontSize = 22.sp)
+                    Text(pack.emoji, fontSize = 16.sp)
                 }
             }
         }
@@ -347,8 +425,8 @@ private fun PackTabBar(
         val addScale by animateFloatAsState(if (isAddSelected) 0.95f else 1f, spring(dampingRatio = 0.6f), label = "add_scale")
 
         val addMod = Modifier
-            .padding(horizontal = 4.dp)
-            .size(46.dp)
+            .padding(horizontal = 3.dp)
+            .size(34.dp)
             .scale(addScale)
             .then(
                 if (isAddSelected && tokens.structure.enabled) Modifier.vlRaised(tokens.structure, pillShape)
@@ -376,7 +454,7 @@ private fun PackTabBar(
         Box(modifier = addMod, contentAlignment = Alignment.Center) {
             Icon(Icons.Default.GridView, null,
                 tint = if (isAddSelected) cs.primary else cs.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }
@@ -519,20 +597,48 @@ private fun PackContentGrid(
         return
     }
 
+    val cs = MaterialTheme.colorScheme
+    var previewSticker by remember { mutableStateOf<StickerItem?>(null) }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(4),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 4.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (!isInstalled) {
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(4) }) {
-                org.visorlink.app.ui.components.VlButton(
-                    onClick = onInstallPack,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = cs.primaryContainer.copy(alpha = 0.45f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 2.dp)
                 ) {
-                    Text("Добавить пак")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${pack.emoji} ${pack.name}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        org.visorlink.app.ui.components.VlButton(
+                            onClick = onInstallPack,
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("Добавить", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
         }
@@ -542,9 +648,23 @@ private fun PackContentGrid(
                 onTap = {
                     haptic.perform(HapticType.CLICK, true)
                     onStickerTap(sticker)
+                },
+                onLongClick = {
+                    previewSticker = sticker
                 }
             )
         }
+    }
+
+    previewSticker?.let { sticker ->
+        org.visorlink.app.ui.components.chat.StickerPreviewDialog(
+            sticker = sticker,
+            onDismiss = { previewSticker = null },
+            onSend = {
+                onStickerTap(sticker)
+                previewSticker = null
+            }
+        )
     }
 }
 
@@ -552,11 +672,12 @@ private fun PackContentGrid(
 @Composable
 private fun StickerCell(
     sticker: StickerItem,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val itemShape = RoundedCornerShape(16.dp)
+    val itemShape = RoundedCornerShape(14.dp)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.88f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f))
@@ -579,12 +700,20 @@ private fun StickerCell(
                 if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), itemShape)
                 else Modifier
             )
-            .combinedClickable(interactionSource = interactionSource, indication = null, onClick = onTap),
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onTap,
+                onLongClick = onLongClick
+            ),
         contentAlignment = Alignment.Center
     ) {
-        AsyncImage(
-            model = sticker.url, contentDescription = sticker.emoji,
-            contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize().padding(10.dp)
+        VlAnimatedMedia(
+            url = sticker.url,
+            contentDescription = sticker.emoji,
+            isLottie = sticker.isLottie,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize().padding(4.dp)
         )
 
         val emojiMod = Modifier

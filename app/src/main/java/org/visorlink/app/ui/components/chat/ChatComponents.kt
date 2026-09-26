@@ -315,6 +315,7 @@ fun SwipeableMessage(
     hapticEnabled: Boolean,
     onReply: () -> Unit,
     liquidEnabled: Boolean = false,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val haptic = rememberHaptic()
@@ -326,15 +327,16 @@ fun SwipeableMessage(
     var didTrigger by remember { mutableStateOf(false) }
 
     // Пузырь пружинит в момент срабатывания реплая — визуальная пара к тактильному отклику
-    val bubbleJelly = rememberLiquidJellyState(softness = 0.07f, damping = 0.55f, stiffness = 340f)
+    val bubbleJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.52f, stiffness = 340f)
+    val dropJelly = rememberLiquidJellyState(softness = 0.16f, damping = 0.42f, stiffness = 280f)
 
     val replyIconAlpha by animateFloatAsState(
         targetValue = if (abs(offsetX.value) > 20f) (abs(offsetX.value) / triggerThreshold).coerceIn(0f, 1f) else 0f,
         animationSpec = tween(80), label = "reply_icon_alpha",
     )
     val replyIconScale by animateFloatAsState(
-        targetValue = if (abs(offsetX.value) >= triggerThreshold) 1.15f else if (abs(offsetX.value) > 20f) (0.6f + 0.4f * (abs(offsetX.value) / triggerThreshold)).coerceIn(0.6f, 1.15f) else 0.6f,
-        animationSpec = if (liquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+        targetValue = if (abs(offsetX.value) >= triggerThreshold) 1.20f else if (abs(offsetX.value) > 20f) (0.6f + 0.48f * (abs(offsetX.value) / triggerThreshold)).coerceIn(0.6f, 1.20f) else 0.6f,
+        animationSpec = if (liquidEnabled) spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMedium)
                         else spring(Spring.DampingRatioMediumBouncy),
         label = "reply_icon_scale",
     )
@@ -343,7 +345,7 @@ fun SwipeableMessage(
 
     val align = if (offsetX.value > 0) Alignment.CenterStart else if (offsetX.value < 0) Alignment.CenterEnd else (if (isMine) Alignment.CenterEnd else Alignment.CenterStart)
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(modifier = modifier.fillMaxWidth()) {
         val dropShape = tokens.shapes.indicator
         Box(
             modifier = Modifier
@@ -351,10 +353,12 @@ fun SwipeableMessage(
                 .padding(horizontal = 16.dp)
                 .then(
                     // Капля догоняет палец с отставанием — жидкость тянется следом
-                    if (liquidEnabled) Modifier.offset { IntOffset((offsetX.value * 0.22f).roundToInt(), 0) }
+                    if (liquidEnabled) Modifier.offset { IntOffset((offsetX.value * 0.28f).roundToInt(), 0) }
                     else Modifier
                 )
-                .size(36.dp).scale(replyIconScale)
+                .size(38.dp)
+                .scale(replyIconScale)
+                .liquidJelly(dropJelly, enabled = liquidEnabled)
                 .then(
                     // Неоморфный рельеф превращает иконку в стеклянную каплю (в M3E — no-op).
                     // Прозрачность накручивается снаружи: vlRaised рисует тень независимо от
@@ -365,7 +369,7 @@ fun SwipeableMessage(
                     else Modifier
                 )
                 .background(
-                    replyIconColor.copy(alpha = if (liquidEnabled) 0.12f else replyIconAlpha * 0.12f),
+                    replyIconColor.copy(alpha = if (liquidEnabled) 0.16f else replyIconAlpha * 0.12f),
                     dropShape
                 ),
             contentAlignment = Alignment.Center,
@@ -381,7 +385,7 @@ fun SwipeableMessage(
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .liquidDragStretch(offsetX.value, maxOffset, enabled = liquidEnabled, maxStretch = 0.05f)
+                .liquidDragStretch(offsetX.value, maxOffset, enabled = liquidEnabled, maxStretch = 0.07f)
                 .liquidJelly(bubbleJelly, enabled = liquidEnabled)
                 .pointerInput(message.id, liquidEnabled) {
                     var totalDragX = 0f
@@ -438,15 +442,18 @@ fun SwipeableMessage(
                                     didTrigger = true
                                     haptic.perform(HapticType.SELECTION, hapticEnabled)
                                     onReply()
-                                    if (liquidEnabled) bubbleJelly.pulse(0.07f)
+                                    if (liquidEnabled) {
+                                        bubbleJelly.pulse(0.10f)
+                                        dropJelly.pulse(0.24f)
+                                    }
 
-                                    val bounceBackTarget = if (offsetX.value > 0) triggerThreshold * 0.5f else -triggerThreshold * 0.5f
+                                    val bounceBackTarget = if (offsetX.value > 0) triggerThreshold * 0.45f else -triggerThreshold * 0.45f
                                     scope.launch {
-                                        offsetX.animateTo(bounceBackTarget, spring(Spring.DampingRatioLowBouncy, Spring.StiffnessHigh))
-                                        delay(100)
+                                        offsetX.animateTo(bounceBackTarget, spring(dampingRatio = 0.42f, stiffness = Spring.StiffnessMedium))
+                                        delay(90)
                                         offsetX.animateTo(
                                             0f,
-                                            if (liquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+                                            if (liquidEnabled) spring(dampingRatio = 0.48f, stiffness = 280f)
                                             else spring(Spring.DampingRatioMediumBouncy)
                                         )
                                     }
@@ -459,7 +466,7 @@ fun SwipeableMessage(
                             scope.launch {
                                 offsetX.animateTo(
                                     0f,
-                                    if (liquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
+                                    if (liquidEnabled) spring(dampingRatio = 0.48f, stiffness = 300f)
                                     else spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium)
                                 )
                             }
@@ -495,28 +502,51 @@ fun RecordingBar(
     hapticEnabled: Boolean,
     onCancel: () -> Unit,
     onSend: () -> Unit,
+    liquidEnabled: Boolean = true,
 ) {
     val haptic = rememberHaptic()
     var elapsed by remember { mutableIntStateOf(0) }
     val dotAlpha by rememberInfiniteTransition(label = "dot").animateFloat(
-        initialValue = 1f, targetValue = 0.2f,
+        initialValue = 1f, targetValue = 0.25f,
         animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
         label = "dot_alpha",
     )
+    val micJelly = rememberLiquidJellyState(softness = 0.18f, damping = 0.45f, stiffness = 240f)
+    val sendJelly = rememberLiquidJellyState(softness = 0.12f, damping = 0.55f, stiffness = 300f)
+    val cancelJelly = rememberLiquidJellyState(softness = 0.12f, damping = 0.55f, stiffness = 300f)
 
     val timerColor = MaterialTheme.colorScheme.error
     val labelColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     LaunchedEffect(Unit) {
-        while (true) { delay(1000); elapsed++; haptic.perform(HapticType.CLICK, hapticEnabled) }
+        while (true) {
+            delay(1000)
+            elapsed++
+            haptic.perform(HapticType.CLICK, hapticEnabled)
+            if (liquidEnabled) {
+                micJelly.pulse(0.18f)
+            }
+        }
     }
     Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { haptic.perform(HapticType.ERROR, hapticEnabled); onCancel() }) {
+        IconButton(
+            onClick = {
+                haptic.perform(HapticType.ERROR, hapticEnabled)
+                cancelJelly.press()
+                onCancel()
+            },
+            modifier = Modifier.liquidJelly(cancelJelly, enabled = liquidEnabled)
+        ) {
             Icon(Icons.Default.Delete, "Cancel", tint = MaterialTheme.colorScheme.error)
         }
 
         Row(Modifier.weight(1f).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(10.dp).background(Color.Red.copy(alpha = dotAlpha), VlTheme.tokens.shapes.indicator))
+            Box(
+                Modifier
+                    .size(12.dp)
+                    .liquidJelly(micJelly, enabled = liquidEnabled)
+                    .background(Color.Red.copy(alpha = dotAlpha), VlTheme.tokens.shapes.indicator)
+            )
             Spacer(Modifier.width(8.dp))
             Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = timerColor)
             Spacer(Modifier.width(6.dp))
@@ -524,8 +554,15 @@ fun RecordingBar(
         }
 
         IconButton(
-            onClick = { haptic.perform(HapticType.SUCCESS, hapticEnabled); onSend() },
-            modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary, VlTheme.tokens.shapes.fab),
+            onClick = {
+                haptic.perform(HapticType.SUCCESS, hapticEnabled)
+                sendJelly.press()
+                onSend()
+            },
+            modifier = Modifier
+                .size(48.dp)
+                .liquidJelly(sendJelly, enabled = liquidEnabled)
+                .background(MaterialTheme.colorScheme.primary, VlTheme.tokens.shapes.fab),
         ) { Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.action_send), tint = MaterialTheme.colorScheme.onPrimary) }
     }
 }

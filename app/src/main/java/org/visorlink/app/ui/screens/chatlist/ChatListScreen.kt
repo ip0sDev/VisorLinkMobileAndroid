@@ -45,6 +45,7 @@ import org.visorlink.app.ui.components.calculateJellyScale
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
+import org.visorlink.app.ui.components.LiquidPullRefreshLayout
 import androidx.compose.ui.graphics.graphicsLayer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -73,6 +74,7 @@ fun ChatListScreen(
     val drafts by viewModel.drafts.collectAsState()
     val typingMap by viewModel.typingMap.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val compactList by themeViewModel.compactChatList.collectAsState()
@@ -235,8 +237,16 @@ fun ChatListScreen(
         ) {
             VlAmbientGlow()
 
-            if (chats.isEmpty()) {
-                Column(
+            LiquidPullRefreshLayout(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                liquidEnabled = isLiquidEnabled,
+                hapticEnabled = hapticEnabled,
+                topPadding = padding.calculateTopPadding(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (chats.isEmpty()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
@@ -303,7 +313,7 @@ fun ChatListScreen(
                                     chats.forEachIndexed { index, chat ->
                                         val chatType = chat.chatType()
                                         val otherUid = when (chatType) {
-                                            ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                            ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
                                             else -> chat.id
                                         }
 
@@ -311,7 +321,7 @@ fun ChatListScreen(
                                             chat = chat,
                                             chatType = chatType,
                                             currentUid = viewModel.currentUid,
-                                            otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                            otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
                                             draftText = drafts[chat.id],
                                             unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                             isTyping = typingMap[chat.id] == true,
@@ -367,7 +377,7 @@ fun ChatListScreen(
                             ) { index, chat ->
                                 val chatType = chat.chatType()
                                 val otherUid = when (chatType) {
-                                    ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                    ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
                                     else -> chat.id
                                 }
 
@@ -384,7 +394,7 @@ fun ChatListScreen(
                                         chat = chat,
                                         chatType = chatType,
                                         currentUid = viewModel.currentUid,
-                                        otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                        otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
                                         draftText = drafts[chat.id],
                                         unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                         isCompactList = compactList,
@@ -399,6 +409,7 @@ fun ChatListScreen(
                         }
                     }
                 }
+            }
 
             // FAB Menu Overlay
             if (showFabMenu) {

@@ -88,6 +88,7 @@ class StickerPackViewModel(
     // ─── Delete pack ──────────────────────────────────────────────────────────
 
     fun deletePack(packId: String, isOwner: Boolean) {
+        _uiState.update { it.copy(userPacks = it.userPacks.filter { p -> p.id != packId }) }
         viewModelScope.launch {
             try { repo.deletePack(packId, isOwner) }
             catch (e: Exception) { _uiState.update { it.copy(error = e.message) } }
@@ -100,6 +101,10 @@ class StickerPackViewModel(
         packId: String,
         onResult: (AddPackBannerState) -> Unit
     ) {
+        val storePack = _uiState.value.storePacks.find { it.id == packId }
+        if (storePack != null && _uiState.value.userPacks.none { it.id == packId }) {
+            _uiState.update { it.copy(userPacks = it.userPacks + storePack) }
+        }
         viewModelScope.launch {
             onResult(AddPackBannerState.Loading)
             try {

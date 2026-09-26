@@ -211,63 +211,33 @@ fun LiquidMorphingChatBottomBar(
                 LiquidBottomBarMode.STICKERS -> {
                     val stickerVm: StickerPackViewModel = koinViewModel()
                     val stickerUiState by stickerVm.uiState.collectAsState()
+                    val stickerTargetHeight = remember(screenHeight) { minOf(520.dp, screenHeight * 0.65f) }
 
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(400.dp)
+                            .height(stickerTargetHeight)
                             .navigationBarsPadding()
                     ) {
-                        // Верхняя панель управления панели стикеров
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = stringResource(R.string.stickers_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = cs.onSurface
-                            )
-                            IconButton(
-                                onClick = {
-                                    haptic.perform(HapticType.CLICK, hapticEnabled)
-                                    onCloseStickers()
-                                },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = stringResource(R.string.action_close),
-                                    tint = cs.onSurfaceVariant
-                                )
+                        StickerPickerContent(
+                            userPacks = stickerUiState.userPacks,
+                            storePacks = stickerUiState.storePacks,
+                            isLoading = stickerUiState.isLoading,
+                            currentUid = stickerVm.currentUid,
+                            onStickerSelected = { packId, sticker ->
+                                stickerVm.recordPackUsage(packId)
+                                onStickerSelected(packId, sticker)
+                                onCloseStickers()
+                            },
+                            onDeletePack = { packId, isOwner ->
+                                stickerVm.deletePack(packId, isOwner)
+                            },
+                            onInstallPack = { packId -> stickerVm.addForeignPack(packId) {} },
+                            onClose = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                onCloseStickers()
                             }
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                        ) {
-                            StickerPickerContent(
-                                userPacks = stickerUiState.userPacks,
-                                storePacks = stickerUiState.storePacks,
-                                isLoading = stickerUiState.isLoading,
-                                currentUid = stickerVm.currentUid,
-                                onStickerSelected = { packId, sticker ->
-                                    stickerVm.recordPackUsage(packId)
-                                    onStickerSelected(packId, sticker)
-                                    onCloseStickers()
-                                },
-                                onDeletePack = { packId, isOwner ->
-                                    stickerVm.deletePack(packId, isOwner)
-                                },
-                                onInstallPack = { packId -> stickerVm.addForeignPack(packId) {} }
-                            )
-                        }
+                        )
                     }
                 }
 

@@ -109,8 +109,27 @@ val appModule = module {
     single { org.visorlink.app.utils.GoogleDriveAuthManager(androidContext()) }
     single { org.visorlink.app.data.remote.GoogleDriveMediaService(get()) }
 
+    // --- Yandex Disk Emergency Relay (enable_alternative_outbox) ---
+    single { org.visorlink.app.data.remote.yandex.YandexRelayConfigManager(androidContext(), get()) }
+    single { org.visorlink.app.data.remote.yandex.YandexDiskTransportService() }
+    single { org.visorlink.app.data.remote.yandex.YandexDeadDropManager(androidContext(), get(), get()) }
+
     single { AuthRepository(get(), get(), get(), get()) }
-    single { ChatRepository(get(), get(), get(), androidContext(), get(), get(), get(), get(), get(), get()) }
+    single {
+        ChatRepository(
+            auth = get(),
+            db = get(),
+            functions = get(),
+            context = androidContext(),
+            networkMonitor = get(),
+            api = get(),
+            wsClient = get(),
+            flagsRepository = get(),
+            googleDriveAuthManager = get(),
+            googleDriveMediaService = get(),
+            yandexDeadDropManager = get()
+        )
+    }
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
@@ -125,7 +144,19 @@ val appModule = module {
     single { MusicDatabase(androidContext()) }
     single { MusicRepository(androidContext()) }
     single { NetworkMonitor(androidContext()) }
-    single { OutboxManager(androidContext(), get(), get(), get(), get(), get(), googleDriveAuthManager = get(), googleDriveMediaService = get()) }
+    single {
+        OutboxManager(
+            context = androidContext(),
+            chatRepository = get(),
+            userRepository = get(),
+            feedRepository = get(),
+            functions = get(),
+            networkMonitor = get(),
+            googleDriveAuthManager = get(),
+            googleDriveMediaService = get(),
+            yandexDeadDropManager = get()
+        )
+    }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
@@ -222,7 +253,7 @@ val appModule = module {
     }
 
     viewModel { CacheViewModel(get(), androidApplication()) }
-    viewModel { StorageViewModel(get(), get()) }
+    viewModel { StorageViewModel(get(), get(), get()) }
     viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
 
     single { SavedMessagesRepository(get(), androidContext()) }

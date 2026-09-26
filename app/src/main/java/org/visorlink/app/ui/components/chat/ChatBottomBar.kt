@@ -337,7 +337,8 @@ fun ChatBottomBar(
                         RecordingBar(
                             hapticEnabled = hapticEnabled,
                             onCancel = onCancelRecord,
-                            onSend = onSendRecord
+                            onSend = onSendRecord,
+                            liquidEnabled = isLiquidEnabled
                         )
                     } else {
                         val isBot = uiState.otherUser?.isBot == true

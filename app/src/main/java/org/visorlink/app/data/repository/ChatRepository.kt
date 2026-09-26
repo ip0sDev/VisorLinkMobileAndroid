@@ -17,6 +17,9 @@ import org.visorlink.app.utils.ChatDataCache
 import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.VoiceCache
 import org.visorlink.app.utils.NetworkMonitor
+import org.visorlink.app.utils.deriveKey
+import org.visorlink.app.utils.encryptText
+import org.visorlink.app.utils.decryptText
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.MetadataChanges
 import kotlinx.coroutines.CoroutineScope
@@ -50,9 +53,10 @@ class ChatRepository(
     private val wsClient: ChatWebSocketClient,
     private val flagsRepository: FlagsRepository,
     private val googleDriveAuthManager: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
-    private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null
+    private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null,
+    private val yandexDeadDropManager: org.visorlink.app.data.remote.yandex.YandexDeadDropManager? = null
 ) {
-    private val currentUid get() = auth.currentUser?.uid ?: ""
+    val currentUid: String get() = auth.currentUser?.uid ?: ""
     private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
 
     fun isBackendEnabled(): Boolean {
@@ -121,6 +125,10 @@ class ChatRepository(
         listOf(uid1, uid2).sorted().joinToString("_")
 
     suspend fun chatExists(chatId: String): Boolean = try {
+        if (chatId.startsWith("emer_")) {
+            val cached = ChatDataCache.loadChat(context, chatId)
+            return cached != null
+        }
         if (isFirestoreDisabled() && !isBackendEnabled()) return false
         db.collection("chats").document(chatId).get().await().exists()
     } catch (e: Exception) {
@@ -199,11 +207,14 @@ class ChatRepository(
         val groupChats  = mutableListOf<Chat>()
 
         fun merge() {
-            val all = (directChats + groupChats)
-                .distinctBy { it.id }
-                .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
-            trySend(all)
-            launch(Dispatchers.IO) { ChatDataCache.saveChatList(context, cacheUid, all) }
+            launch(Dispatchers.IO) {
+                val emerChats = ChatDataCache.loadChatList(context, cacheUid).filter { it.isEmergency }
+                val all = (directChats + groupChats + emerChats)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+                trySend(all)
+                ChatDataCache.saveChatList(context, cacheUid, all)
+            }
         }
 
         val reg1 = db.collection("chats").whereArrayContains("participants", uid)
@@ -304,15 +315,6 @@ class ChatRepository(
             return@channelFlow
         }
 
-        if (isFirestoreDisabled()) {
-            launch(Dispatchers.IO) {
-                val cached = ChatDataCache.loadMessages(context, chatId)
-                onUpdate(cached, null)
-            }
-            awaitClose { }
-            return@channelFlow
-        }
-
         var currentFirestore = emptyList<Message>()
         var currentOutbox = emptyList<ChatDataCache.QueuedAction>()
         var currentLastDoc: DocumentSnapshot? = null
@@ -349,8 +351,6 @@ class ChatRepository(
             firestoreMap.forEach { (id, fsMsg) ->
                 val obMsg = outboxMap[id]
                 combinedMap[id] = if (obMsg != null) {
-                    // Если сообщение есть и в Firestore, и в Outbox — значит оно уже прилетело по сети,
-                    // но Outbox еще не почищен. В этом случае прогресс уже не нужен.
                     fsMsg.copy(
                         localFile = obMsg.localFile ?: fsMsg.localFile,
                         status = SendStatus.SENT
@@ -363,14 +363,13 @@ class ChatRepository(
             val combined = combinedMap.values.distinctBy { it.id }
             onUpdate(combined, currentLastDoc)
             
-            // Clean up outbox items that are now present in the Firestore snapshot
             val confirmedIds = currentOutbox.map { it.id }.filter { it in firestoreIds }
             if (confirmedIds.isNotEmpty()) {
                 launch(Dispatchers.IO) { ChatDataCache.cleanupOutbox(context, confirmedIds) }
             }
         }
 
-        // 1. Initial Outbox load and listener
+        // 1. Outbox listener (отображение отправляемых сообщений)
         launch(Dispatchers.Default) {
             ChatDataCache.outboxFlow(context, chatId).collect {
                 currentOutbox = it
@@ -378,43 +377,107 @@ class ChatRepository(
             }
         }
 
-        // 2. Initial Cache load
+        // 2. Initial Cache load + Signal listener (для мгновенного обновления при сохранении в SQLite)
         launch(Dispatchers.IO) {
-            val cached = ChatDataCache.loadMessages(context, chatId)
-            currentFirestore = cached
+            currentFirestore = ChatDataCache.loadMessages(context, chatId)
             rebuild()
+
+            ChatDataCache.cacheUpdateSignal.collect { updatedChatId ->
+                if (updatedChatId == chatId) {
+                    val updated = ChatDataCache.loadMessages(context, chatId)
+                    currentFirestore = updated
+                    rebuild()
+                }
+            }
         }
 
-        // 3. Firestore Snapshot Listener
-        val reg = db.collection("chats").document(chatId).collection("messages")
-            .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
-            .addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
-                if (error != null || snap == null) return@addSnapshotListener
-                val messages = snap.documents.mapNotNull { doc ->
-                    try { doc.toObject(Message::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = doc.id) } catch (_: Exception) { null }
-                }.reversed()
-                
-                currentFirestore = messages
-                currentLastDoc = snap.documents.lastOrNull()
-                rebuild()
+        // 3. Firestore Snapshot Listener (только для обычных чатов)
+        val reg = if (!chatId.startsWith("emer_") && !isFirestoreDisabled()) {
+            db.collection("chats").document(chatId).collection("messages")
+                .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
+                .addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
+                    if (error != null || snap == null) return@addSnapshotListener
+                    val messages = snap.documents.mapNotNull { doc ->
+                        try { doc.toObject(Message::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = doc.id) } catch (_: Exception) { null }
+                    }.reversed()
+                    
+                    currentFirestore = messages
+                    currentLastDoc = snap.documents.lastOrNull()
+                    rebuild()
 
-                launch(Dispatchers.IO) {
-                    ChatDataCache.saveMessages(context, chatId, messages)
-                    // Prefetch media
-                    messages.forEach { msg ->
-                        try {
-                            val url = msg.url
-                            if (!url.isNullOrEmpty()) {
-                                if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
-                                else ImageCache.getOrDownload(context, url)
+                    launch(Dispatchers.IO) {
+                        ChatDataCache.saveMessages(context, chatId, messages)
+                        // Prefetch media
+                        messages.forEach { msg ->
+                            try {
+                                val url = msg.url
+                                if (!url.isNullOrEmpty()) {
+                                    if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
+                                    else ImageCache.getOrDownload(context, url)
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
+                }
+        } else null
+
+        // 4. Polling Yandex Dead-Drop (если включена аварийная доставка)
+        val deadDropJob = if (yandexDeadDropManager?.isAvailable() == true && currentUid.isNotBlank() && (chatId.startsWith("emer_") || isFirestoreDisabled())) {
+            launch(Dispatchers.IO) {
+                // Мгновенный первый опрос при входе
+                try {
+                    val initialIncoming = yandexDeadDropManager.pollIncomingMessages(chatId, currentUid)
+                    if (initialIncoming.isNotEmpty()) {
+                        val newMsgs = initialIncoming.mapNotNull {
+                            try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
+                        }
+                        if (newMsgs.isNotEmpty()) {
+                            ChatDataCache.saveMessages(context, chatId, newMsgs)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("ChatRepo", "Initial dead-drop poll: ${e.message}")
+                }
+
+                while (true) {
+                    kotlinx.coroutines.delay(3000L)
+                    try {
+                        val incoming = yandexDeadDropManager.pollIncomingMessages(chatId, currentUid)
+                        if (incoming.isNotEmpty()) {
+                            val newMsgs = incoming.mapNotNull {
+                                try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
                             }
-                        } catch (_: Exception) {}
+                            if (newMsgs.isNotEmpty()) {
+                                ChatDataCache.saveMessages(context, chatId, newMsgs)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        Log.w("ChatRepo", "Dead-drop poll error: ${e.message}")
                     }
                 }
             }
+        } else null
 
-        awaitClose { reg.remove() }
+        awaitClose {
+            reg?.remove()
+            deadDropJob?.cancel()
+        }
         send(Unit)
+    }
+
+    suspend fun pollDeadDropNow(chatId: String): List<Message> = withContext(Dispatchers.IO) {
+        val manager = yandexDeadDropManager ?: return@withContext emptyList()
+        if (!manager.isAvailable() || currentUid.isBlank()) return@withContext emptyList()
+        val incoming = manager.pollIncomingMessages(chatId, currentUid)
+        if (incoming.isEmpty()) return@withContext emptyList()
+        val messages = incoming.mapNotNull {
+            try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
+        }
+        if (messages.isNotEmpty()) {
+            ChatDataCache.saveMessages(context, chatId, messages)
+        }
+        messages
     }
 
     suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> = try {
@@ -885,7 +948,7 @@ class ChatRepository(
     }
 
     suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? = withContext(Dispatchers.IO) {
-        if (isBackendEnabled()) {
+        if (!chatId.startsWith("emer_") && isBackendEnabled()) {
             return@withContext try {
                 val response = api.sendMessage(SendMessageRequest(
                     chatId = chatId,
@@ -900,7 +963,7 @@ class ChatRepository(
                 null
             }
         }
-        if (isFirestoreDisabled()) return@withContext null
+        if (!chatId.startsWith("emer_") && isFirestoreDisabled()) return@withContext null
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
@@ -1794,4 +1857,131 @@ class ChatRepository(
         val downloadUrl = storageRef.downloadUrl.await().toString()
         addComment(chatId = chatId, messageId = messageId, type = MessageType.VOICE, url = downloadUrl, duration = durationSeconds, replyTo = replyTo)
     }
+
+    /**
+     * Создаёт или возвращает существующий изолированный аварийный чат (транспорт через Яндекс.Диск).
+     * Аварийный чат не зависит от состояния серверов Firestore и сохраняется в SQLite.
+     */
+    suspend fun getOrCreateEmergencyChat(otherUser: UserProfile): Chat = withContext(Dispatchers.IO) {
+        val sortedUids = listOf(currentUid, otherUser.uid).sorted()
+        val chatId = "emer_${sortedUids.joinToString("_")}"
+        val existing = ChatDataCache.loadChat(context, chatId)
+        if (existing != null) {
+            return@withContext existing
+        }
+
+        val myProfile = ChatDataCache.loadProfile(context, currentUid)
+        val myName = myProfile?.displayName?.ifEmpty { myProfile.username } ?: "Пользователь"
+        val otherName = otherUser.displayName.ifEmpty { otherUser.username }.ifEmpty { "Собеседник" }
+
+        val newChat = Chat(
+            id = chatId,
+            type = "emergency",
+            participants = sortedUids,
+            participantData = mapOf(
+                currentUid to mapOf("username" to (myProfile?.username ?: ""), "displayName" to myName),
+                otherUser.uid to mapOf("username" to otherUser.username, "displayName" to otherName)
+            ),
+            name = otherName,
+            createdAt = Timestamp.now()
+        )
+        ChatDataCache.saveSingleChat(context, currentUid, newChat)
+        newChat
+    }
+
+    /**
+     * Зашифрованная синхронизация истории аварийного чата в защищенный Vault пользователя в Firestore.
+     * Коллекция users/{uid}/emergency_vault/{chatId} защищена правилами Firestore (доступ только auth.uid == uid).
+     */
+    suspend fun syncEmergencyVault(chatId: String): Boolean = withContext(Dispatchers.IO) {
+        if (!chatId.startsWith("emer_") || isFirestoreDisabled() || currentUid.isBlank()) return@withContext false
+        try {
+            val messages = ChatDataCache.loadMessages(context, chatId)
+            if (messages.isEmpty()) return@withContext false
+
+            val jsonArray = org.json.JSONArray()
+            for (msg in messages) {
+                jsonArray.put(ChatDataCache.messageToJson(msg))
+            }
+
+            // Шифруем данные AES-256-GCM симметричным ключом пользователя
+            val vaultKey = deriveKey("vl_vault_user_salt", currentUid)
+            val (encryptedPayload, iv) = encryptText(jsonArray.toString(), vaultKey)
+
+            val vaultDoc = hashMapOf<String, Any>(
+                "chatId" to chatId,
+                "payload" to encryptedPayload,
+                "iv" to iv,
+                "messageCount" to messages.size,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+
+            db.collection("users").document(currentUid)
+                .collection("emergency_vault").document(chatId)
+                .set(vaultDoc)
+                .await()
+            Log.d("ChatRepo", "Successfully synced emergency vault for $chatId (${messages.size} msgs)")
+            true
+        } catch (e: Exception) {
+            Log.w("ChatRepo", "Failed to sync emergency vault for $chatId: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Восстановление аварийных чатов и сообщений из персонального зашифрованного Vault в Firestore
+     * (например, после чистки кэша или смены устройства).
+     */
+    suspend fun restoreEmergencyVault(): Int = withContext(Dispatchers.IO) {
+        if (isFirestoreDisabled() || currentUid.isBlank()) return@withContext 0
+        try {
+            val snapshot = db.collection("users").document(currentUid)
+                .collection("emergency_vault")
+                .get()
+                .await()
+
+            if (snapshot.isEmpty) return@withContext 0
+
+            val vaultKey = deriveKey("vl_vault_user_salt", currentUid)
+            var restoredCount = 0
+
+            for (doc in snapshot.documents) {
+                val chatId = doc.id
+                val payload = doc.getString("payload") ?: continue
+                val iv = doc.getString("iv") ?: continue
+
+                val decryptedJson = decryptText(payload, iv, vaultKey) ?: continue
+                val jsonArray = org.json.JSONArray(decryptedJson)
+                val messages = mutableListOf<Message>()
+
+                for (i in 0 until jsonArray.length()) {
+                    val msgJson = jsonArray.getJSONObject(i)
+                    messages.add(ChatDataCache.jsonToMessage(msgJson))
+                }
+
+                if (messages.isNotEmpty()) {
+                    ChatDataCache.saveMessages(context, chatId, messages)
+                    val lastMsg = messages.maxByOrNull { it.createdAt?.seconds ?: 0L }
+                    if (lastMsg != null) {
+                        val text = lastMsg.text ?: lastMsg.caption ?: "Аварийное сообщение"
+                        ChatDataCache.updateChatLastMessage(
+                            context = context,
+                            uid = currentUid,
+                            chatId = chatId,
+                            text = text,
+                            senderId = lastMsg.senderId,
+                            tsSeconds = lastMsg.createdAt?.seconds ?: (System.currentTimeMillis() / 1000L)
+                        )
+                    }
+                    restoredCount += messages.size
+                }
+            }
+            Log.d("ChatRepo", "Restored $restoredCount messages from emergency vault")
+            restoredCount
+        } catch (e: Exception) {
+            Log.w("ChatRepo", "Failed to restore emergency vault: ${e.message}")
+            0
+        }
+    }
 }
+

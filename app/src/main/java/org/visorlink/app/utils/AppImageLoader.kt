@@ -6,6 +6,8 @@ import coil.Coil
 import coil.ImageLoader
 import coil.decode.VideoFrameDecoder
 import coil.decode.ImageDecoderDecoder
+import coil.decode.GifDecoder
+import android.os.Build
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
@@ -78,7 +80,11 @@ object AppImageLoader {
             .components {
                 // Добавляем декодер для поддержки превью видео и GIF
                 add(VideoFrameDecoder.Factory())
-                add(ImageDecoderDecoder.Factory())
+                if (Build.VERSION.SDK_INT >= 28) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
             }
             .okHttpClient(okhttp)
             // Disk cache — для картинок (аватарки, фото из чатов)

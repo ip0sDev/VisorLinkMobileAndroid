@@ -10,6 +10,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,6 +41,8 @@ import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chat.*
+import org.visorlink.app.ui.components.rememberLiquidPopProgress
+import org.visorlink.app.ui.components.liquidPopIn
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerSheet
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
 import org.visorlink.app.ui.screens.stickers.StickerPickerBottomSheet
@@ -146,12 +149,25 @@ fun ChatScreen(
     }
 
     var showStickerSheet by remember { mutableStateOf(false) }
+    var showMediaPicker by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
+    // Автоматическое закрытие меню стикеров и вложений при начале листания чата
+    val isChatDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(isChatDragged) {
+        if (isChatDragged) {
+            if (showStickerSheet) showStickerSheet = false
+            if (showMediaPicker) showMediaPicker = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+        }
+    }
+
     var contextMenuData by remember { mutableStateOf<ContextMenuData?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var isDraggingMenu by remember { mutableStateOf(false) }
     var forwardingMessage by remember { mutableStateOf<ForwardableMessage?>(null) }
 
     var lightboxImages by remember { mutableStateOf<List<AlbumImage>>(emptyList()) }
@@ -164,7 +180,6 @@ fun ChatScreen(
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
 
-    var showMediaPicker by remember { mutableStateOf(false) }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.setWallpaper(it) }
     }
@@ -492,9 +507,11 @@ fun ChatScreen(
                                     is MessageListItem.DateHeader -> DateSeparator(item.label)
                                     is MessageListItem.MessageItem -> {
                                         val isMine = item.message.senderId == viewModel.currentUid
+                                        val popProgress = rememberLiquidPopProgress(enabled = isLiquidEnabled)
                                         SwipeableMessage(
                                             message = item.message, isMine = isMine, hapticEnabled = hapticEnabled,
                                             liquidEnabled = isLiquidEnabled,
+                                            modifier = Modifier.liquidPopIn(popProgress, enabled = isLiquidEnabled),
                                             onReply = {
                                                 haptic.perform(HapticType.SELECTION, hapticEnabled)
                                                 viewModel.setReplyTo(item.message)
@@ -522,9 +539,10 @@ fun ChatScreen(
                                                     keyboardController?.hide()
                                                     contextMenuData = ContextMenuData(item.message, isMine, offset)
                                                     dragOffset = Offset.Zero
+                                                    isDraggingMenu = true
                                                 },
                                                 onLongPressDrag = { delta -> dragOffset += delta },
-                                                onLongPressEnd = { contextMenuData = null; dragOffset = Offset.Zero },
+                                                onLongPressEnd = { isDraggingMenu = false },
                                                 onMediaTap = onOpenImageViewer,
                                                 onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
                                                 onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
@@ -537,7 +555,8 @@ fun ChatScreen(
                                                         selectedStickerPack = Triple(packId, item.message.packName, item.message.packEmoji)
                                                     }
                                                 },
-                                                onCancelUpload = { viewModel.cancelSending(it) }
+                                                onCancelUpload = { viewModel.cancelSending(it) },
+                                                liquidEnabled = isLiquidEnabled
                                             )
                                         }
                                     }
@@ -572,10 +591,15 @@ fun ChatScreen(
                 MessageActionOverlay(
                     contextMenuData = menuData,
                     currentDragOffset = dragOffset,
-                    isGestureMode = true,
+                    isDragging = isDraggingMenu,
+                    isGestureMode = isDraggingMenu,
                     canReact = canReact,
                     currentUid = viewModel.currentUid,
-                    onDismiss = { contextMenuData = null; dragOffset = Offset.Zero },
+                    onDismiss = {
+                        contextMenuData = null
+                        dragOffset = Offset.Zero
+                        isDraggingMenu = false
+                    },
                     onReply = { viewModel.setReplyTo(menuData.message); contextMenuData = null },
                     onEdit = { viewModel.startEditing(menuData.message); contextMenuData = null },
                     onDelete = { showDeleteConfirm = menuData.message.id; contextMenuData = null },

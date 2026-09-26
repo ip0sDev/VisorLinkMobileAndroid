@@ -43,7 +43,7 @@ data class AppFlags(
         
         return when (key) {
             "test_flag" -> testFlag
-            "animation_test" -> (serverClaims["animation_test"] as? Boolean) ?: BuildConfig.DEBUG
+            "animation_test" -> (serverClaims["animation_test"] as? Boolean) ?: true
             else -> serverClaims[key] as? Boolean ?: false
         }
     }

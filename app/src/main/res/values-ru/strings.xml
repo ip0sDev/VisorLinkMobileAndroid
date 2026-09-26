@@ -148,6 +148,9 @@
     <string name="action_save_gallery">Сохранить в галерею</string>
     <string name="action_save_voice">Сохранить голосовое</string>
     <string name="action_reply">Ответить</string>
+    <string name="action_forward">Переслать</string>
+    <string name="action_retry_send">Повторить отправку</string>
+    <string name="action_cancel_send">Отменить отправку</string>
     <string name="action_delete_message">Удалить</string>
     <string name="action_preview_photo">📷 Фото</string>
     <string name="action_preview_voice">🎤 Голосовое сообщение</string>
@@ -889,6 +892,7 @@
     <!-- Google Drive & Storage Spec -->
     <string name="msg_unsupported_media">Неподдерживаемый формат медиа (Архивное вложение недоступно)</string>
     <string name="msg_sticker_unavailable">Стикер недоступен</string>
+    <string name="msg_unknown_type">Неподдерживаемый формат сообщения (%1$s)</string>
     <string name="storage_gdrive_title">Хранилище Google Drive</string>
     <string name="storage_gdrive_connected">Подключено</string>
     <string name="storage_gdrive_not_connected">Не подключено</string>
@@ -899,4 +903,19 @@
     <string name="storage_firebase_cloud_desc">Аватарки, обложки профиля и стикеры хранятся в защищённом облаке VisorLink и не расходуют место на вашем Google Диске.</string>
     <string name="storage_gdrive_required_title">Требуется Google Drive</string>
     <string name="storage_gdrive_required_desc">Для отправки медиа подключите ваш Google Диск в настройках хранилища.</string>
+    <string name="storage_yandex_relay_title">Аварийный транспорт (Яндекс.Диск)</string>
+    <string name="storage_yandex_relay_desc">Автономная доставка сообщений через Яндекс.Диск (WebDAV/REST) при блокировках и сбоях основных серверов. Сообщения защищены сквозным шифрованием (E2EE).</string>
+    <string name="storage_yandex_relay_ready">Транспорт готов к работе</string>
+    <string name="storage_yandex_relay_disabled">Транспорт отключен</string>
+    <string name="storage_yandex_relay_token_btn">Персональный токен</string>
+    <string name="storage_yandex_relay_token_dialog_title">OAuth-токен Яндекс.Диска</string>
+    <string name="storage_yandex_relay_token_dialog_desc">По умолчанию используется сервисный токен. Вы можете указать собственный OAuth-токен или пароль приложений для Яндекс.Диска.</string>
+    <string name="emergency_chat_title">Аварийный чат (Яндекс.Диск)</string>
+    <string name="emergency_chat_badge">Аварийный</string>
+    <string name="emergency_sync_vault_success">Аварийный архив сохранён</string>
+    <string name="storage_yandex_relay_login_btn">Войти с Яндекс ID</string>
+    <string name="storage_yandex_relay_disconnect_btn">Отвязать Яндекс ID</string>
+    <string name="storage_yandex_relay_manual_btn">Настроить вручную</string>
+    <string name="storage_yandex_relay_custom_connected">Подключен персональный Яндекс ID</string>
+    <string name="storage_yandex_relay_client_id_label">Client ID приложения Яндекс</string>
 </resources>
