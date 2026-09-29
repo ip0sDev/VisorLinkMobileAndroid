@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Открываем доступ к папке Downloads внутри директории приложения -->
+    <external-files-path name="downloaded_apks" path="Download/" />
+</paths>

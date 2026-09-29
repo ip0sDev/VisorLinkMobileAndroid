@@ -2,28 +2,38 @@ package org.visorlink.app.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import org.visorlink.app.ui.theme.VisorLinkTheme
 import org.visorlink.app.R
 import org.visorlink.app.BuildConfig
 
 @Composable
 fun AuthScreen(
-    onLoginClick: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {},
+    viewModel: AuthViewModel = viewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val emailState = rememberTextFieldState(initialText = "example@gmail.com")
+    val passwordState = rememberTextFieldState(initialText = "password")
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -36,15 +46,38 @@ fun AuthScreen(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
-
-        Image(
-            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-            contentDescription = null,
+        Spacer(modifier = Modifier.height(96.dp))
+        Box(
             modifier = Modifier
                 .size(256.dp)
+                .clip(CircleShape)
                 .align(Alignment.CenterHorizontally),
+            ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_background),
+                contentDescription = null,
+                modifier = Modifier
+                    .clip(CircleShape)
+                    .size(180.dp)
+                    .align(Alignment.Center)
+            )
+            Image(
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                contentDescription = null,
+                modifier = Modifier
+                    .size(256.dp)
+                    .align(Alignment.Center)
+            )
+        }
+        Spacer(modifier = Modifier.height(32.dp))
+        Text(
+            text = "Войдите в аккаунт",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.align(Alignment.CenterHorizontally)
         )
-        Spacer(modifier = Modifier.height(128.dp))
+        Spacer(modifier = Modifier.height(64.dp))
 
         val state = rememberTextFieldState(initialText = "example@gmail.com")
         OutlinedTextField(
@@ -62,14 +95,31 @@ fun AuthScreen(
             label = { Text("Пароль") }
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onLoginClick, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Войти")
+        Text(
+            text = uiState.errorText,
+            color = MaterialTheme.colorScheme.error
+        )
+        Button(
+            onClick = {
+                viewModel.signIn(
+                    email = emailState.text.toString(),
+                    password = passwordState.text.toString()
+                )
+            },
+            enabled = !uiState.isLoading
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+            } else {
+                Text("Войти")
+            }
         }
-        Spacer(modifier = Modifier.height(128.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         var VersionCode = BuildConfig.VERSION_CODE
         Text(
             text = "Версия: $VersionCode",
-            modifier = Modifier.align(Alignment.CenterHorizontally)
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            color = MaterialTheme.colorScheme.secondary
         )
     }
 }

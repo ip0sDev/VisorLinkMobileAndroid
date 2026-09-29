@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable<AuthRoute> {
                             AuthScreen(
-                                onLoginClick = { }
+                                onLoginSuccess = {}
                             )
                         }
                     }
