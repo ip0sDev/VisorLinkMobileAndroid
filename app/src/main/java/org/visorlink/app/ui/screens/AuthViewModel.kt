@@ -20,12 +20,13 @@ class AuthViewModel: ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, isSuccess = false, errorText = "")
             val auth = FirebaseAuth.getInstance()
+            _uiState.value = _uiState.value.copy(isLoading = true, isSuccess = false, errorText = "")
             try {
                 auth.signInWithEmailAndPassword(email, password).await()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = false, errorText = e.message ?: "Ошибка! $e")
             }
-            _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true)
+            _uiState.value = _uiState.value.copy(isLoading = false, isSuccess = true, errorText = "")
         }
 
     }

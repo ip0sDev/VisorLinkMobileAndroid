@@ -3,11 +3,14 @@ package org.visorlink.app.ui.screens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextObfuscationMode
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,6 +28,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import org.visorlink.app.ui.theme.VisorLinkTheme
 import org.visorlink.app.R
 import org.visorlink.app.BuildConfig
+import androidx.compose.ui.text.input.KeyboardType
 
 @Composable
 fun AuthScreen(
@@ -79,26 +83,31 @@ fun AuthScreen(
         )
         Spacer(modifier = Modifier.height(64.dp))
 
-        val state = rememberTextFieldState(initialText = "example@gmail.com")
+        val emailState = rememberTextFieldState()
+        val passwordState = rememberTextFieldState()
         OutlinedTextField(
-            state = state,
+            state = emailState,
             lineLimits = TextFieldLineLimits.SingleLine,
-            label = { Text("Email") }
+            label = { Text("Email") },
+            placeholder = { Text("user@example.com") }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val statePassword = rememberTextFieldState(initialText = "password")
-        OutlinedTextField(
-            state = statePassword,
-            lineLimits = TextFieldLineLimits.SingleLine,
-            label = { Text("Пароль") }
+        OutlinedSecureTextField(
+            state = passwordState,
+            label = { Text("Пароль") },
+            textObfuscationMode = TextObfuscationMode.RevealLastTyped,
+            placeholder = { Text("пароль") }
         )
         Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = uiState.errorText,
-            color = MaterialTheme.colorScheme.error
-        )
+        if (uiState.errorText.isNotBlank()) {
+            Text(
+                text = uiState.errorText,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
         Button(
             onClick = {
                 viewModel.signIn(
@@ -106,12 +115,19 @@ fun AuthScreen(
                     password = passwordState.text.toString()
                 )
             },
-            enabled = !uiState.isLoading
+            enabled = !uiState.isLoading,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
         ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-            } else {
-                Text("Войти")
+            when {
+                uiState.isLoading -> {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+                uiState.isSuccess -> {
+                    Text("Успешно")
+                }
+                else -> {
+                    Text("Войти")
+                }
             }
         }
         Spacer(modifier = Modifier.height(32.dp))
