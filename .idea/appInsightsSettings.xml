@@ -8,28 +8,11 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="org.visorlink.app" />
+                  <option name="appId" value="by.iposdev.protomap" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
               <option name="timeIntervalDays" value="SEVEN_DAYS" />
-              <option name="visibilityType" value="ALL" />
-            </InsightsFilterSettings>
-          </value>
-        </entry>
-        <entry key="Firebase Crashlytics">
-          <value>
-            <InsightsFilterSettings>
-              <option name="connection">
-                <ConnectionSetting>
-                  <option name="appId" value="org.visorlink.app" />
-                  <option name="mobileSdkAppId" value="1:18511020064:android:462be962ccbcdbf2b97c45" />
-                  <option name="projectId" value="visorlink-f9484" />
-                  <option name="projectNumber" value="18511020064" />
-                </ConnectionSetting>
-              </option>
-              <option name="signal" value="SIGNAL_UNSPECIFIED" />
-              <option name="timeIntervalDays" value="THIRTY_DAYS" />
               <option name="visibilityType" value="ALL" />
             </InsightsFilterSettings>
           </value>

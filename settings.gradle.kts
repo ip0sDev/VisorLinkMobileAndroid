@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "VisorLink"
 include(":app")
+ 
