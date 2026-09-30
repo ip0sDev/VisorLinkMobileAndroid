@@ -1,4 +1,4 @@
-package org.visorlink.app.ui.screens
+package org.visorlink.app.ui.screens.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,4 +31,3 @@ class AuthViewModel: ViewModel() {
 
     }
 }
-

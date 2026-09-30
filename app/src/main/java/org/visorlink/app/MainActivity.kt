@@ -11,8 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import org.visorlink.app.ui.navigation.AuthRoute
-import org.visorlink.app.ui.screens.AuthScreen
+import org.visorlink.app.ui.navigation.*
+import org.visorlink.app.ui.screens.auth.AuthScreen
+import org.visorlink.app.ui.screens.chatlist.ChatListScreen
 import org.visorlink.app.ui.theme.VisorLinkTheme
 
 class MainActivity : ComponentActivity() {
@@ -33,8 +34,13 @@ class MainActivity : ComponentActivity() {
                     ) {
                         composable<AuthRoute> {
                             AuthScreen(
-                                onLoginSuccess = {}
+                                onLoginSuccess = {
+                                    navController.navigate(ChatListRoute)
+                                }
                             )
+                        }
+                        composable<ChatListRoute> {
+                            ChatListScreen()
                         }
                     }
                 }
