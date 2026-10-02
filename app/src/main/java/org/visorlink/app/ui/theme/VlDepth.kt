@@ -151,12 +151,16 @@ fun Modifier.vlInset(
             drawContent()
             val path = shape.toPath(size, layoutDirection, this)
             val off = tokens.insetOffset.toPx()
+            // Обводка центрирована по контуру: сдвиг на off/2 при ширине off даёт
+            // полосу ровно [0, off] внутри формы, наружную половину срезает clipPath.
+            // Раньше было «сдвиг off, ширина 2·off» — фаска выходила вдвое толще
+            // токена (4dp вместо 2dp) и на тумблере съедала весь зазор до бегунка.
             clipPath(path) {
-                translate(left = off, top = off) {
-                    drawPath(path, color = tokens.shadowDark, style = Stroke(width = off * 2f))
+                translate(left = off / 2f, top = off / 2f) {
+                    drawPath(path, color = tokens.shadowDark, style = Stroke(width = off))
                 }
-                translate(left = -off, top = -off) {
-                    drawPath(path, color = tokens.shadowLight, style = Stroke(width = off * 2f))
+                translate(left = -off / 2f, top = -off / 2f) {
+                    drawPath(path, color = tokens.shadowLight, style = Stroke(width = off))
                 }
             }
         }

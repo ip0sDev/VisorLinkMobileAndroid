@@ -78,7 +78,8 @@ fun VlNavigationBar(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val isDark = cs.surface.luminance() < 0.5f
-    val barShape: Shape = if (tokens.isForge) tokens.shapes.bar else RoundedCornerShape(32.dp)
+    // У M3E bar = 32dp, у Biolume — 50% от 64dp, то есть те же 32dp; у Forge — без скруглений
+    val barShape: Shape = tokens.shapes.bar
 
     Box(
         modifier = modifier
@@ -304,7 +305,7 @@ private fun NeumorphicLiquidNavBarContent(
     }
 
     val activeIndex = navTabs.indexOfFirst { it.tabId == selectedTab }.coerceAtLeast(0)
-    val pillShape: Shape = if (tokens.isForge) tokens.shapes.pill else CircleShape
+    val pillShape: Shape = tokens.shapes.pill
 
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.toFloat()
@@ -376,7 +377,10 @@ private fun NeumorphicLiquidNavBarContent(
             .vlHairline(cs.outlineVariant.copy(alpha = 0.5f), barShape)
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .onGloballyPositioned { coords ->
-                totalWidthPx = coords.size.width.toFloat() - with(density) { 16.dp.toPx() }
+                // Модификатор стоит после padding — размер уже внутренний. Раньше
+                // отсюда ещё раз вычитались 16dp, ширина занижалась, и вкладки
+                // вместе с бегунком съезжали влево (справа пустело ~16dp)
+                totalWidthPx = coords.size.width.toFloat()
             }
     ) {
         // Динамический жидкостный неоморфный бегунок с адаптивным размером
@@ -543,7 +547,7 @@ fun VlTabItem(
         label = "tab_content_color"
     )
 
-    val pillShape: Shape = if (tokens.isForge) tokens.shapes.pill else CircleShape
+    val pillShape: Shape = tokens.shapes.pill
 
     val selectionProgress by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
