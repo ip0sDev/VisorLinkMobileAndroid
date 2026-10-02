@@ -234,7 +234,7 @@ val uiRulesBaseline = rootProject.file("config/ui-rules-baseline.txt")
 val uiRulesUpdate = providers.gradleProperty("updateUiBaseline").isPresent
 tasks.register("checkUiRules") {
     group = "verification"
-    description = "Запрещает новые захардкоженные цвета и прямые M3-компоненты в экранах"
+    description = "Запрещает новые захардкоженные цвета, формы в обход shapes.adapt, прямые M3-компоненты и проверки темы в экранах"
     inputs.dir(uiRulesSrc)
     inputs.files(uiRulesBaseline)
     val srcDir = uiRulesSrc
@@ -247,6 +247,10 @@ tasks.register("checkUiRules") {
                 """AlertDialog|FloatingActionButton|ExtendedFloatingActionButton|NavigationBar|SingleChoiceSegmentedButtonRow)\s*\("""
         )
         val hexColor = Regex("""(?<![\w.])Color\(\s*0x""")
+        // Форма в обход shapes.adapt(): у Forge (шкала без скруглений) она осталась бы круглой
+        val rawShape = Regex("""(?<![\w.])(?<!adapt\()(RoundedCornerShape\(|CircleShape\b)""")
+        // Экран сам решает, как выглядеть в теме, — это работа компонента или токена
+        val themeCheck = Regex("""\b(isBiolume|isForge|VlStyle\.\w+|AppTheme\.(BIOLUME|FORGE|MATERIAL3_EXPRESSIVE))\b""")
         // Захардкоженные цвета ищем везде, кроме ui/theme — палитры живут там по определению.
         // Прямые M3-компоненты — только в экранах: компоненты Vl* их как раз оборачивают.
         val counts = sortedMapOf<String, Int>()
@@ -259,6 +263,13 @@ tasks.register("checkUiRules") {
             if (rel.startsWith("screens/")) {
                 val m3 = rawM3.findAll(code).count()
                 if (m3 > 0) counts["$rel raw-m3"] = m3
+                val tc = themeCheck.findAll(code).count()
+                if (tc > 0) counts["$rel theme-check"] = tc
+            }
+            // Фейковое новостное приложение (decoy) обязано выглядеть не как VisorLink
+            if ((rel.startsWith("screens/") || rel.startsWith("components/")) && !rel.startsWith("screens/decoy/")) {
+                val shapes = rawShape.findAll(code).count()
+                if (shapes > 0) counts["$rel raw-shape"] = shapes
             }
         }
         if (update) {
