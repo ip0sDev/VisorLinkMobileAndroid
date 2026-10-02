@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.sentry.android)
+    alias(libs.plugins.roborazzi)
 }
 
 // Читаем CommitID из свойства, которое передаёт CI (./gradlew assembleDebug -PcommitId=abc1234)
@@ -78,6 +79,18 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // Robolectric для скриншот-тестов: нужны ресурсы (шрифты, строки)
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            it.systemProperty("robolectric.graphicsMode", "NATIVE")
+            it.systemProperty("robolectric.pixelCopyRenderMode", "hardware")
+            it.maxHeapSize = "4g"
+            // Robolectric лезет во внутренности FileDescriptor; на JDK 17+ без этого падает
+            it.jvmArgs(
+                "--add-opens=java.base/java.io=ALL-UNNAMED",
+                "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+            )
+        }
     }
 }
 
@@ -176,6 +189,13 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test) // Для runTest, setMain, advanceUntilIdle
     testImplementation(libs.mockito.kotlin)          // Для mock, whenever, any, verify
     testImplementation(libs.mockito.core)            // Ядро Mockito
+    // Скриншот-тесты тем (Roborazzi поверх Robolectric, без устройства)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 }
 
 // Автоматическое создание app/google-services.json из шаблона при клонировании репозитория
@@ -197,6 +217,80 @@ tasks.matching { it.name.startsWith("process") && it.name.endsWith("GoogleServic
 tasks.matching { it.name.contains("AarMetadata") }.configureEach {
     enabled = false
 }
+
+roborazzi {
+    // Эталоны коммитятся в репозиторий: по ним verify ловит визуальные регрессии тем
+    outputDir.set(file("src/test/screenshots"))
+}
+
+// ── Правила UI-слоя ──────────────────────────────────────────────────────────
+// Экраны не должны обходить компоненты Vl* и токены темы: прямые M3-компоненты
+// и захардкоженные цвета — главная причина, по которой M3E и Forge разъезжались.
+// Существующие нарушения зафиксированы в baseline: сборка падает, только если
+// в файле нарушений стало БОЛЬШЕ. Уменьшили — обновите baseline:
+//   ./gradlew checkUiRules -PupdateUiBaseline
+val uiRulesSrc = file("src/main/java/org/visorlink/app/ui")
+val uiRulesBaseline = rootProject.file("config/ui-rules-baseline.txt")
+val uiRulesUpdate = providers.gradleProperty("updateUiBaseline").isPresent
+tasks.register("checkUiRules") {
+    group = "verification"
+    description = "Запрещает новые захардкоженные цвета и прямые M3-компоненты в экранах"
+    inputs.dir(uiRulesSrc)
+    inputs.files(uiRulesBaseline)
+    val srcDir = uiRulesSrc
+    val baselineFile = uiRulesBaseline
+    val update = uiRulesUpdate
+    doLast {
+        val rawM3 = Regex(
+            """(?<![\w.])(Card|ElevatedCard|OutlinedCard|Button|OutlinedButton|TextButton|FilledTonalButton|ElevatedButton|""" +
+                """Switch|TopAppBar|CenterAlignedTopAppBar|MediumTopAppBar|LargeTopAppBar|TextField|OutlinedTextField|""" +
+                """AlertDialog|FloatingActionButton|ExtendedFloatingActionButton|NavigationBar|SingleChoiceSegmentedButtonRow)\s*\("""
+        )
+        val hexColor = Regex("""(?<![\w.])Color\(\s*0x""")
+        // Захардкоженные цвета ищем везде, кроме ui/theme — палитры живут там по определению.
+        // Прямые M3-компоненты — только в экранах: компоненты Vl* их как раз оборачивают.
+        val counts = sortedMapOf<String, Int>()
+        srcDir.walkTopDown().filter { it.isFile && it.extension == "kt" }.forEach { f ->
+            val rel = f.relativeTo(srcDir).invariantSeparatorsPath
+            if (rel.startsWith("theme/")) return@forEach
+            val code = f.readLines().filterNot { it.trimStart().startsWith("//") }.joinToString("\n")
+            val hex = hexColor.findAll(code).count()
+            if (hex > 0) counts["$rel hex-color"] = hex
+            if (rel.startsWith("screens/")) {
+                val m3 = rawM3.findAll(code).count()
+                if (m3 > 0) counts["$rel raw-m3"] = m3
+            }
+        }
+        if (update) {
+            baselineFile.parentFile.mkdirs()
+            baselineFile.writeText(
+                "# Сгенерировано: ./gradlew checkUiRules -PupdateUiBaseline\n" +
+                    "# <файл относительно ui/> <правило> <допустимое число>\n" +
+                    counts.entries.joinToString("") { "${it.key} ${it.value}\n" }
+            )
+            logger.lifecycle("Baseline обновлён: ${counts.size} записей, ${counts.values.sum()} нарушений")
+            return@doLast
+        }
+        val baseline = if (baselineFile.exists()) {
+            baselineFile.readLines().filter { it.isNotBlank() && !it.startsWith("#") }.associate {
+                val i = it.lastIndexOf(' ')
+                it.substring(0, i) to it.substring(i + 1).toInt()
+            }
+        } else emptyMap()
+        val grown = counts.filter { (k, v) -> v > (baseline[k] ?: 0) }
+        val shrunk = baseline.filter { (k, v) -> (counts[k] ?: 0) < v }
+        if (shrunk.isNotEmpty()) {
+            logger.lifecycle("Нарушений стало меньше в ${shrunk.size} местах — зафиксируйте: ./gradlew checkUiRules -PupdateUiBaseline")
+        }
+        if (grown.isNotEmpty()) {
+            throw GradleException(
+                "Новые нарушения правил UI (используйте компоненты Vl* и цвета из MaterialTheme/VlTheme.tokens):\n" +
+                    grown.entries.joinToString("\n") { "  ui/${it.key}: ${baseline[it.key] ?: 0} → ${it.value}" }
+            )
+        }
+    }
+}
+tasks.matching { it.name == "check" }.configureEach { dependsOn("checkUiRules") }
 
 // Алиас для запуска юнит-тестов без ошибки неоднозначности флейворов (play/standalone)
 tasks.register("testDebugUnitTest") {

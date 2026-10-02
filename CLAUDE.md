@@ -20,6 +20,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Lint (AGP built-in only — no ktlint/detekt/spotless configured)
 ./gradlew lintDebug
 
+# Screenshot tests (Roborazzi + Robolectric, JVM): every scene × AppTheme × light/dark
+./gradlew recordRoborazziPlayDebug        # rewrite goldens in app/src/test/screenshots
+./gradlew verifyRoborazziPlayDebug        # fail on any visual diff
+./gradlew compareRoborazziPlayDebug       # write diffs to app/build/outputs/roborazzi, don't fail
+
+# UI rules: no new Color(0x…) outside ui/theme, no new raw M3 components in ui/screens
+./gradlew checkUiRules                    # ratchet against config/ui-rules-baseline.txt
+./gradlew checkUiRules -PupdateUiBaseline # re-snapshot after removing violations
+
 # What CI actually runs
 ./gradlew testDebugUnitTest assembleRelease -PcommitId=<short-sha> --parallel --build-cache --configuration-cache
 ```
@@ -185,6 +194,8 @@ Neumorphic relief draws **outside** a component's bounds, so a Biolume raised el
 
 - Code comments and commit messages are in Russian; identifiers and log tags in English. Match that.
 - UI strings belong in `values/strings.xml` + `values-ru/strings.xml` (kept in lockstep, one entry per key in both) and are read with `stringResource`. ~32 files still hold hardcoded Russian literals — prefer extracting when you touch them.
+- Screenshot tests live in `ui/theme/ThemeScreenshotTest.kt`. They run under a bare `Application` (no Firebase), with Koin started on a stub `FlagsRepository`, because base components such as `VlSwitch`, `VlSettingsSection` and `VlAlertDialog` call `koinInject()` through `rememberLiquidEnabled`. The Compose clock is paused (`autoAdvance = false`) because `VlLiveDot` and the FAB glow animate forever and would hang `waitForIdle`. Content sits in a `Surface`, not `Box.background`, so `LocalContentColor` is set the way `Scaffold` sets it. When a visual change is intentional, re-record and commit the PNGs together with the code. CI currently runs `compare`, not `verify`: the goldens were recorded on Windows and have not yet been confirmed pixel-identical on Linux.
+- `checkUiRules` is a ratchet: it fails only when a file gains violations. After you remove some, run it with `-PupdateUiBaseline` so the lower count is locked in.
 - Tests are JUnit4 + `mockito-kotlin` + `kotlinx-coroutines-test`, with backtick method names and `Dispatchers.setMain(testDispatcher)`. `unitTests.isReturnDefaultValues = true`, so Android stubs return defaults instead of throwing. Existing coverage is ViewModel/logic only.
 - `Log.d`/`Log.e` calls in hot or noisy paths are wrapped in `if (BuildConfig.DEBUG)` (see `FlagsRepository`).
 - `app/google-services.json` is committed intentionally.
