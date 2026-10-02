@@ -7,6 +7,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.data.model.AppTheme
+import org.visorlink.app.data.model.ProfileFont
 
 /**
  * Типографика тем.
@@ -51,6 +53,18 @@ private val JetBrainsMono = FontFamily(
 private val SpaceGrotesk = FontFamily(
     Font(R.font.space_grotesk_medium, FontWeight.Medium),
     Font(R.font.space_grotesk_semibold, FontWeight.SemiBold),
+)
+
+/**
+ * «Округлая» гарнитура профиля. Раньше `rounded` отображался в
+ * `FontFamily.SansSerif` — это тот же Roboto, и выбор в редакторе ничего не менял.
+ * Nunito (OFL, лицензия в `licenses/nunito-OFL.txt`) покрывает кириллицу целиком;
+ * веса — статические инстансы вариативного шрифта.
+ */
+private val Nunito = FontFamily(
+    Font(R.font.nunito_regular, FontWeight.Normal),
+    Font(R.font.nunito_semibold, FontWeight.SemiBold),
+    Font(R.font.nunito_bold, FontWeight.Bold),
 )
 
 /** Заголовочная роль: Inter SemiBold вместо Space Grotesk — причина выше. */
@@ -249,3 +263,33 @@ val ForgeDataTypography = VlDataTypography(
         letterSpacing = 0.5.sp,
     ),
 )
+
+
+// ── PRO-шрифт профиля ────────────────────────────────────────────────────────
+
+fun baseTypography(theme: AppTheme): Typography = when (theme) {
+    AppTheme.BIOLUME -> BiolumeTypography
+    AppTheme.FORGE -> ForgeTypography
+    AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
+}
+
+/**
+ * Подменяет гарнитуру во всех ролях, сохраняя кегли, веса и трекинг темы.
+ * Моно — JetBrains Mono, а не системный моноширинный: тот без кириллицы на
+ * части прошивок и не совпадает с data-ролями.
+ */
+fun Typography.withProfileFont(font: ProfileFont): Typography {
+    val family = when (font) {
+        ProfileFont.MONO -> JetBrainsMono
+        ProfileFont.SERIF -> FontFamily.Serif
+        ProfileFont.ROUNDED -> Nunito
+    }
+    fun TextStyle.f() = copy(fontFamily = family)
+    return copy(
+        displayLarge = displayLarge.f(), displayMedium = displayMedium.f(), displaySmall = displaySmall.f(),
+        headlineLarge = headlineLarge.f(), headlineMedium = headlineMedium.f(), headlineSmall = headlineSmall.f(),
+        titleLarge = titleLarge.f(), titleMedium = titleMedium.f(), titleSmall = titleSmall.f(),
+        bodyLarge = bodyLarge.f(), bodyMedium = bodyMedium.f(), bodySmall = bodySmall.f(),
+        labelLarge = labelLarge.f(), labelMedium = labelMedium.f(), labelSmall = labelSmall.f(),
+    )
+}

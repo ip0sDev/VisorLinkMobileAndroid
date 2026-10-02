@@ -40,6 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.data.model.ProfileAppearance
+import org.visorlink.app.data.model.ProfileLayout
 import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.*
@@ -111,11 +113,10 @@ fun ProfileScreen(
 
     val user = uiState.user ?: UserProfile()
     val isPro = user.isProActive()
-    val cust = user.customization ?: emptyMap()
-    val layout = cust["layout"] as? String ?: "default"
-    val bgUrl = (cust["bgUrl"] as? String)?.takeIf { it.isNotBlank() }
-    val gifUrl = (cust["gifUrl"] as? String)?.takeIf { it.isNotBlank() }
-    val bannerUrl = gifUrl?.takeIf { isPro }
+    // Свой профиль всегда в своём оформлении — см. ProfileAppearance.resolve
+    val appearance = ProfileAppearance.resolve(owner = user, viewer = user)
+    val bgUrl = appearance.backgroundUrl
+    val bannerUrl = appearance.bannerUrl
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val haptic = rememberHaptic()
@@ -127,160 +128,101 @@ fun ProfileScreen(
         uiState.error?.let { snackbar.showSnackbar(it); viewModel.clearMessages() }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        if (bgUrl != null) {
-            AsyncImage(
-                model = bgUrl,
-                contentDescription = null,
+    // Оформление владельца профиля (тема, акцент, шрифт) — поверх настроек зрителя
+    UserProfileTheme(profile = user, currentUser = user) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            if (bgUrl != null) {
+                AsyncImage(
+                    model = bgUrl,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            if (isDark) Color.Black.copy(alpha = 0.40f)
+                            else Color.White.copy(alpha = 0.20f)
+                        )
+                )
+            } else {
+                VlAmbientGlow()
+            }
+
+            Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        if (isDark) Color.Black.copy(alpha = 0.40f)
-                        else Color.White.copy(alpha = 0.20f)
-                    )
-            )
-        } else {
-            VlAmbientGlow()
-        }
-
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            containerColor = Color.Transparent,
-            topBar = {
-                VlTopAppBar(
-                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
-                    title = {
-                        val titleText = if (uiState.isEditing) stringResource(R.string.profile_edit_title)
-                        else stringResource(R.string.profile_title)
-                        Text(titleText, fontWeight = FontWeight.Bold)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
-                            if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
-                        }
-                    },
-                    actions = {
-                        if (!uiState.isEditing) {
+                containerColor = Color.Transparent,
+                topBar = {
+                    VlTopAppBar(
+                        modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                        title = {
+                            val titleText = if (uiState.isEditing) stringResource(R.string.profile_edit_title)
+                            else stringResource(R.string.profile_title)
+                            Text(titleText, fontWeight = FontWeight.Bold)
+                        },
+                        navigationIcon = {
                             IconButton(onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 if (isLiquidEnabled) topBarJelly.press(0.06f)
-                                viewModel.startEditing()
+                                if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
                             }) {
-                                Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                             }
-
-                            IconButton(onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                if (isLiquidEnabled) topBarJelly.press(0.06f)
-                                showLogout = true
-                            }) {
-                                Icon(Icons.AutoMirrored.Filled.Logout, null, tint = MaterialTheme.colorScheme.error)
-                            }
-                        } else {
-                            TextButton(
-                                onClick = {
+                        },
+                        actions = {
+                            if (!uiState.isEditing) {
+                                IconButton(onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
                                     if (isLiquidEnabled) topBarJelly.press(0.06f)
-                                    viewModel.saveProfile()
-                                },
-                                enabled = !uiState.isLoading,
-                                modifier = Modifier.padding(end = 8.dp)
-                            ) {
-                                Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
+                                    viewModel.startEditing()
+                                }) {
+                                    Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
+                                }
+
+                                IconButton(onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                    showLogout = true
+                                }) {
+                                    Icon(Icons.AutoMirrored.Filled.Logout, null, tint = MaterialTheme.colorScheme.error)
+                                }
+                            } else {
+                                TextButton(
+                                    onClick = {
+                                        haptic.perform(HapticType.CLICK, hapticEnabled)
+                                        if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                        viewModel.saveProfile()
+                                    },
+                                    enabled = !uiState.isLoading,
+                                    modifier = Modifier.padding(end = 8.dp)
+                                ) {
+                                    Text(stringResource(R.string.action_save), fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
-                    }
-                )
-            },
-            snackbarHost = { SnackbarHost(snackbar) }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                if (layout == "compact") {
-                if (bannerUrl != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp)
-                            .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                    ) {
-                        AsyncImage(
-                            model = bannerUrl,
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                }
-                Row(
+                    )
+                },
+                snackbarHost = { SnackbarHost(snackbar) }
+            ) { padding ->
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = if (bannerUrl != null) 16.dp else 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .padding(padding)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(80.dp)
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                            .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                            .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                            .clip(VlTheme.tokens.shapes.avatar),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AvatarContent(user, 80.dp)
-                    }
-                    Spacer(Modifier.width(20.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                user.displayName,
-                                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            val emojis = cust["emojis"] as? String
-                            if (!emojis.isNullOrEmpty()) {
-                                Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
-                            }
-                        }
-                        Text(
-                            "@${user.username}",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            } else {
-                // Default / Banner Layout: полоска баннера НАД аватаркой
-                if (bannerUrl != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(170.dp),
-                        contentAlignment = Alignment.BottomCenter
-                    ) {
+                    if (appearance.layout == ProfileLayout.COMPACT) {
+                    if (bannerUrl != null) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(170.dp)
-                                .padding(bottom = 50.dp)
+                                .height(130.dp)
                                 .background(MaterialTheme.colorScheme.surfaceContainerHighest)
                         ) {
                             AsyncImage(
@@ -290,195 +232,257 @@ fun ProfileScreen(
                                 contentScale = ContentScale.Crop
                             )
                         }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = if (bannerUrl != null) 16.dp else 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(110.dp)
-                                .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                .size(80.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
+                                .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
+                                .clip(VlTheme.tokens.shapes.avatar),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AvatarContent(user, 80.dp)
+                        }
+                        Spacer(Modifier.width(20.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    user.displayName,
+                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                val emojis = appearance.emojis
+                                if (!emojis.isNullOrEmpty()) {
+                                    Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
+                                }
+                            }
+                            Text(
+                                "@${user.username}",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                } else {
+                    // Default / Banner Layout: полоска баннера НАД аватаркой
+                    if (bannerUrl != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(170.dp),
+                            contentAlignment = Alignment.BottomCenter
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(170.dp)
+                                    .padding(bottom = 50.dp)
+                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                            ) {
+                                AsyncImage(
+                                    model = bannerUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(110.dp)
+                                    .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
+                                    .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
+                                    .clip(VlTheme.tokens.shapes.avatar),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AvatarContent(user, 110.dp)
+                            }
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 24.dp)
+                                .size(130.dp)
+                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
                                 .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
                                 .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
                                 .clip(VlTheme.tokens.shapes.avatar),
                             contentAlignment = Alignment.Center
                         ) {
-                            AvatarContent(user, 110.dp)
+                            AvatarContent(user, 130.dp)
                         }
                     }
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 24.dp)
-                            .size(130.dp)
-                            .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                            .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                            .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                            .clip(VlTheme.tokens.shapes.avatar),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AvatarContent(user, 130.dp)
-                    }
-                }
 
-                Spacer(Modifier.height(14.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.height(14.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            user.displayName,
+                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        val emojis = appearance.emojis
+                        if (!emojis.isNullOrEmpty()) {
+                            Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
                     Text(
-                        user.displayName,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                        color = MaterialTheme.colorScheme.onSurface
+                        "@${user.username}",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.primary
                     )
-                    val emojis = cust["emojis"] as? String
-                    if (!emojis.isNullOrEmpty()) {
-                        Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
-                    }
                 }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    "@${user.username}",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
 
-                if (!uiState.isEditing) {
-                    // Profile body
-                    Column(
-                        modifier = Modifier
-                            .padding(24.dp)
-                            .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        DebugUidBadge(uid = user.uid)
-                        if (user.online) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Online", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!uiState.isEditing) {
+                        // Profile body
+                        Column(
+                            modifier = Modifier
+                                .padding(24.dp)
+                                .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            DebugUidBadge(uid = user.uid)
+                            if (user.online) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Online", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Spacer(Modifier.height(16.dp))
                             }
-                            Spacer(Modifier.height(16.dp))
-                        }
 
-                        if (user.isAdmin) {
-                            Spacer(Modifier.height(16.dp))
-                            AdminBadge()
-                        }
+                            if (user.isAdmin) {
+                                Spacer(Modifier.height(16.dp))
+                                AdminBadge()
+                            }
 
-                        if (isPro) {
-                            Spacer(Modifier.height(12.dp))
-                            ProBadge()
-                        }
+                            if (isPro) {
+                                Spacer(Modifier.height(12.dp))
+                                ProBadge()
+                            }
 
-                        if (user.bio.isNotEmpty()) {
-                            Spacer(Modifier.height(16.dp))
-                            VlCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 4.dp),
-                                shape = VlTheme.tokens.shapes.card
-                            ) {
-                                Box(
+                            if (user.bio.isNotEmpty()) {
+                                Spacer(Modifier.height(16.dp))
+                                VlCard(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
+                                        .padding(horizontal = 4.dp),
+                                    shape = VlTheme.tokens.shapes.card
                                 ) {
-                                    LinkifiedText(
-                                        text = user.bio,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        linkColor = MaterialTheme.colorScheme.primary,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        textAlign = TextAlign.Center
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        LinkifiedText(
+                                            text = user.bio,
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            linkColor = MaterialTheme.colorScheme.primary,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                } else {
-                    // Editing fields
-                    Column(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 24.dp)
-                            .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        VlTextField(
-                            value = uiState.editDisplayName,
-                            onValueChange = viewModel::onDisplayNameChange,
-                            label = stringResource(R.string.profile_field_display_name),
-                            leading = { Icon(Icons.Default.Person, null) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        VlTextField(
-                            value = uiState.editBio, onValueChange = viewModel::onBioChange,
-                            label = stringResource(R.string.profile_field_bio),
-                            leading = { Icon(Icons.Default.Info, null) },
-                            supportingText = "${uiState.editBio.length}/160",
-                            maxLines = 3,
-                            singleLine = false,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        VlTextField(
-                            value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
-                            label = stringResource(R.string.profile_field_username),
-                            leading = { Icon(Icons.Default.AlternateEmail, null) },
-                            trailing = {
-                                when {
-                                    uiState.checkingUsername -> CircularProgressIndicator(
-                                        Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary
-                                    )
-                                    uiState.usernameAvailable == true -> Icon(
-                                        Icons.Default.CheckCircle, null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    uiState.usernameAvailable == false -> Icon(
-                                        Icons.Default.Cancel, null,
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
-                                }
-                            },
-                            isError = uiState.usernameAvailable == false,
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Spacer(Modifier.height(4.dp))
-
-                        VlButton(
-                            onClick = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                viewModel.checkUsername()
-                            },
-                            modifier = Modifier.fillMaxWidth()
+                    } else {
+                        // Editing fields
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 24.dp)
+                                .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text(stringResource(R.string.profile_check_username), fontWeight = FontWeight.Bold)
+                            VlTextField(
+                                value = uiState.editDisplayName,
+                                onValueChange = viewModel::onDisplayNameChange,
+                                label = stringResource(R.string.profile_field_display_name),
+                                leading = { Icon(Icons.Default.Person, null) },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            VlTextField(
+                                value = uiState.editBio, onValueChange = viewModel::onBioChange,
+                                label = stringResource(R.string.profile_field_bio),
+                                leading = { Icon(Icons.Default.Info, null) },
+                                supportingText = "${uiState.editBio.length}/160",
+                                maxLines = 3,
+                                singleLine = false,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            VlTextField(
+                                value = uiState.editUsername, onValueChange = viewModel::onUsernameChange,
+                                label = stringResource(R.string.profile_field_username),
+                                leading = { Icon(Icons.Default.AlternateEmail, null) },
+                                trailing = {
+                                    when {
+                                        uiState.checkingUsername -> CircularProgressIndicator(
+                                            Modifier.size(20.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary
+                                        )
+                                        uiState.usernameAvailable == true -> Icon(
+                                            Icons.Default.CheckCircle, null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        uiState.usernameAvailable == false -> Icon(
+                                            Icons.Default.Cancel, null,
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                },
+                                isError = uiState.usernameAvailable == false,
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            VlButton(
+                                onClick = {
+                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                    viewModel.checkUsername()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(stringResource(R.string.profile_check_username), fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
+                    Spacer(Modifier.height(32.dp))
                 }
-                Spacer(Modifier.height(32.dp))
             }
         }
-    }
 
-    if (showLogout) {
-        AlertDialog(
-            onDismissRequest = { showLogout = false },
-            title = { Text(stringResource(R.string.dialog_logout_title)) },
-            text  = { Text(stringResource(R.string.dialog_logout_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogout = false; viewModel.logout(); onLoggedOut()
-                }) {
-                    Text(stringResource(R.string.dialog_logout_confirm),
-                        color = MaterialTheme.colorScheme.error)
+        if (showLogout) {
+            AlertDialog(
+                onDismissRequest = { showLogout = false },
+                title = { Text(stringResource(R.string.dialog_logout_title)) },
+                text  = { Text(stringResource(R.string.dialog_logout_body)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showLogout = false; viewModel.logout(); onLoggedOut()
+                    }) {
+                        Text(stringResource(R.string.dialog_logout_confirm),
+                            color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogout = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLogout = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
-            }
-        )
+            )
+        }
     }
 }

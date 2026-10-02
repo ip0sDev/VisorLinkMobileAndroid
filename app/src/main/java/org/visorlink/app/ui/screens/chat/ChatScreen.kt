@@ -292,8 +292,10 @@ fun ChatScreen(
 
     val otherUser = uiState.otherUser
     val currentUser = uiState.currentUser
-    val myBg = (currentUser?.customization?.get("bgUrl") as? String)?.takeIf { it.isNotBlank() }
-    val otherBg = (otherUser?.customization?.get("bgUrl") as? String)?.takeIf { it.isNotBlank() }
+    val myBg = ProfileAppearance.resolve(owner = currentUser, viewer = currentUser).backgroundUrl
+    // Обои собеседника — по тем же правилам, что и остальное его оформление:
+    // раньше они показывались без PRO и вопреки ignoreCustomizations
+    val otherBg = ProfileAppearance.resolve(owner = otherUser, viewer = currentUser).backgroundUrl
 
     val chatBgUrl = when (uiState.wallpaperMode) {
         "none" -> null

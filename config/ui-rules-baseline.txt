@@ -46,7 +46,6 @@ screens/settings/AppCheckDiagnosticScreen.kt hex-color 1
 screens/settings/AppCheckDiagnosticScreen.kt raw-m3 6
 screens/settings/BugReportSheet.kt raw-m3 2
 screens/settings/CacheSettingsScreen.kt raw-m3 2
-screens/settings/CustomizationScreen.kt raw-m3 1
 screens/settings/FlagFlipperScreen.kt raw-m3 2
 screens/settings/SettingsScreen.kt hex-color 24
 screens/settings/SettingsScreen.kt raw-m3 8

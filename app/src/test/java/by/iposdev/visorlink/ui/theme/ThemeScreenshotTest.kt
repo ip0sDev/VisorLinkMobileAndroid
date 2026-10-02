@@ -49,7 +49,11 @@ import org.robolectric.annotation.GraphicsMode
 import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.Chat
 import org.visorlink.app.data.model.ChatType
+import org.visorlink.app.data.model.ColorPreset
 import org.visorlink.app.data.model.Message
+import org.visorlink.app.data.model.ProfileAppearance
+import org.visorlink.app.data.model.ProfileFont
+import org.visorlink.app.data.model.ProfileLayout
 import org.visorlink.app.data.model.ThemeMode
 import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.data.model.flags.AppFlags
@@ -73,6 +77,7 @@ import org.visorlink.app.ui.components.VlTextField
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.chat.MessageBubble
 import org.visorlink.app.ui.components.chatlist.ChatListItem
+import org.visorlink.app.ui.screens.settings.ProfilePreview
 import org.visorlink.app.utils.VoicePlaybackState
 
 /**
@@ -89,7 +94,7 @@ import org.visorlink.app.utils.VoicePlaybackState
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @RunWith(ParameterizedRobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(application = Application::class, sdk = [36], qualifiers = "ru-w400dp-h900dp-xhdpi")
+@Config(application = Application::class, sdk = [36], qualifiers = "ru-w400dp-h1400dp-xhdpi")
 class ThemeScreenshotTest(
     private val appTheme: AppTheme,
     private val dark: Boolean,
@@ -320,6 +325,35 @@ class ThemeScreenshotTest(
                 onOpenDiary = {},
                 flagsRepository = flagsRepository,
             )
+        }
+    }
+
+    /**
+     * Оформление профиля поверх темы зрителя (параметр теста). Первая карточка —
+     * без оформления: должна совпадать с темой зрителя. Остальные переопределяют
+     * акцент, шрифт, тему и раскладку — превью редактора рисуется так же.
+     */
+    @Test
+    fun profileAppearance() = snap("profile") {
+        val profile = UserProfile(uid = "u1", displayName = "Иван Петров", username = "ivan")
+        val cases = listOf(
+            "без оформления" to ProfileAppearance.None,
+            "акцент + округлый" to ProfileAppearance(accent = ColorPreset.CRIMSON, font = ProfileFont.ROUNDED, emojis = "🔥"),
+            "Forge + засечки, компактный" to ProfileAppearance(theme = AppTheme.FORGE, font = ProfileFont.SERIF, layout = ProfileLayout.COMPACT),
+            "Biolume + моно + синий" to ProfileAppearance(theme = AppTheme.BIOLUME, font = ProfileFont.MONO, accent = ColorPreset.BLUE),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            cases.forEach { (label, appearance) ->
+                Text(label, style = MaterialTheme.typography.labelMedium)
+                ProfileAppearanceTheme(
+                    appearance = appearance,
+                    viewerTheme = appTheme,
+                    viewerMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT,
+                    viewerPreset = ColorPreset.DEFAULT,
+                ) {
+                    ProfilePreview(profile = profile, appearance = appearance)
+                }
+            }
         }
     }
 

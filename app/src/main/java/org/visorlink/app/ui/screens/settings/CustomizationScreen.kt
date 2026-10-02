@@ -2,7 +2,6 @@ package org.visorlink.app.ui.screens.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,192 +13,343 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.R
 import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.ColorPreset
+import org.visorlink.app.data.model.ProfileAppearance
+import org.visorlink.app.data.model.ProfileFont
+import org.visorlink.app.data.model.ProfileLayout
 import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.ui.components.*
-import org.visorlink.app.ui.theme.ThemeViewModel
-import coil.compose.AsyncImage
-import org.koin.compose.viewmodel.koinViewModel
+import org.visorlink.app.ui.theme.ProfileAppearanceTheme
 
+/**
+ * Редактор оформления профиля (PRO; вход закрыт проверкой в SettingsScreen).
+ *
+ * Превью рисуется внутри [ProfileAppearanceTheme] — той же обёртки, через которую
+ * оформление видят другие, поэтому превью не может разойтись с результатом.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CustomizationScreen(
     onNavigateBack: () -> Unit,
     viewModel: CustomizationViewModel = koinViewModel(),
-    themeViewModel: ThemeViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val currentTheme by themeViewModel.appTheme.collectAsState()
-    
-    val profile = uiState.profile ?: return
-    val cust = profile.customization
-    
-    val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { viewModel.uploadCustomBackground(it, "bgUrl") }
+    val snackbar = remember { SnackbarHostState() }
+    val errorPrefix = stringResource(R.string.custom_save_error)
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbar.showSnackbar("$errorPrefix: $it")
+            viewModel.clearError()
+        }
     }
-    
-    val gifPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { viewModel.uploadCustomBackground(it, "gifUrl") }
+
+    val bgPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { viewModel.upload(it, AppearanceUpload.BACKGROUND) }
+    }
+    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { viewModel.upload(it, AppearanceUpload.BANNER) }
     }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(stringResource(R.string.settings_custom_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.custom_back))
                     }
-                }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
+        val profile = uiState.profile
+        if (profile == null) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            return@Scaffold
+        }
+        CustomizationContent(
+            profile = profile,
+            appearance = uiState.appearance,
+            uploading = uiState.uploading,
+            onChange = viewModel::update,
+            onPickBackground = { bgPicker.launch("image/*") },
+            onPickBanner = { bannerPicker.launch("image/gif") },
+            modifier = Modifier.padding(padding),
+        )
+    }
+}
+
+@Composable
+private fun CustomizationContent(
+    profile: UserProfile,
+    appearance: ProfileAppearance,
+    uploading: AppearanceUpload?,
+    onChange: ((ProfileAppearance) -> ProfileAppearance) -> Unit,
+    onPickBackground: () -> Unit,
+    onPickBanner: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 32.dp),
+    ) {
+        VlSettingsSection(title = stringResource(R.string.custom_section_preview)) {
+            ProfileAppearanceTheme(appearance = appearance) {
+                ProfilePreview(
+                    profile = profile,
+                    appearance = appearance,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
+            Text(
+                stringResource(R.string.custom_preview_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
             )
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-        ) {
-            // Preview
-            VlSettingsSection(title = "Preview") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp)
-                        .padding(16.dp)
-                ) {
-                   ProfilePreview(profile)
-                }
-            }
 
-            // Accent Color
-            VlSettingsSection(title = "Accent Color") {
-                val presets = listOf(
-                    "default" to ColorPreset.DEFAULT,
-                    "purple" to ColorPreset.PURPLE,
-                    "blue" to ColorPreset.BLUE,
-                    "emerald" to ColorPreset.EMERALD,
-                    "crimson" to ColorPreset.CRIMSON
-                )
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    presets.forEach { (name, preset) ->
-                        ColorPresetCircle(
-                            preset = preset,
-                            isSelected = (cust["accent"] as? String ?: "default") == name,
-                            onClick = { viewModel.updateCustomization("accent", name) }
-                        )
-                    }
-                }
-            }
-
-            // Background
-            VlSettingsSection(title = "Profile Background") {
-                VlSettingsItem(
-                    icon = Icons.Default.Image,
-                    title = "Upload Image",
-                    subtitle = (cust["bgUrl"] as? String)?.takeLast(20) ?: "None",
-                    onClick = { bgPicker.launch("image/*") }
-                )
-                VlSettingsItem(
-                    icon = Icons.Default.Gif,
-                    title = "Upload GIF",
-                    subtitle = (cust["gifUrl"] as? String)?.takeLast(20) ?: "None",
-                    onClick = { gifPicker.launch("image/gif") }
+        // Тема: null — «как у зрителя», поэтому отдельная первая строка
+        VlSettingsSection(title = stringResource(R.string.custom_section_theme)) {
+            val options: List<AppTheme?> = listOf(null) + AppTheme.entries
+            options.forEachIndexed { i, theme ->
+                VlOptionRow(
+                    icon = if (theme == null) Icons.Default.PersonOutline else Icons.Default.Palette,
+                    label = theme?.let { themeName(it) } ?: stringResource(R.string.custom_option_viewer),
+                    desc = if (theme == null) stringResource(R.string.custom_theme_viewer_desc) else null,
+                    selected = appearance.theme == theme,
+                    onClick = { onChange { it.copy(theme = theme) } },
+                    index = i,
+                    total = options.size,
                 )
             }
+        }
 
-            // Font
-            VlSettingsSection(title = "Custom Font") {
-                val fonts = listOf("default", "mono", "serif", "rounded")
-                fonts.forEachIndexed { index, f ->
-                    VlOptionRow(
-                        icon = Icons.Default.TextFields,
-                        label = f.replaceFirstChar { it.uppercase() },
-                        selected = (cust["font"] as? String ?: "default") == f,
-                        onClick = { viewModel.updateCustomization("font", f) }
+        VlSettingsSection(title = stringResource(R.string.custom_section_accent)) {
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ColorPreset.entries.forEach { preset ->
+                    ColorPresetCircle(
+                        preset = preset,
+                        // DEFAULT в модели хранится как null — «акцент зрителя»
+                        isSelected = (appearance.accent ?: ColorPreset.DEFAULT) == preset,
+                        isDark = isDark,
+                        onClick = {
+                            onChange { it.copy(accent = preset.takeIf { p -> p != ColorPreset.DEFAULT }) }
+                        },
                     )
                 }
             }
-            
-            Spacer(Modifier.height(32.dp))
+        }
+
+        VlSettingsSection(title = stringResource(R.string.custom_section_font)) {
+            val fonts: List<ProfileFont?> = listOf(null) + ProfileFont.entries
+            fonts.forEachIndexed { i, font ->
+                VlOptionRow(
+                    icon = Icons.Default.TextFields,
+                    label = fontName(font),
+                    selected = appearance.font == font,
+                    onClick = { onChange { it.copy(font = font) } },
+                    index = i,
+                    total = fonts.size,
+                )
+            }
+        }
+
+        VlSettingsSection(title = stringResource(R.string.custom_section_layout)) {
+            VlSegmentedControl(
+                labels = listOf(
+                    stringResource(R.string.custom_layout_default),
+                    stringResource(R.string.custom_layout_compact),
+                ),
+                selectedIndex = ProfileLayout.entries.indexOf(appearance.layout),
+                onSelected = { i -> onChange { it.copy(layout = ProfileLayout.entries[i]) } },
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+
+        VlSettingsSection(title = stringResource(R.string.custom_section_media)) {
+            MediaItem(
+                icon = Icons.Default.Image,
+                title = stringResource(R.string.custom_media_background),
+                isSet = appearance.backgroundUrl != null,
+                isUploading = uploading == AppearanceUpload.BACKGROUND,
+                enabled = uploading == null,
+                onPick = onPickBackground,
+                onRemove = { onChange { it.copy(backgroundUrl = null) } },
+                index = 0,
+            )
+            MediaItem(
+                icon = Icons.Default.Gif,
+                title = stringResource(R.string.custom_media_banner),
+                isSet = appearance.bannerUrl != null,
+                isUploading = uploading == AppearanceUpload.BANNER,
+                enabled = uploading == null,
+                onPick = onPickBanner,
+                onRemove = { onChange { it.copy(bannerUrl = null) } },
+                index = 1,
+            )
         }
     }
 }
 
 @Composable
-fun ProfilePreview(profile: UserProfile) {
-    val cust = profile.customization ?: emptyMap()
-    val bgUrl = cust["bgUrl"] as? String
-    val gifUrl = cust["gifUrl"] as? String
-    val bannerUrl = gifUrl ?: bgUrl
-    
-    VlSurface(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            if (bannerUrl != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(76.dp)
-                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                ) {
-                    AsyncImage(
-                        model = bannerUrl,
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+private fun MediaItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    isSet: Boolean,
+    isUploading: Boolean,
+    enabled: Boolean,
+    onPick: () -> Unit,
+    onRemove: () -> Unit,
+    index: Int,
+) {
+    VlSettingsItem(
+        icon = icon,
+        title = title,
+        subtitle = stringResource(
+            when {
+                isUploading -> R.string.custom_media_uploading
+                isSet -> R.string.custom_media_set
+                else -> R.string.custom_media_none
+            }
+        ),
+        onClick = if (enabled) onPick else null,
+        index = index,
+        trailing = {
+            when {
+                isUploading -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                isSet -> IconButton(onClick = onRemove, enabled = enabled) {
+                    Icon(Icons.Default.Close, stringResource(R.string.custom_media_remove))
                 }
             }
-            
-            Box(
-                modifier = Modifier
-                    .then(if (bannerUrl != null) Modifier.offset(y = (-24).dp) else Modifier.padding(top = 16.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                AvatarWithPresence(
-                    avatarUrl = profile.avatarUrl,
-                    displayName = profile.displayName,
-                    isOnline = true,
-                    size = 56.dp
+        },
+    )
+}
+
+@Composable
+private fun themeName(theme: AppTheme): String = when (theme) {
+    AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
+    AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
+    AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
+}
+
+@Composable
+private fun fontName(font: ProfileFont?): String = stringResource(
+    when (font) {
+        null -> R.string.custom_option_viewer
+        ProfileFont.MONO -> R.string.custom_font_mono
+        ProfileFont.SERIF -> R.string.custom_font_serif
+        ProfileFont.ROUNDED -> R.string.custom_font_rounded
+    }
+)
+
+/**
+ * Мини-карточка профиля. Рисуется внутри [ProfileAppearanceTheme], поэтому
+ * тема, акцент и шрифт берутся из MaterialTheme, а фон и баннер — из [appearance].
+ */
+@Composable
+fun ProfilePreview(
+    profile: UserProfile,
+    appearance: ProfileAppearance,
+    modifier: Modifier = Modifier,
+) {
+    val compact = appearance.layout == ProfileLayout.COMPACT
+    VlSurface(modifier = modifier.fillMaxWidth()) {
+        Box {
+            appearance.backgroundUrl?.let { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    modifier = Modifier.matchParentSize(),
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.35f,
                 )
             }
-            
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.then(if (bannerUrl != null) Modifier.offset(y = (-16).dp) else Modifier)
-            ) {
-                Text(
-                    profile.displayName,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp
-                )
-                Text(
-                    "@${profile.username}",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = 13.sp
-                )
+            Column(Modifier.fillMaxWidth()) {
+                appearance.bannerUrl?.let { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(72.dp)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
+                val avatar = @Composable {
+                    AvatarWithPresence(
+                        avatarUrl = profile.avatarUrl,
+                        displayName = profile.displayName,
+                        isOnline = true,
+                        size = if (compact) 44.dp else 56.dp,
+                    )
+                }
+                val names = @Composable { align: Alignment.Horizontal ->
+                    Column(horizontalAlignment = align) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                profile.displayName.ifBlank { profile.username },
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            appearance.emojis?.let { Text(" $it", style = MaterialTheme.typography.titleMedium) }
+                        }
+                        Text(
+                            "@${profile.username}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                if (compact) {
+                    Row(
+                        Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        avatar()
+                        names(Alignment.Start)
+                    }
+                } else {
+                    Column(
+                        Modifier.fillMaxWidth().padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        avatar()
+                        names(Alignment.CenterHorizontally)
+                    }
+                }
+                // Кнопка показывает акцент — главное, что меняет пресет
+                VlButton(
+                    onClick = {},
+                    hapticEnabled = false,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp).fillMaxWidth(),
+                ) { Text(stringResource(R.string.custom_preview_button)) }
             }
         }
     }

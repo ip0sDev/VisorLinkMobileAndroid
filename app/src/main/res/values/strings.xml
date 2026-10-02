@@ -585,6 +585,29 @@
     <string name="settings_custom_hide_sub">Display profiles in system style</string>
     <string name="settings_custom_pro_only">Available only with PRO subscription!</string>
     <string name="settings_custom_in_development">In development</string>
+    <string name="custom_back">Back</string>
+    <string name="custom_save_error">Couldn\'t save</string>
+    <string name="custom_section_preview">Preview</string>
+    <string name="custom_preview_hint">This is how other users see your profile and your chat with them.</string>
+    <string name="custom_preview_button">Message</string>
+    <string name="custom_section_theme">Theme</string>
+    <string name="custom_option_viewer">Viewer\'s choice</string>
+    <string name="custom_theme_viewer_desc">Everyone sees their own theme</string>
+    <string name="custom_section_accent">Accent color</string>
+    <string name="custom_section_font">Font</string>
+    <string name="custom_font_mono">Monospace</string>
+    <string name="custom_font_serif">Serif</string>
+    <string name="custom_font_rounded">Rounded</string>
+    <string name="custom_section_layout">Profile layout</string>
+    <string name="custom_layout_default">Standard</string>
+    <string name="custom_layout_compact">Compact</string>
+    <string name="custom_section_media">Background and banner</string>
+    <string name="custom_media_background">Profile and chat background</string>
+    <string name="custom_media_banner">Animated banner (GIF)</string>
+    <string name="custom_media_none">Not set</string>
+    <string name="custom_media_set">Set</string>
+    <string name="custom_media_uploading">Uploading…</string>
+    <string name="custom_media_remove">Remove</string>
     <string name="settings_section_accent">Color Accent</string>
 
     <!-- Bottom navigation tab labels (short — the screen titles are separate) -->

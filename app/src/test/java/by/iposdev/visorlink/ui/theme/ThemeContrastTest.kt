@@ -198,6 +198,28 @@ class ThemeContrastTest {
             }
     }
 
+    /**
+     * M3E: пресет тонирует primary и непрозрачные контейнеры. secondaryContainer —
+     * это selectionFill M3E (pill навигации), primaryContainer — фон моих пузырей,
+     * на котором текст рисуется onSurface (см. VlBubbleTokens в Theme.kt).
+     */
+    @Test
+    fun `every color preset keeps M3E readable`() {
+        listOf(Triple("M3E dark", DarkM3, true), Triple("M3E light", LightM3, false))
+            .forEach { (label, base, isDark) ->
+                ColorPreset.entries.forEach { preset ->
+                    val cs = base.withMaterialAccent(preset.seedColor, isDark)
+                    val p = "$label/${preset.name}"
+                    assertReadable("$p onPrimary/primary", cs.onPrimary, cs.primary, min = 4.5)
+                    assertReadable("$p onPrimaryContainer/primaryContainer", cs.onPrimaryContainer, cs.primaryContainer, min = 4.5)
+                    assertReadable("$p onSecondaryContainer/secondaryContainer", cs.onSecondaryContainer, cs.secondaryContainer, min = 4.5)
+                    assertReadable("$p bubble text onSurface/primaryContainer", cs.onSurface, cs.primaryContainer, min = 4.5)
+                    // Акцентная подпись (@username, заголовок секции) на фоне экрана
+                    assertReadable("$p primary/background", cs.primary, cs.background, min = 3.0)
+                }
+            }
+    }
+
     @Test
     fun `selection fill is readable in Biolume and Forge`() {
         listOf(AppTheme.BIOLUME, AppTheme.FORGE).forEach { theme ->

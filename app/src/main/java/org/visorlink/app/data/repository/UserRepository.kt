@@ -528,25 +528,21 @@ class UserRepository(
     }
 
     suspend fun updateCustomization(customization: Map<String, Any?>) {
+        // Оптимистично: экран профиля и превью редактора обновляются сразу, не
+        // дожидаясь снапшота Firestore (а в режиме бэкенда снапшота нет вовсе)
+        updateCachedProfile(currentUid) { it.copy(customization = customization) }
         if (isProfileBackendEnabled()) {
-            try {
-                api.updateProfile(UpdateProfileRequest(customization = customization))
-            } catch (e: Exception) {}
-        } else {
+            // Ошибку не глотаем: раньше редактор показывал «сохранено», а сервер отказал
+            api.updateProfile(UpdateProfileRequest(customization = customization))
+        } else if (!isFirestoreDisabled()) {
             db.collection("users").document(currentUid)
                 .update("customization", customization).await()
-        }
-
-        scope.launch {
-            val cacheUid = if (isProfileBackendEnabled()) currentUid + "_backend" else currentUid
-            val profile = ChatDataCache.loadProfile(context, cacheUid)
-            if (profile != null) {
-                ChatDataCache.saveProfile(context, profile.copy(customization = customization))
-            }
         }
     }
 
     suspend fun updateIgnoreCustomizations(ignore: Boolean) {
+        // У бэкенда пока нет поля ignoreCustomizations — там настройка живёт только локально
+        updateCachedProfile(currentUid) { it.copy(ignoreCustomizations = ignore) }
         if (!isFirestoreDisabled()) {
             db.collection("users").document(currentUid)
                 .update("ignoreCustomizations", ignore).await()
