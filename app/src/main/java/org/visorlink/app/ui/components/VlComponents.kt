@@ -132,7 +132,7 @@ fun ColorPresetCircle(
         label = "scale"
     )
 
-    val shape = CircleShape
+    val shape = VlTheme.tokens.shapes.adapt(CircleShape)
 
     val bgModifier = if (isDefault) {
         Modifier.background(Brush.sweepGradient(listOf(Color.Blue, Color.Magenta, Color.Red, Color(0xFFFFA500), Color.Blue)), shape)
@@ -179,7 +179,7 @@ fun VlGlassPanel(
 ) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(radius)
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(radius))
 
     if (tokens.structure.enabled) {
         Box(
@@ -518,7 +518,7 @@ fun VlTapFeedback(
     onClick: (() -> Unit)?,
     tintColor: Color,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(0.dp),
+    shape: Shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(0.dp)),
     content: @Composable () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -583,7 +583,7 @@ fun VlSettingsSection(
         // настроек, поэтому именно здесь рельеф даёт максимум читаемости структуры.
         val tokens = VlTheme.tokens
         val isLiquidEnabled = rememberLiquidEnabled()
-        val sectionShape = if (isLiquidEnabled) tokens.shapes.liquid(32.dp) else tokens.shapes.section
+        val sectionShape = if (isLiquidEnabled) tokens.shapes.rounded(32.dp) else tokens.shapes.section
         val isDark = cs.surface.luminance() < 0.5f
 
         val cardBrush = remember(isLiquidEnabled, isDark, cs) {
@@ -654,7 +654,7 @@ fun VlSettingsItem(
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
     val isLiquidEnabled = rememberLiquidEnabled()
-    val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.liquid(14.dp) else VlTheme.tokens.shapes.indicator
+    val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.rounded(14.dp) else VlTheme.tokens.shapes.indicator
 
     val color = iconColor ?: if (isDestructive) cs.error else cs.primary
 
@@ -720,10 +720,10 @@ fun VlOptionRow(
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
     val isLiquidEnabled = rememberLiquidEnabled()
-    val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.liquid(14.dp) else VlTheme.tokens.shapes.indicator
+    val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.rounded(14.dp) else VlTheme.tokens.shapes.indicator
 
     val rowShape: Shape = if (isLiquidEnabled) {
-        VlTheme.tokens.shapes.liquid(20.dp)
+        VlTheme.tokens.shapes.rounded(20.dp)
     } else {
         VlTheme.tokens.shapes.row
     }
@@ -821,7 +821,7 @@ fun ProBadge(modifier: Modifier = Modifier) {
         modifier = modifier
             .background(
                 Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFF39C12))),
-                RoundedCornerShape(6.dp)
+                VlTheme.tokens.shapes.adapt(RoundedCornerShape(6.dp))
             )
             .padding(horizontal = 6.dp, vertical = 2.dp)
     ) {
@@ -866,7 +866,7 @@ fun AdminBadge() {
         modifier = Modifier
             .background(
                 Brush.linearGradient(listOf(Color(0xFFFF0055), Color(0xFFFF4B2B))),
-                RoundedCornerShape(6.dp)
+                VlTheme.tokens.shapes.adapt(RoundedCornerShape(6.dp))
             )
             .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {

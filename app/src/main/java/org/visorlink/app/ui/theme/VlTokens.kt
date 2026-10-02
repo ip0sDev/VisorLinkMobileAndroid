@@ -164,12 +164,22 @@ data class VlShapeTokens(
     val isSquare: Boolean get() = cardRadius == 0.dp
 
     /**
-     * Скругление «жидкого» варианта (флаг `animation_test`, по умолчанию включён).
-     * Он скругляет сильнее обычной шкалы, но тема без скруглений их не получает:
-     * раньше жидкие 32/20/14dp были зашиты в компоненты, и Forge в проде ходил
-     * со скруглёнными секциями и строками.
+     * Любая форма, кроме формы шкалы без скруглений: там — прямой угол.
+     *
+     * Компоненты и экраны рисуют много своих форм (`RoundedCornerShape(12.dp)`,
+     * `CircleShape`), и раньше Forge получал их как есть — «ни одного
+     * скругления» нарушалось в каждом листе, плеере и диалоге. Все такие формы
+     * в `ui/components` и `ui/screens` проходят через [adapt]; для скруглённых
+     * тем он возвращает форму без изменений.
      */
-    fun liquid(radius: Dp): Shape = if (isSquare) RectangleShape else RoundedCornerShape(radius)
+    fun adapt(shape: Shape): Shape = if (isSquare) RectangleShape else shape
+
+    /**
+     * Скругление на [radius]. В частности — для «жидкого» варианта (флаг
+     * `animation_test`, по умолчанию включён), который скругляет сильнее
+     * обычной шкалы.
+     */
+    fun rounded(radius: Dp): Shape = adapt(RoundedCornerShape(radius))
 }
 
 // ── Движение ─────────────────────────────────────────────────────────────────

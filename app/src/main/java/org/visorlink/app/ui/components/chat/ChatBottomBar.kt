@@ -121,7 +121,7 @@ fun ChatBottomBar(
                 Button(
                     onClick = { onJoinChannel?.invoke() },
                     enabled = !uiState.isJoiningChannel,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.primary)
                 ) {
                     if (uiState.isJoiningChannel) {

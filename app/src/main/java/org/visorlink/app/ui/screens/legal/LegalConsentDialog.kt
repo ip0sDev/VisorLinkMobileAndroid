@@ -116,8 +116,8 @@ fun LegalConsentDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.94f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .border(1.dp, cs.outlineVariant, RoundedCornerShape(24.dp)),
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)))
+                    .border(1.dp, cs.outlineVariant, VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))),
                 customRadius = 24.dp
             ) {
                 Column(
@@ -145,9 +145,9 @@ fun LegalConsentDialog(
                                 Box(
                                     modifier = Modifier
                                         .size(38.dp)
-                                        .clip(RoundedCornerShape(10.dp))
+                                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp)))
                                         .background(cs.primary.copy(alpha = 0.14f))
-                                        .border(1.dp, cs.primary.copy(alpha = 0.28f), RoundedCornerShape(10.dp)),
+                                        .border(1.dp, cs.primary.copy(alpha = 0.28f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp))),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
@@ -252,7 +252,7 @@ fun LegalConsentDialog(
                                 Spacer(Modifier.height(20.dp))
                                 Button(
                                     onClick = { reloadTrigger++ },
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = cs.primary,
                                         contentColor = cs.onPrimary
@@ -343,7 +343,7 @@ fun LegalConsentDialog(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                             .clickable { agreeTos = !agreeTos }
                                             .padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -367,7 +367,7 @@ fun LegalConsentDialog(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                             .clickable { agreePrivacy = !agreePrivacy }
                                             .padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -391,7 +391,7 @@ fun LegalConsentDialog(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                             .clickable { agreePersonalData = !agreePersonalData }
                                             .padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -415,7 +415,7 @@ fun LegalConsentDialog(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                             .clickable { agreeCrossBorder = !agreeCrossBorder }
                                             .padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -439,7 +439,7 @@ fun LegalConsentDialog(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                             .clickable { agreeAge14 = !agreeAge14 }
                                             .padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -470,7 +470,7 @@ fun LegalConsentDialog(
                                 OutlinedButton(
                                     onClick = onLogout,
                                     modifier = Modifier.weight(0.35f),
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)),
                                     colors = ButtonDefaults.outlinedButtonColors(
                                         contentColor = cs.error
                                     ),
@@ -494,7 +494,7 @@ fun LegalConsentDialog(
                                     },
                                     modifier = Modifier.weight(0.65f),
                                     enabled = allAgreed && !isSubmitting && loadError == null,
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = cs.primary,
                                         contentColor = cs.onPrimary,
@@ -522,7 +522,7 @@ fun LegalConsentDialog(
                             Button(
                                 onClick = onDismissReadOnly,
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
+                                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = cs.surfaceContainerHigh,
                                     contentColor = cs.onSurface
@@ -551,9 +551,9 @@ fun LegalSectionCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
             .background(cs.surfaceContainer.copy(alpha = 0.60f))
-            .border(1.dp, cs.outlineVariant, RoundedCornerShape(14.dp))
+            .border(1.dp, cs.outlineVariant, VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
             .padding(14.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -571,7 +571,7 @@ fun LegalSectionCard(
                     Box(
                         modifier = Modifier
                             .size(24.dp)
-                            .clip(CircleShape)
+                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(cs.primary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -598,9 +598,9 @@ fun LegalSectionCard(
                 if (!section.badge.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
-                            .clip(CircleShape)
+                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(cs.surfaceContainerHigh)
-                            .border(1.dp, cs.outlineVariant, CircleShape)
+                            .border(1.dp, cs.outlineVariant, VlTheme.tokens.shapes.adapt(CircleShape))
                             .padding(horizontal = 8.dp, vertical = 3.dp)
                     ) {
                         Text(
@@ -620,9 +620,9 @@ fun LegalSectionCard(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp)))
                         .background(cs.surfaceContainerLow)
-                        .border(1.dp, cs.outlineVariant.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                        .border(1.dp, cs.outlineVariant.copy(alpha = 0.5f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp)))
                         .padding(10.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {

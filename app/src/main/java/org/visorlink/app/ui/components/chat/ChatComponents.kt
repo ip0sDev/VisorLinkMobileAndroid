@@ -254,7 +254,7 @@ fun UploadProgressOverlay(
         Box(
             modifier = Modifier
                 .size(56.dp) // Чуть больше
-                .background(Color.Black.copy(alpha = 0.6f), CircleShape),
+                .background(Color.Black.copy(alpha = 0.6f), VlTheme.tokens.shapes.adapt(CircleShape)),
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(

@@ -1,5 +1,6 @@
-package org.visorlink.app.ui.screens.stickers
+package org.visorlink.app.ui.components.stickers
 
+import org.visorlink.app.ui.screens.stickers.StickerPackViewModel
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -78,7 +79,7 @@ fun StickerPickerBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = null,
-        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
         containerColor = if (tokens.isBiolume) cs.surfaceContainerLow else cs.surface,
         contentWindowInsets = { WindowInsets(0) }
     ) {
@@ -168,7 +169,7 @@ internal fun StickerPickerContent(
         ) {
             // Компактный переключатель [Мои] [Магазин]
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                 color = if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerHigh,
                 modifier = Modifier.height(34.dp)
             ) {
@@ -181,7 +182,7 @@ internal fun StickerPickerContent(
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)))
                             .background(
                                 if (mySelected) {
                                     if (tokens.isBiolume) cs.primary.copy(alpha = 0.22f) else cs.primaryContainer
@@ -204,7 +205,7 @@ internal fun StickerPickerContent(
 
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)))
                             .background(
                                 if (storeSelected) {
                                     if (tokens.isBiolume) cs.primary.copy(alpha = 0.22f) else cs.primaryContainer
@@ -610,7 +611,7 @@ private fun PackContentGrid(
         if (!isInstalled) {
             item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(4) }) {
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)),
                     color = cs.primaryContainer.copy(alpha = 0.45f),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -677,7 +678,7 @@ private fun StickerCell(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val itemShape = RoundedCornerShape(14.dp)
+    val itemShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.88f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f))
@@ -719,10 +720,10 @@ private fun StickerCell(
         val emojiMod = Modifier
             .align(Alignment.BottomEnd)
             .padding(6.dp)
-            .clip(CircleShape)
+            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
             .background(cs.surface.copy(alpha = if (tokens.isBiolume) 0.85f else 0.75f))
             .then(
-                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.3f), CircleShape)
+                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.3f), VlTheme.tokens.shapes.adapt(CircleShape))
                 else Modifier
             )
             .padding(horizontal = 5.dp, vertical = 2.dp)

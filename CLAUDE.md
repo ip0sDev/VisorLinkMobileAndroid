@@ -146,7 +146,7 @@ Biolume's two rules, both from the guidelines, both easy to violate accidentally
 
 Raised vs Inset is semantic, not decorative: things that *press on* something are raised (cards, chips at rest, switch thumb, icon trays, settings sections, chat list rows, the input panel); things that *receive* are inset (text fields, switch track, pressed buttons, selected chips, the selected nav pill, quoted-reply blocks).
 
-**The "liquid" variant is what users actually see.** `AppFlags.isEnabled("animation_test")` defaults to `true` (`FlagsModels.kt`), so `rememberLiquidEnabled()` branches in `VlSwitch`, `VlSettingsSection`, `VlSettingsItem`, `VlOptionRow` and `VlNavigationBar` (`NeumorphicLiquidNavBarContent`) are the production path. Screenshot tests render it too, because the stub flags use the same default. Liquid radii must go through `tokens.shapes.liquid(r)`, which collapses to `RectangleShape` for a square scale (`cardRadius == 0`). Never write a bare `RoundedCornerShape` there: that is how Forge shipped with rounded sections. `section` and `row` are separate shape roles because Biolume's `card` (16dp) differs from its settings section (24dp).
+**The "liquid" variant is what users actually see.** `AppFlags.isEnabled("animation_test")` defaults to `true` (`FlagsModels.kt`), so `rememberLiquidEnabled()` branches in `VlSwitch`, `VlSettingsSection`, `VlSettingsItem`, `VlOptionRow` and `VlNavigationBar` (`NeumorphicLiquidNavBarContent`) are the production path. Screenshot tests render it too, because the stub flags use the same default. Every ad-hoc shape in `ui/components` and `ui/screens` goes through `VlTheme.tokens.shapes.adapt(shape)` or `.rounded(r)`, which collapse to `RectangleShape` on a square scale (`cardRadius == 0`, Forge) and return the shape unchanged otherwise. A bare `RoundedCornerShape` or `CircleShape` there is how Forge shipped with rounded sections, sheets and dialogs. `checkUiRules` counts them as `raw-shape`. `section` and `row` are separate shape roles because Biolume's `card` (16dp) differs from its settings section (24dp).
 
 **Relief needs clearance.** `vlRaised` draws outside the component's bounds, so a raised element wants ≥6–8dp of air. Where there isn't any — `ChatListItem` in compact mode, chat bubbles — use `vlHairline` alone instead; overlapping soft shadows read as dirty bands, which is worse than no relief. That trade-off is why bubbles have no relief at all (they also read `tokens.bubbles` instead of `colorScheme`, since Biolume's `primaryContainer` at alpha .12 is too faint for a bubble).
 
@@ -170,7 +170,9 @@ Profile customization is typed: `data/model/ProfileAppearance.kt` is the only pl
 
 Shared composables in `ui/components/` are prefixed `Vl`: `VlSurface`, `VlCard`, `VlButton`, `VlSwitch`, `VlSegmentedControl`, `VlSettingsSection`/`VlSettingsItem`, `VlOptionRow`, `VlDialog`, `VlToast`, `VlAmbientGlow`, `VlGlassPanel`, `VlTextField`, `VlFab`, `VlLiveDot`/`VlPresenceDot`, `VlNavigationBar`, `VlBrandText`, `VlTopAppBar`.
 
-`VlTopAppBar` should be used instead of `TopAppBar` on main screens. In Forge it uses `surfaceContainerHigh` with a bottom hairline.
+`VlTopAppBar` should be used instead of `TopAppBar` on main screens. Media viewers (`ImageViewerScreen`, `ImageEditorScreen`) are the deliberate exception: their bars are transparent over the image.
+
+Dialogs are `VlAlertDialog` + `VlDialogButton`, never M3 `AlertDialog`/`TextButton`. One overload mirrors the M3 API (`confirmButton` / `dismissButton` / `icon`), so moving a screen over is a rename; use `isDestructive` instead of `colors = …error`. It enforces M3's 280dp minimum width. Category icon tints in settings live in `VlCategoryTint`, not as `Color(0x…)` in the screen. In Forge it uses `surfaceContainerHigh` with a bottom hairline.
 
 `VlFab` supports both standard icon-only and extended (icon + text) modes. It also has a `content` slot for custom icon morphs.
 

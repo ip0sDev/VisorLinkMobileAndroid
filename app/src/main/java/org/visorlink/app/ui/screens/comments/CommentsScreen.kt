@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.comments
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import android.Manifest
 import android.net.Uri
 import android.widget.Toast
@@ -98,7 +99,7 @@ fun CommentsScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")

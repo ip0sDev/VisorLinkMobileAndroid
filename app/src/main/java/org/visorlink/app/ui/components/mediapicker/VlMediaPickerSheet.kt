@@ -135,7 +135,7 @@ fun VlMediaPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)),
         containerColor = if (tokens.isBiolume) cs.surfaceContainerLow else cs.surface,
         dragHandle = {
             Box(
@@ -149,7 +149,7 @@ fun VlMediaPickerSheet(
                     modifier = Modifier
                         .width(38.dp)
                         .height(4.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(cs.outlineVariant.copy(alpha = 0.5f))
                 )
             }
@@ -353,7 +353,7 @@ fun VlMediaPickerViewContent(
                                 Box(
                                     modifier = Modifier
                                         .size(68.dp)
-                                        .clip(CircleShape)
+                                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                         .background(cs.primaryContainer.copy(alpha = 0.65f)),
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -427,7 +427,7 @@ fun VlMediaPickerViewContent(
             ) {
                 // Кнопка перехода в редактор (аккуратный неоморфный кругляш)
                 if (selectedItems.size == 1 && selectedItems.first().type == MediaType.IMAGE) {
-                    val editShape = CircleShape
+                    val editShape = VlTheme.tokens.shapes.adapt(CircleShape)
                     Surface(
                         onClick = {
                             val item = selectedItems.first()
@@ -537,7 +537,7 @@ private fun MediaPickerTopBar(
         // Центральный заголовок или счетчик выбора
         if (selectedCount > 0 && currentTab != MediaPickerTab.CAMERA) {
             val tokens = VlTheme.tokens
-            val pillShape = CircleShape
+            val pillShape = VlTheme.tokens.shapes.adapt(CircleShape)
             Box(
                 modifier = Modifier
                     .padding(horizontal = 8.dp)
@@ -623,7 +623,7 @@ private fun MediaPickerBottomNavBar(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val barShape: Shape = if (tokens.isForge) tokens.shapes.bar else RoundedCornerShape(32.dp)
+    val barShape: Shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp))
     val tabs = MediaPickerTab.values()
 
     Box(
@@ -712,7 +712,7 @@ private fun BiolumeTabItem(
         label = "tab_scale"
     )
 
-    val pillShape = CircleShape
+    val pillShape = VlTheme.tokens.shapes.adapt(CircleShape)
     Box(
         modifier = modifier
             .then(

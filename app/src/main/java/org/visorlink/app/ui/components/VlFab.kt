@@ -106,7 +106,7 @@ fun VlFab(
     val tokens = VlTheme.tokens
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val fabShape: Shape = shape ?: if (tokens.structure.enabled) tokens.shapes.fab else RoundedCornerShape(16.dp)
+    val fabShape: Shape = shape ?: if (tokens.structure.enabled) tokens.shapes.fab else VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
 
     // Постоянное слабое свечение в покое, усиленное на время нажатия.
     val glowAlpha = if (isPressed) tokens.signal.glowAlpha else tokens.signal.fabRestAlpha

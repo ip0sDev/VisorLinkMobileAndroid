@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.settings
 
+import org.visorlink.app.ui.theme.VlCategoryTint
 import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -137,20 +138,20 @@ fun SettingsScreen(
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
     val versionString = "${BuildConfig.VERSION_NAME}.${BuildConfig.VERSION_CODE}.$buildDate [$commitHash]"
 
-    val colorNotif = Color(0xFFF59E0B)
-    val colorVibro = Color(0xFFEC4899)
-    val colorDynInput = Color(0xFF10B981)
-    val colorCompact = Color(0xFF3B82F6)
-    val colorStealth = Color(0xFF8B5CF6)
-    val colorStealthPin = Color(0xFF6366F1)
-    val colorStealthBiometric = Color(0xFF14B8A6)
-    val colorStorage = Color(0xFF3B82F6)
-    val colorBots = Color(0xFF14B8A6)
-    val colorEmail = Color(0xFF64748B)
-    val colorPassword = Color(0xFFF43F5E)
-    val colorSecurity = Color(0xFF10B981)
-    val colorUpdateChan = Color(0xFF6366F1)
-    val colorUpdateCheck = Color(0xFF10B981)
+    val colorNotif = VlCategoryTint.Amber
+    val colorVibro = VlCategoryTint.Pink
+    val colorDynInput = VlCategoryTint.Emerald
+    val colorCompact = VlCategoryTint.Blue
+    val colorStealth = VlCategoryTint.Violet
+    val colorStealthPin = VlCategoryTint.Indigo
+    val colorStealthBiometric = VlCategoryTint.Teal
+    val colorStorage = VlCategoryTint.Blue
+    val colorBots = VlCategoryTint.Teal
+    val colorEmail = VlCategoryTint.Slate
+    val colorPassword = VlCategoryTint.Rose
+    val colorSecurity = VlCategoryTint.Emerald
+    val colorUpdateChan = VlCategoryTint.Indigo
+    val colorUpdateCheck = VlCategoryTint.Emerald
 
     val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
@@ -209,7 +210,7 @@ fun SettingsScreen(
                 profile?.let { p ->
                     val tokens = VlTheme.tokens
                     val cs = MaterialTheme.colorScheme
-                    val accountShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else tokens.shapes.card
+                    val accountShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else tokens.shapes.card
                     val isDark = cs.surface.luminance() < 0.5f
 
                     val accountBrush = remember(isLiquidEnabled, isDark, cs) {
@@ -361,11 +362,11 @@ fun SettingsScreen(
                     VlSettingsItem(icon = Icons.Default.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
                     VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
                     VlSettingsItem(icon = Icons.Default.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
-                    VlSettingsItem(icon = Icons.Default.Explore, iconColor = Color(0xFF10B981), title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsState().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
+                    VlSettingsItem(icon = Icons.Default.Explore, iconColor = VlCategoryTint.Emerald, title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsState().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
                     val musicEnabled by themeViewModel.musicEnabled.collectAsState()
                     VlSettingsItem(
                         icon = Icons.Default.MusicNote,
-                        iconColor = Color(0xFFEC4899),
+                        iconColor = VlCategoryTint.Pink,
                         title = stringResource(R.string.music_settings_title),
                         subtitle = stringResource(R.string.music_settings_desc),
                         trailing = {
@@ -400,7 +401,7 @@ fun SettingsScreen(
                     if (profile?.diaryEnabled == true) {
                         VlSettingsItem(
                             icon = Icons.Default.Notifications,
-                            iconColor = Color(0xFFF59E0B),
+                            iconColor = VlCategoryTint.Amber,
                             title = stringResource(R.string.diary_reminders_title),
                             subtitle = stringResource(R.string.diary_reminders_sub, profile?.diaryReminderTime ?: "21:00"),
                             onClick = {
@@ -489,10 +490,10 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
                 ) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
-                    VlSettingsItem(icon = Icons.Default.Security, iconColor = Color(0xFF10B981), title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
+                    VlSettingsItem(icon = Icons.Default.Security, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
                     VlSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
-                        iconColor = Color(0xFF2AABEE),
+                        iconColor = VlCategoryTint.Telegram,
                         title = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked, profile?.tg_username ?: "") else stringResource(R.string.settings_tg_link),
                         subtitle = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
                         onClick = {
@@ -652,7 +653,7 @@ fun SettingsScreen(
         )
     }
     if (showBugReportSheet) BugReportSheet(onDismiss = { showBugReportSheet = false })
-    if (showLogoutDialog) AlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { TextButton(onClick = { showLogoutDialog = false; authViewModel.logout() }) { Text("Выйти") } }, dismissButton = { TextButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
+    if (showLogoutDialog) VlAlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { VlDialogButton(onClick = { showLogoutDialog = false; authViewModel.logout() }, isDestructive = true) { Text("Выйти") } }, dismissButton = { VlDialogButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
     if (showDeleteAccountDialog) {
         var password by remember { mutableStateOf("") }
@@ -660,7 +661,7 @@ fun SettingsScreen(
         var deleteError by remember { mutableStateOf<String?>(null) }
         val uriHandler = LocalUriHandler.current
 
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { if (!isDeleting) showDeleteAccountDialog = false },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text(stringResource(R.string.delete_account_dialog_title), fontWeight = FontWeight.Bold) },
@@ -686,7 +687,7 @@ fun SettingsScreen(
                 }
             },
             confirmButton = {
-                Button(
+                VlDialogButton(isPrimary = true, 
                     onClick = {
                         if (password.isNotBlank() && !isDeleting) {
                             isDeleting = true
@@ -707,7 +708,7 @@ fun SettingsScreen(
                         }
                     },
                     enabled = password.isNotBlank() && !isDeleting,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    isDestructive = true
                 ) {
                     if (isDeleting) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onError, strokeWidth = 2.dp)
@@ -719,7 +720,7 @@ fun SettingsScreen(
                 }
             },
             dismissButton = {
-                TextButton(
+                VlDialogButton(
                     onClick = { showDeleteAccountDialog = false },
                     enabled = !isDeleting
                 ) {
@@ -783,9 +784,9 @@ fun SettingsScreen(
                     } else if (tgError != null) {
                         Text(tgError!!, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
                     } else if (tgCode != null) {
-                        Text(text = tgCode!!, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = 8.sp), color = Color(0xFF2AABEE), modifier = Modifier.padding(vertical = 16.dp))
+                        Text(text = tgCode!!, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 36.sp, fontWeight = FontWeight.Bold, letterSpacing = 8.sp), color = VlCategoryTint.Telegram, modifier = Modifier.padding(vertical = 16.dp))
                         Text("Отправьте нашему боту в Telegram команду:", style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(vertical = 12.dp)) {
+                        Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)), modifier = Modifier.padding(vertical = 12.dp)) {
                             Text("/start ${tgCode!!}", modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold))
                         }
                         Text("Срок действия кода — 5 минут.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f))
@@ -1007,12 +1008,12 @@ private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, pr
         VlSettingsItem(
             icon = Icons.Default.Toll,
             title = stringResource(R.string.pro_bits),
-            trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = Color(0xFFC5A059)) }
+            trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = VlCategoryTint.ProGold) }
         )
 
         if (!profile.isProActive()) {
             val isLiquid = rememberLiquidEnabled()
-            val buttonShape = if (isLiquid) RoundedCornerShape(20.dp) else RoundedCornerShape(12.dp)
+            val buttonShape = if (isLiquid) VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 if (!profile.trialUsed) {
                     OutlinedButton(
@@ -1114,7 +1115,7 @@ private fun SecretDevMenuSheet(
 
             VlSettingsItem(
                 icon = Icons.Default.VerifiedUser,
-                iconColor = Color(0xFF10B981),
+                iconColor = VlCategoryTint.Emerald,
                 title = "App Check Диагностика",
                 subtitle = "Проверка целостности и токенов Play Integrity / Debug",
                 onClick = {
@@ -1149,7 +1150,7 @@ private fun SecretDevMenuSheet(
 
             VlSettingsItem(
                 icon = Icons.Default.Terminal,
-                iconColor = Color(0xFF6366F1),
+                iconColor = VlCategoryTint.Indigo,
                 title = "Aegis Project Debug",
                 subtitle = "Отладка локальной базы данных и логов Aegis",
                 onClick = {
@@ -1160,7 +1161,7 @@ private fun SecretDevMenuSheet(
 
             VlSettingsItem(
                 icon = Icons.Default.ToggleOn,
-                iconColor = Color(0xFFEC4899),
+                iconColor = VlCategoryTint.Pink,
                 title = "Flag Flipper",
                 subtitle = "Управление Feature Flags в реальном времени",
                 onClick = {

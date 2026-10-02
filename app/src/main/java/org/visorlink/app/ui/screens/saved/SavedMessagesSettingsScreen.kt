@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.saved
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -144,7 +145,7 @@ fun SavedMessagesSettingsScreen(
                             val cs = MaterialTheme.colorScheme
                             options.forEach { (value, label) ->
                                 val selected = lockTimeout == value
-                                val chipShape = RoundedCornerShape(16.dp)
+                                val chipShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
                                 val bg = if (selected) cs.primaryContainer else cs.surfaceContainerHigh.copy(alpha = 0.5f)
                                 val contentColor = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant
                                 val border = if (selected) BorderStroke(1.dp, cs.primary.copy(alpha = 0.35f)) else null
@@ -200,7 +201,7 @@ fun SavedMessagesSettingsScreen(
     if (showDisablePinDialog) {
         AlertDialog(
             onDismissRequest = { showDisablePinDialog = false },
-            shape = RoundedCornerShape(28.dp),
+            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)),
             icon = {
                 Icon(
                     Icons.Default.LockOpen,
@@ -225,7 +226,7 @@ fun SavedMessagesSettingsScreen(
                         showDisablePinDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
                 ) {
                     Text("Удалить и отключить", color = MaterialTheme.colorScheme.onError, fontWeight = FontWeight.Bold)
                 }
@@ -233,7 +234,7 @@ fun SavedMessagesSettingsScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showDisablePinDialog = false },
-                    shape = RoundedCornerShape(16.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
                 ) {
                     Text("Отмена")
                 }
@@ -248,7 +249,7 @@ private fun WarningBanner(
     isLiquidEnabled: Boolean = false
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else RoundedCornerShape(20.dp)
+    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))
 
     Surface(
         shape = shape,
@@ -266,7 +267,7 @@ private fun WarningBanner(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
-                        .background(cs.primary.copy(alpha = 0.15f), CircleShape),
+                        .background(cs.primary.copy(alpha = 0.15f), VlTheme.tokens.shapes.adapt(CircleShape)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -320,7 +321,7 @@ private fun SetPinDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(28.dp),
+        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)),
         icon = {
             Icon(
                 Icons.Default.Lock,
@@ -363,7 +364,7 @@ private fun SetPinDialog(
             Button(
                 onClick = { onConfirm(pin) },
                 enabled = pin.length >= 4 && !mismatch && confirmPin == pin,
-                shape = RoundedCornerShape(16.dp)
+                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
             ) {
                 Text("Установить", fontWeight = FontWeight.Bold)
             }
@@ -371,7 +372,7 @@ private fun SetPinDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                shape = RoundedCornerShape(16.dp)
+                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
             ) {
                 Text("Отмена")
             }

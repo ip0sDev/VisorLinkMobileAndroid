@@ -240,7 +240,7 @@ fun MusicLibraryScreen(
     // Диалог создания плейлиста
     if (showCreatePlaylistDialog) {
         val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.65f, stiffness = 420f)
-        val dialogShape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.extraLarge
+        val dialogShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else MaterialTheme.shapes.extraLarge
         AlertDialog(
             onDismissRequest = { showCreatePlaylistDialog = false },
             modifier = Modifier.liquidPopIn(popProgress, isLiquidEnabled),
@@ -257,7 +257,7 @@ fun MusicLibraryScreen(
                     onValueChange = { newPlaylistName = it },
                     label = { Text(stringResource(R.string.music_playlist_name)) },
                     singleLine = true,
-                    shape = if (isLiquidEnabled) RoundedCornerShape(16.dp) else RoundedCornerShape(12.dp),
+                    shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)),
                     modifier = Modifier.fillMaxWidth()
                 )
             },
@@ -274,7 +274,7 @@ fun MusicLibraryScreen(
                         }
                     },
                     modifier = Modifier.liquidJelly(confirmJelly, enabled = isLiquidEnabled),
-                    shape = if (isLiquidEnabled) RoundedCornerShape(16.dp) else ButtonDefaults.shape
+                    shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)) else ButtonDefaults.shape
                 ) {
                     Text("Создать")
                 }
@@ -300,7 +300,7 @@ private fun MusicSearchBar(
 ) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
-    val shape = if (isLiquidEnabled) RoundedCornerShape(26.dp) else RoundedCornerShape(12.dp)
+    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(26.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
     val clearJelly = rememberLiquidJellyState()
 
     OutlinedTextField(
@@ -371,7 +371,7 @@ private fun PlaylistsTabView(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         itemsIndexed(playlists, key = { _, it -> it.id }) { index, playlist ->
-            val cardShape = if (isLiquidEnabled) RoundedCornerShape(22.dp) else RoundedCornerShape(12.dp)
+            val cardShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(22.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
             val cardJelly = rememberLiquidJellyState(softness = 0.06f)
 
             val border = remember(isLiquidEnabled, isDark, cs) {
@@ -417,7 +417,7 @@ private fun PlaylistsTabView(
                         Box(
                             modifier = Modifier
                                 .size(52.dp)
-                                .clip(if (isLiquidEnabled) RoundedCornerShape(16.dp) else RoundedCornerShape(10.dp))
+                                .clip(if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp)))
                                 .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
@@ -581,7 +581,7 @@ private fun DeviceTracksTabView(
                         onRequestPermission()
                     },
                     modifier = Modifier.liquidJelly(permJelly, enabled = isLiquidEnabled),
-                    shape = if (isLiquidEnabled) RoundedCornerShape(18.dp) else ButtonDefaults.shape
+                    shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)) else ButtonDefaults.shape
                 ) {
                     Text(stringResource(R.string.music_grant_permission))
                 }
@@ -732,9 +732,9 @@ private fun MiniEqualizerIndicator(
         val effH1 = if (isPlaying) h1 else 0.35f
         val effH2 = if (isPlaying) h2 else 0.6f
         val effH3 = if (isPlaying) h3 else 0.25f
-        Box(Modifier.weight(1f).fillMaxHeight(effH1).clip(RoundedCornerShape(1.dp)).background(color))
-        Box(Modifier.weight(1f).fillMaxHeight(effH2).clip(RoundedCornerShape(1.dp)).background(color))
-        Box(Modifier.weight(1f).fillMaxHeight(effH3).clip(RoundedCornerShape(1.dp)).background(color))
+        Box(Modifier.weight(1f).fillMaxHeight(effH1).clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(1.dp))).background(color))
+        Box(Modifier.weight(1f).fillMaxHeight(effH2).clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(1.dp))).background(color))
+        Box(Modifier.weight(1f).fillMaxHeight(effH3).clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(1.dp))).background(color))
     }
 }
 
@@ -755,7 +755,7 @@ private fun TrackRowItem(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
-    val trackShape = if (isLiquidEnabled) RoundedCornerShape(18.dp) else RoundedCornerShape(10.dp)
+    val trackShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp))
     val itemJelly = rememberLiquidJellyState(softness = 0.05f)
 
     val border = remember(isLiquidEnabled, isCurrent, isDark, cs) {
@@ -804,7 +804,7 @@ private fun TrackRowItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Мини-обложка или винил
-            val coverShape = if (isLiquidEnabled) RoundedCornerShape(12.dp) else CircleShape
+            val coverShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)) else VlTheme.tokens.shapes.adapt(CircleShape)
             Box(
                 modifier = Modifier
                     .size(44.dp)

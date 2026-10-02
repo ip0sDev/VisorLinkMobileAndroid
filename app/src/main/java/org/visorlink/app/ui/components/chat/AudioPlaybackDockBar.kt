@@ -122,7 +122,7 @@ fun AudioPlaybackDockBar(
     val isPlaying = musicPlayback.isPlaying
     val isDark = cs.surface.luminance() < 0.5f
 
-    val dockShape: Shape = if (tokens.isForge) tokens.shapes.card else RoundedCornerShape(26.dp)
+    val dockShape: Shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(26.dp))
 
     val dockBrush = remember(isDark, cs, tokens.isForge) {
         if (tokens.isForge) {
@@ -227,7 +227,7 @@ fun AudioPlaybackDockBar(
                         track = shown,
                         isPlaying = isPlaying,
                         accent = cs.primary,
-                        shape = if (tokens.isForge) tokens.shapes.avatar else RoundedCornerShape(15.dp)
+                        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(15.dp))
                     )
 
                     Spacer(Modifier.width(12.dp))
@@ -273,7 +273,7 @@ fun AudioPlaybackDockBar(
                         modifier = Modifier
                             .size(42.dp)
                             .liquidJelly(playJelly, enabled = isLiquidEnabled)
-                            .clip(if (tokens.isForge) tokens.shapes.button else CircleShape)
+                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(cs.primary)
                             .clickable {
                                 if (isLiquidEnabled) playJelly.pulse(0.18f)
@@ -305,7 +305,7 @@ fun AudioPlaybackDockBar(
                             modifier = Modifier
                                 .size(36.dp)
                                 .liquidJelly(nextJelly, enabled = isLiquidEnabled)
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .clickable {
                                     if (isLiquidEnabled) nextJelly.pulse(0.16f)
                                     onNext()
@@ -328,7 +328,7 @@ fun AudioPlaybackDockBar(
                         modifier = Modifier
                             .size(34.dp)
                             .liquidJelly(closeJelly, enabled = isLiquidEnabled)
-                            .clip(if (tokens.isForge) tokens.shapes.button else CircleShape)
+                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(cs.onSurface.copy(alpha = 0.07f))
                             .clickable {
                                 if (isLiquidEnabled) closeJelly.pulse(0.16f)

@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.auth
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -84,7 +85,7 @@ fun RegisterScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(stringResource(R.string.register_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {

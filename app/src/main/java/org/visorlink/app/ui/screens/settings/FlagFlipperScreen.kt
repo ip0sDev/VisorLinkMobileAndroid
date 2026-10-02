@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
+import org.visorlink.app.ui.components.VlSwitch
+import org.visorlink.app.ui.components.VlTopAppBar
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -23,7 +25,7 @@ fun FlagFlipperScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text("Flag Flipper") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -56,7 +58,7 @@ fun FlagFlipperScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Switch(
+                    VlSwitch(
                         checked = isEnabled,
                         onCheckedChange = { viewModel.toggleFlag(key, it) }
                     )

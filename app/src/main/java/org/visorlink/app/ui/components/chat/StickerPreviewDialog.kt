@@ -85,7 +85,7 @@ fun StickerPreviewDialog(
                                 Color.Transparent
                             )
                         ),
-                        CircleShape
+                        VlTheme.tokens.shapes.adapt(CircleShape)
                     )
             )
 
@@ -116,12 +116,12 @@ fun StickerPreviewDialog(
                     // Эмодзи стикера в стеклянной плашке
                     if (sticker.emoji.isNotBlank()) {
                         Surface(
-                            shape = CircleShape,
+                            shape = VlTheme.tokens.shapes.adapt(CircleShape),
                             color = cs.surface.copy(alpha = 0.88f),
                             tonalElevation = 6.dp,
                             modifier = Modifier
                                 .then(
-                                    if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                                    if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.4f), VlTheme.tokens.shapes.adapt(CircleShape))
                                     else Modifier
                                 )
                         ) {
@@ -142,7 +142,7 @@ fun StickerPreviewDialog(
                         modifier = Modifier
                             .size(stickerSize)
                             .then(
-                                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, RoundedCornerShape(24.dp))
+                                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)))
                                 else Modifier
                             ),
                         contentAlignment = Alignment.Center

@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.chat
 
+import org.visorlink.app.ui.theme.VlTheme
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -88,7 +89,7 @@ fun StickerPackBottomSheet(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape),
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), VlTheme.tokens.shapes.adapt(CircleShape)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(text = displayEmoji, fontSize = 24.sp)
@@ -143,7 +144,7 @@ fun StickerPackBottomSheet(
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)))
                                     .combinedClickable(
                                         onClick = { previewSticker = item },
                                         onLongClick = { previewSticker = item }
@@ -177,7 +178,7 @@ fun StickerPackBottomSheet(
                     onClick = { /* already installed */ },
                     enabled = false,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -201,7 +202,7 @@ fun StickerPackBottomSheet(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)),
                     enabled = !isInstalling
                 ) {
                     if (isInstalling) {

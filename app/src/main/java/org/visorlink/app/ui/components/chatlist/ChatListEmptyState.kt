@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.chatlist
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -51,7 +52,7 @@ fun ChatListEmptyState(
                     modifier = Modifier
                         .size(96.dp)
                         .scale(breathScale)
-                        .background(primaryContainer.copy(alpha = breathAlpha), CircleShape)
+                        .background(primaryContainer.copy(alpha = breathAlpha), VlTheme.tokens.shapes.adapt(CircleShape))
                 )
 
                 Icon(

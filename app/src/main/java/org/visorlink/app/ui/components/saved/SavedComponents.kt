@@ -132,7 +132,7 @@ fun PinInputDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {

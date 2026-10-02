@@ -35,7 +35,7 @@ import org.visorlink.app.ui.components.mediapicker.VlMediaPickerViewContent
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.screens.chat.ChatUiState
 import org.visorlink.app.ui.screens.stickers.StickerPackViewModel
-import org.visorlink.app.ui.screens.stickers.StickerPickerContent
+import org.visorlink.app.ui.components.stickers.StickerPickerContent
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlRaised
@@ -132,7 +132,7 @@ fun LiquidMorphingChatBottomBar(
         if (showMediaPicker) onCloseMediaPicker()
     }
 
-    val panelShape = RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius)
+    val panelShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius))
 
     Box(
         modifier = modifier

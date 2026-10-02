@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.chat
 
+import org.visorlink.app.ui.components.VlDialogButton
+import org.visorlink.app.ui.components.VlAlertDialog
 import android.Manifest
 import android.net.Uri
 import android.widget.Toast
@@ -45,7 +47,7 @@ import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.components.liquidPopIn
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerSheet
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
-import org.visorlink.app.ui.screens.stickers.StickerPickerBottomSheet
+import org.visorlink.app.ui.components.stickers.StickerPickerBottomSheet
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.data.repository.MusicRepository
 import org.visorlink.app.utils.ActiveChatTracker
@@ -707,33 +709,33 @@ fun ChatScreen(
     }
 
     showDeleteConfirm?.let { msgId ->
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
             title = { Text(stringResource(R.string.dialog_delete_message_title)) },
             text  = { Text(stringResource(R.string.dialog_delete_message_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteMessage(msgId); showDeleteConfirm = null }) {
+                VlDialogButton(onClick = { viewModel.deleteMessage(msgId); showDeleteConfirm = null }) {
                     Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 
     if (showLeaveDialog) {
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showLeaveDialog = false },
             title = { Text(if (uiState.chatType == ChatType.CHANNEL) stringResource(R.string.dialog_leave_channel_title) else stringResource(R.string.dialog_leave_group_title)) },
             text = { Text(stringResource(R.string.dialog_leave_body)) },
             confirmButton = {
-                TextButton(onClick = { showLeaveDialog = false; viewModel.leaveChat { onNavigateBack() } }) {
+                VlDialogButton(onClick = { showLeaveDialog = false; viewModel.leaveChat { onNavigateBack() } }) {
                     Text(stringResource(R.string.action_leave), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLeaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(onClick = { showLeaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -783,12 +785,12 @@ fun ChatScreen(
     }
 
     blockTargetUser?.let { (targetUid, _) ->
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { blockTargetUser = null },
             title = { Text(stringResource(R.string.block_user_confirm_title)) },
             text = { Text(stringResource(R.string.block_user_confirm_desc)) },
             confirmButton = {
-                TextButton(onClick = {
+                VlDialogButton(onClick = {
                     viewModel.blockUser(targetUid)
                     blockTargetUser = null
                     Toast.makeText(context, context.getString(R.string.user_blocked_toast), Toast.LENGTH_SHORT).show()
@@ -797,7 +799,7 @@ fun ChatScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { blockTargetUser = null }) {
+                VlDialogButton(onClick = { blockTargetUser = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }

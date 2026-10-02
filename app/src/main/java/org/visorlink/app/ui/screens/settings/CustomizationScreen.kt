@@ -29,6 +29,7 @@ import org.visorlink.app.data.model.ProfileFont
 import org.visorlink.app.data.model.ProfileLayout
 import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.ui.components.*
+import org.visorlink.app.ui.components.settings.displayName
 import org.visorlink.app.ui.theme.ProfileAppearanceTheme
 
 /**
@@ -131,7 +132,7 @@ private fun CustomizationContent(
             options.forEachIndexed { i, theme ->
                 VlOptionRow(
                     icon = if (theme == null) Icons.Default.PersonOutline else Icons.Default.Palette,
-                    label = theme?.let { themeName(it) } ?: stringResource(R.string.custom_option_viewer),
+                    label = theme?.displayName() ?: stringResource(R.string.custom_option_viewer),
                     desc = if (theme == null) stringResource(R.string.custom_theme_viewer_desc) else null,
                     selected = appearance.theme == theme,
                     onClick = { onChange { it.copy(theme = theme) } },
@@ -245,13 +246,6 @@ private fun MediaItem(
             }
         },
     )
-}
-
-@Composable
-private fun themeName(theme: AppTheme): String = when (theme) {
-    AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
-    AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
-    AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
 }
 
 @Composable

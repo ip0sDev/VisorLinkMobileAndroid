@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.settings
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -43,7 +44,7 @@ fun AppCheckDiagnosticScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(stringResource(R.string.appcheck_diagnostic_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {

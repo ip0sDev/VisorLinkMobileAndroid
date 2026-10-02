@@ -118,7 +118,7 @@ fun AuthCard(
         Box(
             modifier = Modifier
                 .size(82.dp)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(cs.surfaceContainerHighest)
                 .border(
                     width = 1.5.dp,
@@ -128,12 +128,12 @@ fun AuthCard(
                             cs.primary.copy(alpha = 0.20f)
                         )
                     ),
-                    shape = CircleShape
+                    shape = VlTheme.tokens.shapes.adapt(CircleShape)
                 )
                 .vlSignalGlow(
                     tokens = tokens.signal,
                     color = cs.primary,
-                    shape = CircleShape,
+                    shape = VlTheme.tokens.shapes.adapt(CircleShape),
                     active = true
                 ),
             contentAlignment = Alignment.Center
@@ -143,7 +143,7 @@ fun AuthCard(
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(CircleShape)
+                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
             )
             Image(
                 painter = painterResource(id = R.drawable.ic_launcher_foreground),
@@ -195,9 +195,9 @@ fun AuthCard(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)))
                         .background(cs.error.copy(alpha = 0.12f))
-                        .border(1.dp, cs.error.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+                        .border(1.dp, cs.error.copy(alpha = 0.35f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)))
                         .padding(14.dp)
                 ) {
                         Text(

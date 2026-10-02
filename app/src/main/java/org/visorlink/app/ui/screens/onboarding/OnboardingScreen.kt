@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.onboarding
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -84,7 +85,7 @@ fun OnboardingScreen(
                         Box(
                             Modifier
                                 .size(width = width, height = 8.dp)
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .background(color)
                         )
                     }

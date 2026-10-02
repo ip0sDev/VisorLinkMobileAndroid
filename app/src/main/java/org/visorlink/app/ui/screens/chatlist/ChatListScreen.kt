@@ -29,7 +29,7 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
-import org.visorlink.app.ui.components.VlBrandText
+import org.visorlink.app.ui.components.VlBarBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chatlist.*
@@ -121,21 +121,8 @@ fun ChatListScreen(
             VlTopAppBar(
                 modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
                 title = {
-                    val tokens = VlTheme.tokens
                     Column {
-                        if (tokens.isBiolume) {
-                            VlBrandText(
-                                text = stringResource(R.string.chatlist_title),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 20.sp
-                            )
-                        } else {
-                            Text(
-                                stringResource(R.string.chatlist_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        VlBarBrandText(stringResource(R.string.chatlist_title))
                         AnimatedVisibility(
                             visible = !isScrolled,
                             enter = expandVertically(
@@ -274,7 +261,7 @@ fun ChatListScreen(
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {
                                 val cs = MaterialTheme.colorScheme
-                                val shape = RoundedCornerShape(24.dp)
+                                val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
 
                                 Column(
                                     modifier = Modifier

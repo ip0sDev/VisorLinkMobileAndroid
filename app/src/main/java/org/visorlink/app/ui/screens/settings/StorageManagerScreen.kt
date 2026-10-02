@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
+import org.visorlink.app.ui.components.VlDialogButton
+import org.visorlink.app.ui.components.VlAlertDialog
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -76,21 +78,21 @@ fun StorageManagerScreen(
     var showDisconnectConfirm by remember { mutableStateOf(false) }
 
     if (showDisconnectConfirm) {
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showDisconnectConfirm = false },
             title = { Text(stringResource(R.string.storage_gdrive_disconnect_btn)) },
             text = { Text("Отключить Google Drive? Отправка новых медиафайлов в чаты будет недоступна до повторного подключения.") },
             confirmButton = {
-                TextButton(
+                VlDialogButton(
                     onClick = {
                         viewModel.disconnect()
                         showDisconnectConfirm = false
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    isDestructive = true
                 ) { Text(stringResource(R.string.storage_gdrive_disconnect_btn)) }
             },
             dismissButton = {
-                TextButton(onClick = { showDisconnectConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(onClick = { showDisconnectConfirm = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -100,7 +102,7 @@ fun StorageManagerScreen(
     var clientIdInput by remember(uiState.yandexClientId) { mutableStateOf(uiState.yandexClientId) }
 
     if (showTokenDialog) {
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showTokenDialog = false },
             title = { Text(stringResource(R.string.storage_yandex_relay_token_dialog_title)) },
             text = {
@@ -131,7 +133,7 @@ fun StorageManagerScreen(
                 }
             },
             confirmButton = {
-                TextButton(
+                VlDialogButton(
                     onClick = {
                         viewModel.setYandexCustomToken(tokenInput.ifBlank { null })
                         viewModel.setYandexClientId(clientIdInput.ifBlank { null })
@@ -140,7 +142,7 @@ fun StorageManagerScreen(
                 ) { Text(stringResource(R.string.action_save)) }
             },
             dismissButton = {
-                TextButton(onClick = { showTokenDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(onClick = { showTokenDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -342,7 +344,7 @@ private fun GoogleDriveStorageCard(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .background(if (isConnected) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                         )
                         Text(

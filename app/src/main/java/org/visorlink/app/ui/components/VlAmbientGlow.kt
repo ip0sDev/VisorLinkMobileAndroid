@@ -25,10 +25,12 @@ import kotlin.math.roundToInt
 /**
  * Фоновое цветное свечение-меш.
  *
- * В Biolume НЕ отображается: три постоянно анимированных цветных пятна прямо
- * противоречат §1.2 («один сигнал за раз») и §10 («не подсвечивать glow-ом
- * состояние покоя»). Там роль фона играет неоморфный рельеф, а свечение
- * зарезервировано под focus/press/live.
+ * В Biolume приглушено до 3–4% непрозрачности: три постоянно анимированных
+ * цветных пятна противоречат §1.2 («один сигнал за раз») и §10 («не
+ * подсвечивать glow-ом состояние покоя»), роль фона там играет рельеф.
+ *
+ * При жёсткой тени (Forge) не рисуется вовсе: мягкие размытые пятна на
+ * индустриальном фоне читались как грязь за секциями.
  *
  * Также уважает системное отключение анимаций (§8).
  */
@@ -42,6 +44,7 @@ fun VlAmbientGlow(
 
     val tokens = VlTheme.tokens
     if (tokens.reduceMotion) return
+    if (tokens.structure.hardEdge) return
 
     val cs = MaterialTheme.colorScheme
     val isBiolume = tokens.isBiolume
@@ -127,21 +130,21 @@ fun VlAmbientGlow(
                 .align(Alignment.TopEnd)
                 .offset { IntOffset(o1x.dp.roundToPx(), o1y.dp.roundToPx()) }
                 .size(350.dp)
-                .background(brush1, CircleShape)
+                .background(brush1, VlTheme.tokens.shapes.adapt(CircleShape))
         )
         Box(
             Modifier
                 .align(Alignment.BottomStart)
                 .offset { IntOffset(o2x.dp.roundToPx(), o2y.dp.roundToPx()) }
                 .size(400.dp)
-                .background(brush2, CircleShape)
+                .background(brush2, VlTheme.tokens.shapes.adapt(CircleShape))
         )
         Box(
             Modifier
                 .align(Alignment.CenterStart)
                 .offset { IntOffset(o3x.dp.roundToPx(), o3y.dp.roundToPx()) }
                 .size(300.dp)
-                .background(brush3, CircleShape)
+                .background(brush3, VlTheme.tokens.shapes.adapt(CircleShape))
         )
     }
 }

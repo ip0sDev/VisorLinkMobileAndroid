@@ -65,7 +65,7 @@ internal fun DebugUidBadge(uid: String, modifier: Modifier = Modifier) {
                 clipboard.setPrimaryClip(ClipData.newPlainText("UID", uid))
                 Toast.makeText(context, toastMessage, Toast.LENGTH_SHORT).show()
             },
-        shape = RoundedCornerShape(8.dp),
+        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
     ) {
         Row(

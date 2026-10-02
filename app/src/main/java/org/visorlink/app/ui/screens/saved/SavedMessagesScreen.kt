@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.saved
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -170,7 +171,7 @@ fun SavedMessagesScreen(
         snackbarHost    = { SnackbarHost(snackbar) },
         containerColor  = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 navigationIcon = {
                     IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))

@@ -1097,7 +1097,7 @@ internal fun StickerBubble(
         ) {
             if (isLegacySticker || message.url.isNullOrBlank()) {
                 Surface(
-                    shape = RoundedCornerShape(8.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                     modifier = Modifier.size(120.dp)
                 ) {

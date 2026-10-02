@@ -394,7 +394,7 @@ private fun LiquidReactionCapsule(
 
     Column {
         Surface(
-            shape = RoundedCornerShape(26.dp),
+            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(26.dp)),
             color = cs.surface.copy(alpha = 0.94f),
             tonalElevation = 8.dp,
             shadowElevation = 8.dp,
@@ -455,7 +455,7 @@ private fun LiquidReactionCapsule(
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(if (showAllReactions) cs.primaryContainer else cs.surfaceVariant.copy(alpha = 0.7f))
                         .clickable { showAllReactions = !showAllReactions },
                     contentAlignment = Alignment.Center
@@ -498,7 +498,7 @@ private fun LiquidReactionCapsule(
                                 Box(
                                     modifier = Modifier
                                         .size(42.dp)
-                                        .clip(CircleShape)
+                                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                         .background(if (isUserReacted) cs.primaryContainer else Color.Transparent)
                                         .clickable { onSelectReaction(emoji) },
                                     contentAlignment = Alignment.Center
@@ -541,7 +541,7 @@ private fun EmojiDockItem(
                 scaleY = scale * squashY * clickBounce.value
                 this.translationY = translationY
             }
-            .clip(CircleShape)
+            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
             .background(if (isUserReacted) cs.primaryContainer.copy(alpha = 0.85f) else Color.Transparent)
             .clickable {
                 scope.launch {
@@ -702,7 +702,7 @@ private fun ActionGlassCard(
     }
 
     val cardRadius = VlTheme.tokens.shapes.cardRadius
-    val windowShape = RoundedCornerShape(cardRadius)
+    val windowShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(cardRadius))
 
     Surface(
         shape = windowShape,
@@ -724,9 +724,9 @@ private fun ActionGlassCard(
                 val isFirst = index == 0
                 val isLast = index == actionList.lastIndex
                 val itemShape = when {
-                    actionList.size == 1 -> RoundedCornerShape(cardRadius)
-                    isFirst -> RoundedCornerShape(topStart = cardRadius, topEnd = cardRadius, bottomStart = 0.dp, bottomEnd = 0.dp)
-                    isLast -> RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = cardRadius, bottomEnd = cardRadius)
+                    actionList.size == 1 -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(cardRadius))
+                    isFirst -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cardRadius, topEnd = cardRadius, bottomStart = 0.dp, bottomEnd = 0.dp))
+                    isLast -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = cardRadius, bottomEnd = cardRadius))
                     else -> RectangleShape
                 }
 

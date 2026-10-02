@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.group
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -60,7 +61,7 @@ fun CreateChatScreen(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(stringResource(titleRes), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = {

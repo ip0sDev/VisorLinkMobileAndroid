@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.chat
 
+import org.visorlink.app.ui.theme.VlTheme
 import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
@@ -416,7 +417,7 @@ private fun FullscreenVideoPlayer(url: String, type: String, onNavigateBack: () 
 
                     if (!isBuffering && type != "gif") {
                         Box(
-                            modifier = Modifier.align(Alignment.Center).size(64.dp).background(Color.Black.copy(alpha = 0.5f), CircleShape).clickable {
+                            modifier = Modifier.align(Alignment.Center).size(64.dp).background(Color.Black.copy(alpha = 0.5f), VlTheme.tokens.shapes.adapt(CircleShape)).clickable {
                                 if (isPlaying) exoPlayer.pause() else {
                                     if (exoPlayer.playbackState == Player.STATE_ENDED) exoPlayer.seekTo(0)
                                     exoPlayer.play()

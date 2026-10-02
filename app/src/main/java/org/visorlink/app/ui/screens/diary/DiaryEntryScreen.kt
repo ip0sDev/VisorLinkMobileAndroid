@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.diary
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -104,7 +105,7 @@ fun DiaryEntryScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(if (entryId == null) stringResource(R.string.diary_new_entry) else stringResource(R.string.diary_edit_entry), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
@@ -131,7 +132,7 @@ fun DiaryEntryScreen(
             )
         },
         bottomBar = {
-            val dockShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else RoundedCornerShape(topStart = tokens.shapes.cardRadius, topEnd = tokens.shapes.cardRadius)
+            val dockShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = tokens.shapes.cardRadius, topEnd = tokens.shapes.cardRadius))
 
             val dockBrush = remember(isLiquidEnabled, isDark, cs) {
                 if (isLiquidEnabled) {

@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.stickers
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -68,7 +69,7 @@ fun AddStickerPackBanner(
     val bannerModifier = Modifier
             .fillMaxWidth()
             .padding(top = 4.dp)
-            .clip(RoundedCornerShape(10.dp))
+            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(10.dp)))
             .background(MaterialTheme.colorScheme.secondaryContainer)
 
         Box(modifier = bannerModifier) {
@@ -134,7 +135,7 @@ fun AddStickerPackBanner(
                             // Кнопка: в Exthru выпуклая таблетка, в M3 просто IconButton
                             val btnMod = Modifier
                                 .size(32.dp)
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .background(Color.Transparent)
                                 .clickable {
                                     viewModel.addForeignPack(packId) { result ->
