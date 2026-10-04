@@ -118,10 +118,13 @@ private val ForgeShapeScale = Shapes(
 fun UserProfileTheme(
     profile: UserProfile?,
     currentUser: UserProfile?,
+    /** Произвольный HEX-акцент применяется только на экранах профиля, не в чате. */
+    applyAccentHex: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val resolved = ProfileAppearance.resolve(owner = profile, viewer = currentUser)
     ProfileAppearanceTheme(
-        appearance = ProfileAppearance.resolve(owner = profile, viewer = currentUser),
+        appearance = if (applyAccentHex) resolved else resolved.copy(accentHex = null),
         content = content,
     )
 }
@@ -166,6 +169,7 @@ fun ProfileAppearanceTheme(
         appTheme = theme,
         themeMode = viewerMode,
         colorPreset = appearance.accent ?: viewerPreset,
+        accentOverride = appearance.accentHexColor,
         showDebugIds = showDebugIds,
         // Статус-бар остаётся за внешней темой: режим светлая/тёмная тот же,
         // а при уходе с экрана внешняя тема не перезапустила бы свой SideEffect
@@ -192,6 +196,8 @@ fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
+    /** Произвольный цвет акцента поверх пресета (HEX из оформления профиля). */
+    accentOverride: androidx.compose.ui.graphics.Color? = null,
     showDebugIds: Boolean = LocalShowDebugIds.current,
     setStatusBarColor: Boolean = true,
     /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
@@ -217,21 +223,22 @@ fun VisorLinkTheme(
         ) == 0f
     }
 
+    val seed = accentOverride ?: colorPreset.seedColor
     val colorScheme = when (appTheme) {
         AppTheme.BIOLUME -> {
             val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
-            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+            base.withSignalAccent(seed, darkTheme)
         }
 
         AppTheme.FORGE -> {
             val base = if (darkTheme) ForgeSteelColorScheme else ForgeConcreteColorScheme
-            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+            base.withSignalAccent(seed, darkTheme)
         }
 
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT ->
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT && accentOverride == null ->
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            else -> (if (darkTheme) DarkM3 else LightM3).withMaterialAccent(colorPreset.seedColor, darkTheme)
+            else -> (if (darkTheme) DarkM3 else LightM3).withMaterialAccent(seed, darkTheme)
         }
     }
 

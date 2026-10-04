@@ -114,7 +114,8 @@ val appModule = module {
     single { org.visorlink.app.data.remote.yandex.YandexDiskTransportService() }
     single { org.visorlink.app.data.remote.yandex.YandexDeadDropManager(androidContext(), get(), get()) }
 
-    single { AuthRepository(get(), get(), get(), get()) }
+    single { SessionRepository(get(), get(), get()) }
+    single { AuthRepository(get(), get(), get(), get(), get()) }
     single {
         ChatRepository(
             auth = get(),
@@ -167,6 +168,7 @@ val appModule = module {
 
     viewModel { AuthViewModel(get(), get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
+    viewModel { org.visorlink.app.ui.screens.settings.SessionsViewModel(get(), get()) }
     viewModel { MainViewModel(get(), get()) }
     viewModel {
         ChatListViewModel(

@@ -74,20 +74,33 @@ class BugReportViewModel(
                 val user = FirebaseAuth.getInstance().currentUser
                     ?: throw IllegalStateException("Пользователь не авторизован")
                 val contentResolver = context.contentResolver
+                val mime = contentResolver.getType(uri) ?: "image/jpeg"
+                val ext = when (mime) {
+                    "image/png" -> "png"
+                    "image/webp" -> "webp"
+                    "image/gif" -> "gif"
+                    "image/jpeg", "image/jpg" -> "jpg"
+                    else -> throw IllegalArgumentException("Неподдерживаемый формат изображения")
+                }
+                val size = contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
+                if (size >= MAX_SCREENSHOT_BYTES) throw IllegalArgumentException("Скриншот должен быть меньше 8 МБ")
                 val bytes = withContext(Dispatchers.IO) {
                     contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 } ?: throw IllegalArgumentException("Не удалось прочитать файл скриншота")
 
-                val fileName = "screenshot_${System.currentTimeMillis()}.jpg"
-                val storageRef = FirebaseStorage.getInstance().reference.child("bugreports/${user.uid}/$fileName")
-                val metadata = StorageMetadata.Builder().setContentType("image/jpeg").build()
+                if (bytes.size >= MAX_SCREENSHOT_BYTES) throw IllegalArgumentException("Скриншот должен быть меньше 8 МБ")
+                val fileName = "${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.$ext"
+                val storagePath = "bugReports/${user.uid}/$fileName"
+                val storageRef = FirebaseStorage.getInstance().reference.child(storagePath)
+                val metadata = StorageMetadata.Builder().setContentType(mime).build()
                 storageRef.putBytes(bytes, metadata).await()
                 val downloadUrl = storageRef.downloadUrl.await().toString()
 
                 val attachment = ScreenshotAttachment(
                     url = downloadUrl,
                     fileName = fileName,
-                    size = bytes.size.toLong()
+                    size = bytes.size.toLong(),
+                    storagePath = storagePath
                 )
                 _uiState.update { state ->
                     state.copy(
@@ -161,5 +174,9 @@ class BugReportViewModel(
 
     fun reset() {
         _uiState.value = BugReportUiState()
+    }
+
+    private companion object {
+        const val MAX_SCREENSHOT_BYTES = 8L * 1024 * 1024
     }
 }

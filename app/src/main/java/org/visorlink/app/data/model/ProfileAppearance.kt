@@ -1,5 +1,7 @@
 package org.visorlink.app.data.model
 
+import androidx.compose.ui.graphics.toArgb
+
 /**
  * Оформление профиля — типизированный вид `UserProfile.customization`.
  *
@@ -14,6 +16,8 @@ package org.visorlink.app.data.model
 data class ProfileAppearance(
     val theme: AppTheme? = null,
     val accent: ColorPreset? = null,
+    /** Произвольный цвет акцента `#RRGGBB` (из веба); приоритетнее пресета, только для экрана профиля. */
+    val accentHex: String? = null,
     val font: ProfileFont? = null,
     val layout: ProfileLayout = ProfileLayout.DEFAULT,
     /** Фон профиля и обои чата «как у собеседника». */
@@ -25,6 +29,10 @@ data class ProfileAppearance(
 ) {
     val isEmpty: Boolean get() = this == None
 
+    /** Цвет из [accentHex]; формат проверен при разборе. */
+    val accentHexColor: androidx.compose.ui.graphics.Color?
+        get() = accentHex?.let { runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+
     /**
      * Записывает поля обратно в карту customization, не трогая чужие ключи:
      * в той же карте бэкенд хранит `diaryEnabled`, `acceptedVersion` и т.п.
@@ -33,6 +41,7 @@ data class ProfileAppearance(
         customization.toMutableMap().apply {
             put(KEY_THEME, theme?.id)
             put(KEY_ACCENT, accent?.let { ACCENT_IDS.getValue(it) })
+            put(KEY_ACCENT_HEX, accentHex)
             put(KEY_FONT, font?.id)
             put(KEY_LAYOUT, layout.id.takeIf { layout != ProfileLayout.DEFAULT })
             put(KEY_BG, backgroundUrl)
@@ -48,12 +57,13 @@ data class ProfileAppearance(
 
         const val KEY_THEME = "theme"
         const val KEY_ACCENT = "accent"
+        const val KEY_ACCENT_HEX = "accentHex"
         const val KEY_FONT = "font"
         const val KEY_LAYOUT = "layout"
         const val KEY_BG = "bgUrl"
         const val KEY_BANNER = "gifUrl"
         const val KEY_EMOJIS = "emojis"
-        private val OWN_KEYS = setOf(KEY_THEME, KEY_ACCENT, KEY_FONT, KEY_LAYOUT, KEY_BG, KEY_BANNER, KEY_EMOJIS)
+        private val OWN_KEYS = setOf(KEY_THEME, KEY_ACCENT, KEY_ACCENT_HEX, KEY_FONT, KEY_LAYOUT, KEY_BG, KEY_BANNER, KEY_EMOJIS)
 
         /** Строковые id акцентов в Firestore. `DEFAULT` хранится как "default". */
         private val ACCENT_IDS = mapOf(
@@ -63,6 +73,13 @@ data class ProfileAppearance(
             ColorPreset.EMERALD to "emerald",
             ColorPreset.CRIMSON to "crimson",
         )
+
+        private val HEX_COLOR = Regex("^#[0-9A-Fa-f]{6}$")
+
+        /** Цвет пресета в `#RRGGBB` — пишется в `accentHex`, чтобы веб показал тот же цвет. */
+        fun hexOf(preset: ColorPreset?): String? = preset?.seedColor?.let {
+            "#%06X".format(it.toArgb() and 0xFFFFFF)
+        }
 
         /**
          * Разбор без исключений: неизвестное или битое значение даёт `null`
@@ -77,6 +94,7 @@ data class ProfileAppearance(
                 accent = str(KEY_ACCENT)
                     ?.let { id -> ACCENT_IDS.entries.firstOrNull { it.value == id }?.key }
                     ?.takeIf { it != ColorPreset.DEFAULT },
+                accentHex = str(KEY_ACCENT_HEX)?.takeIf { HEX_COLOR.matches(it) },
                 font = str(KEY_FONT)?.let(ProfileFont::fromId),
                 layout = ProfileLayout.fromId(str(KEY_LAYOUT)),
                 backgroundUrl = str(KEY_BG),

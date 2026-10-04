@@ -641,24 +641,9 @@ class ChatRepository(
             if (cached.any { it.id == chatId }) chatId else throw e
         }
     } else try {
-        val targetDoc = db.collection("users").document(targetUid).get().await()
-        val targetUser = targetDoc.toObject(UserProfile::class.java) ?: throw Exception("User not found")
-        val chatId = getChatId(currentUserProfile.uid, targetUid)
-        val chatDoc = db.collection("chats").document(chatId).get().await()
-        if (!chatDoc.exists()) {
-            db.collection("chats").document(chatId).set(mapOf(
-                "type"            to "direct",
-                "participants"    to listOf(currentUserProfile.uid, targetUid),
-                "participantData" to mapOf(
-                    currentUserProfile.uid to mapOf("username" to currentUserProfile.username, "displayName" to currentUserProfile.displayName),
-                    targetUid to mapOf("username" to targetUser.username, "displayName" to targetUser.displayName)
-                ),
-                "createdAt"      to FieldValue.serverTimestamp(),
-                "lastMessageAt"  to FieldValue.serverTimestamp(),
-                "lastMessage"    to null
-            )).await()
-        }
-        chatId
+        // Чат создаёт сервер: возвращает существующий или новый (NOT_FOUND — нет пользователя, INVALID_ARGUMENT — сам с собой)
+        val result = functions.getHttpsCallable("createDirectChat").call(mapOf("targetUid" to targetUid)).await()
+        (result.data as? Map<*, *>)?.get("chatId") as? String ?: throw Exception("createDirectChat: пустой ответ")
     } catch (e: Exception) {
         // Fallback for offline: if we already have this chat in cache, return it
         val chatId = getChatId(currentUserProfile.uid, targetUid)

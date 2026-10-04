@@ -83,7 +83,7 @@ fun OtherProfileScreen(
     val bannerUrl = appearance.bannerUrl
 
     // Оформление владельца профиля (тема, акцент, шрифт) — поверх настроек зрителя
-    UserProfileTheme(profile = targetUser, currentUser = currentUser) {
+    UserProfileTheme(profile = targetUser, currentUser = currentUser, applyAccentHex = true) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

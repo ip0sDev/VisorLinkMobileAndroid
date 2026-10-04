@@ -7,6 +7,7 @@ import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 import org.visorlink.app.data.remote.chat.SyncUserRequest
@@ -25,7 +26,8 @@ class AuthRepository(
     private val auth: FirebaseAuth,
     private val functions: FirebaseFunctions,          // inject via Koin
     private val api: VisorLinkApi? = null,
-    private val flagsRepository: FlagsRepository? = null
+    private val flagsRepository: FlagsRepository? = null,
+    private val sessions: SessionRepository? = null
 ) {
     val currentUser: FirebaseUser? get() = auth.currentUser
     val currentUid: String? get() = auth.currentUser?.uid
@@ -164,6 +166,28 @@ class AuthRepository(
             .await()
     }
 
+    /** Включение/выключение 2FA только с одноразовым кодом; при включении сервер сам авторизует текущую сессию. */
+    suspend fun set2FAEnabled(enabled: Boolean, code: String) {
+        functions
+            .getHttpsCallable("set2FAEnabled")
+            .call(mapOf("enabled" to enabled, "code" to code))
+            .await()
+    }
+
+    /** Есть ли документ authorized_sessions/{auth_time} — источник истины «2FA пройдена». */
+    suspend fun isSessionAuthorized(): Boolean {
+        val user = auth.currentUser ?: return false
+        val authTime = getAuthTime() ?: return false
+        return try {
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users").document(user.uid)
+                .collection("authorized_sessions").document(authTime)
+                .get().await().exists()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     suspend fun getAuthTime(): String? {
         val user = auth.currentUser ?: return null
         val result: GetTokenResult = user.getIdToken(false).await()
@@ -259,7 +283,16 @@ class AuthRepository(
     }
 
     // ── Logout ────────────────────────────────────────────────────────────────
-    fun logout() = auth.signOut()
+    /** Своя сессия завершается на сервере (таймаут ~2 с), затем signOut() — сеть не должна задерживать выход. */
+    fun logout() {
+        val s = sessions
+        if (s == null || auth.currentUser == null) { auth.signOut(); return }
+        kotlinx.coroutines.MainScope().launch {
+            try { kotlinx.coroutines.withTimeoutOrNull(2_000) { s.terminateCurrent() } } catch (_: Exception) {}
+            s.stopWatching()
+            auth.signOut()
+        }
+    }
 
     // ── Error mapping ─────────────────────────────────────────────────────────
     // Maps Firebase / CF error codes to user-friendly messages per guideline §8.

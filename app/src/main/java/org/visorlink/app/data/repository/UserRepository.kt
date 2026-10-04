@@ -558,18 +558,6 @@ class UserRepository(
         return (result.data as Map<*, *>)["code"] as String
     }
 
-    suspend fun updateTfaEnabled(enabled: Boolean) {
-        if (isProfileBackendEnabled()) {
-            try {
-                api.updateProfile(UpdateProfileRequest(tfaEnabled = enabled))
-            } catch (_: Exception) {}
-        } else if (!isFirestoreDisabled()) {
-            val uid = currentUid.ifEmpty { return }
-            db.collection("users").document(uid).update("tfaEnabled", enabled).await()
-        }
-        updateCachedProfile(currentUid) { it.copy(tfaEnabled = enabled) }
-    }
-
     suspend fun updateDiaryReminders(enabled: Boolean, time: String) {
         if (isProfileBackendEnabled()) {
             try {

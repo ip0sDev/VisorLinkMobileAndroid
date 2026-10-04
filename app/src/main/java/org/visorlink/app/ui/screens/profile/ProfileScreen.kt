@@ -129,7 +129,7 @@ fun ProfileScreen(
     }
 
     // Оформление владельца профиля (тема, акцент, шрифт) — поверх настроек зрителя
-    UserProfileTheme(profile = user, currentUser = user) {
+    UserProfileTheme(profile = user, currentUser = user, applyAccentHex = true) {
         Box(
             modifier = Modifier
                 .fillMaxSize()

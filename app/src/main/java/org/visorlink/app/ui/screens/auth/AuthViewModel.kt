@@ -84,6 +84,11 @@ class AuthViewModel(
                 if (authTime != null && tfaManager.isTfaPassed(authTime)) {
                     _tfaPassed.value = true
                     emit(false)
+                } else if (authTime != null && authRepository.isSessionAuthorized()) {
+                    // Кэш пуст (переустановка), но сервер уже авторизовал эту сессию
+                    tfaManager.setTfaPassed(authTime)
+                    _tfaPassed.value = true
+                    emit(false)
                 } else {
                     emit(true)
                 }
@@ -154,6 +159,40 @@ class AuthViewModel(
                     }
                 }
                 .onFailure { _tfaUiState.update { it.copy(isLoading = false, error = "Invalid code or expired") } }
+        }
+    }
+
+    /**
+     * Включение/выключение 2FA кодом. При включении признак «2FA пройдена» ставится сразу,
+     * до прихода нового профиля, — иначе пользователь упрётся в экран кода.
+     */
+    fun set2FAEnabled(enabled: Boolean, code: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            _tfaUiState.update { it.copy(isLoading = true, error = null) }
+            runCatching { authRepository.set2FAEnabled(enabled, code.trim()) }
+                .onSuccess {
+                    if (enabled) {
+                        authRepository.getAuthTime()?.let { tfaManager.setTfaPassed(it) }
+                        _tfaPassed.value = true
+                    } else {
+                        tfaManager.clearCache()
+                        _tfaPassed.value = false
+                    }
+                    _tfaUiState.update { it.copy(isLoading = false) }
+                    onDone()
+                }
+                .onFailure { e -> _tfaUiState.update { it.copy(isLoading = false, error = tfaErrorMessage(e)) } }
+        }
+    }
+
+    private fun tfaErrorMessage(t: Throwable): String {
+        val e = t as? com.google.firebase.functions.FirebaseFunctionsException ?: return friendlyMessage(t)
+        return when (e.code) {
+            com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND -> "Код не запрошен"
+            com.google.firebase.functions.FirebaseFunctionsException.Code.FAILED_PRECONDITION -> "Код истёк, запросите новый"
+            com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED -> "Слишком много попыток, запросите новый код"
+            com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT -> e.message ?: "Неверный код"
+            else -> friendlyMessage(t)
         }
     }
 

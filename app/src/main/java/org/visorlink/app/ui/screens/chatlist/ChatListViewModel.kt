@@ -84,6 +84,7 @@ class ChatListViewModel(
         sidebarTypingManager?.startListening(currentUid)
         viewModelScope.launch {
             chats.collect { list ->
+                sidebarTypingManager?.syncChats(list.map { it.id })
                 launch(Dispatchers.IO) {
                     list.forEach { chat ->
                         if (chat.unreadCountFor(currentUid) == 0) {

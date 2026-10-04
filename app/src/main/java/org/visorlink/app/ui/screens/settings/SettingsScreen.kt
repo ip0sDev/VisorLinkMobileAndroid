@@ -78,6 +78,7 @@ fun SettingsScreen(
     onOpenCacheSettings: () -> Unit = {},
     onOpenStorageManager: () -> Unit = {},
     onOpenStatus: () -> Unit = {},
+    onOpenSessions: () -> Unit = {},
     onOpenCustomization: () -> Unit = {},
     onOpenAegisDebug: () -> Unit = {},
     onOpenFlagFlipper: () -> Unit = {},
@@ -133,6 +134,13 @@ fun SettingsScreen(
     var showLegalDialog by remember { mutableStateOf(false) }
     var showBugReportSheet by remember { mutableStateOf(false) }
     var showChannelDialog by remember { mutableStateOf(false) }
+
+    // Флоу 2FA: 0 — нет, 1 — выбор канала, 2 — ввод кода. Состояние профиля не меняется до подтверждения кодом
+    var tfaStep by remember { mutableIntStateOf(0) }
+    var tfaTargetEnabled by remember { mutableStateOf(true) }
+    var tfaMethod by remember { mutableStateOf("bot") }
+    var tfaCode by remember { mutableStateOf("") }
+    val tfaUi by authViewModel.tfaUiState.collectAsState()
 
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
@@ -481,6 +489,7 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 10, enabled = isLiquidEnabled)
                 ) {
                     VlSettingsItem(icon = Icons.Default.Storage, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
+                    VlSettingsItem(icon = Icons.Default.Security, iconColor = VlCategoryTint.Emerald, title = "Устройства", subtitle = "Активные сеансы", onClick = onOpenSessions)
                     VlSettingsItem(icon = Icons.Default.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
                     VlSettingsItem(icon = Icons.Default.HealthAndSafety, iconColor = colorStorage, title = "Статус системы", onClick = onOpenStatus)
                 }
@@ -490,7 +499,7 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
                 ) {
                     VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
-                    VlSettingsItem(icon = Icons.Default.Security, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlSwitch(checked = profile?.tfaEnabled ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateTfaEnabled(v) } }) })
+                    VlSettingsItem(icon = Icons.Default.Security, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlDialogButton(onClick = { tfaTargetEnabled = profile?.tfaEnabled != true; tfaCode = ""; authViewModel.clearTfaError(); tfaStep = 1 }, isPrimary = true) { Text(if (profile?.tfaEnabled == true) "Выключить" else "Включить") } })
                     VlSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
                         iconColor = VlCategoryTint.Telegram,
@@ -653,6 +662,40 @@ fun SettingsScreen(
         )
     }
     if (showBugReportSheet) BugReportSheet(onDismiss = { showBugReportSheet = false })
+    if (tfaStep == 1) VlAlertDialog(
+        onDismissRequest = { tfaStep = 0 },
+        title = { Text(if (tfaTargetEnabled) "Включить 2FA" else "Выключить 2FA") },
+        text = {
+            Column {
+                Text("Куда прислать код подтверждения?")
+                Spacer(Modifier.height(8.dp))
+                VlOptionRow(icon = Icons.Default.Security, label = "Бот VisorLink", selected = tfaMethod == "bot", onClick = { tfaMethod = "bot" })
+                Spacer(Modifier.height(8.dp))
+                VlOptionRow(icon = Icons.Default.Security, label = "Почта", selected = tfaMethod == "email", onClick = { tfaMethod = "email" })
+                tfaUi.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = { VlDialogButton(onClick = { authViewModel.request2FA(tfaMethod); tfaStep = 2 }, isPrimary = true) { Text("Отправить код") } },
+        dismissButton = { VlDialogButton(onClick = { tfaStep = 0 }) { Text("Отмена") } }
+    )
+    if (tfaStep == 2) VlAlertDialog(
+        onDismissRequest = { tfaStep = 0 },
+        title = { Text("Введите код") },
+        text = {
+            Column {
+                VlTextField(value = tfaCode, onValueChange = { tfaCode = it.filter(Char::isDigit).take(8) }, placeholder = "Код", isError = tfaUi.error != null)
+                tfaUi.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            }
+        },
+        confirmButton = {
+            VlDialogButton(
+                onClick = { authViewModel.set2FAEnabled(tfaTargetEnabled, tfaCode) { tfaStep = 0 } },
+                isPrimary = true, isLoading = tfaUi.isLoading, enabled = tfaCode.length >= 4,
+                isDestructive = !tfaTargetEnabled
+            ) { Text(if (tfaTargetEnabled) "Включить" else "Выключить") }
+        },
+        dismissButton = { VlDialogButton(onClick = { tfaStep = 0 }) { Text("Отмена") } }
+    )
     if (showLogoutDialog) VlAlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { VlDialogButton(onClick = { showLogoutDialog = false; authViewModel.logout() }, isDestructive = true) { Text("Выйти") } }, dismissButton = { VlDialogButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
     if (showDeleteAccountDialog) {

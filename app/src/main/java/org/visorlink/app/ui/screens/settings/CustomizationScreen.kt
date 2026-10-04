@@ -156,7 +156,11 @@ private fun CustomizationContent(
                         isSelected = (appearance.accent ?: ColorPreset.DEFAULT) == preset,
                         isDark = isDark,
                         onClick = {
-                            onChange { it.copy(accent = preset.takeIf { p -> p != ColorPreset.DEFAULT }) }
+                            onChange {
+                                val chosen = preset.takeIf { p -> p != ColorPreset.DEFAULT }
+                                // accentHex пишем вместе с пресетом, иначе веб покажет старый цвет; «по умолчанию» — удаляем
+                                it.copy(accent = chosen, accentHex = ProfileAppearance.hexOf(chosen))
+                            }
                         },
                     )
                 }
