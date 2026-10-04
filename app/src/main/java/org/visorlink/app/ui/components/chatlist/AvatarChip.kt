@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.chatlist
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -48,7 +49,7 @@ fun AvatarChip(
     val cs = MaterialTheme.colorScheme
     val placeholderBg = cs.primaryContainer
     val placeholderColor = cs.onPrimaryContainer
-    val shape = CircleShape
+    val shape = VlTheme.tokens.shapes.adapt(CircleShape)
 
     Box(
         modifier = Modifier

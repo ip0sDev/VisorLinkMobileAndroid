@@ -77,11 +77,7 @@ private fun ThemePreviewCard(
     colorPreset: ColorPreset,
     onClick: () -> Unit,
 ) {
-    val name = when (theme) {
-        AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
-        AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
-        AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
-    }
+    val name = theme.displayName()
     val description = when (theme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_desc)
         AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_desc)
@@ -92,7 +88,7 @@ private fun ThemePreviewCard(
     // с палитрой превью и перестало бы читаться как элемент настроек.
     val isLiquid = rememberLiquidEnabled()
     val outerCs = MaterialTheme.colorScheme
-    val outerShape = if (isLiquid) RoundedCornerShape(24.dp) else VlTheme.tokens.shapes.card
+    val outerShape = if (isLiquid) VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)) else VlTheme.tokens.shapes.card
 
     Column(
         modifier = Modifier
@@ -309,4 +305,13 @@ private fun PreviewChip(selected: Boolean) {
                 )
         )
     }
+}
+
+
+/** Локализованное название темы — для селектора и редактора оформления профиля. */
+@Composable
+fun AppTheme.displayName(): String = when (this) {
+    AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
+    AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
+    AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
 }

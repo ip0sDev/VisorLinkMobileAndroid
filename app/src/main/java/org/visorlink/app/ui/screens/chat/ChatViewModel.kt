@@ -148,7 +148,10 @@ class ChatViewModel(
         val calculated = calculateNextSeq(chat, messages)
         val nextSeq = maxOf(calculated, pendingMaxSeq + 1L)
         pendingMaxSeq = nextSeq
-        val isDirect = _uiState.value.chatType == ChatType.DIRECT || chat?.chatType() == ChatType.DIRECT
+        val isDirect = _uiState.value.chatType == ChatType.DIRECT || 
+                       _uiState.value.chatType == ChatType.EMERGENCY || 
+                       chat?.chatType() == ChatType.DIRECT || 
+                       chat?.chatType() == ChatType.EMERGENCY
         val targetUserId = if (isDirect) effectiveOtherUid.takeIf { it.isNotBlank() && it != chatId } else null
         return Triple(nextSeq, isDirect, targetUserId)
     }
@@ -359,38 +362,40 @@ class ChatViewModel(
                 }
             }
 
-            chatDocListener?.remove()
-            chatDocListener = db.collection("chats").document(chatId)
-                .addSnapshotListener { snap, error ->
-                    if (error != null || snap == null) return@addSnapshotListener
-                    val chat = snap.toChatOrNull() ?: return@addSnapshotListener
+            if (!chatId.startsWith("emer_")) {
+                chatDocListener?.remove()
+                chatDocListener = db.collection("chats").document(chatId)
+                    .addSnapshotListener { snap, error ->
+                        if (error != null || snap == null) return@addSnapshotListener
+                        val chat = snap.toChatOrNull() ?: return@addSnapshotListener
 
-                    val type = chat.chatType()
-                    _uiState.update { it.copy(chat = chat, chatType = type) }
+                        val type = chat.chatType()
+                        _uiState.update { it.copy(chat = chat, chatType = type) }
 
-                    if (type == ChatType.DIRECT) {
-                        val resolvedUid = chat.otherParticipantId(currentUid)
-                        if (resolvedUid.isNotBlank()) {
-                            startObservingOtherUser(resolvedUid)
+                        if (type == ChatType.DIRECT) {
+                            val resolvedUid = chat.otherParticipantId(currentUid)
+                            if (resolvedUid.isNotBlank()) {
+                                startObservingOtherUser(resolvedUid)
+                            }
+                        } else {
+                            startGroupOnlineCount(chat.memberIds)
                         }
-                    } else {
-                        startGroupOnlineCount(chat.memberIds)
+                    }
+
+                launch {
+                    chatRepository.membersFlow(chatId).collect { members ->
+                        _uiState.update { it.copy(members = members) }
+                        val mine = members.find { it.uid == currentUid }
+                        if (mine != null) _uiState.update { it.copy(myMember = mine) }
                     }
                 }
 
-            launch {
-                chatRepository.membersFlow(chatId).collect { members ->
-                    _uiState.update { it.copy(members = members) }
-                    val mine = members.find { it.uid == currentUid }
-                    if (mine != null) _uiState.update { it.copy(myMember = mine) }
+                launch {
+                    try {
+                        val myMember = chatRepository.getMyMemberData(chatId)
+                        if (myMember != null) _uiState.update { it.copy(myMember = myMember) }
+                    } catch (_: Exception) {}
                 }
-            }
-
-            launch {
-                try {
-                    val myMember = chatRepository.getMyMemberData(chatId)
-                    if (myMember != null) _uiState.update { it.copy(myMember = myMember) }
-                } catch (_: Exception) {}
             }
 
             val currentTarget = effectiveOtherUid
@@ -446,7 +451,9 @@ class ChatViewModel(
 
             launch {
                 try {
-                    chatRepository.resetUnreadCount(chatId, currentUid)
+                    if (!chatId.startsWith("emer_")) {
+                        chatRepository.resetUnreadCount(chatId, currentUid)
+                    }
                     NotificationHelper.clearNotification(context, chatId)
                 } catch (_: Exception) {}
             }
@@ -464,6 +471,7 @@ class ChatViewModel(
     }
 
     private fun startWallpaperListener(type: ChatType) {
+        if (chatId.startsWith("emer_")) return
         wallpaperListener?.remove()
         val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
         wallpaperListener = db.collection("chats").document(chatId)

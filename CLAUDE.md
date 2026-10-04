@@ -20,6 +20,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Lint (AGP built-in only — no ktlint/detekt/spotless configured)
 ./gradlew lintDebug
 
+# Screenshot tests (Roborazzi + Robolectric, JVM): every scene × AppTheme × light/dark
+./gradlew recordRoborazziPlayDebug        # rewrite goldens in app/src/test/screenshots
+./gradlew verifyRoborazziPlayDebug        # fail on any visual diff
+./gradlew compareRoborazziPlayDebug       # write diffs to app/build/outputs/roborazzi, don't fail
+
+# UI rules: no new Color(0x…) outside ui/theme, no new raw M3 components in ui/screens
+./gradlew checkUiRules                    # ratchet against config/ui-rules-baseline.txt
+./gradlew checkUiRules -PupdateUiBaseline # re-snapshot after removing violations
+
 # What CI actually runs
 ./gradlew testDebugUnitTest assembleRelease -PcommitId=<short-sha> --parallel --build-cache --configuration-cache
 ```
@@ -137,13 +146,15 @@ Biolume's two rules, both from the guidelines, both easy to violate accidentally
 
 Raised vs Inset is semantic, not decorative: things that *press on* something are raised (cards, chips at rest, switch thumb, icon trays, settings sections, chat list rows, the input panel); things that *receive* are inset (text fields, switch track, pressed buttons, selected chips, the selected nav pill, quoted-reply blocks).
 
+**The "liquid" variant is what users actually see.** `AppFlags.isEnabled("animation_test")` defaults to `true` (`FlagsModels.kt`), so `rememberLiquidEnabled()` branches in `VlSwitch`, `VlSettingsSection`, `VlSettingsItem`, `VlOptionRow` and `VlNavigationBar` (`NeumorphicLiquidNavBarContent`) are the production path. Screenshot tests render it too, because the stub flags use the same default. Every ad-hoc shape in `ui/components` and `ui/screens` goes through `VlTheme.tokens.shapes.adapt(shape)` or `.rounded(r)`, which collapse to `RectangleShape` on a square scale (`cardRadius == 0`, Forge) and return the shape unchanged otherwise. A bare `RoundedCornerShape` or `CircleShape` there is how Forge shipped with rounded sections, sheets and dialogs. `checkUiRules` counts them as `raw-shape`. `section` and `row` are separate shape roles because Biolume's `card` (16dp) differs from its settings section (24dp).
+
 **Relief needs clearance.** `vlRaised` draws outside the component's bounds, so a raised element wants ≥6–8dp of air. Where there isn't any — `ChatListItem` in compact mode, chat bubbles — use `vlHairline` alone instead; overlapping soft shadows read as dirty bands, which is worse than no relief. That trade-off is why bubbles have no relief at all (they also read `tokens.bubbles` instead of `colorScheme`, since Biolume's `primaryContainer` at alpha .12 is too faint for a bubble).
 
 `tokens.selectionFill` is the opaque fill for a selected pill/chip/segment. It exists because `primaryContainer` in Biolume is `primary` at 12% alpha (§3), which over a container surface reads as *no selection at all*. Reach for it any time "selected" needs to be visible; `primaryContainer` alone is not enough in this theme.
 
 `vlBiopulse` is the only animated glow in the app and belongs solely to live indicators (`VlLiveDot`, `AvatarWithPresence`). It falls back to a static peak-intensity glow when the system animation scale is 0 — `VisorLinkTheme` reads that once into `tokens.reduceMotion` so components don't each query `Settings`. `VlAmbientGlow` is disabled entirely in Biolume (three always-on colored blooms contradict rule 1).
 
-`ColorPreset` re-tints only the **signal** layer (primary + glow) in Biolume; Abyss/Tidepool surfaces stay canonical, since those surfaces are the theme's identity. `DEFAULT` means the exact guideline colors. In M3E the preset still switches dynamic color off in favour of the static schemes, as before.
+`ColorPreset` re-tints only the **signal** layer (primary + glow) in Biolume; Abyss/Tidepool surfaces stay canonical, since those surfaces are the theme's identity. `DEFAULT` means the exact guideline colors. In M3E a non-`DEFAULT` preset switches dynamic color off and is applied through `withMaterialAccent`. M3 containers are opaque (`primaryContainer` is the background of my own bubbles, `secondaryContainer` is the M3E `selectionFill`), so they are blended from surface + accent rather than set to the accent. `primary` is pushed to ≥3:1 against the background, because preset BLUE alone gives 2.7:1 there. Before this, the preset only swapped in the static indigo palette and the chosen accent appeared nowhere.
 
 `withSignalAccent` must recompute `onPrimary`/`onPrimaryContainer` alongside `primary` — the base values are tuned for the canonical accent, and a dark preset over a dark theme otherwise yields unreadable button text. Pick the on-color by **comparing actual WCAG contrast** for black vs white, never by a luminance threshold: `#0EA5E9` (preset BLUE) reads as a light color at luminance 0.33, yet white on it gives 2.8:1 while dark gives 6.8:1.
 
@@ -151,7 +162,7 @@ Raised vs Inset is semantic, not decorative: things that *press on* something ar
 
 `ThemeViewModel` is a `SharedPreferences` façade over `visorlink_settings` that registers an `OnSharedPreferenceChangeListener` on itself, so every instance across every screen stays in sync. **Setters write prefs, not state** — never assign to the `MutableStateFlow`s directly.
 
-`UserProfileTheme` applies a PRO user's own theme/accent/font when viewing their chat or profile, gated by `CustomizationHelper.shouldApplyCustomization`; the keys are `theme` / `accent` / `font` in `UserProfile.customization`.
+Profile customization is typed: `data/model/ProfileAppearance.kt` is the only place that parses `UserProfile.customization` (keys `theme`, `accent`, `font`, `layout`, `bgUrl`, `gifUrl`, `emojis`) and the only place that decides visibility. `ProfileAppearance.resolve(owner, viewer)` always shows your own customization, and shows someone else's only when they have active PRO and the viewer's `ignoreCustomizations` is off. Use it everywhere, including the chat wallpaper "other" mode, instead of reading the map. `writeTo` preserves unrelated keys (the backend keeps `diaryEnabled` and similar in the same map). `UserProfileTheme(profile, currentUser)` → `ProfileAppearanceTheme(appearance)` applies the result over the viewer's own settings; light/dark always stays the viewer's. It wraps `ChatScreen`, `ProfileScreen` and `OtherProfileScreen`, and the editor's `ProfilePreview`, so the preview is drawn by the same code path other users see. The VM-free overload exists for screenshot tests. The `rounded` font is bundled Nunito; previously it mapped to `SansSerif`, which is Roboto.
 
 **Adding a theme:** add an `AppTheme` entry with a fresh `id`, build its `ColorScheme` + `VlShapeTokens`, add the branch in `VisorLinkTheme` (the `when` is exhaustive, so the compiler will point at every place needing an arm), and add its name/description strings. The selector picks it up automatically — it iterates `AppTheme.entries`. No component needs touching.
 
@@ -159,7 +170,9 @@ Raised vs Inset is semantic, not decorative: things that *press on* something ar
 
 Shared composables in `ui/components/` are prefixed `Vl`: `VlSurface`, `VlCard`, `VlButton`, `VlSwitch`, `VlSegmentedControl`, `VlSettingsSection`/`VlSettingsItem`, `VlOptionRow`, `VlDialog`, `VlToast`, `VlAmbientGlow`, `VlGlassPanel`, `VlTextField`, `VlFab`, `VlLiveDot`/`VlPresenceDot`, `VlNavigationBar`, `VlBrandText`, `VlTopAppBar`.
 
-`VlTopAppBar` should be used instead of `TopAppBar` on main screens. In Forge it uses `surfaceContainerHigh` with a bottom hairline.
+`VlTopAppBar` should be used instead of `TopAppBar` on main screens. Media viewers (`ImageViewerScreen`, `ImageEditorScreen`) are the deliberate exception: their bars are transparent over the image.
+
+Dialogs are `VlAlertDialog` + `VlDialogButton`, never M3 `AlertDialog`/`TextButton`. One overload mirrors the M3 API (`confirmButton` / `dismissButton` / `icon`), so moving a screen over is a rename; use `isDestructive` instead of `colors = …error`. It enforces M3's 280dp minimum width. Category icon tints in settings live in `VlCategoryTint`, not as `Color(0x…)` in the screen. In Forge it uses `surfaceContainerHigh` with a bottom hairline.
 
 `VlFab` supports both standard icon-only and extended (icon + text) modes. It also has a `content` slot for custom icon morphs.
 
@@ -185,6 +198,8 @@ Neumorphic relief draws **outside** a component's bounds, so a Biolume raised el
 
 - Code comments and commit messages are in Russian; identifiers and log tags in English. Match that.
 - UI strings belong in `values/strings.xml` + `values-ru/strings.xml` (kept in lockstep, one entry per key in both) and are read with `stringResource`. ~32 files still hold hardcoded Russian literals — prefer extracting when you touch them.
+- Screenshot tests live in `ui/theme/ThemeScreenshotTest.kt`. They run under a bare `Application` (no Firebase), with Koin started on a stub `FlagsRepository`, because base components such as `VlSwitch`, `VlSettingsSection` and `VlAlertDialog` call `koinInject()` through `rememberLiquidEnabled`. The Compose clock is paused (`autoAdvance = false`) because `VlLiveDot` and the FAB glow animate forever and would hang `waitForIdle`. Content sits in a `Surface`, not `Box.background`, so `LocalContentColor` is set the way `Scaffold` sets it. When a visual change is intentional, re-record and commit the PNGs together with the code. CI currently runs `compare`, not `verify`: the goldens were recorded on Windows and have not yet been confirmed pixel-identical on Linux.
+- `checkUiRules` is a ratchet: it fails only when a file gains violations. After you remove some, run it with `-PupdateUiBaseline` so the lower count is locked in.
 - Tests are JUnit4 + `mockito-kotlin` + `kotlinx-coroutines-test`, with backtick method names and `Dispatchers.setMain(testDispatcher)`. `unitTests.isReturnDefaultValues = true`, so Android stubs return defaults instead of throwing. Existing coverage is ViewModel/logic only.
 - `Log.d`/`Log.e` calls in hot or noisy paths are wrapped in `if (BuildConfig.DEBUG)` (see `FlagsRepository`).
 - `app/google-services.json` is committed intentionally.

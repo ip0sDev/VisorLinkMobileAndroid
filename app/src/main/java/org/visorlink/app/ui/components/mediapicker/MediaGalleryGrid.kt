@@ -120,7 +120,7 @@ fun MediaGalleryGrid(
                             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                         )
                     },
-                    shape = RoundedCornerShape(14.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(8.dp))
@@ -128,7 +128,7 @@ fun MediaGalleryGrid(
                 }
                 OutlinedButton(
                     onClick = { permissionsState.launchMultiplePermissionRequest() },
-                    shape = RoundedCornerShape(14.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
                 ) {
                     Text("Предоставить доступ к файлам")
                 }
@@ -206,7 +206,7 @@ private fun MediaGridItem(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
 
-    val itemShape = RoundedCornerShape(14.dp)
+    val itemShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
 
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 0.92f else 1f,
@@ -267,13 +267,13 @@ private fun MediaGridItem(
                     modifier = Modifier
                         .size(26.dp)
                         .then(
-                            if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, CircleShape)
+                            if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape))
                             else Modifier
                         )
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(cs.primary)
                         .then(
-                            if (tokens.structure.enabled) Modifier.vlHairline(Color.White.copy(alpha = 0.6f), CircleShape)
+                            if (tokens.structure.enabled) Modifier.vlHairline(Color.White.copy(alpha = 0.6f), VlTheme.tokens.shapes.adapt(CircleShape))
                             else Modifier
                         ),
                     contentAlignment = Alignment.Center
@@ -289,9 +289,9 @@ private fun MediaGridItem(
                 Box(
                     modifier = Modifier
                         .size(24.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(Color.Black.copy(alpha = 0.35f))
-                        .border(1.5.dp, Color.White.copy(alpha = 0.85f), CircleShape)
+                        .border(1.5.dp, Color.White.copy(alpha = 0.85f), VlTheme.tokens.shapes.adapt(CircleShape))
                 )
             }
         }
@@ -302,7 +302,7 @@ private fun MediaGridItem(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                     .background(Color.Black.copy(alpha = 0.65f))
                     .padding(horizontal = 6.dp, vertical = 3.dp)
             ) {

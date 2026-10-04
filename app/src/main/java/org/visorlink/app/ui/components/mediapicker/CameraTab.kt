@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.mediapicker
 
+import org.visorlink.app.ui.theme.VlTheme
 import android.Manifest
 import android.content.Context
 import android.net.Uri
@@ -224,7 +225,7 @@ fun CameraTab(
                     camera?.cameraControl?.enableTorch(isTorch)
                 },
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f), VlTheme.tokens.shapes.adapt(CircleShape))
                     .size(40.dp)
             ) {
                 Icon(
@@ -241,7 +242,7 @@ fun CameraTab(
             // Таймер записи видео
             if (isRecording) {
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)),
                     color = Color.Red.copy(alpha = 0.85f),
                     modifier = Modifier.padding(horizontal = 8.dp)
                 ) {
@@ -253,7 +254,7 @@ fun CameraTab(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(Color.White, CircleShape)
+                                .background(Color.White, VlTheme.tokens.shapes.adapt(CircleShape))
                         )
                         Text(
                             text = String.format(Locale.US, "00:%02d / 00:60", recordingSeconds),
@@ -278,7 +279,7 @@ fun CameraTab(
                 },
                 enabled = !isRecording,
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    .background(Color.Black.copy(alpha = 0.45f), VlTheme.tokens.shapes.adapt(CircleShape))
                     .size(40.dp)
             ) {
                 Icon(
@@ -301,7 +302,7 @@ fun CameraTab(
             if (!isRecording) {
                 Row(
                     modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+                        .background(Color.Black.copy(alpha = 0.5f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)))
                         .padding(horizontal = 4.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
@@ -311,7 +312,7 @@ fun CameraTab(
                             contentColor = if (captureMode == CameraCaptureMode.PHOTO) Color.White else Color.White.copy(alpha = 0.5f)
                         ),
                         modifier = if (captureMode == CameraCaptureMode.PHOTO) {
-                            Modifier.background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            Modifier.background(Color.White.copy(alpha = 0.25f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                         } else Modifier
                     ) {
                         Text("ФОТО", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -328,7 +329,7 @@ fun CameraTab(
                             contentColor = if (captureMode == CameraCaptureMode.VIDEO) Color.White else Color.White.copy(alpha = 0.5f)
                         ),
                         modifier = if (captureMode == CameraCaptureMode.VIDEO) {
-                            Modifier.background(Color.White.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            Modifier.background(Color.White.copy(alpha = 0.25f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                         } else Modifier
                     ) {
                         Text("ВИДЕО (60с)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -346,9 +347,9 @@ fun CameraTab(
                     Box(
                         modifier = Modifier
                             .size(76.dp)
-                            .border(4.dp, Color.White, CircleShape)
+                            .border(4.dp, Color.White, VlTheme.tokens.shapes.adapt(CircleShape))
                             .padding(6.dp)
-                            .clip(CircleShape)
+                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(if (isCapturingPhoto) Color.Gray else Color.White)
                             .clickable(enabled = !isCapturingPhoto) {
                                 val capture = imageCapture ?: return@clickable
@@ -389,7 +390,7 @@ fun CameraTab(
                     Box(
                         modifier = Modifier
                             .size(if (isRecording) 40.dp else 68.dp)
-                            .clip(if (isRecording) RoundedCornerShape(8.dp) else CircleShape)
+                            .clip(if (isRecording) VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)) else VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(Color.Red)
                             .clickable {
                                 if (isRecording) {

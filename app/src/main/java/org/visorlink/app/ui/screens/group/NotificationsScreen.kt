@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.group
 
+import org.visorlink.app.ui.components.VlTopAppBar
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -54,7 +55,7 @@ fun NotificationsScreen(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = { Text(stringResource(R.string.notifications_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = {
@@ -144,7 +145,7 @@ private fun NotificationItem(
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), CircleShape),
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), VlTheme.tokens.shapes.adapt(CircleShape)),
             contentAlignment = Alignment.Center
         ) {
             Icon(Icons.Default.Group, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))

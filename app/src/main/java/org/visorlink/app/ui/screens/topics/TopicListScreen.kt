@@ -188,7 +188,7 @@ fun TopicListScreen(
                         }
                     },
                     singleLine = true,
-                    shape = if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(24.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = cs.surfaceContainerLow,
                         unfocusedContainerColor = cs.surfaceContainerLow,
@@ -344,12 +344,12 @@ fun TopicListScreen(
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(CircleShape)
+                                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                     .background(if (isSelected) cs.primaryContainer else cs.surfaceContainerLow)
                                     .border(
                                         width = if (isSelected) 2.dp else 0.dp,
                                         color = if (isSelected) cs.primary else Color.Transparent,
-                                        shape = CircleShape
+                                        shape = VlTheme.tokens.shapes.adapt(CircleShape)
                                     )
                                     .clickable { viewModel.onCreateIconChanged(emoji) },
                                 contentAlignment = Alignment.Center
@@ -377,12 +377,12 @@ fun TopicListScreen(
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
-                                    .clip(CircleShape)
+                                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                     .background(color)
                                     .border(
                                         width = if (isSelected) 3.dp else 0.dp,
                                         color = if (isSelected) cs.onSurface else Color.Transparent,
-                                        shape = CircleShape
+                                        shape = VlTheme.tokens.shapes.adapt(CircleShape)
                                     )
                                     .clickable { viewModel.onCreateColorChanged(hexColor) },
                                 contentAlignment = Alignment.Center
@@ -422,7 +422,7 @@ private fun TopicCardItem(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val topicColor = parseHexColor(topic.displayColor)
-    val cardShape = if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(16.dp)
+    val cardShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
 
     Row(
         modifier = Modifier
@@ -437,12 +437,12 @@ private fun TopicCardItem(
         Box(
             modifier = Modifier
                 .size(44.dp)
-                .clip(if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(12.dp))
+                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)))
                 .background(topicColor.copy(alpha = 0.15f))
                 .border(
                     width = 1.dp,
                     color = topicColor.copy(alpha = 0.4f),
-                    shape = if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(12.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -469,7 +469,7 @@ private fun TopicCardItem(
                 if (topic.isGeneral) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(4.dp)))
                             .background(cs.primaryContainer.copy(alpha = 0.7f))
                             .padding(horizontal = 5.dp, vertical = 1.dp)
                     ) {
@@ -526,7 +526,7 @@ private fun TopicCardItem(
             if (topic.unreadCount > 0) {
                 Box(
                     modifier = Modifier
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(cs.primary)
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                     contentAlignment = Alignment.Center

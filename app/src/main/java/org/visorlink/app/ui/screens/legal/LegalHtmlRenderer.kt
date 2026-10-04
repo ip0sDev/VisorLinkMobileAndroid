@@ -78,9 +78,9 @@ fun LegalHtmlContent(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
                             .background(bgContainer)
-                            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
+                            .border(1.dp, borderColor, VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
                             .padding(14.dp)
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

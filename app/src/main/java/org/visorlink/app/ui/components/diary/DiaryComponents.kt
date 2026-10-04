@@ -81,7 +81,7 @@ fun DiaryStatsCard(stats: DiaryStats) {
     val isLiquidEnabled = rememberLiquidEnabled()
     val isDark = cs.surface.luminance() < 0.5f
 
-    val shape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else tokens.shapes.card
+    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else tokens.shapes.card
 
     val cardBrush = remember(isLiquidEnabled, isDark, cs) {
         if (isLiquidEnabled) {
@@ -171,7 +171,7 @@ private fun StatItem(
             .then(
                 if (isLiquid) {
                     Modifier
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
                         .padding(horizontal = 14.dp, vertical = 8.dp)
                 } else Modifier
@@ -190,7 +190,7 @@ fun DateSelector(selectedDate: Calendar, onDateSelected: (Calendar) -> Unit) {
     val isLiquidEnabled = rememberLiquidEnabled()
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
-    val shape = if (isLiquidEnabled) RoundedCornerShape(24.dp) else RoundedCornerShape(12.dp)
+    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
 
     val leftJelly = rememberLiquidJellyState(softness = 0.12f)
     val rightJelly = rememberLiquidJellyState(softness = 0.12f)
@@ -273,7 +273,7 @@ fun DiaryEntryCard(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
-    val shape = if (isLiquidEnabled) RoundedCornerShape(22.dp) else tokens.shapes.card
+    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(22.dp)) else tokens.shapes.card
     val cardJelly = rememberLiquidJellyState(softness = 0.05f)
 
     val cardBorder = remember(isLiquidEnabled, isDark, cs) {
@@ -316,7 +316,7 @@ fun DiaryEntryCard(
                 if (timeStr.isNotEmpty()) {
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                             .background(cs.primary.copy(alpha = 0.12f))
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
@@ -369,7 +369,7 @@ fun DiaryPinDialog(
     val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.65f, stiffness = 420f)
     var pin by remember { mutableStateOf("") }
     var saveBio by remember { mutableStateOf(false) }
-    val shape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else MaterialTheme.shapes.extraLarge
+    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else MaterialTheme.shapes.extraLarge
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -407,7 +407,7 @@ fun DiaryPinDialog(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)))
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
@@ -458,7 +458,7 @@ fun DiaryPinDialog(
                 },
                 enabled = pin.length >= 4,
                 modifier = Modifier.liquidJelly(confirmJelly, enabled = isLiquidEnabled),
-                shape = if (isLiquidEnabled) RoundedCornerShape(18.dp) else ButtonDefaults.shape
+                shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)) else ButtonDefaults.shape
             ) {
                 Text(stringResource(R.string.tfa_action_confirm))
             }
@@ -512,7 +512,7 @@ fun VlDrawingDialog(
                 )
 
                 val colors = listOf(Color.Black, Color.Red, Color.Green, Color.Blue, Color.Yellow)
-                val paletteShape = if (isLiquidEnabled) RoundedCornerShape(24.dp) else RoundedCornerShape(12.dp)
+                val paletteShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -532,10 +532,10 @@ fun VlDrawingDialog(
                                 Modifier
                                     .size(42.dp)
                                     .liquidJelly(dotJelly, enabled = isLiquidEnabled)
-                                    .clip(CircleShape)
+                                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                     .background(c)
                                     .then(
-                                        if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                        if (isSelected) Modifier.border(3.dp, MaterialTheme.colorScheme.primary, VlTheme.tokens.shapes.adapt(CircleShape))
                                         else Modifier
                                     )
                                     .clickable {
@@ -547,7 +547,7 @@ fun VlDrawingDialog(
                     }
                 }
 
-                val canvasShape = if (isLiquidEnabled) RoundedCornerShape(28.dp) else RoundedCornerShape(16.dp)
+                val canvasShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
                 Box(
                     Modifier
                         .fillMaxSize()

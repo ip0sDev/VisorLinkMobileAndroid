@@ -74,13 +74,13 @@ fun VlSurface(
     // Скругления элемента группы: у крайних — большой радиус снаружи, внутренние
     // углы схлопываются до 4dp. Работает одинаково в обеих темах.
     val shape: Shape = if (total <= 1) {
-        RoundedCornerShape(baseRadius)
+        VlTheme.tokens.shapes.adapt(RoundedCornerShape(baseRadius))
     } else {
         val smallR = 4.dp
         when (index) {
-            0 -> RoundedCornerShape(topStart = baseRadius, topEnd = baseRadius, bottomStart = smallR, bottomEnd = smallR)
-            total - 1 -> RoundedCornerShape(topStart = smallR, topEnd = smallR, bottomStart = baseRadius, bottomEnd = baseRadius)
-            else -> RoundedCornerShape(smallR)
+            0 -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = baseRadius, topEnd = baseRadius, bottomStart = smallR, bottomEnd = smallR))
+            total - 1 -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = smallR, topEnd = smallR, bottomStart = baseRadius, bottomEnd = baseRadius))
+            else -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(smallR))
         }
     }
 

@@ -208,6 +208,8 @@ val ForgeShapes = VlShapeTokens(
     avatar = RectangleShape,
     cardRadius = 0.dp,
     buttonRadius = 0.dp,
+    section = RectangleShape,
+    row = RectangleShape,
 )
 
 // ── Сборка токенов ───────────────────────────────────────────────────────────

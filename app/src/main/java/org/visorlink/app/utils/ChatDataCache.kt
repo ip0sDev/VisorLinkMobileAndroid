@@ -57,14 +57,8 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
     }
 
     override fun onDowngrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        Log.w(TAG, "Downgrading database from $oldVersion to $newVersion. Recreating tables.")
-        db.execSQL("DROP TABLE IF EXISTS chats")
-        db.execSQL("DROP TABLE IF EXISTS messages")
-        db.execSQL("DROP TABLE IF EXISTS profiles")
-        db.execSQL("DROP TABLE IF EXISTS stickers")
-        db.execSQL("DROP TABLE IF EXISTS outbox")
-        db.execSQL("DROP TABLE IF EXISTS likes")
-        onCreate(db)
+        Log.w(TAG, "Downgrading database from $oldVersion to $newVersion. Retaining tables to prevent data loss.")
+        // Защита от потери данных: не удаляем существующие таблицы при откате версии APK
     }
 
     private fun ensureColumnExists(db: SQLiteDatabase, table: String, column: String, def: String) {
@@ -96,6 +90,13 @@ object ChatDataCache {
 
     private val _outboxSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val outboxSignal: SharedFlow<Unit> = _outboxSignal.asSharedFlow()
+
+    private val _cacheUpdateSignal = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    val cacheUpdateSignal: SharedFlow<String> = _cacheUpdateSignal.asSharedFlow()
+
+    fun notifyCacheUpdated(chatId: String) {
+        _cacheUpdateSignal.tryEmit(chatId)
+    }
 
     fun outboxFlow(context: Context, chatId: String): Flow<List<QueuedAction>> = callbackFlow {
         fun reload() {
@@ -310,7 +311,8 @@ object ChatDataCache {
                 val db = getDb(context).writableDatabase
                 db.beginTransaction()
                 try {
-                    db.delete("chats", "uid=?", arrayOf(uid))
+                    // Удаляем только обычные чаты, сохраняя локальные аварийные чаты
+                    db.delete("chats", "uid=? AND chat_id NOT LIKE 'emer_%'", arrayOf(uid))
                     val stmt = db.compileStatement("INSERT INTO chats (uid, chat_id, data) VALUES (?, ?, ?)")
                     chats.forEach { chat ->
                         stmt.bindString(1, uid)
@@ -323,6 +325,32 @@ object ChatDataCache {
                     db.endTransaction()
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to save chat list", e) }
+        }
+
+    suspend fun saveSingleChat(context: Context, uid: String, chat: Chat) =
+        withContext(Dispatchers.IO) {
+            try {
+                val db = getDb(context).writableDatabase
+                val stmt = db.compileStatement("INSERT OR REPLACE INTO chats (uid, chat_id, data) VALUES (?, ?, ?)")
+                stmt.bindString(1, uid)
+                stmt.bindString(2, chat.id)
+                stmt.bindString(3, chat.toJson().toString())
+                stmt.executeInsert()
+            } catch (e: Exception) { Log.e(TAG, "Failed to save single chat ${chat.id}", e) }
+        }
+
+    suspend fun updateChatLastMessage(context: Context, uid: String, chatId: String, text: String, senderId: String, tsSeconds: Long) =
+        withContext(Dispatchers.IO) {
+            try {
+                val chat = loadChat(context, chatId) ?: return@withContext
+                val updated = chat.copy(
+                    lastMessage = text,
+                    lastMessageSenderId = senderId,
+                    lastMessageAt = com.google.firebase.Timestamp(tsSeconds, 0)
+                )
+                saveSingleChat(context, uid, updated)
+                notifyCacheUpdated(chatId)
+            } catch (e: Exception) { Log.e(TAG, "Failed to update chat lastMessage for $chatId", e) }
         }
 
     suspend fun loadChatList(context: Context, uid: String): List<Chat> =
@@ -372,6 +400,7 @@ object ChatDataCache {
                 } finally {
                     db.endTransaction()
                 }
+                notifyCacheUpdated(chatId)
             } catch (e: Exception) { Log.e(TAG, "Failed to save messages for $chatId", e) }
         }
 
@@ -596,7 +625,10 @@ object ChatDataCache {
         )
     }
 
-    private fun Message.toJson(): JSONObject = JSONObject().apply {
+    fun messageToJson(message: Message): JSONObject = message.toJson()
+    fun jsonToMessage(json: JSONObject): Message = json.toMessage()
+
+    fun Message.toJson(): JSONObject = JSONObject().apply {
         put("id", id)
         put("seq", seq ?: JSONObject.NULL)
         put("senderId", senderId)
@@ -638,9 +670,15 @@ object ChatDataCache {
         put("thumbUrl", thumbUrl ?: JSONObject.NULL)
         put("width", width ?: JSONObject.NULL)
         put("height", height ?: JSONObject.NULL)
+
+        unknownPayload.forEach { (k, v) ->
+            if (!has(k)) {
+                put(k, v ?: JSONObject.NULL)
+            }
+        }
     }
 
-    private fun JSONObject.toMessage(): Message {
+    fun JSONObject.toMessage(): Message {
         val readByArr = optJSONArray("readBy") ?: JSONArray()
         val readByList = (0 until readByArr.length()).map { readByArr.getString(it) }
 
@@ -684,6 +722,23 @@ object ChatDataCache {
             )
         }
 
+        val knownKeys = setOf(
+            "id", "seq", "senderId", "senderUsername", "type", "text", "url", "fileName",
+            "duration", "thumbUrl", "width", "height", "stickerId", "packId", "packName",
+            "packEmoji", "deleted", "createdAt", "spoiler", "commentsEnabled", "commentsCount",
+            "caption", "readBy", "images", "replyTo", "forwardFrom", "reactions", "status",
+            "mimeType", "uploadProgress", "cdnMediaId", "driveFileId", "driveUrl", "previewUrl",
+            "thumbnailUrl", "title", "performer", "fileSize", "coverCdnMediaId", "coverUrl"
+        )
+        val unknown = mutableMapOf<String, Any?>()
+        val keysIt = keys()
+        while (keysIt.hasNext()) {
+            val k = keysIt.next()
+            if (k !in knownKeys) {
+                unknown[k] = if (isNull(k)) null else opt(k)
+            }
+        }
+
         return Message(
             id = getString("id"),
             seq = if (has("seq") && !isNull("seq")) optLong("seq") else null,
@@ -711,7 +766,8 @@ object ChatDataCache {
             images = imagesList,
             replyTo = replyMap,
             forwardFrom = forwardMap,
-            reactions = reactionsList
+            reactions = reactionsList,
+            unknownPayload = unknown
         )
     }
 
@@ -773,12 +829,20 @@ object ChatDataCache {
         val custom = JSONObject()
         customization.forEach { (k, v) -> custom.put(k, v) }
         put("customization", custom)
+        val stickerArr = JSONArray()
+        stickerPackIds.forEach { stickerArr.put(it) }
+        put("stickerPackIds", stickerArr)
     }
 
     private fun JSONObject.toUserProfile(): UserProfile? = try {
         val customObj = optJSONObject("customization") ?: JSONObject()
         val customMap = mutableMapOf<String, Any?>()
         customObj.keys().forEach { k -> customMap[k] = customObj.get(k) }
+
+        val stickerArr = optJSONArray("stickerPackIds")
+        val stickerPackIds = if (stickerArr != null) {
+            (0 until stickerArr.length()).map { stickerArr.getString(it) }
+        } else emptyList()
 
         UserProfile(
             uid         = getString("uid"),
@@ -790,7 +854,8 @@ object ChatDataCache {
             isAdmin     = optBoolean("isAdmin", false),
             diaryEnabled = optBoolean("diaryEnabled", false),
             acceptedVersion = if (isNull("acceptedVersion") || !has("acceptedVersion")) null else optString("acceptedVersion"),
-            customization = customMap
+            customization = customMap,
+            stickerPackIds = stickerPackIds
         )
     } catch (e: Exception) { null }
 }

@@ -184,6 +184,18 @@ fun VisorLinkNavGraph(
                 targetOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
             )
+        },
+        predictivePopEnterTransition = {
+            slideInHorizontally(
+                initialOffsetX = { fullWidth -> -fullWidth / 4 },
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            )
+        },
+        predictivePopExitTransition = {
+            slideOutHorizontally(
+                targetOffsetX = { fullWidth -> fullWidth },
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            )
         }
     ) {
 

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.status
 
 import android.util.Log
+import org.visorlink.app.BuildConfig
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.firestore.FirebaseFirestore
@@ -181,7 +182,11 @@ class StatusViewModel(
                     .call(mapOf("service" to service, "errorTelemetry" to error))
                     .await()
             } catch (e: Exception) {
-                Log.e("StatusVM", "Failed to report incident: ${e.message}")
+                val code = (e as? com.google.firebase.functions.FirebaseFunctionsException)?.code
+                // Лимит 6 вызовов за 10 минут — молча пропускаем, без инцидента и без лога
+                if (code == com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED) return@launch
+                // UNAUTHENTICATED (нет входа) и прочее — показываем инцидент локально
+                if (BuildConfig.DEBUG) Log.w("StatusVM", "Failed to report incident: ${e.message}")
                 val local = Incident(
                     id = "local_${System.currentTimeMillis()}",
                     service = service,
@@ -209,7 +214,8 @@ class StatusViewModel(
                     .call(mapOf("service" to service))
                     .await()
             } catch (e: Exception) {
-                Log.e("StatusVM", "Failed to resolve incident: ${e.message}")
+                // RESOURCE_EXHAUSTED / UNAUTHENTICATED — не критично, молча пропускаем
+                if (BuildConfig.DEBUG) Log.w("StatusVM", "Failed to resolve incident: ${e.message}")
             }
         }
     }

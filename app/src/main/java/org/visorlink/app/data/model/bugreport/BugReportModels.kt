@@ -43,7 +43,8 @@ data class ScreenshotAttachment(
     @SerializedName("url") val url: String,
     @SerializedName("cdnMediaId") val cdnMediaId: String? = null,
     @SerializedName("fileName") val fileName: String,
-    @SerializedName("size") val size: Long
+    @SerializedName("size") val size: Long,
+    @SerializedName("storagePath") val storagePath: String? = null
 )
 
 /**

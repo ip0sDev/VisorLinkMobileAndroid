@@ -98,7 +98,7 @@ fun AudioMessageBubble(
                 Box(
                     modifier = Modifier
                         .size(46.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .clickable {
                             if (isThisTrack) onTogglePlayPause() else onPlay(message)
                         },
@@ -126,7 +126,7 @@ fun AudioMessageBubble(
                             contentDescription = null,
                             modifier = Modifier
                                 .size(24.dp)
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .rotate(vinylRotation),
                             contentScale = ContentScale.Crop
                         )
@@ -134,7 +134,7 @@ fun AudioMessageBubble(
                         Box(
                             modifier = Modifier
                                 .size(20.dp)
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .background(MaterialTheme.colorScheme.primary),
                             contentAlignment = Alignment.Center
                         ) {
@@ -231,7 +231,7 @@ fun AudioMessageBubble(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(3.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(tint.copy(alpha = 0.2f))
                 )
                 // Заполненная линия прогресса
@@ -239,7 +239,7 @@ fun AudioMessageBubble(
                     modifier = Modifier
                         .fillMaxWidth(progress)
                         .height(3.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(tint)
                 )
             }

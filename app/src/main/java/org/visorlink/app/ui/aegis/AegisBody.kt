@@ -120,7 +120,7 @@ fun AnimatedProtogen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .size(76.dp, 45.dp)
-                .clip(RoundedCornerShape(topStart = VlTheme.tokens.shapes.cardRadius, topEnd = VlTheme.tokens.shapes.cardRadius))
+                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = VlTheme.tokens.shapes.cardRadius, topEnd = VlTheme.tokens.shapes.cardRadius)))
                 .background(Color(0xFF1E1E1E))
         )
 

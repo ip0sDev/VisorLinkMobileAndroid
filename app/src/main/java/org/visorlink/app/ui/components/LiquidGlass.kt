@@ -511,8 +511,8 @@ fun NeumorphicLiquidSegmentedControl(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val density = LocalDensity.current
-    val trackShape = RoundedCornerShape(18.dp)
-    val thumbShape = RoundedCornerShape(14.dp)
+    val trackShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp))
+    val thumbShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
 
     var totalWidthPx by remember { mutableFloatStateOf(1f) }
     val tabCount = tabs.size.coerceAtLeast(1)

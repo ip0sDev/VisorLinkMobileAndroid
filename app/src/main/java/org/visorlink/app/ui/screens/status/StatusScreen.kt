@@ -118,7 +118,7 @@ fun StatusScreen(
                         if (isAllSystemsUp) {
                             Surface(
                                 color = Color(0xFF10B981).copy(alpha = 0.1f),
-                                shape = CircleShape
+                                shape = VlTheme.tokens.shapes.adapt(CircleShape)
                             ) {
                                 Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF10B981), modifier = Modifier.size(12.dp))
@@ -168,7 +168,7 @@ fun StatusScreen(
                     item {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else tokens.shapes.card,
+                            shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else tokens.shapes.card,
                             color = cs.surfaceContainerLow.copy(alpha = 0.6f),
                             border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.1f))
                         ) {
@@ -224,7 +224,7 @@ fun UptimeTimeline(timeline: List<TimelineBar>) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(6.dp))
+                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(6.dp)))
                         .background(if (bar.isUp) green.copy(alpha = 0.8f) else red)
                 )
             }
@@ -247,7 +247,7 @@ fun ServiceStatusCard(
     
     val statusColor = if (service.isUp) Color(0xFF10B981) else Color(0xFFEF4444)
     val statusIcon = if (service.isUp) Icons.Default.CheckCircle else Icons.Default.Error
-    val cardShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else null
+    val cardShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else null
 
     VlCard(modifier = modifier.fillMaxWidth(), shape = cardShape) {
         Row(
@@ -257,7 +257,7 @@ fun ServiceStatusCard(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .background(statusColor.copy(alpha = 0.1f), CircleShape),
+                    .background(statusColor.copy(alpha = 0.1f), VlTheme.tokens.shapes.adapt(CircleShape)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(statusIcon, null, tint = statusColor, modifier = Modifier.size(24.dp))
@@ -290,14 +290,14 @@ fun IncidentCard(
     val cs = MaterialTheme.colorScheme
     val green = Color(0xFF27AE60)
     val red = Color(0xFFE74C3C)
-    val cardShape = if (isLiquidEnabled) RoundedCornerShape(32.dp) else null
+    val cardShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else null
 
     VlCard(modifier = modifier.fillMaxWidth(), shape = cardShape) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Surface(
                     color = (if (incident.resolved) green else red).copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(4.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(4.dp))
                 ) {
                     Text(
                         text = if (incident.resolved) "РЕШЕНО" else "АКТИВНО",
@@ -363,7 +363,7 @@ fun IncidentCard(
                 Spacer(Modifier.height(12.dp))
                 Surface(
                     color = cs.errorContainer.copy(alpha = 0.2f),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
                     modifier = Modifier.fillMaxWidth(),
                     border = BorderStroke(1.dp, red.copy(alpha = 0.3f))
                 ) {

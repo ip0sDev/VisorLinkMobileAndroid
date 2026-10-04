@@ -17,15 +17,15 @@ import androidx.core.view.WindowCompat
 import org.visorlink.app.BuildConfig
 import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.ColorPreset
+import org.visorlink.app.data.model.ProfileAppearance
 import org.visorlink.app.data.model.ThemeMode
 import org.visorlink.app.data.model.UserProfile
-import org.visorlink.app.utils.CustomizationHelper
 import org.koin.compose.viewmodel.koinViewModel
 import java.util.concurrent.atomic.AtomicInteger
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
 
-private val LightM3 = lightColorScheme(
+internal val LightM3 = lightColorScheme(
     primary = Color(0xFF4F46E5),
     onPrimary = Color(0xFFFFFFFF),
     primaryContainer = Color(0xFFE0E7FF),
@@ -53,7 +53,7 @@ private val LightM3 = lightColorScheme(
     surfaceContainerHighest = Color(0xFFE4E3F5),
 )
 
-private val DarkM3 = darkColorScheme(
+internal val DarkM3 = darkColorScheme(
     primary = Color(0xFF818CF8),
     onPrimary = Color(0xFF1E1B4B),
     primaryContainer = Color(0xFF312E81),
@@ -108,54 +108,73 @@ private val ForgeShapeScale = Shapes(
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
 /**
- * Оформление, применяемое при просмотре чужого профиля или чата.
+ * Оформление владельца [profile], применяемое при просмотре его профиля или чата.
  *
- * PRO-пользователь может задать свои акцент, шрифт и тему; они применяются
- * зрителю, только если [CustomizationHelper.shouldApplyCustomization] это
- * разрешает (владелец — PRO, и зритель не отключил у себя чужие кастомизации).
- * Иначе показываются глобальные настройки зрителя.
+ * Что показывать, решает [ProfileAppearance.resolve]: своё — всегда, чужое —
+ * только при активном PRO владельца и если зритель не отключил чужое оформление.
+ * Всё незаданное берётся из глобальных настроек зрителя.
  */
 @Composable
 fun UserProfileTheme(
     profile: UserProfile?,
     currentUser: UserProfile?,
+    /** Произвольный HEX-акцент применяется только на экранах профиля, не в чате. */
+    applyAccentHex: Boolean = false,
     content: @Composable () -> Unit
 ) {
+    val resolved = ProfileAppearance.resolve(owner = profile, viewer = currentUser)
+    ProfileAppearanceTheme(
+        appearance = if (applyAccentHex) resolved else resolved.copy(accentHex = null),
+        content = content,
+    )
+}
+
+/**
+ * Применяет [appearance] поверх настроек зрителя из [ThemeViewModel].
+ * Режим светлая/тёмная всегда зрителя: оформление профиля его не меняет.
+ */
+@Composable
+fun ProfileAppearanceTheme(
+    appearance: ProfileAppearance,
+    content: @Composable () -> Unit,
+) {
     val themeVm: ThemeViewModel = koinViewModel()
-    val currentTheme by themeVm.appTheme.collectAsState()
-    val currentThemeMode by themeVm.themeMode.collectAsState()
-    val globalPreset by themeVm.colorPreset.collectAsState()
+    val viewerTheme by themeVm.appTheme.collectAsState()
+    val viewerMode by themeVm.themeMode.collectAsState()
+    val viewerPreset by themeVm.colorPreset.collectAsState()
     val showDebugIds by themeVm.showDebugIds.collectAsState()
 
-    val applyCustom = CustomizationHelper.shouldApplyCustomization(profile, currentUser)
-    val cust = if (applyCustom) profile?.customization.orEmpty() else emptyMap()
+    ProfileAppearanceTheme(
+        appearance = appearance,
+        viewerTheme = viewerTheme,
+        viewerMode = viewerMode,
+        viewerPreset = viewerPreset,
+        showDebugIds = showDebugIds,
+        content = content,
+    )
+}
 
-    val theme = (cust["theme"] as? String)
-        ?.let { CustomizationHelper.parseStyle(it) }
-        ?: currentTheme
-
-    val preset = (cust["accent"] as? String)
-        ?.let { CustomizationHelper.parseAccent(it) }
-        ?: globalPreset
-
-    val fontKey = cust["font"] as? String
-
+/** Чистая версия без ViewModel — для превью и скриншот-тестов. */
+@Composable
+fun ProfileAppearanceTheme(
+    appearance: ProfileAppearance,
+    viewerTheme: AppTheme,
+    viewerMode: ThemeMode,
+    viewerPreset: ColorPreset,
+    showDebugIds: Boolean = LocalShowDebugIds.current,
+    content: @Composable () -> Unit,
+) {
+    val theme = appearance.theme ?: viewerTheme
     VisorLinkTheme(
         appTheme = theme,
-        themeMode = currentThemeMode,
-        colorPreset = preset,
+        themeMode = viewerMode,
+        colorPreset = appearance.accent ?: viewerPreset,
+        accentOverride = appearance.accentHexColor,
         showDebugIds = showDebugIds,
+        // Статус-бар остаётся за внешней темой: режим светлая/тёмная тот же,
+        // а при уходе с экрана внешняя тема не перезапустила бы свой SideEffect
         setStatusBarColor = false,
-        typographyOverride = fontKey?.let { key ->
-            CustomizationHelper.getTypography(
-                fontStr = key,
-                base = when (theme) {
-                    AppTheme.BIOLUME -> BiolumeTypography
-                    AppTheme.FORGE -> ForgeTypography
-                    AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
-                },
-            )
-        },
+        typographyOverride = appearance.font?.let { baseTypography(theme).withProfileFont(it) },
         content = content,
     )
 }
@@ -177,6 +196,8 @@ fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
+    /** Произвольный цвет акцента поверх пресета (HEX из оформления профиля). */
+    accentOverride: androidx.compose.ui.graphics.Color? = null,
     showDebugIds: Boolean = LocalShowDebugIds.current,
     setStatusBarColor: Boolean = true,
     /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
@@ -202,22 +223,22 @@ fun VisorLinkTheme(
         ) == 0f
     }
 
+    val seed = accentOverride ?: colorPreset.seedColor
     val colorScheme = when (appTheme) {
         AppTheme.BIOLUME -> {
             val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
-            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+            base.withSignalAccent(seed, darkTheme)
         }
 
         AppTheme.FORGE -> {
             val base = if (darkTheme) ForgeSteelColorScheme else ForgeConcreteColorScheme
-            base.withSignalAccent(colorPreset.seedColor, darkTheme)
+            base.withSignalAccent(seed, darkTheme)
         }
 
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT ->
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT && accentOverride == null ->
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-            darkTheme -> DarkM3
-            else      -> LightM3
+            else -> (if (darkTheme) DarkM3 else LightM3).withMaterialAccent(seed, darkTheme)
         }
     }
 
@@ -289,8 +310,9 @@ fun VisorLinkTheme(
             }
             val window = (ctx as? Activity)?.window
             if (window != null) {
-                window.statusBarColor = Color.Transparent.toArgb()
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                val insetsController = WindowCompat.getInsetsController(window, view)
+                insetsController.isAppearanceLightStatusBars = !darkTheme
+                insetsController.isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }
@@ -309,11 +331,7 @@ fun VisorLinkTheme(
                 AppTheme.FORGE -> ForgeShapeScale
                 AppTheme.MATERIAL3_EXPRESSIVE -> Material3ShapeScale
             },
-            typography = typographyOverride ?: when (appTheme) {
-                AppTheme.BIOLUME -> BiolumeTypography
-                AppTheme.FORGE -> ForgeTypography
-                AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
-            },
+            typography = typographyOverride ?: baseTypography(appTheme),
             content = content
         )
     }

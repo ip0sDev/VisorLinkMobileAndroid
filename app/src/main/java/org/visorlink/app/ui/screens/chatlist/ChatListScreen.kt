@@ -29,8 +29,9 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
-import org.visorlink.app.ui.components.VlBrandText
+import org.visorlink.app.ui.components.VlBarBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chatlist.*
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.HapticType
@@ -44,6 +45,7 @@ import org.visorlink.app.ui.components.calculateJellyScale
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
+import org.visorlink.app.ui.components.LiquidPullRefreshLayout
 import androidx.compose.ui.graphics.graphicsLayer
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +74,7 @@ fun ChatListScreen(
     val drafts by viewModel.drafts.collectAsState()
     val typingMap by viewModel.typingMap.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val compactList by themeViewModel.compactChatList.collectAsState()
@@ -118,21 +121,8 @@ fun ChatListScreen(
             VlTopAppBar(
                 modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
                 title = {
-                    val tokens = VlTheme.tokens
                     Column {
-                        if (tokens.isBiolume) {
-                            VlBrandText(
-                                text = stringResource(R.string.chatlist_title),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 20.sp
-                            )
-                        } else {
-                            Text(
-                                stringResource(R.string.chatlist_title),
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        VlBarBrandText(stringResource(R.string.chatlist_title))
                         AnimatedVisibility(
                             visible = !isScrolled,
                             enter = expandVertically(
@@ -234,8 +224,16 @@ fun ChatListScreen(
         ) {
             VlAmbientGlow()
 
-            if (chats.isEmpty()) {
-                Column(
+            LiquidPullRefreshLayout(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() },
+                liquidEnabled = isLiquidEnabled,
+                hapticEnabled = hapticEnabled,
+                topPadding = padding.calculateTopPadding(),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (chats.isEmpty()) {
+                    Column(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
@@ -247,7 +245,13 @@ fun ChatListScreen(
                 } else {
                     LazyColumn(
                         state = listState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .progressiveEdgeBlur(
+                                topBlur = 10.dp,
+                                bottomBlur = 10.dp,
+                                enabled = !VlTheme.tokens.reduceMotion
+                            ),
                         contentPadding = PaddingValues(
                             top = padding.calculateTopPadding(),
                             bottom = padding.calculateBottomPadding() + 88.dp
@@ -257,7 +261,7 @@ fun ChatListScreen(
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {
                                 val cs = MaterialTheme.colorScheme
-                                val shape = RoundedCornerShape(24.dp)
+                                val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
 
                                 Column(
                                     modifier = Modifier
@@ -296,7 +300,7 @@ fun ChatListScreen(
                                     chats.forEachIndexed { index, chat ->
                                         val chatType = chat.chatType()
                                         val otherUid = when (chatType) {
-                                            ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                            ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
                                             else -> chat.id
                                         }
 
@@ -304,7 +308,7 @@ fun ChatListScreen(
                                             chat = chat,
                                             chatType = chatType,
                                             currentUid = viewModel.currentUid,
-                                            otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                            otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
                                             draftText = drafts[chat.id],
                                             unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                             isTyping = typingMap[chat.id] == true,
@@ -360,7 +364,7 @@ fun ChatListScreen(
                             ) { index, chat ->
                                 val chatType = chat.chatType()
                                 val otherUid = when (chatType) {
-                                    ChatType.DIRECT -> chat.otherParticipantId(viewModel.currentUid)
+                                    ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
                                     else -> chat.id
                                 }
 
@@ -377,7 +381,7 @@ fun ChatListScreen(
                                         chat = chat,
                                         chatType = chatType,
                                         currentUid = viewModel.currentUid,
-                                        otherProfile = if (chatType == ChatType.DIRECT) profileCache[otherUid] else null,
+                                        otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
                                         draftText = drafts[chat.id],
                                         unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
                                         isCompactList = compactList,
@@ -392,6 +396,7 @@ fun ChatListScreen(
                         }
                     }
                 }
+            }
 
             // FAB Menu Overlay
             if (showFabMenu) {

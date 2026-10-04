@@ -96,7 +96,7 @@ fun ChatTopBar(
                     ?: uiState.chat?.avatarUrl
 
                 when (uiState.chatType) {
-                    ChatType.DIRECT -> {
+                    ChatType.DIRECT, ChatType.EMERGENCY -> {
                         val isFaulty = uiState.otherUser?.uid == "bot_faultywire" ||
                                 uiState.otherUser?.username == "faultywire" ||
                                 uiState.chat?.otherUsername(currentUid) == "faultywire"
@@ -136,6 +136,7 @@ fun ChatTopBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 when (uiState.chatType) {
+                                    ChatType.EMERGENCY -> "$directName [SOS]"
                                     ChatType.DIRECT -> directName
                                     else -> uiState.chat?.name ?: ""
                                 },
@@ -217,6 +218,14 @@ fun ChatTopBar(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                             }
+                        }
+                        ChatType.EMERGENCY -> {
+                            Text(
+                                text = "🛡️ Аварийный канал связи",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontSize = 11.sp
+                            )
                         }
                     }
                 }

@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.chat
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -63,7 +64,7 @@ fun ReportContentDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
+                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                             .clickable { selectedCategory = cat }
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -86,7 +87,7 @@ fun ReportContentDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     maxLines = 4,
-                    shape = RoundedCornerShape(12.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
                 )
 
                 if (submitError != null) {
@@ -122,7 +123,7 @@ fun ReportContentDialog(
                     }
                 },
                 enabled = !isSubmitting,
-                shape = RoundedCornerShape(12.dp)
+                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
             ) {
                 if (isSubmitting) {
                     CircularProgressIndicator(

@@ -41,6 +41,7 @@ fun LegacyMediaPlaceholder(
     onLongPressEnd: () -> Unit = {},
     onReact: (String) -> Unit = {},
     onReplyClick: (String) -> Unit = {},
+    onDoubleTap: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val bubbleColor = resolveBubbleColor(isMine)
@@ -59,7 +60,7 @@ fun LegacyMediaPlaceholder(
                 messageId = message.id,
                 interactionSource = interactionSource,
                 onTap = null,
-                onDoubleTap = { onReact("❤️") },
+                onDoubleTap = onDoubleTap ?: { onReact("❤️") },
                 hapticEnabled = hapticEnabled,
                 onLongPressStart = onLongPressStart,
                 onLongPressDrag = onLongPressDrag,

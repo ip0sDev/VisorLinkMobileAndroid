@@ -43,7 +43,13 @@ fun VlAlertDialog(
         val popProgress = rememberLiquidPopProgress(isLiquidEnabled)
 
         val body: @Composable () -> Unit = {
-            Column(Modifier.padding(start = 24.dp, top = 24.dp, end = 20.dp, bottom = 12.dp)) {
+            // Ширина как у M3 AlertDialog: без минимума короткий диалог («Выйти?»)
+            // сжимался до ширины кнопок и выглядел обрывком
+            Column(
+                Modifier
+                    .widthIn(min = 280.dp, max = 560.dp)
+                    .padding(start = 24.dp, top = 24.dp, end = 20.dp, bottom = 12.dp)
+            ) {
                 title?.let {
                     CompositionLocalProvider(
                         LocalTextStyle provides TextStyle(
@@ -62,7 +68,7 @@ fun VlAlertDialog(
                 if (actions != null) {
                     Spacer(Modifier.height(24.dp))
                     Row(
-                        Modifier,
+                        Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                         content = actions,
                     )
@@ -94,6 +100,47 @@ fun VlAlertDialog(
     }
 }
 
+/**
+ * Тот же диалог в форме API M3 `AlertDialog` (confirmButton / dismissButton /
+ * icon). Нужен, чтобы экраны переходили с M3-диалогов заменой имени: раньше
+ * десяток диалогов в ChatScreen, ChatSettingsScreen, SettingsScreen и
+ * StorageManagerScreen рисовался M3 по умолчанию и выпадал из темы — в Forge
+ * со скруглёнными углами и без жёсткой тени.
+ */
+@Composable
+fun VlAlertDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    dismissButton: (@Composable () -> Unit)? = null,
+    icon: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+    dismissible: Boolean = true,
+) {
+    VlAlertDialog(
+        onDismissRequest = onDismissRequest,
+        modifier = modifier,
+        title = if (icon == null && title == null) null else {
+            {
+                Column {
+                    icon?.let {
+                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.secondary) { it() }
+                        if (title != null) Spacer(Modifier.height(16.dp))
+                    }
+                    title?.invoke()
+                }
+            }
+        },
+        text = text,
+        actions = {
+            dismissButton?.invoke()
+            confirmButton()
+        },
+        dismissible = dismissible,
+    )
+}
+
 @Composable
 fun VlDialogButton(
     onClick: (() -> Unit)?,
@@ -101,10 +148,11 @@ fun VlDialogButton(
     isPrimary: Boolean = false,
     isDestructive: Boolean = false,
     isLoading: Boolean = false,
+    enabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val active = onClick != null && !isLoading
+    val active = onClick != null && enabled && !isLoading
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()

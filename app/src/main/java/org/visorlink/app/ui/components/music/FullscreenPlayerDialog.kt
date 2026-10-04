@@ -238,7 +238,7 @@ fun FullscreenPlayerDialog(
                                             modifier = Modifier
                                                 .align(Alignment.TopEnd)
                                                 .offset(x = 6.dp, y = (-4).dp)
-                                                .clip(CircleShape)
+                                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                                 .background(MaterialTheme.colorScheme.primary)
                                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
@@ -272,9 +272,9 @@ fun FullscreenPlayerDialog(
                                             modifier = Modifier
                                                 .align(Alignment.BottomEnd)
                                                 .offset(x = 4.dp, y = 4.dp)
-                                                .clip(CircleShape)
+                                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), CircleShape)
+                                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f), VlTheme.tokens.shapes.adapt(CircleShape))
                                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
                                             Text(
@@ -419,16 +419,16 @@ fun FullscreenPlayerDialog(
                             // Бейдж качества HQ AUDIO с живым индикатором
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                    .border(0.8.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                                    .border(0.8.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                     .padding(horizontal = 7.dp, vertical = 2.5.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         modifier = Modifier
                                             .size(6.dp)
-                                            .clip(CircleShape)
+                                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                             .background(if (state.isPlaying) Color(0xFF00E676) else MaterialTheme.colorScheme.primary)
                                     )
                                     Spacer(Modifier.width(5.dp))
@@ -443,7 +443,7 @@ fun FullscreenPlayerDialog(
                             // Бейдж источника аудиофайла
                             Box(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                                     .padding(horizontal = 8.dp, vertical = 2.5.dp)
                             ) {
@@ -517,7 +517,7 @@ fun FullscreenPlayerDialog(
                                 .then(
                                     if (state.isShuffle) {
                                         Modifier
-                                            .clip(RoundedCornerShape(16.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
                                     } else Modifier
                                 )
@@ -534,7 +534,7 @@ fun FullscreenPlayerDialog(
                                     Box(
                                         modifier = Modifier
                                             .size(4.dp)
-                                            .clip(CircleShape)
+                                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                             .background(MaterialTheme.colorScheme.primary)
                                     )
                                 }
@@ -550,8 +550,8 @@ fun FullscreenPlayerDialog(
                             modifier = Modifier
                                 .size(54.dp)
                                 .liquidJelly(prevJelly, enabled = isLiquidEnabled)
-                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, CircleShape) else Modifier),
-                            shape = CircleShape,
+                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape)) else Modifier),
+                            shape = VlTheme.tokens.shapes.adapt(CircleShape),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
                             )
@@ -585,8 +585,8 @@ fun FullscreenPlayerDialog(
                                 Box(
                                     modifier = Modifier
                                         .size(pulseRadius1.dp)
-                                        .clip(CircleShape)
-                                        .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha1), CircleShape)
+                                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
+                                        .border(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = pulseAlpha1), VlTheme.tokens.shapes.adapt(CircleShape))
                                 )
                             }
 
@@ -599,10 +599,10 @@ fun FullscreenPlayerDialog(
                                     .size(80.dp)
                                     .liquidJelly(playPauseJelly, enabled = isLiquidEnabled)
                                     .then(
-                                        if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, CircleShape)
-                                        else Modifier.shadow(elevation = 12.dp, shape = CircleShape, ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary)
+                                        if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape))
+                                        else Modifier.shadow(elevation = 12.dp, shape = VlTheme.tokens.shapes.adapt(CircleShape), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary)
                                     ),
-                                shape = CircleShape,
+                                shape = VlTheme.tokens.shapes.adapt(CircleShape),
                                 colors = IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary
                                 )
@@ -633,8 +633,8 @@ fun FullscreenPlayerDialog(
                             modifier = Modifier
                                 .size(54.dp)
                                 .liquidJelly(nextJelly, enabled = isLiquidEnabled)
-                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, CircleShape) else Modifier),
-                            shape = CircleShape,
+                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape)) else Modifier),
+                            shape = VlTheme.tokens.shapes.adapt(CircleShape),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f)
                             )
@@ -657,7 +657,7 @@ fun FullscreenPlayerDialog(
                                 .then(
                                     if (state.repeatMode != MusicRepeatMode.OFF) {
                                         Modifier
-                                            .clip(RoundedCornerShape(16.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f))
                                     } else Modifier
                                 )
@@ -678,7 +678,7 @@ fun FullscreenPlayerDialog(
                                     Box(
                                         modifier = Modifier
                                             .size(4.dp)
-                                            .clip(CircleShape)
+                                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                             .background(MaterialTheme.colorScheme.primary)
                                     )
                                 }
@@ -700,11 +700,11 @@ fun FullscreenPlayerDialog(
                                 speedJelly.pulse()
                                 playerManager.cycleSpeed()
                             },
-                            shape = RoundedCornerShape(20.dp),
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                             modifier = Modifier
                                 .liquidJelly(speedJelly, enabled = isLiquidEnabled)
-                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, RoundedCornerShape(20.dp)) else Modifier),
+                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text(
@@ -722,11 +722,11 @@ fun FullscreenPlayerDialog(
                                 playlistAddJelly.pulse()
                                 showPlaylistPicker = true
                             },
-                            shape = RoundedCornerShape(20.dp),
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                             modifier = Modifier
                                 .liquidJelly(playlistAddJelly, enabled = isLiquidEnabled)
-                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, RoundedCornerShape(20.dp)) else Modifier),
+                                .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Icon(
@@ -775,10 +775,10 @@ fun FullscreenPlayerDialog(
                                             }
                                         }
                                     },
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                                     modifier = Modifier
                                         .liquidJelly(saveJelly, enabled = isLiquidEnabled)
-                                        .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, RoundedCornerShape(20.dp)) else Modifier),
+                                        .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
                                     Icon(
@@ -842,7 +842,7 @@ fun FullscreenPlayerDialog(
     if (showPlaylistPicker) {
         ModalBottomSheet(
             onDismissRequest = { showPlaylistPicker = false },
-            shape = if (isLiquidEnabled) RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp) else BottomSheetDefaults.ExpandedShape,
+            shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) else BottomSheetDefaults.ExpandedShape,
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -885,7 +885,7 @@ fun FullscreenPlayerDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .liquidJelly(rowJelly, enabled = isLiquidEnabled)
-                                .clip(RoundedCornerShape(18.dp))
+                                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)))
                                 .clickable {
                                     rowJelly.press()
                                     scope.launch {
@@ -897,7 +897,7 @@ fun FullscreenPlayerDialog(
                                     }
                                 },
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                            shape = RoundedCornerShape(18.dp)
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp))
                         ) {
                             ListItem(
                                 headlineContent = { Text(playlist.title, fontWeight = FontWeight.SemiBold) },
@@ -906,7 +906,7 @@ fun FullscreenPlayerDialog(
                                     Box(
                                         modifier = Modifier
                                             .size(42.dp)
-                                            .clip(RoundedCornerShape(14.dp))
+                                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
                                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -927,7 +927,7 @@ fun FullscreenPlayerDialog(
         val dialogPop = rememberLiquidPopProgress(isLiquidEnabled)
         AlertDialog(
             onDismissRequest = { showCreatePlaylistDialog = false },
-            shape = RoundedCornerShape(28.dp),
+            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)),
             modifier = Modifier.liquidPopIn(dialogPop, enabled = isLiquidEnabled),
             title = { Text(stringResource(R.string.music_playlist_create)) },
             text = {
@@ -936,7 +936,7 @@ fun FullscreenPlayerDialog(
                     onValueChange = { newPlaylistName = it },
                     label = { Text(stringResource(R.string.music_playlist_name)) },
                     singleLine = true,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)),
                     modifier = Modifier.fillMaxWidth()
                 )
             },
@@ -988,10 +988,10 @@ private fun PlayerVisualModeSelector(
     val tokens = VlTheme.tokens
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
-            .then(if (tokens.isBiolume) Modifier.vlInset(tokens.structure, RoundedCornerShape(20.dp)) else Modifier)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)))
+            .then(if (tokens.isBiolume) Modifier.vlInset(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier)
             .padding(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1005,7 +1005,7 @@ private fun PlayerVisualModeSelector(
             val isSelected = currentMode == mode
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                     .background(
                         if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
                         else Color.Transparent
@@ -1071,7 +1071,7 @@ private fun PlayerArtCard(
             Box(
                 modifier = Modifier
                     .size(280.dp)
-                    .clip(RoundedCornerShape(38.dp))
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(38.dp)))
                     .background(
                         Brush.radialGradient(
                             listOf(
@@ -1093,8 +1093,8 @@ private fun PlayerArtCard(
                     scaleY = animatedScale
                     translationY = if (isPlaying && isLiquidEnabled) floatOffset else 0f
                 }
-                .shadow(elevation = 16.dp, shape = RoundedCornerShape(32.dp), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
-                .clip(RoundedCornerShape(32.dp))
+                .shadow(elevation = 16.dp, shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .border(
                     BorderStroke(
@@ -1107,7 +1107,7 @@ private fun PlayerArtCard(
                             )
                         )
                     ),
-                    RoundedCornerShape(32.dp)
+                    VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp))
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -1179,7 +1179,7 @@ private fun PlayerVinylTurntable(
         Box(
             modifier = Modifier
                 .size(255.dp)
-                .clip(CircleShape),
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape)),
             contentAlignment = Alignment.Center
         ) {
             Canvas(
@@ -1223,10 +1223,10 @@ private fun PlayerVinylTurntable(
             Box(
                 modifier = Modifier
                     .size(105.dp)
-                    .clip(CircleShape)
+                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                     .rotate(currentRotation)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .border(2.dp, Color(0xFFC5A059), CircleShape),
+                    .border(2.dp, Color(0xFFC5A059), VlTheme.tokens.shapes.adapt(CircleShape)),
                 contentAlignment = Alignment.Center
             ) {
                 val cover = track.coverUrl
@@ -1245,9 +1245,9 @@ private fun PlayerVinylTurntable(
                 Box(
                     modifier = Modifier
                         .size(18.dp)
-                        .clip(CircleShape)
+                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(Color(0xFF1A1A1C))
-                        .border(1.dp, Color(0xFF88888E), CircleShape)
+                        .border(1.dp, Color(0xFF88888E), VlTheme.tokens.shapes.adapt(CircleShape))
                 )
             }
         }
@@ -1515,7 +1515,7 @@ private fun FluidAudioScrubber(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(cs.onSurface.copy(alpha = 0.16f))
         ) {
             // Активная полоса прогресса с градиентом и свечением
@@ -1523,7 +1523,7 @@ private fun FluidAudioScrubber(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(progress.coerceIn(0f, 1f))
-                    .clip(CircleShape)
+                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                     .background(
                         Brush.horizontalGradient(
                             listOf(
@@ -1546,9 +1546,9 @@ private fun FluidAudioScrubber(
             Box(
                 modifier = Modifier
                     .offset(x = (thumbOffsetDp - 18.dp).coerceAtLeast(0.dp), y = (-32).dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)))
                     .background(cs.surfaceContainerHighest)
-                    .border(1.dp, cs.primary.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .border(1.dp, cs.primary.copy(alpha = 0.5f), VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)))
                     .padding(horizontal = 8.dp, vertical = 2.dp)
             ) {
                 Text(
@@ -1574,9 +1574,9 @@ private fun FluidAudioScrubber(
                     scaleY = animatedThumbScale
                 }
                 .liquidJelly(jellyState)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(cs.primary)
-                .border(2.5.dp, cs.surface, CircleShape)
+                .border(2.5.dp, cs.surface, VlTheme.tokens.shapes.adapt(CircleShape))
         )
 
         // Обработка жестов
@@ -1625,7 +1625,7 @@ private fun QueueBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -1677,14 +1677,14 @@ private fun QueueBottomSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .liquidJelly(rowJelly, enabled = isLiquidEnabled)
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                                 .clickable {
                                     rowJelly.press()
                                     onTrackClick(itemTrack, index)
                                 },
                             color = if (isCurrent) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
                                    else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                            shape = RoundedCornerShape(16.dp),
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)),
                             border = if (isCurrent) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)) else null
                         ) {
                             ListItem(
@@ -1748,7 +1748,7 @@ private fun SleepTimerBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
@@ -1775,11 +1775,11 @@ private fun SleepTimerBottomSheet(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
                         .clickable { onSetTimer(minutes) }
                         .padding(vertical = 4.dp),
                     color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
-                    shape = RoundedCornerShape(14.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
                 ) {
                     Row(
                         modifier = Modifier
@@ -1806,11 +1806,11 @@ private fun SleepTimerBottomSheet(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp)))
                     .clickable { onSetEndOfTrack() }
                     .padding(vertical = 4.dp),
                 color = if (isSleepAtEnd) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else Color.Transparent,
-                shape = RoundedCornerShape(14.dp)
+                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(14.dp))
             ) {
                 Row(
                     modifier = Modifier
@@ -1838,7 +1838,7 @@ private fun SleepTimerBottomSheet(
                 OutlinedButton(
                     onClick = onCancelTimer,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
                 ) {
                     Text(stringResource(R.string.music_sleep_off))
                 }
@@ -1878,21 +1878,21 @@ private fun MiniEqualizerWaves(color: Color) {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(b1)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(color)
         )
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(b2)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(color)
         )
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight(b3)
-                .clip(CircleShape)
+                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(color)
         )
     }

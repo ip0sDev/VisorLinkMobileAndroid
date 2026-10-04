@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.settings
 
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,7 +41,7 @@ fun SecretTokenDialog(
             Column(modifier = Modifier.fillMaxWidth()) {
                 Surface(
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(8.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
@@ -56,7 +57,7 @@ fun SecretTokenDialog(
                 // Поле с токеном
                 Surface(
                     color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -76,7 +77,7 @@ fun SecretTokenDialog(
                         haptic.perform(HapticType.CLICK, true)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp))
                 ) {
                     Icon(
                         if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,

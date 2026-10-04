@@ -112,7 +112,7 @@ fun BugReportSheet(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Surface(
-                        shape = CircleShape,
+                        shape = VlTheme.tokens.shapes.adapt(CircleShape),
                         color = cs.primaryContainer,
                         modifier = Modifier.size(72.dp)
                     ) {
@@ -147,7 +147,7 @@ fun BugReportSheet(
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
                     ) {
                         Text(stringResource(R.string.action_ok))
                     }
@@ -303,8 +303,8 @@ fun BugReportSheet(
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .border(1.dp, cs.outlineVariant, RoundedCornerShape(8.dp))
+                                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
+                                .border(1.dp, cs.outlineVariant, VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                         ) {
                             CachedImage(
                                 model = attachment.url,
@@ -317,7 +317,7 @@ fun BugReportSheet(
                                 modifier = Modifier
                                     .size(24.dp)
                                     .align(Alignment.TopEnd)
-                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f), VlTheme.tokens.shapes.adapt(CircleShape))
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -333,7 +333,7 @@ fun BugReportSheet(
                         Box(
                             modifier = Modifier
                                 .size(72.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
                                 .background(cs.surfaceVariant.copy(alpha = 0.5f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -341,7 +341,7 @@ fun BugReportSheet(
                         }
                     } else if (uiState.screenshots.size < 5) {
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
                             color = cs.surfaceVariant.copy(alpha = 0.35f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, cs.outlineVariant),
                             modifier = Modifier
@@ -417,7 +417,7 @@ fun BugReportSheet(
                     onClick = { viewModel.submit(context) },
                     enabled = !uiState.isSubmitting && !uiState.isUploadingScreenshot,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp)),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.primary)
                 ) {
                     if (uiState.isSubmitting) {

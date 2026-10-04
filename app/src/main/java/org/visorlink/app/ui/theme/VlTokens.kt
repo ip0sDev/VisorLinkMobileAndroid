@@ -2,6 +2,7 @@ package org.visorlink.app.ui.theme
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -150,7 +151,36 @@ data class VlShapeTokens(
     /** Радиус, от которого считается рельеф и сигнальный контур. */
     val cardRadius: Dp,
     val buttonRadius: Dp,
-)
+    /**
+     * Контейнер группы настроек ([VlSettingsSection]). Отдельно от [card]: у
+     * Biolume карточка 16dp, а секция исторически 24dp — раньше это было
+     * зашито в компонент, и Forge получал скругления вопреки своей шкале.
+     */
+    val section: Shape = RoundedCornerShape(24.dp),
+    /** Строка выбора ([VlOptionRow]) — подсветка выбранного варианта. */
+    val row: Shape = RoundedCornerShape(12.dp),
+) {
+    /** Шкала без скруглений (Forge). */
+    val isSquare: Boolean get() = cardRadius == 0.dp
+
+    /**
+     * Любая форма, кроме формы шкалы без скруглений: там — прямой угол.
+     *
+     * Компоненты и экраны рисуют много своих форм (`RoundedCornerShape(12.dp)`,
+     * `CircleShape`), и раньше Forge получал их как есть — «ни одного
+     * скругления» нарушалось в каждом листе, плеере и диалоге. Все такие формы
+     * в `ui/components` и `ui/screens` проходят через [adapt]; для скруглённых
+     * тем он возвращает форму без изменений.
+     */
+    fun adapt(shape: Shape): Shape = if (isSquare) RectangleShape else shape
+
+    /**
+     * Скругление на [radius]. В частности — для «жидкого» варианта (флаг
+     * `animation_test`, по умолчанию включён), который скругляет сильнее
+     * обычной шкалы.
+     */
+    fun rounded(radius: Dp): Shape = adapt(RoundedCornerShape(radius))
+}
 
 // ── Движение ─────────────────────────────────────────────────────────────────
 

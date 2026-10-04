@@ -300,7 +300,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
 
     Dialog(
         onDismissRequest = { if (!isDismissing.value) onDismiss() },
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
             modifier = Modifier

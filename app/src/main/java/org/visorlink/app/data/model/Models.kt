@@ -69,9 +69,7 @@ data class UserProfile(
     }
 }
 
-// ─── Chat ─────────────────────────────────────────────────────────────────────
-
-enum class ChatType { DIRECT, GROUP, CHANNEL }
+enum class ChatType { DIRECT, GROUP, CHANNEL, EMERGENCY }
 
 @IgnoreExtraProperties
 data class ChatSettings(
@@ -161,15 +159,19 @@ data class Chat(
         }
     }
 
-    fun chatType() = when (type) {
-        "group"   -> ChatType.GROUP
-        "channel" -> ChatType.CHANNEL
-        else      -> ChatType.DIRECT
+    val isEmergency: Boolean get() = type == "emergency" || id.startsWith("emer_")
+
+    fun chatType() = when {
+        isEmergency -> ChatType.EMERGENCY
+        type == "group" -> ChatType.GROUP
+        type == "channel" -> ChatType.CHANNEL
+        else -> ChatType.DIRECT
     }
 
     fun displayName(currentUid: String) = when (chatType()) {
-        ChatType.DIRECT -> participantData[otherParticipantId(currentUid)]?.get("displayName") ?: ""
-        else            -> name
+        ChatType.DIRECT, ChatType.EMERGENCY -> participantData[otherParticipantId(currentUid)]?.get("displayName")
+            ?: name.ifEmpty { "Emergency Chat" }
+        else -> name
     }
 
     fun otherParticipantId(currentUid: String) =
@@ -315,13 +317,13 @@ data class Member(
 // ─── Permissions helpers ──────────────────────────────────────────────────────
 
 fun canSendMessage(myMember: Member?, chatType: ChatType): Boolean = when (chatType) {
-    ChatType.DIRECT  -> true
+    ChatType.DIRECT, ChatType.EMERGENCY -> true
     ChatType.GROUP   -> myMember?.canSend() ?: false
     ChatType.CHANNEL -> myMember?.isAdmin() ?: false
 }
 
 fun canSendMedia(myMember: Member?, chatType: ChatType): Boolean = when (chatType) {
-    ChatType.DIRECT  -> true
+    ChatType.DIRECT, ChatType.EMERGENCY -> true
     ChatType.CHANNEL -> myMember?.isAdmin() ?: false
     ChatType.GROUP   -> myMember?.canSend() == true && myMember.mediaRestricted == false
 }
@@ -455,7 +457,14 @@ data class StickerItem(
     val storagePath: String = "",
     val sortOrder: Int = 0,
     val createdAt: Timestamp? = null
-)
+) {
+    val isLottie: Boolean
+        get() = url.substringBefore("?").endsWith(".json", ignoreCase = true) ||
+                url.substringBefore("?").endsWith(".lottie", ignoreCase = true)
+
+    val isGif: Boolean
+        get() = url.substringBefore("?").endsWith(".gif", ignoreCase = true)
+}
 
 data class UserStickerData(
     val packIds: List<String> = emptyList()
@@ -531,8 +540,23 @@ data class Message(
     val uploadProgress: Float? = null,
     val localFile: java.io.File? = null,
     val localBytes: ByteArray? = null,
-    val status: String = "sent"
+    val status: String = "sent",
+    val unknownPayload: Map<String, Any?> = emptyMap()
 ) {
+    val isGifMedia: Boolean
+        get() = type.equals(MessageType.GIF, ignoreCase = true) ||
+                url?.substringBefore("?")?.endsWith(".gif", ignoreCase = true) == true ||
+                fileName?.endsWith(".gif", ignoreCase = true) == true ||
+                mimeType.equals("image/gif", ignoreCase = true)
+
+    val isLottieMedia: Boolean
+        get() = type.equals(MessageType.LOTTIE, ignoreCase = true) ||
+                url?.substringBefore("?")?.endsWith(".json", ignoreCase = true) == true ||
+                url?.substringBefore("?")?.endsWith(".lottie", ignoreCase = true) == true ||
+                fileName?.endsWith(".json", ignoreCase = true) == true ||
+                fileName?.endsWith(".lottie", ignoreCase = true) == true ||
+                (mimeType.equals("application/json", ignoreCase = true) && type == MessageType.STICKER)
+
     val replyData: ReplyData?
         get() = replyTo?.let {
             ReplyData(
@@ -642,6 +666,13 @@ object MessageType {
     const val GIFT    = "gift"
     const val VIDEO   = "video"
     const val GIF     = "gif"
+    const val LOTTIE  = "lottie"
+    const val UNKNOWN = "unknown"
+
+    fun isKnown(type: String?): Boolean = when (type?.lowercase()) {
+        TEXT, IMAGE, VOICE, AUDIO, STICKER, ALBUM, GIFT, VIDEO, GIF, LOTTIE -> true
+        else -> false
+    }
 }
 
 /**

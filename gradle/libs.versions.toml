@@ -3,7 +3,7 @@ agp = "9.4.1"
 biometric = "1.2.0-alpha05"
 coilVideo = "2.7.0"
 kotlin = "2.4.20"
-coreKtx = "1.19.0"
+coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
@@ -13,13 +13,14 @@ activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 media3Exoplayer = "1.11.1"
 media3Ui = "1.11.1"
-navigationCompose = "2.10.1"
+navigationCompose = "2.10.2"
 mediaVersion = "1.8.0"
-animation = "1.12.1"
-foundationLayout = "1.12.1"
+composeUi = "1.13.0-alpha03"
+animation = "1.13.0-alpha03"
+foundationLayout = "1.13.0-alpha03"
 materialIconsExtended = "1.7.8"
-sentry-sdk = "8.57.0"
-sentry-plugin = "6.22.0"
+sentry-sdk = "8.58.0"
+sentry-plugin = "6.23.0"
 securityCrypto = "1.1.0"
 
 koin = "4.2.2"
@@ -30,6 +31,7 @@ retrofit = "3.0.0"
 okhttp = "5.5.0"
 jwtDecode = "2.1.0"
 serializationJson = "1.11.0"
+lottie = "6.7.1"
 
 # Оставляем только одну версию Firebase
 firebaseBom = "34.19.0"
@@ -37,12 +39,14 @@ playServicesAuth = "22.0.0"
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 coroutinesTest = "1.11.0"
-mockitoKotlin = "6.3.0"
-mockitoCore = "5.23.0"
-uiText = "1.12.1"
-foundation = "1.12.1"
-uiGeometry = "1.12.1"
+mockitoKotlin = "6.4.0"
+mockitoCore = "5.24.0"
+uiText = "1.13.0-alpha03"
+foundation = "1.13.0-alpha03"
+uiGeometry = "1.13.0-alpha03"
 cameraX = "1.6.2"
+robolectric = "4.17"
+roborazzi = "1.76.0"
 
 [libraries]
 # --- AndroidX ---
@@ -60,12 +64,12 @@ androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-p
 
 # --- Compose ---
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
-androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
-androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
-androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
-androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
+androidx-compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "composeUi" }
+androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "composeUi" }
+androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "composeUi" }
+androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "composeUi" }
+androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "composeUi" }
+androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "composeUi" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "animation" }
@@ -107,6 +111,7 @@ jwt-decode = { group = "com.auth0.android", name = "jwtdecode", version.ref = "j
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttp" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
+lottie-compose = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie" }
 androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "cameraX" }
 androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "cameraX" }
 androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "cameraX" }
@@ -122,6 +127,10 @@ mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mo
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 androidx-compose-ui-geometry = { group = "androidx.compose.ui", name = "ui-geometry", version.ref = "uiGeometry" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-junit-rule = { group = "io.github.takahirom.roborazzi", name = "roborazzi-junit-rule", version.ref = "roborazzi" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -129,3 +138,4 @@ kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "ko
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 google-services = { id = "com.google.gms.google-services", version = "4.5.0" }
 sentry-android = { id = "io.sentry.android.gradle", version.ref = "sentry-plugin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

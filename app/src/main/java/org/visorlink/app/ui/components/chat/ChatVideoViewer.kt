@@ -44,7 +44,9 @@ fun ChatVideoViewer(
                 .sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp)
                 .clip(VlTheme.tokens.shapes.card)
                 .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-        }.clickable { onClick?.invoke() },
+        }.then(
+            if (onClick != null) Modifier.clickable { onClick.invoke() } else Modifier
+        ),
         contentAlignment = Alignment.Center
     ) {
         if (modelSource != null) {

@@ -60,12 +60,31 @@ class ChatListViewModel(
         lastMessage = "Нажмите, чтобы открыть",
     )
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    fun refresh() {
+        viewModelScope.launch {
+            if (_isRefreshing.value) return@launch
+            _isRefreshing.value = true
+            try {
+                userRepository.getUserProfile(currentUid)
+                kotlinx.coroutines.delay(800)
+            } catch (e: Exception) {
+                Log.e("ChatListVM", "Failed to refresh chats: ${e.message}")
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
     private val observedPresenceUids = mutableSetOf<String>()
 
     init {
         sidebarTypingManager?.startListening(currentUid)
         viewModelScope.launch {
             chats.collect { list ->
+                sidebarTypingManager?.syncChats(list.map { it.id })
                 launch(Dispatchers.IO) {
                     list.forEach { chat ->
                         if (chat.unreadCountFor(currentUid) == 0) {

@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.chat
 
+import org.visorlink.app.ui.components.VlDialogButton
+import org.visorlink.app.ui.components.VlAlertDialog
 import android.Manifest
 import android.net.Uri
 import android.widget.Toast
@@ -10,6 +12,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -38,10 +41,13 @@ import org.visorlink.app.ui.aegis.AegisLifeViewModel
 import org.visorlink.app.ui.components.SecureScreen
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
+import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chat.*
+import org.visorlink.app.ui.components.rememberLiquidPopProgress
+import org.visorlink.app.ui.components.liquidPopIn
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerSheet
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
-import org.visorlink.app.ui.screens.stickers.StickerPickerBottomSheet
+import org.visorlink.app.ui.components.stickers.StickerPickerBottomSheet
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.data.repository.MusicRepository
 import org.visorlink.app.utils.ActiveChatTracker
@@ -145,12 +151,25 @@ fun ChatScreen(
     }
 
     var showStickerSheet by remember { mutableStateOf(false) }
+    var showMediaPicker by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
+    // Автоматическое закрытие меню стикеров и вложений при начале листания чата
+    val isChatDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(isChatDragged) {
+        if (isChatDragged) {
+            if (showStickerSheet) showStickerSheet = false
+            if (showMediaPicker) showMediaPicker = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+        }
+    }
+
     var contextMenuData by remember { mutableStateOf<ContextMenuData?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    var isDraggingMenu by remember { mutableStateOf(false) }
     var forwardingMessage by remember { mutableStateOf<ForwardableMessage?>(null) }
 
     var lightboxImages by remember { mutableStateOf<List<AlbumImage>>(emptyList()) }
@@ -163,7 +182,6 @@ fun ChatScreen(
 
     val audioPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
 
-    var showMediaPicker by remember { mutableStateOf(false) }
     val wallpaperPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { viewModel.setWallpaper(it) }
     }
@@ -276,8 +294,10 @@ fun ChatScreen(
 
     val otherUser = uiState.otherUser
     val currentUser = uiState.currentUser
-    val myBg = (currentUser?.customization?.get("bgUrl") as? String)?.takeIf { it.isNotBlank() }
-    val otherBg = (otherUser?.customization?.get("bgUrl") as? String)?.takeIf { it.isNotBlank() }
+    val myBg = ProfileAppearance.resolve(owner = currentUser, viewer = currentUser).backgroundUrl
+    // Обои собеседника — по тем же правилам, что и остальное его оформление:
+    // раньше они показывались без PRO и вопреки ignoreCustomizations
+    val otherBg = ProfileAppearance.resolve(owner = otherUser, viewer = currentUser).backgroundUrl
 
     val chatBgUrl = when (uiState.wallpaperMode) {
         "none" -> null
@@ -455,7 +475,13 @@ fun ChatScreen(
                         LazyColumn(
                             state = listState, reverseLayout = true,
                             userScrollEnabled = contextMenuData == null,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .progressiveEdgeBlur(
+                                    topBlur = 10.dp,
+                                    bottomBlur = 10.dp,
+                                    enabled = !VlTheme.tokens.reduceMotion
+                                ),
                             contentPadding = PaddingValues(
                                 top = innerPadding.calculateTopPadding() + 8.dp,
                                 bottom = innerPadding.calculateBottomPadding() + 8.dp,
@@ -485,9 +511,11 @@ fun ChatScreen(
                                     is MessageListItem.DateHeader -> DateSeparator(item.label)
                                     is MessageListItem.MessageItem -> {
                                         val isMine = item.message.senderId == viewModel.currentUid
+                                        val popProgress = rememberLiquidPopProgress(enabled = isLiquidEnabled)
                                         SwipeableMessage(
                                             message = item.message, isMine = isMine, hapticEnabled = hapticEnabled,
                                             liquidEnabled = isLiquidEnabled,
+                                            modifier = Modifier.liquidPopIn(popProgress, enabled = isLiquidEnabled),
                                             onReply = {
                                                 haptic.perform(HapticType.SELECTION, hapticEnabled)
                                                 viewModel.setReplyTo(item.message)
@@ -515,9 +543,10 @@ fun ChatScreen(
                                                     keyboardController?.hide()
                                                     contextMenuData = ContextMenuData(item.message, isMine, offset)
                                                     dragOffset = Offset.Zero
+                                                    isDraggingMenu = true
                                                 },
                                                 onLongPressDrag = { delta -> dragOffset += delta },
-                                                onLongPressEnd = { contextMenuData = null; dragOffset = Offset.Zero },
+                                                onLongPressEnd = { isDraggingMenu = false },
                                                 onMediaTap = onOpenImageViewer,
                                                 onAlbumTap = { imgs, idx -> lightboxImages = imgs; lightboxStartIndex = idx; showLightbox = true },
                                                 onReact = { emoji -> viewModel.toggleReaction(item.message.id, emoji, item.message.parsedReactions) },
@@ -530,7 +559,8 @@ fun ChatScreen(
                                                         selectedStickerPack = Triple(packId, item.message.packName, item.message.packEmoji)
                                                     }
                                                 },
-                                                onCancelUpload = { viewModel.cancelSending(it) }
+                                                onCancelUpload = { viewModel.cancelSending(it) },
+                                                liquidEnabled = isLiquidEnabled
                                             )
                                         }
                                     }
@@ -565,10 +595,15 @@ fun ChatScreen(
                 MessageActionOverlay(
                     contextMenuData = menuData,
                     currentDragOffset = dragOffset,
-                    isGestureMode = true,
+                    isDragging = isDraggingMenu,
+                    isGestureMode = isDraggingMenu,
                     canReact = canReact,
                     currentUid = viewModel.currentUid,
-                    onDismiss = { contextMenuData = null; dragOffset = Offset.Zero },
+                    onDismiss = {
+                        contextMenuData = null
+                        dragOffset = Offset.Zero
+                        isDraggingMenu = false
+                    },
                     onReply = { viewModel.setReplyTo(menuData.message); contextMenuData = null },
                     onEdit = { viewModel.startEditing(menuData.message); contextMenuData = null },
                     onDelete = { showDeleteConfirm = menuData.message.id; contextMenuData = null },
@@ -674,33 +709,33 @@ fun ChatScreen(
     }
 
     showDeleteConfirm?.let { msgId ->
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showDeleteConfirm = null },
             title = { Text(stringResource(R.string.dialog_delete_message_title)) },
             text  = { Text(stringResource(R.string.dialog_delete_message_body)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.deleteMessage(msgId); showDeleteConfirm = null }) {
+                VlDialogButton(onClick = { viewModel.deleteMessage(msgId); showDeleteConfirm = null }) {
                     Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(onClick = { showDeleteConfirm = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 
     if (showLeaveDialog) {
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showLeaveDialog = false },
             title = { Text(if (uiState.chatType == ChatType.CHANNEL) stringResource(R.string.dialog_leave_channel_title) else stringResource(R.string.dialog_leave_group_title)) },
             text = { Text(stringResource(R.string.dialog_leave_body)) },
             confirmButton = {
-                TextButton(onClick = { showLeaveDialog = false; viewModel.leaveChat { onNavigateBack() } }) {
+                VlDialogButton(onClick = { showLeaveDialog = false; viewModel.leaveChat { onNavigateBack() } }) {
                     Text(stringResource(R.string.action_leave), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showLeaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
+                VlDialogButton(onClick = { showLeaveDialog = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
@@ -750,12 +785,12 @@ fun ChatScreen(
     }
 
     blockTargetUser?.let { (targetUid, _) ->
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { blockTargetUser = null },
             title = { Text(stringResource(R.string.block_user_confirm_title)) },
             text = { Text(stringResource(R.string.block_user_confirm_desc)) },
             confirmButton = {
-                TextButton(onClick = {
+                VlDialogButton(onClick = {
                     viewModel.blockUser(targetUid)
                     blockTargetUser = null
                     Toast.makeText(context, context.getString(R.string.user_blocked_toast), Toast.LENGTH_SHORT).show()
@@ -764,7 +799,7 @@ fun ChatScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { blockTargetUser = null }) {
+                VlDialogButton(onClick = { blockTargetUser = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }

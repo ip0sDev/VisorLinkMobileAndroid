@@ -1,5 +1,10 @@
 package org.visorlink.app.ui.screens.group
 
+import org.visorlink.app.ui.components.VlSwitch
+import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.VlDialogButton
+import org.visorlink.app.ui.components.VlAlertDialog
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -298,7 +303,7 @@ fun ChatSettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            VlTopAppBar(
                 title = {
                     Text(
                         uiState.chat?.name ?: stringResource(R.string.settings_title),
@@ -424,7 +429,7 @@ private fun InfoTab(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier.size(72.dp).clip(CircleShape)
+                    modifier = Modifier.size(72.dp).clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(
                             if (isChannel) androidx.compose.ui.graphics.Color(0xFF6366F1)
                             else MaterialTheme.colorScheme.secondaryContainer
@@ -673,7 +678,7 @@ private fun MembersTab(
     var showMuteDialog by remember { mutableStateOf(false) }
 
     if (showInviteDialog) {
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showInviteDialog = false; inviteUsername = "" },
             title = { Text(stringResource(R.string.settings_dialog_invite_title)) },
             text = {
@@ -687,7 +692,7 @@ private fun MembersTab(
                 )
             },
             confirmButton = {
-                TextButton(
+                VlDialogButton(
                     onClick = {
                         onInvite(inviteUsername)
                         showInviteDialog = false
@@ -697,7 +702,7 @@ private fun MembersTab(
                 ) { Text(stringResource(R.string.settings_dialog_invite_button)) }
             },
             dismissButton = {
-                TextButton(onClick = { showInviteDialog = false; inviteUsername = "" }) {
+                VlDialogButton(onClick = { showInviteDialog = false; inviteUsername = "" }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -707,7 +712,7 @@ private fun MembersTab(
     if (showMuteDialog && actionTarget != null) {
         val target = actionTarget!!
         var duration by remember { mutableStateOf("60") }
-        AlertDialog(
+        VlAlertDialog(
             onDismissRequest = { showMuteDialog = false; actionTarget = null },
             title = { Text(stringResource(R.string.dialog_mute_title)) },
             text = {
@@ -720,13 +725,13 @@ private fun MembersTab(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                VlDialogButton(onClick = {
                     onModerate(target.uid, "mute", duration.toIntOrNull() ?: 60)
                     showMuteDialog = false; actionTarget = null
                 }) { Text(stringResource(R.string.dialog_mute_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showMuteDialog = false; actionTarget = null }) {
+                VlDialogButton(onClick = { showMuteDialog = false; actionTarget = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -736,54 +741,54 @@ private fun MembersTab(
     actionTarget?.let { member ->
         if (!showMuteDialog) {
             val profile = uiState.memberProfiles[member.uid]
-            AlertDialog(
+            VlAlertDialog(
                 onDismissRequest = { actionTarget = null },
                 title = { Text("@${profile?.username ?: member.uid}") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (member.role == "member") {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onSetRole(member.uid, "admin"); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_promote)) }
                         } else if (member.role == "admin") {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onSetRole(member.uid, "member"); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_demote)) }
                         }
 
                         if (member.muted) {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onModerate(member.uid, "unmute", null); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_unmute)) }
                         } else {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { showMuteDialog = true },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_mute)) }
                         }
 
                         if (member.mediaRestricted) {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onModerate(member.uid, "unrestrictMedia", null); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_allow_media)) }
                         } else {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onModerate(member.uid, "restrictMedia", null); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_restrict_media)) }
                         }
 
                         if (member.banned) {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onModerate(member.uid, "unban", null); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_unban), color = MaterialTheme.colorScheme.primary) }
                         } else {
-                            TextButton(
+                            VlDialogButton(
                                 onClick = { onModerate(member.uid, "ban", null); actionTarget = null },
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(stringResource(R.string.member_ban), color = MaterialTheme.colorScheme.error) }
@@ -791,7 +796,7 @@ private fun MembersTab(
                     }
                 },
                 confirmButton = {
-                    TextButton(onClick = { actionTarget = null }) { Text(stringResource(R.string.action_close)) }
+                    VlDialogButton(onClick = { actionTarget = null }) { Text(stringResource(R.string.action_close)) }
                 }
             )
         }
@@ -807,7 +812,7 @@ private fun MembersTab(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape)
+                    modifier = Modifier.size(48.dp).clip(VlTheme.tokens.shapes.adapt(CircleShape))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
@@ -869,7 +874,7 @@ private fun MemberRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(48.dp).clip(CircleShape)
+            modifier = Modifier.size(48.dp).clip(VlTheme.tokens.shapes.adapt(CircleShape))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
@@ -1080,6 +1085,6 @@ private fun SettingsToggleRow(
             Text(subtitle, style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        VlSwitch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

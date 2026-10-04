@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private val authViewModel: AuthViewModel by inject()
     private val fcmManager: org.visorlink.app.utils.FcmManager by inject()
     private val musicPlayerManager: org.visorlink.app.utils.MusicPlayerManager by inject()
+    private val yandexRelayConfigManager: org.visorlink.app.data.remote.yandex.YandexRelayConfigManager by inject()
 
     private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val pendingOpenSenderUid = androidx.compose.runtime.mutableStateOf<String?>(null)
@@ -63,6 +64,7 @@ class MainActivity : AppCompatActivity() {
 
         extractOpenChatId(intent)
         extractInviteCode(intent)
+        extractYandexAuthToken(intent)
         if (intent?.getBooleanExtra("open_music_player", false) == true) {
             musicPlayerManager.openFullscreenPlayer()
         }
@@ -154,8 +156,31 @@ class MainActivity : AppCompatActivity() {
         setIntent(intent)
         extractOpenChatId(intent)
         extractInviteCode(intent)
+        extractYandexAuthToken(intent)
         if (intent.getBooleanExtra("open_music_player", false)) {
             musicPlayerManager.openFullscreenPlayer()
+        }
+    }
+
+    private fun extractYandexAuthToken(intent: android.content.Intent?) {
+        val data = intent?.data ?: return
+        if (data.scheme == "visorlink" && data.host == "yandex-auth") {
+            var token: String? = data.getQueryParameter("access_token")
+            if (token.isNullOrBlank()) {
+                val fragment = data.fragment
+                if (!fragment.isNullOrBlank()) {
+                    val params = fragment.split("&").associate { param ->
+                        val parts = param.split("=", limit = 2)
+                        if (parts.size == 2) parts[0] to parts[1] else parts[0] to ""
+                    }
+                    token = params["access_token"]
+                }
+            }
+            if (!token.isNullOrBlank()) {
+                yandexRelayConfigManager.setCustomToken(token)
+                yandexRelayConfigManager.setRelayEnabled(true)
+                android.widget.Toast.makeText(this, "Яндекс.Диск подключен!", android.widget.Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

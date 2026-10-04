@@ -79,7 +79,7 @@ fun TaskTrackerScreen(
                             Box(
                                 modifier = Modifier
                                     .size(28.dp)
-                                    .clip(RoundedCornerShape(6.dp))
+                                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(6.dp)))
                                     .background(topicColor.copy(alpha = 0.18f)),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -105,7 +105,7 @@ fun TaskTrackerScreen(
                                 modifier = Modifier
                                     .width(70.dp)
                                     .height(4.dp)
-                                    .clip(RoundedCornerShape(2.dp)),
+                                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(2.dp))),
                                 color = cs.primary,
                                 trackColor = cs.surfaceContainerHigh
                             )
@@ -238,7 +238,7 @@ private fun KanbanBoardTab(
                             pagerState.animateScrollToPage(index)
                         }
                     },
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                     color = if (isSelected) statusColor.copy(alpha = 0.18f) else cs.surfaceContainerLow,
                     border = if (isSelected) androidx.compose.foundation.BorderStroke(1.5.dp, statusColor) else null,
                     modifier = Modifier.height(34.dp)
@@ -257,7 +257,7 @@ private fun KanbanBoardTab(
                         )
                         Box(
                             modifier = Modifier
-                                .clip(CircleShape)
+                                .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .background(if (isSelected) statusColor else cs.surfaceContainerHigh)
                                 .padding(horizontal = 6.dp, vertical = 1.dp)
                         ) {
@@ -304,7 +304,7 @@ private fun KanbanColumn(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val shape = if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(16.dp)
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
 
     Column(
         modifier = Modifier
@@ -333,7 +333,7 @@ private fun KanbanColumn(
             }
             Box(
                 modifier = Modifier
-                    .clip(CircleShape)
+                    .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                     .background(cs.surfaceContainerHigh)
                     .padding(horizontal = 10.dp, vertical = 2.dp)
             ) {
@@ -410,7 +410,7 @@ private fun KanbanTaskCard(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val priority = TaskPriority.fromId(task.priority)
-    val cardShape = if (tokens.isForge) RoundedCornerShape(4.dp) else RoundedCornerShape(12.dp)
+    val cardShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
 
     Column(
         modifier = Modifier
@@ -483,12 +483,12 @@ private fun KanbanTaskCard(
                         contentDescription = null,
                         modifier = Modifier
                             .size(20.dp)
-                            .clip(CircleShape),
+                            .clip(VlTheme.tokens.shapes.adapt(CircleShape)),
                         error = {
                             Box(
                                 modifier = Modifier
                                     .size(20.dp)
-                                    .background(cs.primaryContainer, CircleShape),
+                                    .background(cs.primaryContainer, VlTheme.tokens.shapes.adapt(CircleShape)),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
@@ -559,7 +559,7 @@ private fun TaskListTab(
             items(state.tasks, key = { it.id }) { task ->
                 val status = TaskStatus.fromId(task.status)
                 val priority = TaskPriority.fromId(task.priority)
-                val cardShape = RoundedCornerShape(12.dp)
+                val cardShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
 
                 Row(
                     modifier = Modifier
@@ -774,12 +774,12 @@ private fun TaskEditDialog(
                                     contentDescription = null,
                                     modifier = Modifier
                                         .size(18.dp)
-                                        .clip(CircleShape),
+                                        .clip(VlTheme.tokens.shapes.adapt(CircleShape)),
                                     error = {
                                         Box(
                                             modifier = Modifier
                                                 .size(18.dp)
-                                                .background(cs.primaryContainer, CircleShape),
+                                                .background(cs.primaryContainer, VlTheme.tokens.shapes.adapt(CircleShape)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Text(displayName.take(1), fontSize = 10.sp)

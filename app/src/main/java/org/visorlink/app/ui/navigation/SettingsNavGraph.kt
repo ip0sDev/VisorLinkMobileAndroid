@@ -24,6 +24,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onNavigateBack = { navController.popBackStack() },
             onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
             onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
+            onOpenSessions = { navController.navigate(Screen.Sessions.route) },
             onOpenStatus = { navController.navigate(Screen.Status.route) },
             onOpenCustomization = { navController.navigate(Screen.Customization.route) },
             onOpenAegisDebug = { navController.navigate(Screen.AegisDebug.route) },
@@ -65,6 +66,10 @@ fun NavGraphBuilder.settingsNavGraph(
                 navController.navigate(Screen.ImageViewer.createRoute(url, type))
             }
         )
+    }
+
+    composable(Screen.Sessions.route) {
+        org.visorlink.app.ui.screens.settings.SessionsScreen(onNavigateBack = { navController.popBackStack() })
     }
 
     composable(Screen.Status.route) {

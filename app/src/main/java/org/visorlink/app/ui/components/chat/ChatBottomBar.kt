@@ -121,7 +121,7 @@ fun ChatBottomBar(
                 Button(
                     onClick = { onJoinChannel?.invoke() },
                     enabled = !uiState.isJoiningChannel,
-                    shape = RoundedCornerShape(20.dp),
+                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                     colors = ButtonDefaults.buttonColors(containerColor = cs.primary)
                 ) {
                     if (uiState.isJoiningChannel) {
@@ -337,7 +337,8 @@ fun ChatBottomBar(
                         RecordingBar(
                             hapticEnabled = hapticEnabled,
                             onCancel = onCancelRecord,
-                            onSend = onSendRecord
+                            onSend = onSendRecord,
+                            liquidEnabled = isLiquidEnabled
                         )
                     } else {
                         val isBot = uiState.otherUser?.isBot == true

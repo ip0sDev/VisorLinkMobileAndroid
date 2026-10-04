@@ -332,6 +332,56 @@ internal fun ColorScheme.withSignalAccent(accent: Color?, isDark: Boolean): Colo
 }
 
 /**
+ * Акцент пресета для M3E. Отличается от [withSignalAccent]: в M3 контейнеры
+ * непрозрачные (`primaryContainer` — фон моих пузырей, `secondaryContainer` —
+ * pill навигации и выбранный сегмент), поэтому подставлять в них сам акцент
+ * нельзя — получится сплошная заливка. Контейнеры смешиваются с поверхностью,
+ * подписи на них подбираются по реальному контрасту.
+ *
+ * Раньше пресет в M3E только выключал динамический цвет и включал статическую
+ * индиго-палитру — выбранный акцент не появлялся нигде.
+ */
+internal fun ColorScheme.withMaterialAccent(accent: Color?, isDark: Boolean): ColorScheme {
+    if (accent == null) return this
+    // В тёмной схеме M3 primary — светлый тон: насыщенный акцент на почти
+    // чёрном фоне режет глаз и теряет контраст с onPrimary. Дальше тон
+    // доводится до 3:1 к фону: светлые пресеты (BLUE — 2.7:1 на светлом фоне)
+    // иначе делают акцентные подписи вроде @username блёклыми
+    val tone = if (isDark) lerp(accent, Color.White, 0.30f) else accent
+    val primary = tone.withContrastAgainst(background, min = 3f, towards = if (isDark) Color.White else Color.Black)
+    val primaryContainer = lerp(surface, accent, if (isDark) 0.32f else 0.18f)
+    val secondaryContainer = lerp(surface, accent, if (isDark) 0.22f else 0.12f)
+    return copy(
+        primary = primary,
+        onPrimary = onColorFor(primary),
+        primaryContainer = primaryContainer,
+        onPrimaryContainer = readableOn(primaryContainer, accent),
+        secondaryContainer = secondaryContainer,
+        onSecondaryContainer = readableOn(secondaryContainer, accent),
+        inversePrimary = if (isDark) accent else lerp(accent, Color.White, 0.30f),
+        surfaceTint = primary,
+    )
+}
+
+/** Сдвигает цвет к [towards] шагами по 5%, пока контраст с [bg] не станет ≥ [min]. */
+private fun Color.withContrastAgainst(bg: Color, min: Float, towards: Color): Color {
+    var c = this
+    var t = 0f
+    while (wcagContrast(c, bg) < min && t < 1f) {
+        t += 0.05f
+        c = lerp(this, towards, t)
+    }
+    return c
+}
+
+/** Тон акцента, сдвинутый к чёрному или белому — в зависимости от того, что читается на [bg]. */
+private fun readableOn(bg: Color, accent: Color): Color {
+    val toDark = lerp(accent, Color.Black, 0.65f)
+    val toLight = lerp(accent, Color.White, 0.80f)
+    return if (wcagContrast(toDark, bg) >= wcagContrast(toLight, bg)) toDark else toLight
+}
+
+/**
  * Чёрный или белый поверх заливки — берём тот, что реально даёт больший контраст.
  *
  * Порог по светлоте здесь не работает: у `#0EA5E9` (пресет BLUE) светлота 0.33,

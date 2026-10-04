@@ -146,6 +146,9 @@
     <string name="action_save_gallery">Save to gallery</string>
     <string name="action_save_voice">Save voice message</string>
     <string name="action_reply">Reply</string>
+    <string name="action_forward">Forward</string>
+    <string name="action_retry_send">Retry sending</string>
+    <string name="action_cancel_send">Cancel sending</string>
     <string name="action_delete_message">Delete</string>
     <string name="action_preview_photo">📷 Photo</string>
     <string name="action_preview_voice">🎤 Voice message</string>
@@ -582,6 +585,29 @@
     <string name="settings_custom_hide_sub">Display profiles in system style</string>
     <string name="settings_custom_pro_only">Available only with PRO subscription!</string>
     <string name="settings_custom_in_development">In development</string>
+    <string name="custom_back">Back</string>
+    <string name="custom_save_error">Couldn\'t save</string>
+    <string name="custom_section_preview">Preview</string>
+    <string name="custom_preview_hint">This is how other users see your profile and your chat with them.</string>
+    <string name="custom_preview_button">Message</string>
+    <string name="custom_section_theme">Theme</string>
+    <string name="custom_option_viewer">Viewer\'s choice</string>
+    <string name="custom_theme_viewer_desc">Everyone sees their own theme</string>
+    <string name="custom_section_accent">Accent color</string>
+    <string name="custom_section_font">Font</string>
+    <string name="custom_font_mono">Monospace</string>
+    <string name="custom_font_serif">Serif</string>
+    <string name="custom_font_rounded">Rounded</string>
+    <string name="custom_section_layout">Profile layout</string>
+    <string name="custom_layout_default">Standard</string>
+    <string name="custom_layout_compact">Compact</string>
+    <string name="custom_section_media">Background and banner</string>
+    <string name="custom_media_background">Profile and chat background</string>
+    <string name="custom_media_banner">Animated banner (GIF)</string>
+    <string name="custom_media_none">Not set</string>
+    <string name="custom_media_set">Set</string>
+    <string name="custom_media_uploading">Uploading…</string>
+    <string name="custom_media_remove">Remove</string>
     <string name="settings_section_accent">Color Accent</string>
 
     <!-- Bottom navigation tab labels (short — the screen titles are separate) -->
@@ -887,6 +913,7 @@
     <!-- Google Drive & Storage Spec -->
     <string name="msg_unsupported_media">Unsupported media format (Archived attachment unavailable)</string>
     <string name="msg_sticker_unavailable">Sticker unavailable</string>
+    <string name="msg_unknown_type">Unsupported message format (%1$s)</string>
     <string name="storage_gdrive_title">Google Drive Storage</string>
     <string name="storage_gdrive_connected">Connected</string>
     <string name="storage_gdrive_not_connected">Not connected</string>
@@ -897,4 +924,19 @@
     <string name="storage_firebase_cloud_desc">Avatars, profile covers, and stickers are stored in the secure VisorLink cloud and do not consume space on your Google Drive.</string>
     <string name="storage_gdrive_required_title">Google Drive Required</string>
     <string name="storage_gdrive_required_desc">To send media, please connect your Google Drive in Storage Settings.</string>
+    <string name="storage_yandex_relay_title">Emergency Relay (Yandex Disk)</string>
+    <string name="storage_yandex_relay_desc">Autonomous message delivery via Yandex Disk (WebDAV/REST) during severe network blocks and backend outages. Messages are protected with end-to-end encryption (E2EE).</string>
+    <string name="storage_yandex_relay_ready">Relay ready</string>
+    <string name="storage_yandex_relay_disabled">Relay disabled</string>
+    <string name="storage_yandex_relay_token_btn">Custom Token</string>
+    <string name="storage_yandex_relay_token_dialog_title">Yandex Disk OAuth Token</string>
+    <string name="storage_yandex_relay_token_dialog_desc">By default, the server relay token is used. You can optionally specify your own OAuth token or App Password for Yandex Disk.</string>
+    <string name="emergency_chat_title">Emergency Chat (Yandex Disk)</string>
+    <string name="emergency_chat_badge">Emergency</string>
+    <string name="emergency_sync_vault_success">Emergency vault synced</string>
+    <string name="storage_yandex_relay_login_btn">Sign in with Yandex ID</string>
+    <string name="storage_yandex_relay_disconnect_btn">Disconnect Yandex ID</string>
+    <string name="storage_yandex_relay_manual_btn">Configure manually</string>
+    <string name="storage_yandex_relay_custom_connected">Personal Yandex ID connected</string>
+    <string name="storage_yandex_relay_client_id_label">Yandex Client ID</string>
 </resources>

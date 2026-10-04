@@ -35,8 +35,25 @@ jobs:
             cp app/google-services.json.example app/google-services.json
           fi
 
-      - name: Run JVM Unit Tests
-        run: ./gradlew testDebugUnitTest --no-daemon
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: UI rules (цвета и M3-компоненты в экранах)
+        run: ./gradlew checkUiRules --no-daemon
+
+      # compare, а не verify: эталоны сняты на Windows, а на Linux сглаживание шрифтов
+      # может отличаться на пиксели. Пока не убедились, что эталоны совпадают, CI
+      # только выкладывает диффы артефактом и не падает. Потом заменить на verifyRoborazziPlayDebug.
+      - name: Run JVM Unit Tests + screenshot compare
+        run: ./gradlew compareRoborazziPlayDebug --no-daemon
+
+      - name: Upload screenshot diffs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roborazzi-diffs
+          path: app/build/outputs/roborazzi
+          if-no-files-found: ignore
 
       - name: Assemble Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assemblePlayDebug --no-daemon

@@ -148,6 +148,20 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             }
         })
 
+        // Сессию завершили с другого устройства: чистим локальные признаки, показываем причину и выходим
+        MainScope().launch {
+            val sessions = GlobalContext.get().get<org.visorlink.app.data.repository.SessionRepository>()
+            sessions.revoked.collect { revoked ->
+                if (!revoked) return@collect
+                sessions.consumeRevoked()
+                if (FirebaseAuth.getInstance().currentUser == null) return@collect
+                try { GlobalContext.get().get<org.visorlink.app.utils.TfaManager>().clearCache() } catch (_: Exception) {}
+                android.widget.Toast.makeText(this@VisorLinkApp, "Сеанс завершён на другом устройстве", android.widget.Toast.LENGTH_LONG).show()
+                sessions.stopWatching()
+                FirebaseAuth.getInstance().signOut()
+            }
+        }
+
         // Автоматически управляем presence и FCM-токеном при смене auth state
         FirebaseAuth.getInstance().addAuthStateListener { auth ->
             val uid = auth.currentUser?.uid
@@ -158,6 +172,11 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                         it.attach(ProcessLifecycleOwner.get().lifecycle)
                     }
                 }
+                if (auth.currentUser?.isEmailVerified == true) {
+                    val sessions = GlobalContext.get().get<org.visorlink.app.data.repository.SessionRepository>()
+                    sessions.watchRevocation(uid)
+                    MainScope().launch { sessions.register() }
+                }
                 MainScope().launch {
                     try {
                         GlobalContext.get().get<org.visorlink.app.utils.FcmManager>().syncTokenAfter2FA()
@@ -166,6 +185,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                     }
                 }
             } else {
+                GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.SessionRepository>()?.stopWatching()
                 presenceManager?.detach()
                 presenceManager = null
             }
