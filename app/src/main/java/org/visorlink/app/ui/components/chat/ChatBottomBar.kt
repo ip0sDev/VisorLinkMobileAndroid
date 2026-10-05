@@ -53,6 +53,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.PermissionState
 import com.google.accompanist.permissions.isGranted
 import kotlinx.coroutines.delay
+import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class)
@@ -212,7 +213,7 @@ fun ChatBottomBar(
             // Панель ввода слегка пружинит, принимая цитату реплая или блок редактирования
             val panelJelly = rememberLiquidJellyState(softness = 0.05f, damping = 0.62f, stiffness = 340f)
             if (isLiquidEnabled) {
-                LaunchedEffect(uiState.replyingTo?.id, uiState.editingMessage?.id) {
+                LaunchedEffectAfterFirst(uiState.replyingTo?.id to uiState.editingMessage?.id) {
                     panelJelly.pulse(0.05f)
                 }
             }

@@ -44,6 +44,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
@@ -387,8 +390,6 @@ private fun NeumorphicLiquidNavBarContent(
         if (totalWidthPx > 10f) {
             val runnerLeftDp = with(density) { runnerLeft.value.toDp() }
             val runnerWidthDp = with(density) { runnerWidth.value.toDp().coerceAtLeast(40.dp) }
-            val scaleX = 1f + abs(stretchAnim.value) * 0.18f
-            val scaleY = 1f - abs(stretchAnim.value) * 0.12f
 
             Box(
                 modifier = Modifier
@@ -396,8 +397,10 @@ private fun NeumorphicLiquidNavBarContent(
                     .width(runnerWidthDp)
                     .fillMaxHeight()
                     .graphicsLayer {
-                        this.scaleX = scaleX
-                        this.scaleY = scaleY
+                        // Читаем в фазе рисования: растяжение не вызывает рекомпозицию каждый кадр
+                        val stretch = abs(stretchAnim.value)
+                        this.scaleX = 1f + stretch * 0.18f
+                        this.scaleY = 1f - stretch * 0.12f
                         this.clip = false
                     }
                     .vlRaised(tokens.structure, pillShape)
@@ -444,9 +447,11 @@ private fun NeumorphicLiquidNavBarContent(
                     .width(animWidthDp.dp)
                     .fillMaxHeight()
                     .clip(pillShape)
+                    .semantics { selected = isSelected }
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
+                        role = Role.Tab,
                         onClick = tab.onClick
                     ),
                 contentAlignment = Alignment.Center

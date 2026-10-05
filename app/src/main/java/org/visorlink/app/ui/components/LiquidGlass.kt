@@ -525,6 +525,8 @@ fun NeumorphicLiquidSegmentedControl(
     LaunchedEffect(selectedIndex) {
         val prevIndex = animatedIndex.value
         val diff = selectedIndex - prevIndex
+        // Первая композиция и повторный вызов с тем же индексом не должны качать бегунок
+        if (abs(diff) < 0.001f) return@LaunchedEffect
         val stretchDirection = if (diff > 0) 1f else -1f
 
         // Анимация вытягивания капли в пути
@@ -597,6 +599,7 @@ fun NeumorphicLiquidSegmentedControl(
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
+                            role = androidx.compose.ui.semantics.Role.Tab,
                             onClick = { onTabSelected(index) }
                         ),
                     contentAlignment = Alignment.Center

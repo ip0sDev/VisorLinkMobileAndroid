@@ -38,6 +38,7 @@ import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.NotificationHelper
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.launch
+import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.data.repository.FlagsRepository
@@ -110,10 +111,10 @@ fun ChatListScreen(
                         topBarJelly.pulse(0.08f)
                     }
                 }
-                LaunchedEffect(syncState) {
+                LaunchedEffectAfterFirst(syncState) {
                     topBarJelly.pulse(0.06f)
                 }
-                LaunchedEffect(isScrolled) {
+                LaunchedEffectAfterFirst(isScrolled) {
                     topBarJelly.pulse(0.07f)
                 }
             }
