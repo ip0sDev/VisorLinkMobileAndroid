@@ -217,6 +217,8 @@ fun ProfileScreen(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // ID-карта: место выбирает владелец (спека §4a)
+                    org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.TOP)
                     if (appearance.layout == ProfileLayout.COMPACT) {
                     if (bannerUrl != null) {
                         Box(
@@ -258,6 +260,7 @@ fun ProfileScreen(
                                     style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
+                                org.visorlink.app.ui.idcard.ProfileModeMark(user.idMode, isMe = true)
                                 val emojis = appearance.emojis
                                 if (!emojis.isNullOrEmpty()) {
                                     Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
@@ -327,6 +330,7 @@ fun ProfileScreen(
                             style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        org.visorlink.app.ui.idcard.ProfileModeMark(user.idMode, isMe = true)
                         val emojis = appearance.emojis
                         if (!emojis.isNullOrEmpty()) {
                             Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
@@ -339,6 +343,8 @@ fun ProfileScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+
+                    org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.AFTER_HEADER)
 
                     if (!uiState.isEditing) {
                         // Profile body
@@ -392,6 +398,7 @@ fun ProfileScreen(
                                     }
                                 }
                             }
+                            org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.BOTTOM)
                         }
                     } else {
                         // Editing fields

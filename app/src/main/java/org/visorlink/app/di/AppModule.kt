@@ -132,6 +132,10 @@ val appModule = module {
         )
     }
     single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
+    // ID-карты: карта и callables, Mask Mode (только на устройстве), контекст темы открытого чата
+    single { org.visorlink.app.data.repository.IdCardRepository(get(), get(), get()) }
+    single { org.visorlink.app.utils.MaskModeManager(androidContext()) }
+    single { org.visorlink.app.ui.idcard.ChatThemeController() }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
@@ -269,6 +273,7 @@ val appModule = module {
 
     viewModel { ProViewModel(get()) }
     viewModel { CustomizationViewModel(get()) }
+    viewModel { org.visorlink.app.ui.screens.settings.IdCardSettingsViewModel(get(), get()) }
     viewModel { FlagFlipperViewModel(get()) }
     viewModel { MediaPickerViewModel(androidApplication()) }
     

@@ -90,7 +90,7 @@ data class ProfileAppearance(
             if (customization.isNullOrEmpty()) return None
             fun str(key: String) = (customization[key] as? String)?.trim()?.takeIf { it.isNotEmpty() }
             return ProfileAppearance(
-                theme = str(KEY_THEME)?.let { id -> AppTheme.entries.firstOrNull { it.id == id } },
+                theme = str(KEY_THEME)?.let { id -> AppTheme.selectableEntries.firstOrNull { it.id == id } },
                 accent = str(KEY_ACCENT)
                     ?.let { id -> ACCENT_IDS.entries.firstOrNull { it.value == id }?.key }
                     ?.takeIf { it != ColorPreset.DEFAULT },

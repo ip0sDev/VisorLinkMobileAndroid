@@ -68,6 +68,7 @@ sealed class Screen(val route: String) {
     object StorageManager : Screen("storage_manager")
     object Status : Screen("status")
     object Sessions : Screen("sessions")
+    object IdCardSettings : Screen("id_card_settings")
     object Diary : Screen("diary")
     object DiaryEntry : Screen("diary_entry?id={id}") {
         fun createRoute(id: String? = null) = if (id != null) "diary_entry?id=$id" else "diary_entry"

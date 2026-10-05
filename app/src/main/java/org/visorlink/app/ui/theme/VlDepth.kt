@@ -99,6 +99,21 @@ fun Modifier.vlRaised(
 ): Modifier {
     if (!tokens.enabled) return this
 
+    // Forge v2: плоская панель — контур поверх содержимого и короткая мягкая тень вниз
+    tokens.outline?.let { outline ->
+        return this
+            .drawBehind {
+                drawSoftShadow(
+                    path = shape.toPath(size, layoutDirection, this),
+                    color = tokens.shadowDark,
+                    blurPx = tokens.raisedBlur.toPx(),
+                    dx = 0f,
+                    dy = tokens.raisedOffset.toPx(),
+                )
+            }
+            .vlHairline(outline, shape)
+    }
+
     // Forge: сплошной смещённый силуэт вместо рассеянной тени. Контр-подсветки
     // нет — у одного жёсткого источника света её и не бывает.
     if (tokens.hardEdge) {
@@ -143,6 +158,25 @@ fun Modifier.vlInset(
     shape: Shape,
 ): Modifier {
     if (!tokens.enabled) return this
+
+    // Forge v2: контур и внутренняя тень сверху (--neo-shadow-in)
+    tokens.outline?.let { outline ->
+        return this.drawWithContent {
+            drawContent()
+            val path = shape.toPath(size, layoutDirection, this)
+            clipPath(path) {
+                drawSoftShadow(
+                    path = path,
+                    color = tokens.shadowDark,
+                    blurPx = tokens.insetBlur.toPx(),
+                    dx = 0f,
+                    dy = tokens.insetOffset.toPx(),
+                    strokeWidthPx = tokens.insetOffset.toPx() * 2f,
+                )
+                drawPath(path = path, color = outline, style = Stroke(width = 1.dp.toPx() * 2f))
+            }
+        }
+    }
 
     // Forge: вместо мягкой вдавленности — резкая фаска, тёмная сверху-слева и
     // светлая снизу-справа, как на металлической панели.
@@ -374,3 +408,24 @@ fun Modifier.vlBiopulse(
  * просто рисуем без клипа. Обёртка существует, чтобы намерение читалось в коде.
  */
 private inline fun DrawScope.clipPathInverseSafe(block: DrawScope.() -> Unit) = block()
+
+// ── Forge v2: сканлайны ──────────────────────────────────────────────────────
+
+/**
+ * Едва заметные горизонтальные линии поверх интерфейса (веб: `.app-layout::after` у Forge
+ * Protogen — белый 1.8 % каждые 3 px). Только при [VlTokens.terminal]?.scanlines.
+ */
+fun Modifier.vlScanlines(tokens: VlTokens): Modifier {
+    if (tokens.terminal?.scanlines != true) return this
+    val line = Color.White.copy(alpha = 0.018f)
+    return this.drawWithContent {
+        drawContent()
+        val step = 3.dp.toPx()
+        val h = 1.dp.toPx()
+        var y = 0f
+        while (y < size.height) {
+            drawRect(line, topLeft = androidx.compose.ui.geometry.Offset(0f, y), size = Size(size.width, h))
+            y += step
+        }
+    }
+}

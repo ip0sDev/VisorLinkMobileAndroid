@@ -25,6 +25,9 @@ import org.visorlink.app.ui.maintenance.ServiceModeGuard
 import org.visorlink.app.ui.screens.auth.AuthViewModel
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.ui.theme.VisorLinkTheme
+import org.visorlink.app.ui.theme.toAppTheme
+import org.visorlink.app.ui.theme.vlScanlines
+import androidx.compose.runtime.remember
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
 import com.google.firebase.Firebase
@@ -48,6 +51,9 @@ class MainActivity : AppCompatActivity() {
     private val fcmManager: org.visorlink.app.utils.FcmManager by inject()
     private val musicPlayerManager: org.visorlink.app.utils.MusicPlayerManager by inject()
     private val yandexRelayConfigManager: org.visorlink.app.data.remote.yandex.YandexRelayConfigManager by inject()
+    private val idCardRepository: org.visorlink.app.data.repository.IdCardRepository by inject()
+    private val maskModeManager: org.visorlink.app.utils.MaskModeManager by inject()
+    private val chatThemeController: org.visorlink.app.ui.idcard.ChatThemeController by inject()
 
     private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val pendingOpenSenderUid = androidx.compose.runtime.mutableStateOf<String?>(null)
@@ -92,6 +98,40 @@ class MainActivity : AppCompatActivity() {
             val colorPreset by themeViewModel.colorPreset.collectAsState()
             val showDebugIds by themeViewModel.showDebugIds.collectAsState()
 
+            // Тема по режиму ID-карты (веб: ModeThemeSync): при включённом id_cards_enabled её
+            // решает режим (Biolume / Forge v2), а не выбор в настройках
+            val authState by authViewModel.authState.collectAsState()
+            val myUid = (authState as? org.visorlink.app.data.repository.AuthState.Verified)?.user?.uid
+            val myProfile by remember(myUid) {
+                if (myUid == null) kotlinx.coroutines.flow.flowOf(null) else userRepository.userProfileFlow(myUid)
+            }.collectAsState(initial = null)
+            val idCardsEnabled by idCardRepository.idCardsEnabled.collectAsState()
+            val maskState by maskModeManager.state.collectAsState()
+            val chatThemeContext by chatThemeController.context.collectAsState()
+            val modeTheme = org.visorlink.app.data.idcard.ModeThemeRules.resolve(
+                idCardsEnabled = idCardsEnabled && myUid != null,
+                idMode = myProfile?.idMode,
+                masked = maskState.active,
+                chatTheme = chatThemeContext,
+            )
+            val idModeState = org.visorlink.app.ui.idcard.IdModeUiState(
+                enabled = idCardsEnabled && myUid != null,
+                myUid = myUid,
+                myMode = org.visorlink.app.data.idcard.IdMode.of(myProfile?.idMode),
+                mask = maskState,
+                theme = modeTheme,
+            )
+            val viewerTheme = if (idModeState.enabled) {
+                org.visorlink.app.ui.theme.ViewerTheme(
+                    appTheme = modeTheme.toAppTheme(),
+                    themeMode = if (modeTheme.forceDark) org.visorlink.app.data.model.ThemeMode.DARK else themeMode,
+                    colorPreset = colorPreset,
+                    modeDriven = true,
+                )
+            } else {
+                org.visorlink.app.ui.theme.ViewerTheme(appTheme, themeMode, colorPreset)
+            }
+
             LaunchedEffect(Unit) {
                 if (firebaseAuth.currentUser != null) {
                     try {
@@ -104,11 +144,16 @@ class MainActivity : AppCompatActivity() {
             }
 
             VisorLinkTheme(
-                appTheme = appTheme,
-                themeMode = themeMode,
-                colorPreset = colorPreset,
-                showDebugIds = showDebugIds
+                appTheme = viewerTheme.appTheme,
+                themeMode = viewerTheme.themeMode,
+                colorPreset = viewerTheme.colorPreset,
+                showDebugIds = showDebugIds,
+                animateColors = idModeState.enabled,
             ) {
+              androidx.compose.runtime.CompositionLocalProvider(
+                  org.visorlink.app.ui.theme.LocalViewerTheme provides viewerTheme,
+                  org.visorlink.app.ui.idcard.LocalIdModeState provides idModeState,
+              ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {
                         LegalConsentGuard(authViewModel = authViewModel) {
@@ -116,6 +161,7 @@ class MainActivity : AppCompatActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(MaterialTheme.colorScheme.background)
+                                    .vlScanlines(org.visorlink.app.ui.theme.VlTheme.tokens)
                             ) {
                                 // Изолированная полоска статусбара на уровне всего приложения
                                 Box(
@@ -140,6 +186,8 @@ class MainActivity : AppCompatActivity() {
                                             pendingOpenSenderUid.value = null
                                         }
                                     )
+                                    // Выдача ID-карты: без карты в приложение не пускаем (спека §5)
+                                    org.visorlink.app.ui.idcard.IdCardGate()
                                     FlagsOverlay()
                                     org.visorlink.app.utils.UpdateManager.UpdateHost()
                                 }
@@ -147,6 +195,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+              }
             }
         }
     }
@@ -222,6 +271,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         org.visorlink.app.utils.ActiveChatTracker.isAppInForeground = true
+        // Срок маски мог истечь, пока приложение было в фоне
+        maskModeManager.refresh()
     }
 
     override fun onPause() {

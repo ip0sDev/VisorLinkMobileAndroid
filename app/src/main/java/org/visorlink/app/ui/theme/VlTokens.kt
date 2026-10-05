@@ -1,6 +1,12 @@
 package org.visorlink.app.ui.theme
 
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.runtime.Immutable
@@ -35,6 +41,12 @@ enum class VlStyle {
 
     /** Forge: прямые углы, жёсткая тень, металл и красный сигнал. */
     FORGE,
+
+    /**
+     * Forge v2: терминал особых режимов ID-карты (Protogen / Beast). Только тёмная,
+     * контур вместо теней, малые скругления — см. ForgeV2Palette.kt.
+     */
+    FORGE_V2,
 }
 
 /**
@@ -80,6 +92,12 @@ data class VlStructureTokens(
     val insetBlur: Dp = 8.dp,
     val insetLightOffset: Dp = 3.dp,
     val insetLightBlur: Dp = 6.dp,
+    /**
+     * Не null — плоская панель с контуром этого цвета вместо неоморфного рельефа
+     * (Forge v2): raised = контур + короткая мягкая тень вниз, inset = контур +
+     * внутренняя тень сверху.
+     */
+    val outline: Color? = null,
 ) {
     companion object {
         /** M3E рельефом не пользуется — elevation остаётся за Material. */
@@ -159,6 +177,11 @@ data class VlShapeTokens(
     val section: Shape = RoundedCornerShape(24.dp),
     /** Строка выбора ([VlOptionRow]) — подсветка выбранного варианта. */
     val row: Shape = RoundedCornerShape(12.dp),
+    /**
+     * Потолок любого скругления (Forge v2: 8–10 dp). Произвольные формы экранов
+     * ([adapt], [rounded]) зажимаются до него — иначе «жидкие» 32 dp в терминале.
+     */
+    val maxRadius: Dp? = null,
 ) {
     /** Шкала без скруглений (Forge). */
     val isSquare: Boolean get() = cardRadius == 0.dp
@@ -172,7 +195,11 @@ data class VlShapeTokens(
      * в `ui/components` и `ui/screens` проходят через [adapt]; для скруглённых
      * тем он возвращает форму без изменений.
      */
-    fun adapt(shape: Shape): Shape = if (isSquare) RectangleShape else shape
+    fun adapt(shape: Shape): Shape = when {
+        isSquare -> RectangleShape
+        maxRadius != null && shape is CornerBasedShape -> ClampedCornerShape(shape, maxRadius)
+        else -> shape
+    }
 
     /**
      * Скругление на [radius]. В частности — для «жидкого» варианта (флаг
@@ -180,6 +207,19 @@ data class VlShapeTokens(
      * обычной шкалы.
      */
     fun rounded(radius: Dp): Shape = adapt(RoundedCornerShape(radius))
+}
+
+/** Скругления формы, зажатые до [max] (проценты пересчитываются от реального размера). */
+private class ClampedCornerShape(private val base: CornerBasedShape, private val max: Dp) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val limit = with(density) { max.toPx() }
+        fun clamp(c: CornerSize) = CornerSize(c.toPx(size, density).coerceAtMost(limit))
+        return base.copy(clamp(base.topStart), clamp(base.topEnd), clamp(base.bottomEnd), clamp(base.bottomStart))
+            .createOutline(size, layoutDirection, density)
+    }
+
+    override fun equals(other: Any?) = other is ClampedCornerShape && other.base == base && other.max == max
+    override fun hashCode() = base.hashCode() * 31 + max.hashCode()
 }
 
 // ── Движение ─────────────────────────────────────────────────────────────────
@@ -272,6 +312,18 @@ data class VlBubbleTokens(
 
 // ── Корневой контракт ────────────────────────────────────────────────────────
 
+// ── Терминальная типографика (Forge v2) ──────────────────────────────────────
+
+/**
+ * Заголовки разделов в Forge v2 — моноширинные, капителью, в цвете primary; у Protogen
+ * с префиксом `> `, плюс едва заметные сканлайны на фоне. `null` в остальных темах.
+ */
+@Immutable
+data class VlTerminalTokens(
+    val labelPrefix: String,
+    val scanlines: Boolean,
+)
+
 @Immutable
 data class VlTokens(
     val style: VlStyle,
@@ -291,6 +343,7 @@ data class VlTokens(
      * Гайдлайн §6/§8: биопульс заменяется статичным glow той же интенсивности.
      */
     val reduceMotion: Boolean,
+    val terminal: VlTerminalTokens? = null,
 ) {
     val isBiolume: Boolean get() = style == VlStyle.BIOLUME
     val isForge: Boolean get() = style == VlStyle.FORGE

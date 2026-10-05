@@ -568,13 +568,23 @@ fun VlSettingsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                title,
-                color = titleColor,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                letterSpacing = 1.2.sp
-            )
+            // Forge v2: моноширинная капитель в цвете primary, у Protogen — префикс «> »
+            val terminal = VlTheme.tokens.terminal
+            if (terminal != null) {
+                Text(
+                    terminal.labelPrefix + title.uppercase(),
+                    color = titleColor.copy(alpha = 0.85f),
+                    style = org.visorlink.app.ui.theme.ForgeV2SectionLabel,
+                )
+            } else {
+                Text(
+                    title,
+                    color = titleColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    letterSpacing = 1.2.sp
+                )
+            }
             if (isPremium) {
                 Icon(
                     Icons.Default.WorkspacePremium,

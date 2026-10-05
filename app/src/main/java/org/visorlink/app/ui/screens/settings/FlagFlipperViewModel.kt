@@ -16,6 +16,8 @@ class FlagFlipperViewModel(
         // Ensure core flags are present
         keys.add("animation_test")
         keys.add("enable_alternative_outbox")
+        // ID-карты: основной источник — Remote Config, здесь локальное переопределение для отладки
+        keys.add("id_cards_enabled")
         if (flags.testFlag) keys.add("test_flag")
         if (flags.isAegisDebugMode) {
             keys.add("aegis_debug_mode_enabled")

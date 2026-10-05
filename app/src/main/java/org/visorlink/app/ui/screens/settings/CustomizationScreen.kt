@@ -126,9 +126,10 @@ private fun CustomizationContent(
             )
         }
 
-        // Тема: null — «как у зрителя», поэтому отдельная первая строка
-        VlSettingsSection(title = stringResource(R.string.custom_section_theme)) {
-            val options: List<AppTheme?> = listOf(null) + AppTheme.entries
+        // Тема: null — «как у зрителя», поэтому отдельная первая строка.
+        // При ID-картах тему решает режим, а не профиль (спека §7) — секцию не показываем
+        if (!org.visorlink.app.ui.idcard.LocalIdModeState.current.enabled) VlSettingsSection(title = stringResource(R.string.custom_section_theme)) {
+            val options: List<AppTheme?> = listOf(null) + AppTheme.selectableEntries
             options.forEachIndexed { i, theme ->
                 VlOptionRow(
                     icon = if (theme == null) Icons.Default.PersonOutline else Icons.Default.Palette,

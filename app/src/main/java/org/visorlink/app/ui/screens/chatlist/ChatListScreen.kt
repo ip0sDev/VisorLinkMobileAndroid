@@ -187,6 +187,9 @@ fun ChatListScreen(
                         }
                     }
 
+                    // Mask Mode: маска до выключения / индикатор «Маска до 18:30» (спека §8)
+                    org.visorlink.app.ui.idcard.MaskToolbarButton()
+
                     IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSearch() }) {
                         Icon(Icons.Default.Search, stringResource(R.string.action_search))
                     }

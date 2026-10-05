@@ -112,6 +112,17 @@ Reading a flag needs no code change anywhere — `flags.isEnabled("some_key")` r
 - **System Status**: `StatusScreen` performs live diagnostics (CDN ping, Firestore read, Flags server ping). It features a 24h uptime timeline and incident history with duplicate suppression and local fallback for network outages. Reports incidents via `reportServiceIncident` and `resolveServiceIncident` functions.
 - **Biometrics**: used only by `SavedMessagesViewModel` and `DiaryViewModel` (`biometric_prefs`).
 
+### ID cards, Protogen / Beast modes, Mask Mode
+
+Spec: `ANDROID_ID_CARDS_SPEC.md`; source of truth is the web repo (`src/utils/idCardModel.js`, `src/components/idcard/*`, `src/utils/modeTheme.js`). Everything is behind Remote Config `id_cards_enabled` (local override via FlagFlipper's `localOverrides`), read by `IdCardRepository.idCardsEnabled`.
+
+- **The client never writes** `idCards/{uid}`, `users.idMode` or `chats.groupId` — only the callables `issueIdCard` / `setIdMode` / `reissueIdCard` / `setGroupIdCard` (europe-west1). Their errors carry `details.reason` (`cooldown` + `waitMs`, `no-card`, `not-enough-bits`, `standard-id`) → `IdCardException`. Reading someone else's card returns `PERMISSION_DENIED` unless the reader's own mode is special; that is `IdCardState.Denied`, not an error.
+- `data/idcard/IdCardGenerator.kt` is a **byte-exact port** of `idCardModel.js` (mulberry32, `deriveDetails` call order, signature, MRZ with transliteration). `IdCardGeneratorTest` holds reference values computed by the original JS with node; if it fails, cards look different from the web. Never reorder `r()` calls.
+- `data/idcard/ModeTheme.kt` ports `modeTheme.js` (tests in `ModeThemeTest` mirror `modeTheme.test.js`). `MainActivity` computes `IdModeUiState` (flag, own `idMode`, mask, chat context) and provides it as `LocalIdModeState`, plus the effective `ViewerTheme` as `LocalViewerTheme`; `ProfileAppearanceTheme` layers owner customization over **that**, not over the settings. `ChatScreen` declares its context with `DeclareChatTheme` (DM: partner's mode, bots → MODE; groups: `groupId.enabled`).
+- With the flag on, the theme is decided by the mode (Biolume or Forge v2), the theme selector is hidden and `customization.theme` is ignored; with the flag off, the user's selection works as before.
+- The card (`ui/components/idcard/VlIdCard.kt`, art in `CardArt.kt`) is a physical object: it looks the same in every theme. Its colors live in `ui/theme/IdCardMaterials.kt` / `IdCardPalette.kt` and its corners go through `IdCardMaterials.corner()`, deliberately **not** `shapes.adapt()`. Layout is in em (card width = 36em) like `idcard.css`. `IdCardScreenshotTest` snapshots every mode front/back.
+- Mask Mode (`utils/MaskModeManager`, prefs `visorlink_mask_prefs`) is device-local; `until == -1` means indefinite; it expires on read, on a timer and on `onResume`. UI for it and every other mode feature is shown only to special-mode users (spec §10).
+
 ### Theming
 
 Three themes, selected at runtime: `AppTheme.MATERIAL3_EXPRESSIVE` (clean M3E), `AppTheme.BIOLUME` (neumorphic relief), and `AppTheme.FORGE` (industrial, square edges, hard shadows). `AppTheme.id` is the stable persistence key (`"m3e"`, `"biolume"`, `"forge"`).
@@ -164,7 +175,9 @@ Raised vs Inset is semantic, not decorative: things that *press on* something ar
 
 Profile customization is typed: `data/model/ProfileAppearance.kt` is the only place that parses `UserProfile.customization` (keys `theme`, `accent`, `font`, `layout`, `bgUrl`, `gifUrl`, `emojis`) and the only place that decides visibility. `ProfileAppearance.resolve(owner, viewer)` always shows your own customization, and shows someone else's only when they have active PRO and the viewer's `ignoreCustomizations` is off. Use it everywhere, including the chat wallpaper "other" mode, instead of reading the map. `writeTo` preserves unrelated keys (the backend keeps `diaryEnabled` and similar in the same map). `UserProfileTheme(profile, currentUser)` → `ProfileAppearanceTheme(appearance)` applies the result over the viewer's own settings; light/dark always stays the viewer's. It wraps `ChatScreen`, `ProfileScreen` and `OtherProfileScreen`, and the editor's `ProfilePreview`, so the preview is drawn by the same code path other users see. The VM-free overload exists for screenshot tests. The `rounded` font is bundled Nunito; previously it mapped to `SansSerif`, which is Roboto.
 
-**Adding a theme:** add an `AppTheme` entry with a fresh `id`, build its `ColorScheme` + `VlShapeTokens`, add the branch in `VisorLinkTheme` (the `when` is exhaustive, so the compiler will point at every place needing an arm), and add its name/description strings. The selector picks it up automatically — it iterates `AppTheme.entries`. No component needs touching.
+**Forge v2** (`ForgeV2Palette.kt`, `AppTheme.FORGE_PROTOGEN` / `FORGE_BEAST`, `selectable = false`) is the special-mode terminal from the web: dark only, `structure.outline` (1dp `primary` 16% contour) instead of relief, `VlShapeTokens.maxRadius` clamps every `adapt()`/`rounded()` shape to 8–10dp, `VlTokens.terminal` gives section titles a mono-caps label (Protogen: `> ` prefix) and scanlines. It is never read from prefs or profiles (`AppTheme.fromId` only knows selectable themes). The old `AppTheme.FORGE` is `@Deprecated` and will be removed once the flag ships.
+
+**Adding a theme:** add an `AppTheme` entry with a fresh `id`, build its `ColorScheme` + `VlShapeTokens`, add the branch in `VisorLinkTheme` (the `when` is exhaustive, so the compiler will point at every place needing an arm), and add its name/description strings. The selector picks it up automatically — it iterates `AppTheme.selectableEntries`. No component needs touching.
 
 ### UI conventions
 
@@ -192,7 +205,7 @@ Neumorphic relief draws **outside** a component's bounds, so a Biolume raised el
 
 ### SharedPreferences files
 
-`visorlink_settings` (theme, locale, UI toggles, onboarding version) · `visorlink_flags_prefs` (device_id, flag overrides) · `visorlink_backend_settings` (custom backend toggle + URL) · `visorlink_stealth_prefs` · `visorlink_update_prefs` (install_id, channel) · `visorlink_drafts` · `visorlink_tfa_prefs` (encrypted) · `biometric_prefs` · `fcm_prefs`.
+`visorlink_settings` (theme, locale, UI toggles, onboarding version) · `visorlink_flags_prefs` (device_id, flag overrides) · `visorlink_backend_settings` (custom backend toggle + URL) · `visorlink_stealth_prefs` · `visorlink_update_prefs` (install_id, channel) · `visorlink_drafts` · `visorlink_tfa_prefs` (encrypted) · `biometric_prefs` · `fcm_prefs` · `visorlink_mask_prefs` (Mask Mode).
 
 ## Conventions
 

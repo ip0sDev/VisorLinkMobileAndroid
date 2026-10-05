@@ -306,6 +306,20 @@ fun ChatScreen(
     }
     val isSecureChat = uiState.chat?.settings?.noForwards == true || uiState.chat?.type == "secret"
 
+    // Тема по контексту чата (спека §7): ЛС — по режиму собеседника (бот тему не трогает),
+    // группа/канал — по «ID группы». Пока собеседник или чат грузятся — тему не меняем
+    val isDirectChat = uiState.chatType == ChatType.DIRECT || uiState.chatType == ChatType.EMERGENCY
+    org.visorlink.app.ui.idcard.DeclareChatTheme(
+        if (!isDirectChat && uiState.chat == null) null
+        else org.visorlink.app.data.idcard.ModeThemeRules.chatThemeFor(
+            isDirect = isDirectChat,
+            partnerLoaded = otherUser != null,
+            partnerIsBot = otherUser?.isBot == true,
+            partnerIdMode = otherUser?.idMode,
+            groupIdEnabled = uiState.chat?.groupIdCard()?.enabled,
+        ),
+    )
+
     SecureScreen(enabled = isSecureChat) {
         UserProfileTheme(profile = otherUser, currentUser = currentUser) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {

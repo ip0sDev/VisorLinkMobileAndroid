@@ -27,6 +27,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenSessions = { navController.navigate(Screen.Sessions.route) },
             onOpenStatus = { navController.navigate(Screen.Status.route) },
             onOpenCustomization = { navController.navigate(Screen.Customization.route) },
+            onOpenIdCard = { navController.navigate(Screen.IdCardSettings.route) },
             onOpenAegisDebug = { navController.navigate(Screen.AegisDebug.route) },
             onOpenFlagFlipper = { navController.navigate(Screen.FlagFlipper.route) },
             onOpenAnimationTest = { navController.navigate(Screen.AnimationTest.route) },
@@ -66,6 +67,10 @@ fun NavGraphBuilder.settingsNavGraph(
                 navController.navigate(Screen.ImageViewer.createRoute(url, type))
             }
         )
+    }
+
+    composable(Screen.IdCardSettings.route) {
+        org.visorlink.app.ui.screens.settings.IdCardSettingsScreen(onNavigateBack = { navController.popBackStack() })
     }
 
     composable(Screen.Sessions.route) {

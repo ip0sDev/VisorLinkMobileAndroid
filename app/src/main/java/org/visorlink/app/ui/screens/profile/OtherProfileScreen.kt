@@ -83,7 +83,14 @@ fun OtherProfileScreen(
     val bannerUrl = appearance.bannerUrl
 
     // Оформление владельца профиля (тема, акцент, шрифт) — поверх настроек зрителя
-    UserProfileTheme(profile = targetUser, currentUser = currentUser, applyAccentHex = true) {
+    // Смотрящий с особым режимом видит чужой профиль в гамме владельца (спека §7)
+    val idModeState = org.visorlink.app.ui.idcard.LocalIdModeState.current
+    val ownerModeTheme = org.visorlink.app.data.idcard.ModeThemeRules.ownerProfileTheme(
+        viewerSpecial = idModeState.viewerSpecial,
+        isMe = targetUser?.uid == idModeState.myUid,
+        ownerMode = targetUser?.idMode,
+    )
+    UserProfileTheme(profile = targetUser, currentUser = currentUser, applyAccentHex = true, ownerModeTheme = ownerModeTheme) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -216,6 +223,8 @@ fun OtherProfileScreen(
                             .verticalScroll(rememberScrollState()),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        // ID-карта: место выбирает владелец (спека §4a)
+                        org.visorlink.app.ui.idcard.ProfileIdCard(targetUser, isMe = false, slot = org.visorlink.app.data.idcard.IdCardPosition.TOP, viewer = currentUser)
                         if (appearance.layout == ProfileLayout.COMPACT) {
                         if (bannerUrl != null) {
                             Box(
@@ -256,6 +265,7 @@ fun OtherProfileScreen(
                                         style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
                                         color = MaterialTheme.colorScheme.onSurface
                                     )
+                                    org.visorlink.app.ui.idcard.ProfileModeMark(targetUser.idMode, isMe = false)
                                     val emojis = appearance.emojis
                                     if (!emojis.isNullOrEmpty()) {
                                         Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
@@ -319,6 +329,7 @@ fun OtherProfileScreen(
                                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            org.visorlink.app.ui.idcard.ProfileModeMark(targetUser.idMode, isMe = false)
                             val emojis = appearance.emojis
                             if (!emojis.isNullOrEmpty()) {
                                 Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
@@ -331,6 +342,8 @@ fun OtherProfileScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
+
+                    org.visorlink.app.ui.idcard.ProfileIdCard(targetUser, isMe = false, slot = org.visorlink.app.data.idcard.IdCardPosition.AFTER_HEADER, viewer = currentUser)
 
                     // Profile body
                     Column(
@@ -383,6 +396,7 @@ fun OtherProfileScreen(
                                 }
                             }
                         }
+                            org.visorlink.app.ui.idcard.ProfileIdCard(targetUser, isMe = false, slot = org.visorlink.app.data.idcard.IdCardPosition.BOTTOM, viewer = currentUser)
                     }
                 }
             }
