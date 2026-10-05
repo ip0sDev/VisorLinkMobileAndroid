@@ -19,7 +19,7 @@ composeUi = "1.13.0-alpha03"
 animation = "1.13.0-alpha03"
 foundationLayout = "1.13.0-alpha03"
 materialIconsExtended = "1.7.8"
-sentry-sdk = "8.58.0"
+sentry-sdk = "8.59.0"
 sentry-plugin = "6.23.0"
 securityCrypto = "1.1.0"
 
