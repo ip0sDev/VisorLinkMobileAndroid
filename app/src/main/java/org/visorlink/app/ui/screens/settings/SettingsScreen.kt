@@ -54,6 +54,9 @@ import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.components.settings.*
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.ThemeViewModel
+import org.visorlink.app.ui.theme.UserProfileTheme
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import org.visorlink.app.utils.AppLanguage
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.StealthManager
@@ -216,6 +219,9 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
                 profile?.let { p ->
+                  // Карточка — своя витрина: оформление профиля применяется всегда, вместе с HEX-акцентом
+                  UserProfileTheme(profile = p, currentUser = p, applyAccentHex = true) {
+                    val appearance = ProfileAppearance.resolve(owner = p, viewer = p)
                     val tokens = VlTheme.tokens
                     val cs = MaterialTheme.colorScheme
                     val accountShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else tokens.shapes.card
@@ -259,7 +265,25 @@ fun SettingsScreen(
                                 else Modifier
                             )
                     ) {
+                        appearance.backgroundUrl?.let { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                                alpha = 0.35f,
+                            )
+                        }
                         CompositionLocalProvider(LocalContentColor provides cs.onSurface) {
+                          Column(Modifier.fillMaxWidth()) {
+                            appearance.bannerUrl?.let { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxWidth().height(72.dp).background(cs.surfaceContainerHighest),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -281,6 +305,7 @@ fun SettingsScreen(
                                             color = cs.onSurface,
                                             maxLines = 1
                                         )
+                                        appearance.emojis?.let { Text(" $it", style = MaterialTheme.typography.titleLarge) }
                                         if (p.isProActive()) {
                                             Spacer(Modifier.width(8.dp))
                                             ProBadge()
@@ -304,8 +329,10 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                          }
                         }
                     }
+                  }
                     Box(modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled)) {
                         ProStatusBanner(profile = p, proViewModel = proViewModel, proState = proState, hapticEnabled = hapticEnabled)
                     }

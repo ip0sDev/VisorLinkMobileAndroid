@@ -595,6 +595,13 @@
     <string name="custom_section_theme">Тема</string>
     <string name="custom_option_viewer">Как у зрителя</string>
     <string name="custom_theme_viewer_desc">Каждый видит свою тему</string>
+    <string name="custom_color_picker_title">Свой цвет</string>
+    <string name="custom_color_hue">Оттенок</string>
+    <string name="custom_color_saturation">Насыщенность</string>
+    <string name="custom_color_brightness">Яркость</string>
+    <string name="custom_color_apply">Применить</string>
+    <string name="custom_color_cancel">Отмена</string>
+    <string name="custom_color_custom">Свой цвет</string>
     <string name="custom_section_accent">Акцентный цвет</string>
     <string name="custom_section_font">Шрифт</string>
     <string name="custom_font_mono">Моноширинный</string>
