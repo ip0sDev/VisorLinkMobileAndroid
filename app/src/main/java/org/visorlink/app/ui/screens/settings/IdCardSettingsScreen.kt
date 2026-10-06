@@ -11,7 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -20,10 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,64 +29,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.R
 import org.visorlink.app.data.idcard.IdCardPosition
 import org.visorlink.app.data.idcard.IdCardRules
 import org.visorlink.app.data.idcard.IdMode
 import org.visorlink.app.data.repository.IdCardState
-import org.visorlink.app.ui.components.VlAlertDialog
 import org.visorlink.app.ui.components.VlDialogButton
 import org.visorlink.app.ui.components.VlSegmentedControl
-import org.visorlink.app.ui.components.VlSettingsItem
 import org.visorlink.app.ui.components.VlSettingsSection
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.idcard.VlIdCard
+import org.visorlink.app.ui.idcard.IdSkinInventory
 import org.visorlink.app.ui.idcard.MaskSection
 import org.visorlink.app.ui.idcard.ModeOption
 import org.visorlink.app.ui.idcard.QuietLink
 import org.visorlink.app.ui.idcard.SpeciesField
+import org.visorlink.app.ui.idcard.formatWait
+import org.visorlink.app.ui.idcard.rememberCountdown
+import org.visorlink.app.ui.idcard.skinErrorText
 import org.visorlink.app.ui.idcard.idCardAccent
 import org.visorlink.app.ui.idcard.idCardEmojis
 import org.visorlink.app.ui.idcard.idCardPerson
-import kotlin.math.ceil
 import kotlin.math.max
-
-/** Оставшееся до [until] время (мс), обновляется раз в секунду, пока есть что ждать. */
-@Composable
-private fun rememberCountdown(until: Long): Long {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(until) {
-        while (true) {
-            now = System.currentTimeMillis()
-            if (now >= until) break
-            delay(1000)
-        }
-    }
-    return max(0, until - now)
-}
-
-/** «12 с» / «5 ч» / «3 дн» — как formatWait в вебе. */
-@Composable
-internal fun formatWait(ms: Long): String {
-    val s = ceil(ms / 1000.0).toInt()
-    if (s < 90) return stringResource(R.string.idcard_wait_seconds, s)
-    val h = ceil(s / 3600.0).toInt()
-    if (h < 48) return stringResource(R.string.idcard_wait_hours, max(1, h))
-    return stringResource(R.string.idcard_wait_days, ceil(h / 24.0).toInt())
-}
-
-@Composable
-internal fun actionErrorText(error: IdCardActionError): String = when (error) {
-    is IdCardActionError.Cooldown -> stringResource(R.string.idcard_tab_err_cooldown, formatWait(error.waitMs))
-    IdCardActionError.NotEnoughBits -> stringResource(R.string.idcard_tab_err_bits, IdCardRules.REISSUE_COST_BITS)
-    is IdCardActionError.Other -> error.message?.takeIf { it.isNotBlank() } ?: stringResource(R.string.idcard_tab_err_generic)
-}
 
 /**
  * Настройки ID-карты (спека §6). Особые режимы спрятаны за кнопкой и раскрыты сразу, только
- * если уже выбраны — их ищут целенаправленно.
+ * если уже выбраны — их ищут целенаправленно. Под режимом — инвентарь скинов: «Заменить документ»
+ * сервер больше не выполняет, его заменила прокрутка.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,13 +96,10 @@ fun IdCardSettingsScreen(
         var showSpecial by rememberSaveable { mutableStateOf(false) }
         // null — показываем сохранённый вид
         var speciesDraft by rememberSaveable(card.species, card.mode) { mutableStateOf<String?>(null) }
-        var confirmReissue by remember { mutableStateOf(false) }
         val special = card.mode.isSpecial
         val speciesValue = speciesDraft ?: card.species.orEmpty()
         val speciesDirty = special && speciesValue.trim() != card.species.orEmpty()
         val modeLeft = rememberCountdown(max(IdCardRules.modeAvailableAt(card), ui.serverWaitUntil))
-        val reissueLeft = rememberCountdown(IdCardRules.reissueAvailableAt(card))
-        val canPayBits = me.bits >= IdCardRules.REISSUE_COST_BITS
 
         Column(
             Modifier
@@ -191,6 +155,10 @@ fun IdCardSettingsScreen(
                 }
             }
 
+            VlSettingsSection(title = stringResource(R.string.idskin_title)) {
+                IdSkinInventory(card = card, profile = me)
+            }
+
             if (special || org.visorlink.app.ui.idcard.LocalIdModeState.current.mask.active) {
                 VlSettingsSection(title = stringResource(R.string.idcard_mask_title)) {
                     MaskSection(Modifier.padding(vertical = 12.dp))
@@ -216,47 +184,14 @@ fun IdCardSettingsScreen(
                 )
             }
 
-            VlSettingsSection(title = stringResource(R.string.idcard_tab_reissue)) {
-                Text(
-                    stringResource(R.string.idcard_tab_reissue_desc, IdCardRules.REISSUE_COST_BITS),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp),
-                )
-                VlSettingsItem(
-                    icon = Icons.Default.Autorenew,
-                    title = stringResource(R.string.idcard_tab_reissue_btn),
-                    subtitle = when {
-                        reissueLeft > 0 -> stringResource(R.string.idcard_tab_reissue_wait, formatWait(reissueLeft))
-                        !canPayBits -> stringResource(R.string.idcard_tab_err_bits, IdCardRules.REISSUE_COST_BITS)
-                        else -> null
-                    },
-                    onClick = if (!ui.busy && reissueLeft == 0L && canPayBits) ({ confirmReissue = true }) else null,
-                )
-            }
-
             ui.error?.let {
                 Text(
-                    actionErrorText(it),
+                    skinErrorText(it),
                     color = cs.error,
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
             }
-        }
-
-        if (confirmReissue) {
-            VlAlertDialog(
-                onDismissRequest = { confirmReissue = false },
-                title = { Text(stringResource(R.string.idcard_tab_reissue_confirm_title)) },
-                text = { Text(stringResource(R.string.idcard_tab_reissue_desc, IdCardRules.REISSUE_COST_BITS)) },
-                confirmButton = {
-                    VlDialogButton(onClick = { viewModel.reissue { confirmReissue = false } }, isPrimary = true, isLoading = ui.busy) {
-                        Text(stringResource(R.string.idcard_tab_reissue_confirm, IdCardRules.REISSUE_COST_BITS))
-                    }
-                },
-                dismissButton = { VlDialogButton(onClick = { confirmReissue = false }) { Text(stringResource(R.string.idcard_tab_cancel)) } },
-            )
         }
     }
 }

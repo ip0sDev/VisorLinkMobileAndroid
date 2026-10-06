@@ -17,7 +17,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         isIgnoreExitValue = true
     }.standardOutput.asText.map { it.trim() }.getOrElse("")
 }
-val currentChannel = "CANARY"
+val currentChannel = "BETA"
 
 android {
     namespace = "org.visorlink.app"
@@ -27,11 +27,11 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 174
-        versionName = "4.2.04"
+        versionCode = 175
+        versionName = "4.3.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"CANARY\"")
+        buildConfigField("String", "CHANNEL", "\"BETA\"")
         buildConfigField("boolean", "InternalBuild", "true")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -111,6 +111,8 @@ sentry {
 dependencies {
     // ── Ipos Store In-App Updates SDK (Только для standalone сборок через Actions) ─
     "standaloneImplementation"(files("libs/ipos-store-sdk-release.aar"))
+    // ── Google Play In-App Updates (только play: вне Play-сборки обновляет Ipos Store) ─
+    "playImplementation"(libs.play.app.update.ktx)
 
     // ── Compose ──────────────────────────────────────────────────────────────
     implementation(platform(libs.androidx.compose.bom))

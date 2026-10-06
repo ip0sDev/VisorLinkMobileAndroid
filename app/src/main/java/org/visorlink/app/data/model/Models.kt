@@ -521,6 +521,9 @@ data class Message(
     val tg_forwarded_from_fallback: String? = null,
     val isUnofficialClient: Boolean? = null,
 
+    // Обмен скином ID-карты (type id_trade): только ссылка на idTrades/{tradeId}, пишет сервер
+    val tradeId: String? = null,
+
     // Подарки
     val redeemed: Boolean = false,
     val redeemedByUid: String? = null,
@@ -676,12 +679,34 @@ object MessageType {
     const val VIDEO   = "video"
     const val GIF     = "gif"
     const val LOTTIE  = "lottie"
+    /** «ID-карта на обмен»: вид и статус — в idTrades/{tradeId}, само сообщение ничего не доказывает. */
+    const val ID_TRADE = "id_trade"
     const val UNKNOWN = "unknown"
 
     fun isKnown(type: String?): Boolean = when (type?.lowercase()) {
-        TEXT, IMAGE, VOICE, AUDIO, STICKER, ALBUM, GIFT, VIDEO, GIF, LOTTIE -> true
+        TEXT, IMAGE, VOICE, AUDIO, STICKER, ALBUM, GIFT, VIDEO, GIF, LOTTIE, ID_TRADE -> true
         else -> false
     }
+
+    /**
+     * Тип, у которого содержимое — файл по `url` (как MEDIA_TYPES в вебе, без альбома: у него
+     * `images`). Подарок, обмен ID-картой и текст вложения не имеют.
+     */
+    fun carriesMedia(type: String?): Boolean = when (type?.lowercase()) {
+        IMAGE, VOICE, AUDIO, STICKER, VIDEO, GIF, LOTTIE, "file", "media" -> true
+        else -> false
+    }
+}
+
+/**
+ * Последнее сообщение — «🪪 ID-карта на обмен» (сервер пишет `lastMessage.text` по-русски с
+ * `type: id_trade`): список чатов и тем показывает подпись на языке интерфейса.
+ */
+fun isIdTradePreview(lastMessage: Any?): Boolean {
+    val m = lastMessage as? Map<*, *>
+    if (m?.get("type") == MessageType.ID_TRADE) return true
+    val text = (m?.get("text") ?: lastMessage) as? String ?: return false
+    return text.trim().lowercase() == "🪪 id-карта на обмен"
 }
 
 /**
@@ -698,8 +723,9 @@ fun isLegacyMediaMessage(message: Message): Boolean {
     if (message.url?.contains("api.visorlink.org") == true) return true
     if (message.url?.contains("/f/") == true && message.url.contains("googleusercontent.com") != true) return true
 
-    // Если URL пустой и сообщение не в процессе локальной отправки
-    if (message.url.isNullOrEmpty() && message.type != MessageType.TEXT && message.type != MessageType.ALBUM && message.localFile == null && message.status == SendStatus.SENT) return true
+    // Медиа без URL и не в процессе локальной отправки. Только для типов с вложением: подарок
+    // и обмен ID-картой ссылки не имеют по природе — раньше они попадали в «архивное вложение»
+    if (message.url.isNullOrEmpty() && MessageType.carriesMedia(message.type) && message.localFile == null && message.status == SendStatus.SENT) return true
 
     return false
 }

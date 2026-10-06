@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -320,9 +321,17 @@ internal fun ModeOption(mode: IdMode, desc: String, selected: Boolean, onClick: 
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         onClick = if (enabled) onClick else null,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // fillMaxWidth: VlSurface центрирует содержимое, и короткое описание уводило блок от левого края
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IdModeGlyph(mode, size = 16.dp, color = if (selected) cs.primary else cs.onSurface)
+                val tint = if (selected) cs.primary else cs.onSurface
+                if (mode == IdMode.STANDARD) {
+                    // У Standard нет значка режима (у имени его и не должно быть) — в выборе режима
+                    // строке нужна иконка наравне с визором и лапой
+                    Icon(Icons.Outlined.Badge, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+                } else {
+                    IdModeGlyph(mode, size = 16.dp, color = tint)
+                }
                 Text(
                     org.visorlink.app.ui.components.idcard.modeLabel(mode),
                     style = MaterialTheme.typography.titleSmall,

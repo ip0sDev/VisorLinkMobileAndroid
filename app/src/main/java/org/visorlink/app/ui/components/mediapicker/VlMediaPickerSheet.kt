@@ -12,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -83,6 +85,8 @@ fun VlMediaPickerSheet(
     onMediaSelected: (List<SelectedMediaItem>) -> Unit,
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
+    /** «ID-карта на обмен» — только в ЛС и группах при флаге id_cards_enabled, не с ботом. */
+    onOpenIdTrade: (() -> Unit)? = null,
     viewModel: MediaPickerViewModel = koinViewModel()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -166,6 +170,7 @@ fun VlMediaPickerSheet(
             onMediaSelected = onMediaSelected,
             onPhotoTaken = onPhotoTaken,
             onVideoRecorded = onVideoRecorded,
+            onOpenIdTrade = onOpenIdTrade,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(animatedHeight)
@@ -188,6 +193,7 @@ fun VlMediaPickerViewContent(
     onMediaSelected: (List<SelectedMediaItem>) -> Unit,
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
+    onOpenIdTrade: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var currentTab by remember { mutableStateOf(MediaPickerTab.ALL) }
@@ -318,94 +324,101 @@ fun VlMediaPickerViewContent(
                 }
                 else -> {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                        modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        VlCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = tokens.shapes.card
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 24.dp, vertical = 20.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
+                            VlCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = tokens.shapes.card
                             ) {
-                                val icon = when (currentTab) {
-                                    MediaPickerTab.PHOTOS -> Icons.Outlined.Image
-                                    MediaPickerTab.VIDEOS -> Icons.Outlined.Videocam
-                                    else -> Icons.Outlined.Collections
-                                }
-                                val titleText = when (currentTab) {
-                                    MediaPickerTab.PHOTOS -> stringResource(R.string.photo)
-                                    MediaPickerTab.VIDEOS -> "Видео"
-                                    else -> stringResource(R.string.media)
-                                }
-                                val descText = when (currentTab) {
-                                    MediaPickerTab.PHOTOS -> stringResource(R.string.media_picker_photos_desc)
-                                    MediaPickerTab.VIDEOS -> stringResource(R.string.media_picker_videos_desc)
-                                    else -> stringResource(R.string.media_picker_select_desc)
-                                }
-
-                                Box(
+                                Column(
                                     modifier = Modifier
-                                        .size(68.dp)
-                                        .clip(VlTheme.tokens.shapes.adapt(CircleShape))
-                                        .background(cs.primaryContainer.copy(alpha = 0.65f)),
-                                    contentAlignment = Alignment.Center
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
                                 ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = null,
-                                        tint = cs.primary,
-                                        modifier = Modifier.size(36.dp)
-                                    )
-                                }
+                                    val icon = when (currentTab) {
+                                        MediaPickerTab.PHOTOS -> Icons.Outlined.Image
+                                        MediaPickerTab.VIDEOS -> Icons.Outlined.Videocam
+                                        else -> Icons.Outlined.Collections
+                                    }
+                                    val titleText = when (currentTab) {
+                                        MediaPickerTab.PHOTOS -> stringResource(R.string.photo)
+                                        MediaPickerTab.VIDEOS -> "Видео"
+                                        else -> stringResource(R.string.media)
+                                    }
+                                    val descText = when (currentTab) {
+                                        MediaPickerTab.PHOTOS -> stringResource(R.string.media_picker_photos_desc)
+                                        MediaPickerTab.VIDEOS -> stringResource(R.string.media_picker_videos_desc)
+                                        else -> stringResource(R.string.media_picker_select_desc)
+                                    }
 
-                                Spacer(Modifier.height(14.dp))
-
-                                Text(
-                                    text = titleText,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = cs.onSurface
-                                )
-
-                                Spacer(Modifier.height(6.dp))
-
-                                Text(
-                                    text = descText,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = cs.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-
-                                Spacer(Modifier.height(20.dp))
-
-                                VlButton(
-                                    onClick = launchPicker,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
+                                    Box(
+                                        modifier = Modifier
+                                            .size(68.dp)
+                                            .clip(VlTheme.tokens.shapes.adapt(CircleShape))
+                                            .background(cs.primaryContainer.copy(alpha = 0.65f)),
+                                        contentAlignment = Alignment.Center
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.PhotoLibrary,
+                                            imageVector = icon,
                                             contentDescription = null,
-                                            modifier = Modifier.size(20.dp)
+                                            tint = cs.primary,
+                                            modifier = Modifier.size(36.dp)
                                         )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            text = stringResource(R.string.media_picker_open_system_picker),
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                    }
+
+                                    Spacer(Modifier.height(14.dp))
+
+                                    Text(
+                                        text = titleText,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = cs.onSurface
+                                    )
+
+                                    Spacer(Modifier.height(6.dp))
+
+                                    Text(
+                                        text = descText,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = cs.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+
+                                    Spacer(Modifier.height(20.dp))
+
+                                    VlButton(
+                                        onClick = launchPicker,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.PhotoLibrary,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.media_picker_open_system_picker),
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
                                     }
                                 }
                             }
+                            if (onOpenIdTrade != null) IdTradeAttachRow(onOpenIdTrade)
                         }
                     }
                 }
@@ -759,6 +772,30 @@ private fun BiolumeTabItem(
                     maxLines = 1
                 )
             }
+        }
+    }
+}
+
+/** Пункт вложений «ID-карта на обмен»: открывает выбор скина, который выставляется в чат. */
+@Composable
+private fun IdTradeAttachRow(onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    VlCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            org.visorlink.app.ui.components.VlIconTray(icon = Icons.Default.SwapHoriz, iconColor = cs.primary)
+            Text(
+                text = stringResource(R.string.idskin_attach),
+                style = MaterialTheme.typography.titleSmall,
+                color = cs.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = cs.onSurfaceVariant)
         }
     }
 }

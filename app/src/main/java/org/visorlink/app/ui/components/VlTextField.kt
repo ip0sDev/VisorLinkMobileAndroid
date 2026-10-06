@@ -159,7 +159,9 @@ fun VlTextField(
                                 color = cs.onSurface,
                             )
                         }
-                        Box(Modifier.fillMaxWidth(if (trailing != null) 0.88f else 1f)) {
+                        // Текст — всё, что осталось от trailing. Раньше здесь была доля 0.88:
+                        // иконке хватало, а кнопка («Сохранить») сжималась до столбика букв
+                        Box(Modifier.weight(1f)) {
                             if (value.isEmpty() && placeholder != null) {
                                 Text(
                                     text = placeholder,

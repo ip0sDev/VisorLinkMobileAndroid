@@ -670,6 +670,12 @@ object ChatDataCache {
         put("thumbUrl", thumbUrl ?: JSONObject.NULL)
         put("width", width ?: JSONObject.NULL)
         put("height", height ?: JSONObject.NULL)
+        put("tradeId", tradeId ?: JSONObject.NULL)
+        // Подарок: без этих полей открытый подарок из кэша выглядел неоткрытым до ответа сети
+        put("redeemed", redeemed)
+        put("redeemedByUid", redeemedByUid ?: JSONObject.NULL)
+        put("redeemedByUsername", redeemedByUsername ?: JSONObject.NULL)
+        put("giftType", giftType ?: JSONObject.NULL)
 
         unknownPayload.forEach { (k, v) ->
             if (!has(k)) {
@@ -728,7 +734,8 @@ object ChatDataCache {
             "packEmoji", "deleted", "createdAt", "spoiler", "commentsEnabled", "commentsCount",
             "caption", "readBy", "images", "replyTo", "forwardFrom", "reactions", "status",
             "mimeType", "uploadProgress", "cdnMediaId", "driveFileId", "driveUrl", "previewUrl",
-            "thumbnailUrl", "title", "performer", "fileSize", "coverCdnMediaId", "coverUrl"
+            "thumbnailUrl", "title", "performer", "fileSize", "coverCdnMediaId", "coverUrl", "tradeId",
+            "redeemed", "redeemedByUid", "redeemedByUsername", "giftType"
         )
         val unknown = mutableMapOf<String, Any?>()
         val keysIt = keys()
@@ -752,6 +759,11 @@ object ChatDataCache {
             thumbUrl = if (has("thumbUrl") && !isNull("thumbUrl")) optString("thumbUrl") else null,
             width = if (has("width") && !isNull("width")) optInt("width") else null,
             height = if (has("height") && !isNull("height")) optInt("height") else null,
+            tradeId = if (has("tradeId") && !isNull("tradeId")) optString("tradeId") else null,
+            redeemed = optBoolean("redeemed", false),
+            redeemedByUid = if (has("redeemedByUid") && !isNull("redeemedByUid")) optString("redeemedByUid") else null,
+            redeemedByUsername = if (has("redeemedByUsername") && !isNull("redeemedByUsername")) optString("redeemedByUsername") else null,
+            giftType = if (has("giftType") && !isNull("giftType")) optString("giftType") else null,
             stickerId = if (isNull("stickerId")) null else optString("stickerId"),
             packId = if (isNull("packId")) null else optString("packId"),
             packName = if (isNull("packName")) null else optString("packName"),

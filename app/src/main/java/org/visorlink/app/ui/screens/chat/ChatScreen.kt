@@ -154,6 +154,7 @@ fun ChatScreen(
     var showMediaPicker by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
+    var showIdTradePicker by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
     // Автоматическое закрытие меню стикеров и вложений при начале листания чата
@@ -240,6 +241,18 @@ fun ChatScreen(
     val canReact = uiState.chat?.settings?.allowReactions != false
     val canSendMessage = uiState.canSendMessage
     val canSendMedia = uiState.canSendMedia
+    // Обмен скинами ID-карт (спека 2.1): только ЛС и группы, не с ботом, при флаге id_cards_enabled
+    val idModeState = org.visorlink.app.ui.idcard.LocalIdModeState.current
+    val canTradeIdCards = idModeState.enabled && canSendMessage && uiState.otherUser?.isBot != true &&
+        (uiState.chatType == ChatType.DIRECT || uiState.chatType == ChatType.GROUP)
+    val openIdTrade: (() -> Unit)? = if (canTradeIdCards) {
+        {
+            showMediaPicker = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            showIdTradePicker = true
+        }
+    } else null
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, chatId) {
@@ -443,7 +456,8 @@ fun ChatScreen(
                             onVideoRecorded = { uri ->
                                 showMediaPicker = false
                                 viewModel.sendVideo(uri)
-                            }
+                            },
+                            onOpenIdTrade = openIdTrade
                         )
                     } else {
                         ChatBottomBar(
@@ -872,7 +886,15 @@ fun ChatScreen(
                 keyboardController?.hide()
                 focusManager.clearFocus(force = true)
                 viewModel.sendVideo(uri)
-            }
+            },
+            onOpenIdTrade = openIdTrade
+        )
+    }
+
+    if (showIdTradePicker) {
+        org.visorlink.app.ui.idcard.IdSkinPicker(
+            purpose = org.visorlink.app.ui.idcard.SkinPickPurpose.Post(chatId),
+            onClose = { showIdTradePicker = false },
         )
     }
     }

@@ -60,7 +60,8 @@ fun GiftMessage(
 
     Box(
         modifier = Modifier
-            .padding(vertical = 8.dp)
+            // Отступ сбоку — как у остальных пузырей
+            .padding(horizontal = 10.dp, vertical = 8.dp)
             .width(260.dp)
             .heightIn(min = 180.dp)
             .clip(VlTheme.tokens.shapes.card)

@@ -103,7 +103,34 @@ internal class CardHaptics(context: Context, private val enabled: () -> Boolean)
         Triple(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.8f, 20),
     )
 
-    /** «Карта выдана». */
+    // ── Скины: прокрутка, раскрытие, обмен ──
+
+    /** Лёгкое касание: выбор скина, отправка, отклонение. */
+    fun tap() = play(20, VibrationEffect.EFFECT_TICK, Triple(VibrationEffect.Composition.PRIMITIVE_TICK, 0.5f, 0))
+
+    /** Барабан стартует. */
+    fun rollStart() = play(0, VibrationEffect.EFFECT_CLICK, Triple(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 0.55f, 0))
+
+    /** Стрелка барабана перескочила плашку — не чаще раза в 70 мс. */
+    fun reelTick() = play(70, VibrationEffect.EFFECT_TICK, Triple(lowTick, 0.4f, 0))
+
+    /** Раскрытие скина: чем реже тираж, тем сильнее удар (0…4). */
+    fun reveal(rarity: Int) = play(
+        0, VibrationEffect.EFFECT_HEAVY_CLICK,
+        Triple(thud, 0.5f + 0.125f * rarity, 0),
+        Triple(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.4f + 0.15f * rarity, 60),
+        Triple(VibrationEffect.Composition.PRIMITIVE_QUICK_RISE, 0.2f * rarity, 40),
+    )
+
+    /** Карты поменялись местами. */
+    fun swap() = play(
+        0, VibrationEffect.EFFECT_DOUBLE_CLICK,
+        Triple(spin, 0.5f, 0),
+        Triple(thud, 0.8f, 120),
+        Triple(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.6f, 60),
+    )
+
+    /** «Карта выдана», скин надет или продан, обмен принят. */
     fun success() = play(
         0, VibrationEffect.EFFECT_DOUBLE_CLICK,
         Triple(VibrationEffect.Composition.PRIMITIVE_CLICK, 0.6f, 0),

@@ -70,11 +70,11 @@ class ModeThemeTest {
     }
 
     @Test
-    fun `кулдауны считаются от последней смены и замены`() {
+    fun `кулдауны считаются от последней смены режима и прокрутки (у старых карт — замены)`() {
         val card = IdCard(issuedAt = 1_000, modeChangedAt = 5_000, reissuedAt = null)
         assertEquals(20_000L, IdCardRules.modeAvailableAt(card))
-        assertEquals(1_000L + IdCardRules.REISSUE_COOLDOWN_MS, IdCardRules.reissueAvailableAt(card))
-        assertEquals(9_000L + IdCardRules.REISSUE_COOLDOWN_MS, IdCardRules.reissueAvailableAt(card.copy(reissuedAt = 9_000)))
+        assertEquals(1_000L + IdSkinRules.ROLL_COOLDOWN_MS, IdSkinRules.rollAvailableAt(card))
+        assertEquals(9_000L + IdSkinRules.ROLL_COOLDOWN_MS, IdSkinRules.rollAvailableAt(card.copy(reissuedAt = 9_000)))
     }
 
     @Test

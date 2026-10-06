@@ -4,6 +4,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
+import org.visorlink.app.data.idcard.IdEdition
 
 /**
  * Материалы ID-карты: пластик, краска, фольга, магнитная полоса (веб: idcard.css). Это не
@@ -63,6 +64,44 @@ object IdCardMaterials {
     // ── Protogen: визор и переходные отверстия дорожек ──
     val LedTop = Color(0xFF0C0F14)
     val Via = Color(0xFF06080B)
+
+    // ── Скины (idskins.css): цвет тиража — «предметный», как название тиража на обороте ──
+
+    fun edition(e: IdEdition): Color = when (e) {
+        IdEdition.COMMON -> hsl(215f, 12f, 66f)
+        IdEdition.UNCOMMON -> hsl(150f, 62f, 54f)
+        IdEdition.RARE -> hsl(212f, 88f, 64f)
+        IdEdition.EPIC -> hsl(276f, 80f, 70f)
+        IdEdition.LEGENDARY -> hsl(42f, 95f, 58f)
+    }
+
+    /** `--ed-soft`: подложка значка тиража и лучей раскрытия. */
+    fun editionSoft(e: IdEdition): Color = edition(e).copy(
+        alpha = when (e) {
+            IdEdition.COMMON, IdEdition.UNCOMMON -> 0.16f
+            IdEdition.RARE -> 0.18f
+            IdEdition.EPIC -> 0.2f
+            IdEdition.LEGENDARY -> 0.22f
+        },
+    )
+
+    /** Переливающееся золото: название legendary-тиража при раскрытии и значок тиража. */
+    val LegendaryShimmer = listOf(hsl(42f, 95f, 52f), hsl(52f, 100f, 75f), hsl(30f, 95f, 55f), hsl(42f, 95f, 52f))
+
+    /** Вращающийся ореол вокруг legendary-карты. */
+    val LegendaryHalo = listOf(hsl(42f, 95f, 58f), hsl(20f, 95f, 60f), hsl(52f, 100f, 70f), hsl(42f, 95f, 58f))
+
+    /** Бегущая кайма кнопки прокрутки — цвета тиражей. */
+    val RollRim = listOf(hsl(276f, 80f, 70f), hsl(42f, 95f, 58f), hsl(150f, 62f, 54f))
+
+    /** Монеты при продаже скина. */
+    val Coin = hsl(42f, 95f, 58f)
+    val CoinEdge = hsl(38f, 80f, 40f)
+
+    /** Кружок голограммы на плашке барабана (conic-gradient). */
+    val ReelHolo = listOf(Color(0xFFFF8BD1), Color(0xFF8BD8FF), Color(0xFFA5FFB0), Color(0xFFFFE28B), Color(0xFFFF8BD1))
+    val ReelHoloGalaxy = listOf(Color(0xFF2B1A5E), Color(0xFF7A5CFF), Color(0xFFFF79D9), Color(0xFF39E1FF), Color(0xFF2B1A5E))
+    val ReelLegendaryGlint = hsl(42f, 100f, 80f, 0.45f)
 
     // ── Формы ──
 

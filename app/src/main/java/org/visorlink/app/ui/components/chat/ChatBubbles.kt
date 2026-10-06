@@ -341,7 +341,7 @@ internal fun ReplyPreview(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = reply.text ?: "Медиа",
+                text = if (reply.type == MessageType.ID_TRADE) stringResource(R.string.preview_id_trade) else reply.text ?: "Медиа",
                 style = MaterialTheme.typography.bodySmall,
                 color = secondaryColor,
                 maxLines = 1,
@@ -561,6 +561,17 @@ fun MessageBubble(
                 }
                 message.type == MessageType.GIFT && !message.deleted -> {
                     GiftMessage(message = message, chatId = chat?.id ?: "")
+                }
+                message.type == MessageType.ID_TRADE && !message.deleted -> {
+                    IdTradeBubble(
+                        message = message, isMine = isMine, currentUid = currentUid,
+                        chatId = chat?.id ?: "", chatType = chatType,
+                        showSenderName = showSenderName, isReadByOther = isReadByOther,
+                        hapticEnabled = hapticEnabled,
+                        onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
+                        onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+                        onReact = onReact, onDoubleTap = onDoubleTapLike,
+                    )
                 }
                 // Универсальная отрисовка Lottie-анимаций и GIF (даже при неизвестном типе сообщения)
                 (message.isLottieMedia || (message.isGifMedia && message.url?.substringBefore("?")?.endsWith(".gif", ignoreCase = true) == true) || message.type == MessageType.STICKER) && !message.deleted -> {

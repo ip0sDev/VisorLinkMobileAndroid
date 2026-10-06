@@ -91,6 +91,7 @@ fun LiquidMorphingChatBottomBar(
     onMediaSelected: (List<SelectedMediaItem>) -> Unit,
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
+    onOpenIdTrade: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -270,6 +271,7 @@ fun LiquidMorphingChatBottomBar(
                                 onVideoRecorded(uri)
                                 onCloseMediaPicker()
                             },
+                            onOpenIdTrade = onOpenIdTrade,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

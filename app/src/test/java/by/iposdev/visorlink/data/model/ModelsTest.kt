@@ -270,3 +270,28 @@ class AlbumImageTest {
         assertEquals(true, map["spoiler"])
     }
 }
+
+class LegacyMediaTest {
+
+    private fun msg(type: String, url: String? = null, status: String = SendStatus.SENT) =
+        Message(id = "m", senderId = "u", type = type, url = url, status = status)
+
+    @Test
+    fun `подарок и обмен ID-картой без url — не архивное вложение`() {
+        assertFalse(isLegacyMediaMessage(msg(MessageType.GIFT)))
+        assertFalse(isLegacyMediaMessage(msg(MessageType.ID_TRADE)))
+        assertFalse(isLegacyMediaMessage(msg("poll")))
+        assertFalse(isLegacyMediaMessage(msg(MessageType.TEXT)))
+        assertFalse(isLegacyMediaMessage(msg(MessageType.ALBUM)))
+    }
+
+    @Test
+    fun `медиа без url — архивное, пока не в отправке`() {
+        assertTrue(isLegacyMediaMessage(msg(MessageType.IMAGE)))
+        assertTrue(isLegacyMediaMessage(msg(MessageType.VOICE)))
+        assertTrue(isLegacyMediaMessage(msg("file")))
+        assertFalse(isLegacyMediaMessage(msg(MessageType.IMAGE, status = SendStatus.SENDING)))
+        assertFalse(isLegacyMediaMessage(msg(MessageType.IMAGE, url = "https://lh3.googleusercontent.com/a.jpg")))
+        assertTrue(isLegacyMediaMessage(msg(MessageType.IMAGE, url = "https://api.visorlink.org/f/x")))
+    }
+}

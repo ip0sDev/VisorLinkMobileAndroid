@@ -1554,7 +1554,7 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
 }
 
 @Composable
-private fun editionName(e: IdEdition) = stringResource(
+internal fun editionName(e: IdEdition) = stringResource(
     when (e) {
         IdEdition.COMMON -> R.string.idcard_edition_common
         IdEdition.UNCOMMON -> R.string.idcard_edition_uncommon
@@ -1565,7 +1565,7 @@ private fun editionName(e: IdEdition) = stringResource(
 )
 
 @Composable
-private fun finishName(f: IdFinish) = stringResource(
+internal fun finishName(f: IdFinish) = stringResource(
     when (f) {
         IdFinish.BASE -> R.string.idcard_finish_base
         IdFinish.PEARL -> R.string.idcard_finish_pearl
@@ -1576,7 +1576,7 @@ private fun finishName(f: IdFinish) = stringResource(
 )
 
 @Composable
-private fun foilName(f: IdFoil) = stringResource(
+internal fun foilName(f: IdFoil) = stringResource(
     when (f) {
         IdFoil.NONE -> R.string.idcard_foil_none
         IdFoil.CLASSIC -> R.string.idcard_foil_classic

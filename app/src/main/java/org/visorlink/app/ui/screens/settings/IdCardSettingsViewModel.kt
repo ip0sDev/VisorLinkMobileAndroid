@@ -22,21 +22,15 @@ import org.visorlink.app.data.repository.IdCardRepository
 import org.visorlink.app.data.repository.IdCardState
 import org.visorlink.app.data.repository.UserRepository
 
-/** Ошибка действия: по `reason` экран подбирает текст (кулдаун, нет Bits, прочее). */
-sealed interface IdCardActionError {
-    data class Cooldown(val waitMs: Long) : IdCardActionError
-    data object NotEnoughBits : IdCardActionError
-    data class Other(val message: String?) : IdCardActionError
-}
-
 data class IdCardSettingsUiState(
     val busy: Boolean = false,
-    val error: IdCardActionError? = null,
+    /** Ошибка действия; текст по `reason` подбирает экран (кулдаун, прочее). */
+    val error: Throwable? = null,
     /** Кулдаун, о котором сказал сервер (мс эпохи), — если часы устройства отстают. */
     val serverWaitUntil: Long = 0,
 )
 
-/** Настройки ID-карты (веб: IdCardTab.jsx): режим, вид, «Заменить документ», место в профиле. */
+/** Настройки ID-карты (веб: IdCardTab.jsx): режим, вид, место в профиле. Инвентарь скинов — IdSkinInventory. */
 class IdCardSettingsViewModel(
     private val repo: IdCardRepository,
     private val users: UserRepository,
@@ -62,17 +56,12 @@ class IdCardSettingsViewModel(
                 action()
                 onSuccess()
             } catch (e: IdCardException) {
-                val err = when (e.reason) {
-                    "cooldown" -> {
-                        if (e.waitMs > 0) _ui.update { it.copy(serverWaitUntil = System.currentTimeMillis() + e.waitMs) }
-                        IdCardActionError.Cooldown(e.waitMs)
-                    }
-                    "not-enough-bits" -> IdCardActionError.NotEnoughBits
-                    else -> IdCardActionError.Other(e.message)
+                if (e.reason == "cooldown" && e.waitMs > 0) {
+                    _ui.update { it.copy(serverWaitUntil = System.currentTimeMillis() + e.waitMs) }
                 }
-                _ui.update { it.copy(error = err) }
+                _ui.update { it.copy(error = e) }
             } catch (e: Exception) {
-                _ui.update { it.copy(error = IdCardActionError.Other(e.message)) }
+                _ui.update { it.copy(error = e) }
             } finally {
                 _ui.update { it.copy(busy = false) }
             }
@@ -89,8 +78,6 @@ class IdCardSettingsViewModel(
         repo.setMode(mode, species.trim().ifEmpty { null })
     }
 
-    fun reissue(onDone: () -> Unit) = run(onDone) { repo.reissue() }
-
     /** Место карты в профиле — не PRO, пишется в customization, чужие ключи сохраняются. */
     fun setPosition(position: IdCardPosition) {
         val p = profile.value ?: return
@@ -99,7 +86,7 @@ class IdCardSettingsViewModel(
             try {
                 users.updateCustomization(next)
             } catch (e: Exception) {
-                _ui.update { it.copy(error = IdCardActionError.Other(e.message)) }
+                _ui.update { it.copy(error = e) }
             }
         }
     }

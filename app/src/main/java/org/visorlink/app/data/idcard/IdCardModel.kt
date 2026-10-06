@@ -39,8 +39,14 @@ enum class IdFoil(val id: String) {
     }
 }
 
-/** Тираж — не хранится, считается из признаков (`editionOf`). */
-enum class IdEdition { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
+/** Тираж: у карты считается из признаков (`editionOf`), у скина хранится (у старых записей может не быть). */
+enum class IdEdition(val id: String) {
+    COMMON("common"), UNCOMMON("uncommon"), RARE("rare"), EPIC("epic"), LEGENDARY("legendary");
+
+    companion object {
+        fun of(id: Any?): IdEdition? = entries.firstOrNull { it.id == id }
+    }
+}
 
 /** Где в профиле карта (`customization.idCardPosition`; не PRO — работает у всех). */
 enum class IdCardPosition(val id: String) {
@@ -69,10 +75,11 @@ data class IdCardTraits(
     val edition: IdEdition get() = editionOf(finish, foil)
 
     companion object {
-        fun parse(raw: Any?): IdCardTraits {
+        /** [fallbackSeed] — `seed` рядом с `traits` (так хранится скин), если в самих признаках его нет. */
+        fun parse(raw: Any?, fallbackSeed: Any? = null): IdCardTraits {
             val m = raw as? Map<*, *> ?: return IdCardTraits()
             return IdCardTraits(
-                seed = (m["seed"] as? Number)?.toLong()?.and(0xFFFFFFFFL)?.takeIf { it != 0L } ?: 1L,
+                seed = ((m["seed"] ?: fallbackSeed) as? Number)?.toLong()?.and(0xFFFFFFFFL)?.takeIf { it != 0L } ?: 1L,
                 finish = IdFinish.of(m["finish"]),
                 laminated = m["laminated"] == true,
                 wear = ((m["wear"] as? Number)?.toInt() ?: 0).coerceIn(0, 3),
@@ -94,9 +101,18 @@ data class IdCard(
     /** Дата регистрации аккаунта — печатается на карте. */
     val registeredAt: Long = 0,
     val modeChangedAt: Long = 0,
+    /** Последняя «Заменить документ» (её больше нет) — для кулдауна прокрутки у старых карт. */
     val reissuedAt: Long? = null,
-    /** Растёт при «Заменить документ». */
     val version: Int = 1,
+    /**
+     * Надетый скин. У карт, выданных до инвентаря, нет — сервер перенесёт бланк в инвентарь
+     * при первом действии, до тех пор карта показывается единственным скином ([IdSkinRules.inventoryOf]).
+     */
+    val skinId: String? = null,
+    /** Слотов инвентаря (5…20); нет — базовые 5. */
+    val slots: Int? = null,
+    val rolledAt: Long? = null,
+    val equippedAt: Long? = null,
 ) {
     companion object {
         /** Разбор документа `idCards/{uid}` или ответа callable (`{ card }`). */
@@ -112,6 +128,10 @@ data class IdCard(
                 modeChangedAt = millis(raw["modeChangedAt"]) ?: 0,
                 reissuedAt = millis(raw["reissuedAt"]),
                 version = (raw["version"] as? Number)?.toInt() ?: 1,
+                skinId = (raw["skinId"] as? String)?.takeIf { it.isNotEmpty() },
+                slots = (raw["slots"] as? Number)?.toInt(),
+                rolledAt = millis(raw["rolledAt"]),
+                equippedAt = millis(raw["equippedAt"]),
             )
         }
     }
@@ -148,15 +168,10 @@ data class GroupIdCard(
 
 object IdCardRules {
     const val MODE_COOLDOWN_MS = 15_000L
-    const val REISSUE_COOLDOWN_MS = 7L * 24 * 3600 * 1000
-    const val REISSUE_COST_BITS = 100
     const val SPECIES_MAX = 40
 
     /** Когда снова можно сменить режим (мс эпохи). */
     fun modeAvailableAt(card: IdCard): Long = card.modeChangedAt + MODE_COOLDOWN_MS
-
-    /** Когда снова можно «Заменить документ»: от последней замены, а если её не было — от выдачи. */
-    fun reissueAvailableAt(card: IdCard): Long = (card.reissuedAt ?: card.issuedAt) + REISSUE_COOLDOWN_MS
 }
 
 private val FINISH_SCORE = mapOf(
