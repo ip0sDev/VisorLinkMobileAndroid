@@ -94,6 +94,23 @@ class ThemeContrastTest {
     }
 
     @Test
+    fun `forge v2 palettes meet text contrast requirements`() {
+        assertSchemeReadable("Forge v2 Protogen", forgeV2ColorScheme(ForgeV2.Protogen))
+        assertSchemeReadable("Forge v2 Beast", forgeV2ColorScheme(ForgeV2.Beast))
+    }
+
+    @Test
+    fun `forge v2 selection fill and secondary text stay readable`() {
+        listOf("Protogen" to ForgeV2.Protogen, "Beast" to ForgeV2.Beast).forEach { (name, f) ->
+            val cs = forgeV2ColorScheme(f)
+            val fill = ForgeV2.mix(cs.primary, 0.16f, cs.surfaceContainer)
+            assertReadable("Forge v2 $name primary/selectionFill", cs.primary, fill, min = 3.0)
+            assertReadable("Forge v2 $name onSurfaceVariant/surface", cs.onSurfaceVariant, cs.surface)
+            assertReadable("Forge v2 $name onSurfaceVariant/surfaceContainerHigh", cs.onSurfaceVariant, cs.surfaceContainerHigh)
+        }
+    }
+
+    @Test
     fun `forge steel palette meets text contrast requirements`() {
         assertSchemeReadable("Forge Steel", ForgeSteelColorScheme)
     }
@@ -260,10 +277,19 @@ class AppThemeIdTest {
     }
 
     @Test
-    fun `fromId round-trips every theme`() {
-        AppTheme.entries.forEach { theme ->
+    fun `fromId round-trips every selectable theme`() {
+        AppTheme.selectableEntries.forEach { theme ->
             assertSame(theme, AppTheme.fromId(theme.id))
         }
+    }
+
+    @Test
+    fun `forge v2 is not selectable and never read from prefs or profile`() {
+        // Forge v2 включает режим ID-карты, а не выбор: из настроек и профиля он не читается
+        assertSame(AppTheme.Default, AppTheme.fromId(AppTheme.FORGE_PROTOGEN.id))
+        assertSame(AppTheme.Default, AppTheme.fromId(AppTheme.FORGE_BEAST.id))
+        assertTrue(AppTheme.FORGE_PROTOGEN !in AppTheme.selectableEntries)
+        assertTrue(AppTheme.FORGE_BEAST !in AppTheme.selectableEntries)
     }
 
     @Test

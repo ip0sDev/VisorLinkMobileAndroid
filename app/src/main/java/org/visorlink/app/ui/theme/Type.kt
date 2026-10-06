@@ -264,12 +264,37 @@ val ForgeDataTypography = VlDataTypography(
     ),
 )
 
+// ── Forge v2: терминал ───────────────────────────────────────────────────────
+
+/**
+ * Forge v2 (веб: --font-brand JetBrains Mono): заголовки и метки моноширинные, текст
+ * сообщений и описаний — Inter, как в вебе (--font-ui). Капитель у заголовков разделов
+ * задаёт [VlTerminalTokens], а не шкала: роль labelLarge — ещё и текст кнопок.
+ */
+val ForgeV2Typography = BiolumeTypography.copy(
+    displayLarge = BiolumeTypography.displayLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium),
+    displayMedium = BiolumeTypography.displayMedium.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium),
+    displaySmall = BiolumeTypography.displaySmall.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium),
+    headlineLarge = BiolumeTypography.headlineLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp),
+    headlineMedium = BiolumeTypography.headlineMedium.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp),
+    headlineSmall = BiolumeTypography.headlineSmall.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp),
+    titleLarge = BiolumeTypography.titleLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
+)
+
+/** Заголовок раздела Forge v2: моно, 11 sp, трекинг 0.08em. */
+val ForgeV2SectionLabel = TextStyle(
+    fontFamily = DataFamily,
+    fontWeight = FontWeight.Medium,
+    fontSize = 11.sp,
+    letterSpacing = 0.9.sp,
+)
 
 // ── PRO-шрифт профиля ────────────────────────────────────────────────────────
 
 fun baseTypography(theme: AppTheme): Typography = when (theme) {
     AppTheme.BIOLUME -> BiolumeTypography
     AppTheme.FORGE -> ForgeTypography
+    AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> ForgeV2Typography
     AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
 }
 

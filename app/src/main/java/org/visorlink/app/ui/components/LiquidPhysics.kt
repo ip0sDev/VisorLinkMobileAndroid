@@ -97,6 +97,25 @@ class LiquidJellyState(
 }
 
 /**
+ * [LaunchedEffect], пропускающий первый запуск при входе в композицию.
+ *
+ * Жидкие импульсы реагируют на *изменение* значения. Обычный LaunchedEffect срабатывает
+ * ещё и на старте, из-за чего при открытии экрана «вздрагивали» все переключатели, FAB,
+ * шапка и панель ввода одновременно.
+ */
+@Composable
+fun LaunchedEffectAfterFirst(key1: Any?, block: suspend CoroutineScope.() -> Unit) {
+    val isFirst = remember { booleanArrayOf(true) }
+    LaunchedEffect(key1) {
+        if (isFirst[0]) {
+            isFirst[0] = false
+            return@LaunchedEffect
+        }
+        block()
+    }
+}
+
+/**
  * Создание и запоминание состояния желейной деформации.
  */
 @Composable
@@ -116,9 +135,12 @@ fun rememberLiquidJellyState(
  */
 fun Modifier.liquidJelly(
     state: LiquidJellyState,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    /** Для панелей, прижатых к краю экрана: центр масштаба на краю, иначе между панелью и краем открывается щель. */
+    transformOrigin: TransformOrigin = TransformOrigin.Center
 ): Modifier = if (enabled) {
     this.graphicsLayer {
+        this.transformOrigin = transformOrigin
         this.scaleX = state.scaleX
         this.scaleY = state.scaleY
     }
@@ -346,7 +368,9 @@ fun Modifier.liquidPillCardSlideOut(
 
     return this.graphicsLayer {
         val p = animProgress.value
-        if (p < 0.999f) {
+        // Условие по модулю: пружина перелетает за 1, и ветка приземления с перелётом
+        // раньше никогда не выполнялась (p < 0.999 исключает p > 1)
+        if (kotlin.math.abs(p - 1f) > 0.001f) {
             // Выезд сверху из-под пилюли вниз в свою позицию
             translationY = (1f - p) * -travelPx
 

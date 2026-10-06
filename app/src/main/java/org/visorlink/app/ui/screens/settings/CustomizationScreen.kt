@@ -126,9 +126,10 @@ private fun CustomizationContent(
             )
         }
 
-        // Тема: null — «как у зрителя», поэтому отдельная первая строка
-        VlSettingsSection(title = stringResource(R.string.custom_section_theme)) {
-            val options: List<AppTheme?> = listOf(null) + AppTheme.entries
+        // Тема: null — «как у зрителя», поэтому отдельная первая строка.
+        // При ID-картах тему решает режим, а не профиль (спека §7) — секцию не показываем
+        if (!org.visorlink.app.ui.idcard.LocalIdModeState.current.enabled) VlSettingsSection(title = stringResource(R.string.custom_section_theme)) {
+            val options: List<AppTheme?> = listOf(null) + AppTheme.selectableEntries
             options.forEachIndexed { i, theme ->
                 VlOptionRow(
                     icon = if (theme == null) Icons.Default.PersonOutline else Icons.Default.Palette,
@@ -144,6 +145,10 @@ private fun CustomizationContent(
 
         VlSettingsSection(title = stringResource(R.string.custom_section_accent)) {
             val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+            var showPicker by remember { mutableStateOf(false) }
+            // Свой цвет: HEX задан и не совпадает с цветом выбранного пресета
+            val isCustom = appearance.accentHex != null &&
+                !appearance.accentHex.equals(ProfileAppearance.hexOf(appearance.accent), ignoreCase = true)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -153,7 +158,7 @@ private fun CustomizationContent(
                     ColorPresetCircle(
                         preset = preset,
                         // DEFAULT в модели хранится как null — «акцент зрителя»
-                        isSelected = (appearance.accent ?: ColorPreset.DEFAULT) == preset,
+                        isSelected = !isCustom && (appearance.accent ?: ColorPreset.DEFAULT) == preset,
                         isDark = isDark,
                         onClick = {
                             onChange {
@@ -164,6 +169,23 @@ private fun CustomizationContent(
                         },
                     )
                 }
+                CustomColorCircle(
+                    color = if (isCustom) appearance.accentHexColor else null,
+                    isSelected = isCustom,
+                    onClick = { showPicker = true },
+                )
+            }
+            if (showPicker) {
+                VlColorPickerDialog(
+                    initial = appearance.accentHexColor
+                        ?: appearance.accent?.seedColor
+                        ?: MaterialTheme.colorScheme.primary,
+                    onDismiss = { showPicker = false },
+                    onConfirm = { hex ->
+                        showPicker = false
+                        onChange { it.copy(accentHex = hex) }
+                    },
+                )
             }
         }
 

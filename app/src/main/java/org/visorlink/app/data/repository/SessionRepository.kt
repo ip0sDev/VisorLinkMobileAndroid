@@ -23,11 +23,23 @@ data class SessionInfo(
     /** Сессия прошла 2FA (есть tfaVerifiedAt). Иначе — «ожидает 2FA». */
     val tfaVerified: Boolean,
     val isCurrent: Boolean,
+    /** `android` | `ios` | `web` — сервер ставит по App Check; у старых сессий нет. */
+    val client: String? = null,
+    /** App Check подтвердил официальное приложение. */
+    val appVerified: Boolean = false,
+    /** Только у Android: «Google Pixel 8», «14», «4.3.00». */
+    val deviceModel: String? = null,
+    val osVersion: String? = null,
+    val appVersion: String? = null,
 )
 
 /**
  * Менеджер сессий. Id сессии — `auth_time` из ID-токена. Пишет только сервер
  * (callable'ы registerSession / terminateSession / terminateOtherSessions), клиент читает.
+ *
+ * Платформу сервер определяет по токену App Check, а не по словам клиента: callable из SDK
+ * прикладывает его сам (провайдер ставится в VisorLinkApp). Только тогда сервер принимает
+ * сведения об устройстве и пишет сессию как Android, иначе она считается веб-сессией.
  */
 class SessionRepository(
     private val auth: FirebaseAuth,
@@ -45,9 +57,9 @@ class SessionRepository(
         return user.getIdToken(false).await().claims["auth_time"]?.toString()
     }
 
-    /** Регистрирует вход. Возвращает id сессии; при отзыве поднимает [revoked]. */
+    /** Регистрирует вход (при каждом запуске). Возвращает id сессии; при отзыве поднимает [revoked]. */
     suspend fun register(): String? = try {
-        val res = functions.getHttpsCallable("registerSession").call().await()
+        val res = functions.getHttpsCallable("registerSession").call(deviceInfo()).await()
         (res.data as? Map<*, *>)?.get("sessionId")?.toString()
     } catch (e: Exception) {
         if (!handleError(e) && BuildConfig.DEBUG) Log.w(TAG, "registerSession failed: ${e.message}")
@@ -86,6 +98,11 @@ class SessionRepository(
                         lastSeenAt = d.getTimestamp("lastSeenAt")?.toDate()?.time ?: 0L,
                         tfaVerified = d.get("tfaVerifiedAt") != null,
                         isCurrent = d.id == current,
+                        client = d.getString("client"),
+                        appVerified = d.getBoolean("appVerified") == true,
+                        deviceModel = d.getString("deviceModel"),
+                        osVersion = d.getString("osVersion"),
+                        appVersion = d.getString("appVersion"),
                     )
                 }.orEmpty())
             }
@@ -131,6 +148,29 @@ class SessionRepository(
     companion object {
         private const val TAG = "SessionRepo"
         const val REASON_TFA_REQUIRED = "tfa-required"
+
+        /**
+         * Сведения об устройстве для `registerSession` (сервер обрезает их до 60 / 20 / 20 символов
+         * и принимает только при подтверждённом App Check).
+         */
+        fun deviceInfo(): Map<String, String> = mapOf(
+            "deviceModel" to deviceModel(android.os.Build.MANUFACTURER, android.os.Build.MODEL),
+            "osVersion" to android.os.Build.VERSION.RELEASE.orEmpty().take(20),
+            "appVersion" to BuildConfig.VERSION_NAME.take(20),
+        )
+
+        /** «Google Pixel 8»; производитель не повторяется, если модель уже с него начинается. */
+        internal fun deviceModel(manufacturer: String?, model: String?): String {
+            val maker = manufacturer.orEmpty().trim().replaceFirstChar { it.titlecase() }
+            val name = model.orEmpty().trim()
+            val full = when {
+                maker.isEmpty() -> name
+                name.isEmpty() -> maker
+                name.startsWith(maker, ignoreCase = true) -> name
+                else -> "$maker $name"
+            }
+            return full.take(60)
+        }
 
         fun isTfaRequired(e: Throwable): Boolean {
             val fe = e as? FirebaseFunctionsException ?: return false

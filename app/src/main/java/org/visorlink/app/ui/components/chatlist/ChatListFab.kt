@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -100,14 +101,14 @@ fun ChatListFab(
         val fabJelly = rememberLiquidJellyState(softness = 0.09f, damping = 0.70f, stiffness = 300f)
 
         if (isLiquidEnabled) {
-            LaunchedEffect(isPressed) {
+            LaunchedEffectAfterFirst(isPressed) {
                 if (isPressed) {
                     fabJelly.press(0.09f)
                 } else {
                     fabJelly.release(0.06f)
                 }
             }
-            LaunchedEffect(showMenu) {
+            LaunchedEffectAfterFirst(showMenu) {
                 fabJelly.pulse(0.08f)
             }
         }

@@ -66,7 +66,7 @@ fun VlTextField(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
-    val fieldShape = if (tokens.isForge) tokens.shapes.field else androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+    val fieldShape = if (tokens.isForge) tokens.shapes.field else tokens.shapes.rounded(20.dp)
 
     if (!tokens.structure.enabled) {
         OutlinedTextField(
@@ -159,7 +159,9 @@ fun VlTextField(
                                 color = cs.onSurface,
                             )
                         }
-                        Box(Modifier.fillMaxWidth(if (trailing != null) 0.88f else 1f)) {
+                        // Текст — всё, что осталось от trailing. Раньше здесь была доля 0.88:
+                        // иконке хватало, а кнопка («Сохранить») сжималась до столбика букв
+                        Box(Modifier.weight(1f)) {
                             if (value.isEmpty() && placeholder != null) {
                                 Text(
                                     text = placeholder,

@@ -61,7 +61,10 @@ data class UserProfile(
     val acceptedVersion: String? = null,
 
     // UGC Compliance: Blocked Users
-    val blockedUserIds: List<String> = emptyList()
+    val blockedUserIds: List<String> = emptyList(),
+
+    /** Режим ID-карты (standard | protogen | beast). Пишет только сервер; нет — Standard. */
+    val idMode: String? = null,
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false
@@ -115,9 +118,15 @@ data class Chat(
     val lastSeq: Long = 0L,
     val lastMessageAt: Timestamp? = null,
     val createdAt: Timestamp? = null,
-    val unreadCount: Map<String, Int> = emptyMap()
+    val unreadCount: Map<String, Int> = emptyMap(),
+    /** «ID группы» (группы и каналы). Пишет только сервер — см. [groupIdCard]. */
+    val groupId: Map<String, Any?>? = null,
 ) {
     val isForumActive: Boolean get() = isForum || is_forum || settings.isForum || settings.is_forum
+
+    /** Функция, а не свойство: Firestore и кэш не должны сериализовать её как поле. */
+    fun groupIdCard(): org.visorlink.app.data.idcard.GroupIdCard? =
+        org.visorlink.app.data.idcard.GroupIdCard.parse(groupId)
 
     fun unreadCountFor(currentUid: String): Int = unreadCount[currentUid] ?: unreadCount[""] ?: 0
 
@@ -512,6 +521,9 @@ data class Message(
     val tg_forwarded_from_fallback: String? = null,
     val isUnofficialClient: Boolean? = null,
 
+    // Обмен скином ID-карты (type id_trade): только ссылка на idTrades/{tradeId}, пишет сервер
+    val tradeId: String? = null,
+
     // Подарки
     val redeemed: Boolean = false,
     val redeemedByUid: String? = null,
@@ -667,12 +679,34 @@ object MessageType {
     const val VIDEO   = "video"
     const val GIF     = "gif"
     const val LOTTIE  = "lottie"
+    /** «ID-карта на обмен»: вид и статус — в idTrades/{tradeId}, само сообщение ничего не доказывает. */
+    const val ID_TRADE = "id_trade"
     const val UNKNOWN = "unknown"
 
     fun isKnown(type: String?): Boolean = when (type?.lowercase()) {
-        TEXT, IMAGE, VOICE, AUDIO, STICKER, ALBUM, GIFT, VIDEO, GIF, LOTTIE -> true
+        TEXT, IMAGE, VOICE, AUDIO, STICKER, ALBUM, GIFT, VIDEO, GIF, LOTTIE, ID_TRADE -> true
         else -> false
     }
+
+    /**
+     * Тип, у которого содержимое — файл по `url` (как MEDIA_TYPES в вебе, без альбома: у него
+     * `images`). Подарок, обмен ID-картой и текст вложения не имеют.
+     */
+    fun carriesMedia(type: String?): Boolean = when (type?.lowercase()) {
+        IMAGE, VOICE, AUDIO, STICKER, VIDEO, GIF, LOTTIE, "file", "media" -> true
+        else -> false
+    }
+}
+
+/**
+ * Последнее сообщение — «🪪 ID-карта на обмен» (сервер пишет `lastMessage.text` по-русски с
+ * `type: id_trade`): список чатов и тем показывает подпись на языке интерфейса.
+ */
+fun isIdTradePreview(lastMessage: Any?): Boolean {
+    val m = lastMessage as? Map<*, *>
+    if (m?.get("type") == MessageType.ID_TRADE) return true
+    val text = (m?.get("text") ?: lastMessage) as? String ?: return false
+    return text.trim().lowercase() == "🪪 id-карта на обмен"
 }
 
 /**
@@ -689,8 +723,9 @@ fun isLegacyMediaMessage(message: Message): Boolean {
     if (message.url?.contains("api.visorlink.org") == true) return true
     if (message.url?.contains("/f/") == true && message.url.contains("googleusercontent.com") != true) return true
 
-    // Если URL пустой и сообщение не в процессе локальной отправки
-    if (message.url.isNullOrEmpty() && message.type != MessageType.TEXT && message.type != MessageType.ALBUM && message.localFile == null && message.status == SendStatus.SENT) return true
+    // Медиа без URL и не в процессе локальной отправки. Только для типов с вложением: подарок
+    // и обмен ID-картой ссылки не имеют по природе — раньше они попадали в «архивное вложение»
+    if (message.url.isNullOrEmpty() && MessageType.carriesMedia(message.type) && message.localFile == null && message.status == SendStatus.SENT) return true
 
     return false
 }
@@ -937,7 +972,14 @@ sealed class MessageListItem {
  * [id] стабилен и пишется в SharedPreferences / профиль PRO-кастомизации —
  * при переименовании констант его менять нельзя.
  */
-enum class AppTheme(val id: String) {
+enum class AppTheme(
+    val id: String,
+    /**
+     * false — тему нельзя выбрать в настройках или кастомизации, её включает режим
+     * ID-карты (Forge v2). Такие темы не читаются из настроек и профиля.
+     */
+    val selectable: Boolean = true,
+) {
     /** Чистый Material 3 Expressive: плоские поверхности, Material You. */
     MATERIAL3_EXPRESSIVE("m3e"),
 
@@ -945,18 +987,30 @@ enum class AppTheme(val id: String) {
     BIOLUME("biolume"),
 
     /** Forge: прямые углы, жёсткая тень, сильный красный (Steel / Concrete). */
-    FORGE("forge");
+    @Deprecated("Заменяется Forge v2 (FORGE_PROTOGEN / FORGE_BEAST) после включения id_cards_enabled; будет удалён")
+    FORGE("forge"),
+
+    /** Forge v2, оттенок Protogen: холодный неон. Включается особым режимом ID-карты. */
+    FORGE_PROTOGEN("forge_protogen", selectable = false),
+
+    /** Forge v2, оттенок Beast: тёплый янтарь. Включается особым режимом ID-карты. */
+    FORGE_BEAST("forge_beast", selectable = false);
 
     companion object {
         val Default = MATERIAL3_EXPRESSIVE
 
+        /** Темы для селекторов: Forge v2 пользователь не выбирает. */
+        val selectableEntries: List<AppTheme> get() = entries.filter { it.selectable }
+
         fun fromId(id: String?): AppTheme =
-            entries.firstOrNull { it.id == id } ?: Default
+            selectableEntries.firstOrNull { it.id == id } ?: Default
     }
 }
 
 val AppTheme.isBiolume: Boolean get() = this == AppTheme.BIOLUME
+@Suppress("DEPRECATION")
 val AppTheme.isForge: Boolean get() = this == AppTheme.FORGE
+val AppTheme.isForgeV2: Boolean get() = this == AppTheme.FORGE_PROTOGEN || this == AppTheme.FORGE_BEAST
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

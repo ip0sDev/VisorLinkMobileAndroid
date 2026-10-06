@@ -668,7 +668,8 @@ private fun ActionGlassCard(
                     })
                 }
 
-                if (onForward != null) {
+                // Обмен привязан к своему чату: пересланная копия показала бы только «Обмен недоступен»
+                if (onForward != null && message.type != MessageType.ID_TRADE) {
                     add(MenuActionItem("forward", Icons.AutoMirrored.Filled.Forward, stringResource(R.string.action_forward)) {
                         onDismiss(); onForward()
                     })

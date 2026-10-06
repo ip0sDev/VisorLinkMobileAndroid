@@ -583,6 +583,7 @@ fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
                     MessageType.VOICE   -> stringResource(R.string.voice_message)
                     MessageType.STICKER -> stringResource(R.string.sticker)
                     MessageType.ALBUM   -> message.caption ?: "📷 ${message.images.size} фото"
+                    MessageType.ID_TRADE -> stringResource(R.string.preview_id_trade)
                     else -> message.text ?: "Media"
                 },
                 style    = MaterialTheme.typography.bodySmall,

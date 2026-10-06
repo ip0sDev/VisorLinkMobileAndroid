@@ -154,6 +154,7 @@ fun ChatScreen(
     var showMediaPicker by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
+    var showIdTradePicker by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
     // Автоматическое закрытие меню стикеров и вложений при начале листания чата
@@ -240,6 +241,18 @@ fun ChatScreen(
     val canReact = uiState.chat?.settings?.allowReactions != false
     val canSendMessage = uiState.canSendMessage
     val canSendMedia = uiState.canSendMedia
+    // Обмен скинами ID-карт (спека 2.1): только ЛС и группы, не с ботом, при флаге id_cards_enabled
+    val idModeState = org.visorlink.app.ui.idcard.LocalIdModeState.current
+    val canTradeIdCards = idModeState.enabled && canSendMessage && uiState.otherUser?.isBot != true &&
+        (uiState.chatType == ChatType.DIRECT || uiState.chatType == ChatType.GROUP)
+    val openIdTrade: (() -> Unit)? = if (canTradeIdCards) {
+        {
+            showMediaPicker = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            showIdTradePicker = true
+        }
+    } else null
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, chatId) {
@@ -305,6 +318,20 @@ fun ChatScreen(
         else -> myBg
     }
     val isSecureChat = uiState.chat?.settings?.noForwards == true || uiState.chat?.type == "secret"
+
+    // Тема по контексту чата (спека §7): ЛС — по режиму собеседника (бот тему не трогает),
+    // группа/канал — по «ID группы». Пока собеседник или чат грузятся — тему не меняем
+    val isDirectChat = uiState.chatType == ChatType.DIRECT || uiState.chatType == ChatType.EMERGENCY
+    org.visorlink.app.ui.idcard.DeclareChatTheme(
+        if (!isDirectChat && uiState.chat == null) null
+        else org.visorlink.app.data.idcard.ModeThemeRules.chatThemeFor(
+            isDirect = isDirectChat,
+            partnerLoaded = otherUser != null,
+            partnerIsBot = otherUser?.isBot == true,
+            partnerIdMode = otherUser?.idMode,
+            groupIdEnabled = uiState.chat?.groupIdCard()?.enabled,
+        ),
+    )
 
     SecureScreen(enabled = isSecureChat) {
         UserProfileTheme(profile = otherUser, currentUser = currentUser) {
@@ -429,7 +456,8 @@ fun ChatScreen(
                             onVideoRecorded = { uri ->
                                 showMediaPicker = false
                                 viewModel.sendVideo(uri)
-                            }
+                            },
+                            onOpenIdTrade = openIdTrade
                         )
                     } else {
                         ChatBottomBar(
@@ -858,7 +886,15 @@ fun ChatScreen(
                 keyboardController?.hide()
                 focusManager.clearFocus(force = true)
                 viewModel.sendVideo(uri)
-            }
+            },
+            onOpenIdTrade = openIdTrade
+        )
+    }
+
+    if (showIdTradePicker) {
+        org.visorlink.app.ui.idcard.IdSkinPicker(
+            purpose = org.visorlink.app.ui.idcard.SkinPickPurpose.Post(chatId),
+            onClose = { showIdTradePicker = false },
         )
     }
     }

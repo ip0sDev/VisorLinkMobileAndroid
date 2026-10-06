@@ -57,7 +57,7 @@ fun VlThemeSelector(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppTheme.entries.forEach { theme ->
+        AppTheme.selectableEntries.forEach { theme ->
             ThemePreviewCard(
                 theme = theme,
                 isSelected = theme == selected,
@@ -82,6 +82,7 @@ private fun ThemePreviewCard(
         AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_desc)
         AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_desc)
         AppTheme.FORGE -> stringResource(R.string.theme_forge_desc)
+        AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> stringResource(R.string.theme_forge_v2_desc)
     }
 
     // Рамка выбора рисуется во ВНЕШНЕЙ теме — иначе выделение прыгало бы вместе
@@ -314,4 +315,6 @@ fun AppTheme.displayName(): String = when (this) {
     AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
     AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
     AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
+    AppTheme.FORGE_PROTOGEN -> stringResource(R.string.theme_forge_protogen_name)
+    AppTheme.FORGE_BEAST -> stringResource(R.string.theme_forge_beast_name)
 }

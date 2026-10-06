@@ -615,6 +615,9 @@ private fun InfoTab(
             }
         }
 
+        // «ID группы» — только владельцу с особым режимом ID; остальным блок не показывается
+        item { org.visorlink.app.ui.idcard.GroupIdSection(chat = chat, isOwner = uiState.isOwner) }
+
         if (isChannel && !uiState.isMember) {
             // Для гостя канала показываем кнопку "Подписаться"
             item { Spacer(Modifier.height(8.dp)) }

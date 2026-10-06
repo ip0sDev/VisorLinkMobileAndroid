@@ -289,8 +289,10 @@ fun ChatListItem(
                                     MessageStatusIcon(isRead = isRead)
                                     Spacer(Modifier.width(5.dp))
                                 }
-                                val messageText = remember(chat.lastMessage) {
-                                    org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
+                                val tradePreview = stringResource(R.string.preview_id_trade)
+                                val messageText = remember(chat.lastMessage, tradePreview) {
+                                    if (org.visorlink.app.data.model.isIdTradePreview(chat.lastMessage)) tradePreview
+                                    else org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
                                 }
                                 Text(
                                     text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
@@ -477,8 +479,10 @@ fun ChatListItemCompact(
                                 MessageStatusIcon(isRead = isRead)
                                 Spacer(Modifier.width(5.dp))
                             }
-                            val messageText = remember(chat.lastMessage) {
-                                org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
+                            val tradePreview = stringResource(R.string.preview_id_trade)
+                            val messageText = remember(chat.lastMessage, tradePreview) {
+                                if (org.visorlink.app.data.model.isIdTradePreview(chat.lastMessage)) tradePreview
+                                else org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
                             }
                             Text(
                                 text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),

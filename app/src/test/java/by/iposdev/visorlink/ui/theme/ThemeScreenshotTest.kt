@@ -103,7 +103,10 @@ class ThemeScreenshotTest(
         @JvmStatic
         @ParameterizedRobolectricTestRunner.Parameters(name = "{0}_{1}")
         fun params(): List<Array<Any>> =
-            AppTheme.entries.flatMap { t -> listOf(arrayOf<Any>(t, false), arrayOf<Any>(t, true)) }
+            AppTheme.entries.flatMap { t ->
+                // Forge v2 — только тёмная: светлый вариант совпал бы с тёмным
+                if (t.selectable) listOf(arrayOf<Any>(t, false), arrayOf<Any>(t, true)) else listOf(arrayOf<Any>(t, true))
+            }
     }
 
     private val modeName get() = if (dark) "dark" else "light"

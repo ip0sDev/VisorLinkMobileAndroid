@@ -301,8 +301,14 @@ fun VlSwitch(
     val trackJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.65f)
     val thumbStretch = remember { Animatable(0f) }
 
+    // Первый запуск — не переключение: без этого каждый тумблер экрана вздрагивал при открытии
+    val switchInitial = remember { booleanArrayOf(true) }
     LaunchedEffect(checked) {
-        if (isLiquidEnabled) {
+        val skipPulse = switchInitial[0]
+        switchInitial[0] = false
+        if (isLiquidEnabled && skipPulse) {
+            thumbStretch.snapTo(0f)
+        } else if (isLiquidEnabled) {
             trackJelly.pulse(0.08f)
             // Фаза полёта: быстрое растяжение бегунка в каплю вдоль оси X
             thumbStretch.animateTo(0.26f, tween(65, easing = FastOutSlowInEasing))
@@ -562,13 +568,23 @@ fun VlSettingsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                title,
-                color = titleColor,
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                letterSpacing = 1.2.sp
-            )
+            // Forge v2: моноширинная капитель в цвете primary, у Protogen — префикс «> »
+            val terminal = VlTheme.tokens.terminal
+            if (terminal != null) {
+                Text(
+                    terminal.labelPrefix + title.uppercase(),
+                    color = titleColor.copy(alpha = 0.85f),
+                    style = org.visorlink.app.ui.theme.ForgeV2SectionLabel,
+                )
+            } else {
+                Text(
+                    title,
+                    color = titleColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    letterSpacing = 1.2.sp
+                )
+            }
             if (isPremium) {
                 Icon(
                     Icons.Default.WorkspacePremium,
@@ -722,11 +738,9 @@ fun VlOptionRow(
     val isLiquidEnabled = rememberLiquidEnabled()
     val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.rounded(14.dp) else VlTheme.tokens.shapes.indicator
 
-    val rowShape: Shape = if (isLiquidEnabled) {
-        VlTheme.tokens.shapes.rounded(20.dp)
-    } else {
-        VlTheme.tokens.shapes.row
-    }
+    // Концентричность: строка отступает от края секции на 8dp, поэтому её радиус =
+    // радиус секции (32 в «жидком» режиме, 24 иначе) минус этот отступ
+    val rowShape: Shape = VlTheme.tokens.shapes.rounded(if (isLiquidEnabled) 24.dp else 16.dp)
 
     val rowJelly = rememberLiquidJellyState(softness = 0.06f, damping = 0.68f)
 
@@ -748,7 +762,14 @@ fun VlOptionRow(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            // Крайние строки группы отступают от края секции на те же 8dp, что и по бокам:
+            // иначе у угла отступ 8×3 и дуга строки не идёт параллельно дуге секции
+            .padding(
+                start = 8.dp,
+                end = 8.dp,
+                top = if (total > 1 && index == 0) 8.dp else 3.dp,
+                bottom = if (total > 1 && index == total - 1) 8.dp else 3.dp,
+            )
             .liquidJelly(rowJelly, enabled = isLiquidEnabled)
             .clip(rowShape)
             .then(if (rowBorder != null) Modifier.border(rowBorder, rowShape) else Modifier),

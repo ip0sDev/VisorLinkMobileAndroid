@@ -145,6 +145,14 @@ fun ChatTopBar(
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
+                            // Значок режима собеседника — только смотрящему с особым режимом (спека §9)
+                            if (uiState.chatType == ChatType.DIRECT && org.visorlink.app.ui.idcard.LocalIdModeState.current.viewerSpecial) {
+                                org.visorlink.app.ui.components.idcard.IdModeGlyph(
+                                    org.visorlink.app.data.idcard.IdMode.of(uiState.otherUser?.idMode),
+                                    Modifier.padding(start = 6.dp),
+                                    size = 14.dp,
+                                )
+                            }
                             val isOfficial = uiState.chatType == ChatType.DIRECT && (
                                 uiState.otherUser?.botBadge == "official" ||
                                 uiState.otherUser?.uid == "bot_faultywire" ||

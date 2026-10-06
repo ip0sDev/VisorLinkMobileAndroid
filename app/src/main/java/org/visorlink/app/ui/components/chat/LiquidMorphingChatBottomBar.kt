@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
@@ -90,6 +91,7 @@ fun LiquidMorphingChatBottomBar(
     onMediaSelected: (List<SelectedMediaItem>) -> Unit,
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
+    onOpenIdTrade: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -118,7 +120,11 @@ fun LiquidMorphingChatBottomBar(
 
     val panelJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f, stiffness = 300f)
 
+    // Импульс только на смене режима: на входе в чат строка ввода не должна «вздрагивать»
+    var previousMode by remember { mutableStateOf(currentMode) }
     LaunchedEffect(currentMode) {
+        if (previousMode == currentMode) return@LaunchedEffect
+        previousMode = currentMode
         if (currentMode != LiquidBottomBarMode.INPUT) {
             panelJelly.pulse(0.10f)
         } else {
@@ -138,7 +144,7 @@ fun LiquidMorphingChatBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer { clip = false }
-            .liquidJelly(panelJelly, enabled = true)
+            .liquidJelly(panelJelly, enabled = true, transformOrigin = TransformOrigin(0.5f, 1f))
             .then(
                 if (isExpanded) {
                     Modifier
@@ -265,6 +271,7 @@ fun LiquidMorphingChatBottomBar(
                                 onVideoRecorded(uri)
                                 onCloseMediaPicker()
                             },
+                            onOpenIdTrade = onOpenIdTrade,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

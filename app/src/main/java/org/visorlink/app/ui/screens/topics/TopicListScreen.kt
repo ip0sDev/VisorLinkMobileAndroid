@@ -492,7 +492,13 @@ private fun TopicCardItem(
                 }
             }
 
-            val lastMsg = org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(topic.lastMessageText())
+            val tradePreview = stringResource(R.string.preview_id_trade)
+            val lastMsg = if (org.visorlink.app.data.model.isIdTradePreview(topic.lastMessage)) {
+                val sender = (topic.lastMessage as? Map<*, *>)?.get("senderUsername") as? String
+                if (!sender.isNullOrBlank()) "$sender: $tradePreview" else tradePreview
+            } else {
+                org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(topic.lastMessageText())
+            }
             if (lastMsg.isNotEmpty()) {
                 Text(
                     text = lastMsg,

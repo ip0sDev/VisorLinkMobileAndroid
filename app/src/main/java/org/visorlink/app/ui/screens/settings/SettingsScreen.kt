@@ -31,6 +31,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -54,6 +55,9 @@ import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.components.settings.*
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.ThemeViewModel
+import org.visorlink.app.ui.theme.UserProfileTheme
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 import org.visorlink.app.utils.AppLanguage
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.StealthManager
@@ -80,6 +84,7 @@ fun SettingsScreen(
     onOpenStatus: () -> Unit = {},
     onOpenSessions: () -> Unit = {},
     onOpenCustomization: () -> Unit = {},
+    onOpenIdCard: () -> Unit = {},
     onOpenAegisDebug: () -> Unit = {},
     onOpenFlagFlipper: () -> Unit = {},
     onOpenAnimationTest: () -> Unit = {},
@@ -216,6 +221,9 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(padding.calculateTopPadding() + 8.dp))
 
                 profile?.let { p ->
+                  // Карточка — своя витрина: оформление профиля применяется всегда, вместе с HEX-акцентом
+                  UserProfileTheme(profile = p, currentUser = p, applyAccentHex = true) {
+                    val appearance = ProfileAppearance.resolve(owner = p, viewer = p)
                     val tokens = VlTheme.tokens
                     val cs = MaterialTheme.colorScheme
                     val accountShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else tokens.shapes.card
@@ -259,7 +267,25 @@ fun SettingsScreen(
                                 else Modifier
                             )
                     ) {
+                        appearance.backgroundUrl?.let { url ->
+                            AsyncImage(
+                                model = url,
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                                alpha = 0.35f,
+                            )
+                        }
                         CompositionLocalProvider(LocalContentColor provides cs.onSurface) {
+                          Column(Modifier.fillMaxWidth()) {
+                            appearance.bannerUrl?.let { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxWidth().height(72.dp).background(cs.surfaceContainerHighest),
+                                    contentScale = ContentScale.Crop,
+                                )
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -281,6 +307,7 @@ fun SettingsScreen(
                                             color = cs.onSurface,
                                             maxLines = 1
                                         )
+                                        appearance.emojis?.let { Text(" $it", style = MaterialTheme.typography.titleLarge) }
                                         if (p.isProActive()) {
                                             Spacer(Modifier.width(8.dp))
                                             ProBadge()
@@ -304,8 +331,10 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+                          }
                         }
                     }
+                  }
                     Box(modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled)) {
                         ProStatusBanner(profile = p, proViewModel = proViewModel, proState = proState, hapticEnabled = hapticEnabled)
                     }
@@ -320,26 +349,40 @@ fun SettingsScreen(
                     VlSettingsItem(icon = Icons.Default.HideImage, title = stringResource(R.string.settings_custom_hide_title), subtitle = stringResource(R.string.settings_custom_hide_sub), trailing = { VlSwitch(checked = profile?.ignoreCustomizations ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateIgnoreCustomizations(v) } }) })
                 }
 
-                VlSettingsSection(
-                    title = stringResource(R.string.settings_section_theme),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 3, enabled = isLiquidEnabled)
-                ) {
-                    VlThemeSelector(
-                        selected = currentTheme,
-                        onSelect = { themeViewModel.setTheme(it) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                        themeMode = currentMode,
-                        colorPreset = currentPreset,
-                    )
+                // ID-карты: тему решает режим карты, а не пользователь (спека §7)
+                val idModeState = org.visorlink.app.ui.idcard.LocalIdModeState.current
+                if (idModeState.enabled) {
+                    VlSettingsSection(
+                        title = stringResource(R.string.idcard_title),
+                        modifier = Modifier.liquidPillCardSlideOut(index = 3, enabled = isLiquidEnabled)
+                    ) {
+                        VlSettingsItem(icon = Icons.Default.Badge, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.idcard_title), subtitle = stringResource(R.string.idcard_settings_sub), onClick = onOpenIdCard)
+                    }
+                } else {
+                    VlSettingsSection(
+                        title = stringResource(R.string.settings_section_theme),
+                        modifier = Modifier.liquidPillCardSlideOut(index = 3, enabled = isLiquidEnabled)
+                    ) {
+                        VlThemeSelector(
+                            selected = currentTheme,
+                            onSelect = { themeViewModel.setTheme(it) },
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            themeMode = currentMode,
+                            colorPreset = currentPreset,
+                        )
+                    }
                 }
 
-                VlSettingsSection(
-                    title = stringResource(R.string.settings_section_accent),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 4, enabled = isLiquidEnabled)
-                ) {
-                    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        ColorPreset.entries.forEach { preset ->
-                            ColorPresetCircle(preset = preset, isSelected = currentPreset == preset, onClick = { themeViewModel.setColorPreset(preset) })
+                // Пресеты акцента — только в Biolume: у Forge палитра режима фиксирована
+                if (idModeState.theme.style != org.visorlink.app.data.idcard.ModeStyle.FORGE) {
+                    VlSettingsSection(
+                        title = stringResource(R.string.settings_section_accent),
+                        modifier = Modifier.liquidPillCardSlideOut(index = 4, enabled = isLiquidEnabled)
+                    ) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            ColorPreset.entries.forEach { preset ->
+                                ColorPresetCircle(preset = preset, isSelected = currentPreset == preset, onClick = { themeViewModel.setColorPreset(preset) })
+                            }
                         }
                     }
                 }
@@ -348,9 +391,23 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_dark_title),
                     modifier = Modifier.liquidPillCardSlideOut(index = 5, enabled = isLiquidEnabled)
                 ) {
-                    VlOptionRow(icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = currentMode == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setThemeMode(ThemeMode.SYSTEM) })
-                    VlOptionRow(icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = currentMode == ThemeMode.LIGHT, index = 1, total = 3, onClick = { themeViewModel.setThemeMode(ThemeMode.LIGHT) })
-                    VlOptionRow(icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = currentMode == ThemeMode.DARK, index = 2, total = 3, onClick = { themeViewModel.setThemeMode(ThemeMode.DARK) })
+                    // Особый режим держит тёмную: у Forge нет светлой версии — выбор неактивен с подсказкой
+                    val darkLocked = idModeState.theme.forceDark
+                    val setMode = { m: ThemeMode -> if (!darkLocked) themeViewModel.setThemeMode(m) }
+                    val shown = if (darkLocked) ThemeMode.DARK else currentMode
+                    Column(Modifier.then(if (darkLocked) Modifier.graphicsLayer { alpha = 0.55f } else Modifier)) {
+                        VlOptionRow(icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = shown == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { setMode(ThemeMode.SYSTEM) })
+                        VlOptionRow(icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = shown == ThemeMode.LIGHT, index = 1, total = 3, onClick = { setMode(ThemeMode.LIGHT) })
+                        VlOptionRow(icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = shown == ThemeMode.DARK, index = 2, total = 3, onClick = { setMode(ThemeMode.DARK) })
+                    }
+                    if (darkLocked) {
+                        Text(
+                            stringResource(R.string.idcard_dark_locked),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+                        )
+                    }
                 }
 
                 VlSettingsSection(

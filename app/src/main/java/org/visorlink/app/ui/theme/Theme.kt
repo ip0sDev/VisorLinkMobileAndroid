@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.ContextWrapper
 import android.os.Build
 import android.provider.Settings
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -15,6 +17,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import org.visorlink.app.BuildConfig
+import org.visorlink.app.data.idcard.IdMode
+import org.visorlink.app.data.idcard.ModeStyle
+import org.visorlink.app.data.idcard.ModeTheme
 import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.ColorPreset
 import org.visorlink.app.data.model.ProfileAppearance
@@ -105,6 +110,40 @@ private val ForgeShapeScale = Shapes(
     extraLarge = RoundedCornerShape(0.dp),
 )
 
+/** Forge v2: малые скругления и для M3-компонентов со своей шкалой форм. */
+private fun forgeV2ShapeScale(f: ForgeV2.Flavor) = Shapes(
+    extraSmall = RoundedCornerShape(2.dp),
+    small = RoundedCornerShape(4.dp),
+    medium = RoundedCornerShape(f.radiusLg),
+    large = RoundedCornerShape(f.radiusLg),
+    extraLarge = RoundedCornerShape(f.radius2xl),
+)
+
+private fun forgeV2Flavor(theme: AppTheme): ForgeV2.Flavor? = when (theme) {
+    AppTheme.FORGE_PROTOGEN -> ForgeV2.Protogen
+    AppTheme.FORGE_BEAST -> ForgeV2.Beast
+    else -> null
+}
+
+// ── Действующая тема зрителя ─────────────────────────────────────────────────
+
+/**
+ * Тема, которую зритель видит сейчас: при включённых ID-картах её решает режим
+ * (Biolume / Forge v2), а не выбор в настройках. Задаёт MainActivity; обёртки профиля
+ * и чата накладывают оформление владельца поверх неё, а не поверх настроек.
+ *
+ * @property modeDriven тему решает режим ID-карты — `customization.theme` владельца не читается.
+ */
+@Immutable
+data class ViewerTheme(
+    val appTheme: AppTheme,
+    val themeMode: ThemeMode,
+    val colorPreset: ColorPreset,
+    val modeDriven: Boolean = false,
+)
+
+val LocalViewerTheme = staticCompositionLocalOf<ViewerTheme?> { null }
+
 // ── User Profile Theme Wrapper ─────────────────────────────────────────────
 
 /**
@@ -120,13 +159,33 @@ fun UserProfileTheme(
     currentUser: UserProfile?,
     /** Произвольный HEX-акцент применяется только на экранах профиля, не в чате. */
     applyAccentHex: Boolean = false,
+    /**
+     * Тема режима владельца поверх темы зрителя (спека §7, `ownerProfileThemeAttrs`):
+     * смотрящий с особым режимом видит чужой профиль в гамме владельца. Только для
+     * экрана чужого профиля — у чата свои правила (контекст чата).
+     */
+    ownerModeTheme: ModeTheme? = null,
     content: @Composable () -> Unit
 ) {
     val resolved = ProfileAppearance.resolve(owner = profile, viewer = currentUser)
-    ProfileAppearanceTheme(
-        appearance = if (applyAccentHex) resolved else resolved.copy(accentHex = null),
-        content = content,
-    )
+    val appearance = if (applyAccentHex) resolved else resolved.copy(accentHex = null)
+    if (ownerModeTheme == null) {
+        ProfileAppearanceTheme(appearance = appearance, content = content)
+        return
+    }
+    val viewer = LocalViewerTheme.current ?: ViewerTheme(AppTheme.BIOLUME, ThemeMode.DARK, ColorPreset.DEFAULT)
+    CompositionLocalProvider(
+        LocalViewerTheme provides viewer.copy(appTheme = ownerModeTheme.toAppTheme(), themeMode = ThemeMode.DARK, modeDriven = true),
+    ) {
+        ProfileAppearanceTheme(appearance = appearance, content = content)
+    }
+}
+
+/** Тема интерфейса для правил режима: Forge своего оттенка или Biolume. */
+fun ModeTheme.toAppTheme(): AppTheme = when {
+    style != ModeStyle.FORGE -> AppTheme.BIOLUME
+    flavor == IdMode.BEAST -> AppTheme.FORGE_BEAST
+    else -> AppTheme.FORGE_PROTOGEN
 }
 
 /**
@@ -139,17 +198,21 @@ fun ProfileAppearanceTheme(
     content: @Composable () -> Unit,
 ) {
     val themeVm: ThemeViewModel = koinViewModel()
-    val viewerTheme by themeVm.appTheme.collectAsState()
-    val viewerMode by themeVm.themeMode.collectAsState()
-    val viewerPreset by themeVm.colorPreset.collectAsState()
+    val settingsTheme by themeVm.appTheme.collectAsState()
+    val settingsMode by themeVm.themeMode.collectAsState()
+    val settingsPreset by themeVm.colorPreset.collectAsState()
     val showDebugIds by themeVm.showDebugIds.collectAsState()
+    val viewer = LocalViewerTheme.current ?: ViewerTheme(settingsTheme, settingsMode, settingsPreset)
 
     ProfileAppearanceTheme(
-        appearance = appearance,
-        viewerTheme = viewerTheme,
-        viewerMode = viewerMode,
-        viewerPreset = viewerPreset,
+        // Тему решает режим ID-карты — выбор темы владельцем не читается (спека §7)
+        appearance = if (viewer.modeDriven) appearance.copy(theme = null) else appearance,
+        viewerTheme = viewer.appTheme,
+        viewerMode = viewer.themeMode,
+        viewerPreset = viewer.colorPreset,
         showDebugIds = showDebugIds,
+        // Тема по режиму меняется при входе в чат — внутренняя тема чата перетекает так же
+        animateColors = viewer.modeDriven,
         content = content,
     )
 }
@@ -162,6 +225,7 @@ fun ProfileAppearanceTheme(
     viewerMode: ThemeMode,
     viewerPreset: ColorPreset,
     showDebugIds: Boolean = LocalShowDebugIds.current,
+    animateColors: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val theme = appearance.theme ?: viewerTheme
@@ -175,6 +239,7 @@ fun ProfileAppearanceTheme(
         // а при уходе с экрана внешняя тема не перезапустила бы свой SideEffect
         setStatusBarColor = false,
         typographyOverride = appearance.font?.let { baseTypography(theme).withProfileFont(it) },
+        animateColors = animateColors,
         content = content,
     )
 }
@@ -202,10 +267,14 @@ fun VisorLinkTheme(
     setStatusBarColor: Boolean = true,
     /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
     typographyOverride: androidx.compose.material3.Typography? = null,
+    /** Плавная смена палитры (~200 мс) — когда тема меняется по режиму (вход в чат и выход). */
+    animateColors: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
-    val darkTheme = when (themeMode) {
+    val forgeV2 = forgeV2Flavor(appTheme)
+    // Forge v2 — только тёмная, светлой версии нет
+    val darkTheme = forgeV2 != null || when (themeMode) {
         ThemeMode.DARK   -> true
         ThemeMode.LIGHT  -> false
         ThemeMode.SYSTEM -> systemDark
@@ -224,7 +293,7 @@ fun VisorLinkTheme(
     }
 
     val seed = accentOverride ?: colorPreset.seedColor
-    val colorScheme = when (appTheme) {
+    val targetScheme = when (appTheme) {
         AppTheme.BIOLUME -> {
             val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
             base.withSignalAccent(seed, darkTheme)
@@ -240,7 +309,11 @@ fun VisorLinkTheme(
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             else -> (if (darkTheme) DarkM3 else LightM3).withMaterialAccent(seed, darkTheme)
         }
+
+        // Пресеты акцента — только в Biolume: палитра режима фиксирована
+        AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!)
     }
+    val colorScheme = if (animateColors) animateColorScheme(targetScheme) else targetScheme
 
     val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme) {
         when (appTheme) {
@@ -270,6 +343,24 @@ fun VisorLinkTheme(
                 bubbles = forgeBubbles(darkTheme, colorScheme.primary),
                 data = ForgeDataTypography,
                 reduceMotion = reduceMotion,
+            )
+
+            AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> VlTokens(
+                style = VlStyle.FORGE_V2,
+                isDark = true,
+                structure = forgeV2Structure(forgeV2!!),
+                signal = forgeV2Signal(forgeV2),
+                shapes = forgeV2Shapes(forgeV2),
+                motion = ForgeV2Motion,
+                status = forgeV2Status(forgeV2),
+                selectionFill = ForgeV2.mix(colorScheme.primary, 0.16f, colorScheme.surfaceContainer),
+                bubbles = forgeV2Bubbles(forgeV2),
+                data = ForgeDataTypography,
+                reduceMotion = reduceMotion,
+                terminal = VlTerminalTokens(
+                    labelPrefix = if (appTheme == AppTheme.FORGE_PROTOGEN) "> " else "",
+                    scanlines = appTheme == AppTheme.FORGE_PROTOGEN,
+                ),
             )
 
             AppTheme.MATERIAL3_EXPRESSIVE -> VlTokens(
@@ -329,10 +420,44 @@ fun VisorLinkTheme(
             shapes = when (appTheme) {
                 AppTheme.BIOLUME -> BiolumeShapeScale
                 AppTheme.FORGE -> ForgeShapeScale
+                AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ShapeScale(forgeV2!!)
                 AppTheme.MATERIAL3_EXPRESSIVE -> Material3ShapeScale
             },
             typography = typographyOverride ?: baseTypography(appTheme),
             content = content
         )
     }
+}
+
+// ── Плавная смена палитры ────────────────────────────────────────────────────
+
+/**
+ * Палитра, перетекающая к [target] за 200 мс (веб: view-transition 200 ms при смене
+ * Biolume ↔ Forge у входа в чат). Анимируются все роли ColorScheme.
+ */
+@Composable
+private fun animateColorScheme(target: ColorScheme): ColorScheme {
+    @Composable
+    fun a(c: Color): Color = animateColorAsState(c, tween(200), label = "scheme").value
+    return target.copy(
+        primary = a(target.primary), onPrimary = a(target.onPrimary),
+        primaryContainer = a(target.primaryContainer), onPrimaryContainer = a(target.onPrimaryContainer),
+        inversePrimary = a(target.inversePrimary),
+        secondary = a(target.secondary), onSecondary = a(target.onSecondary),
+        secondaryContainer = a(target.secondaryContainer), onSecondaryContainer = a(target.onSecondaryContainer),
+        tertiary = a(target.tertiary), onTertiary = a(target.onTertiary),
+        tertiaryContainer = a(target.tertiaryContainer), onTertiaryContainer = a(target.onTertiaryContainer),
+        background = a(target.background), onBackground = a(target.onBackground),
+        surface = a(target.surface), onSurface = a(target.onSurface),
+        surfaceVariant = a(target.surfaceVariant), onSurfaceVariant = a(target.onSurfaceVariant),
+        surfaceTint = a(target.surfaceTint),
+        inverseSurface = a(target.inverseSurface), inverseOnSurface = a(target.inverseOnSurface),
+        error = a(target.error), onError = a(target.onError),
+        errorContainer = a(target.errorContainer), onErrorContainer = a(target.onErrorContainer),
+        outline = a(target.outline), outlineVariant = a(target.outlineVariant), scrim = a(target.scrim),
+        surfaceBright = a(target.surfaceBright), surfaceDim = a(target.surfaceDim),
+        surfaceContainer = a(target.surfaceContainer), surfaceContainerHigh = a(target.surfaceContainerHigh),
+        surfaceContainerHighest = a(target.surfaceContainerHighest), surfaceContainerLow = a(target.surfaceContainerLow),
+        surfaceContainerLowest = a(target.surfaceContainerLowest),
+    )
 }

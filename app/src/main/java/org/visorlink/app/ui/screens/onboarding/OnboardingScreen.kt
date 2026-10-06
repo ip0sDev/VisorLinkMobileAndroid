@@ -205,17 +205,20 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
         )
         Spacer(Modifier.height(32.dp))
 
-        VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-            VlThemeSelector(
-                selected = appTheme,
-                onSelect = { themeViewModel.setTheme(it) },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                themeMode = currentMode,
-                colorPreset = currentPreset,
-            )
-        }
+        // При ID-картах тему решает режим карты, а не выбор (спека §7)
+        if (!org.visorlink.app.ui.idcard.LocalIdModeState.current.enabled) {
+            VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
+                VlThemeSelector(
+                    selected = appTheme,
+                    onSelect = { themeViewModel.setTheme(it) },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    themeMode = currentMode,
+                    colorPreset = currentPreset,
+                )
+            }
 
-        Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(16.dp))
+        }
 
         VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {
             Row(
