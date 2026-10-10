@@ -82,6 +82,9 @@ fun AuthCard(
     var regConfirmPassword by remember { mutableStateOf("") }
     var regPasswordVisible by remember { mutableStateOf(false) }
     var regConfirmVisible by remember { mutableStateOf(false) }
+    val pendingInvite by viewModel.pendingInviteCode.collectAsState()
+    var regInvite by remember { mutableStateOf(pendingInvite.orEmpty()) }
+    LaunchedEffect(pendingInvite) { if (regInvite.isBlank() && !pendingInvite.isNullOrBlank()) regInvite = pendingInvite!! }
 
     // Локальные ошибки валидации регистрации
     var regPasswordError by remember { mutableStateOf<String?>(null) }
@@ -95,6 +98,7 @@ fun AuthCard(
     val regEmailFocus = remember { FocusRequester() }
     val regPasswordFocus = remember { FocusRequester() }
     val regConfirmFocus = remember { FocusRequester() }
+    val regInviteFocus = remember { FocusRequester() }
 
     LaunchedEffect(uiState.success) {
         if (uiState.success) {
@@ -191,7 +195,8 @@ fun AuthCard(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Вывод общей ошибки (если есть)
-            if (uiState.error != null) {
+            val errorText = uiState.error ?: uiState.errorRes?.let { stringResource(it) }
+            if (errorText != null) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -201,7 +206,7 @@ fun AuthCard(
                         .padding(14.dp)
                 ) {
                         Text(
-                            text = uiState.error!!,
+                            text = errorText,
                             style = TextStyle(
                                 fontSize = 13.sp,
                                 color = cs.error,
@@ -346,6 +351,15 @@ fun AuthCard(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+
+                            GoogleAuthButton(
+                                text = stringResource(R.string.auth_google_login),
+                                enabled = !uiState.isLoading,
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    viewModel.signInWithGoogle(context)
+                                },
+                            )
                         }
                     } else {
                         // ── ФОРМА РЕГИСТРАЦИИ ───────────────────────────────────
@@ -484,25 +498,51 @@ fun AuthCard(
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Password,
-                                    imeAction = ImeAction.Done
+                                    imeAction = ImeAction.Next
                                 ),
                                 keyboardActions = KeyboardActions(
-                                    onDone = {
-                                        focusManager.clearFocus()
-                                        if (validateAndRegister(viewModel, regEmail, regPassword, regConfirmPassword, regUsername) { regPasswordError = it }) {
-                                            regPasswordError = null
-                                        }
-                                    }
+                                    onNext = { regInviteFocus.requestFocus() }
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .focusRequester(regConfirmFocus)
                             )
 
+                            // Регистрация только по приглашению — и по почте, и через Google
+                            VlTextField(
+                                value = regInvite,
+                                onValueChange = { regInvite = it.trim(); viewModel.clearError() },
+                                label = stringResource(R.string.register_invite_code),
+                                placeholder = stringResource(R.string.register_invite_code_hint),
+                                leading = {
+                                    Icon(
+                                        Icons.Default.ConfirmationNumber,
+                                        contentDescription = null,
+                                        tint = cs.primary
+                                    )
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done,
+                                    autoCorrectEnabled = false
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        focusManager.clearFocus()
+                                        if (validateAndRegister(viewModel, regEmail, regPassword, regConfirmPassword, regUsername, regInvite) { regPasswordError = it }) {
+                                            regPasswordError = null
+                                        }
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(regInviteFocus)
+                            )
+
                             VlButton(
                                 onClick = {
                                     focusManager.clearFocus()
-                                    if (validateAndRegister(viewModel, regEmail, regPassword, regConfirmPassword, regUsername) { regPasswordError = it }) {
+                                    if (validateAndRegister(viewModel, regEmail, regPassword, regConfirmPassword, regUsername, regInvite) { regPasswordError = it }) {
                                         regPasswordError = null
                                     }
                                 },
@@ -528,6 +568,22 @@ fun AuthCard(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+
+                            GoogleAuthButton(
+                                text = stringResource(R.string.auth_google_register),
+                                enabled = !uiState.isLoading,
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    viewModel.signInWithGoogle(context, regUsername, regInvite)
+                                },
+                            )
+                            Text(
+                                text = stringResource(R.string.auth_google_register_hint),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
                 }
@@ -589,12 +645,46 @@ fun AuthCard(
     }
 }
 
+/** «или» и кнопка Google под формой (веб: под формой входа через разделитель). */
+@Composable
+private fun GoogleAuthButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            HorizontalDivider(Modifier.weight(1f), color = cs.outlineVariant)
+            Text(
+                stringResource(R.string.auth_google_or),
+                style = MaterialTheme.typography.labelMedium,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            HorizontalDivider(Modifier.weight(1f), color = cs.outlineVariant)
+        }
+        VlSurface(
+            isButton = true,
+            onClick = if (enabled) onClick else null,
+            modifier = Modifier.fillMaxWidth().height(52.dp)
+        ) {
+            Row(
+                Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(painterResource(R.drawable.ic_google), contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(text, fontWeight = FontWeight.SemiBold, color = if (enabled) cs.onSurface else cs.onSurfaceVariant)
+            }
+        }
+    }
+}
+
 private fun validateAndRegister(
     viewModel: AuthViewModel,
     email: String,
     pass: String,
     confirm: String,
     username: String,
+    inviteCode: String,
     onError: (String) -> Unit
 ): Boolean {
     if (username.trim().length < 3) {
@@ -609,6 +699,6 @@ private fun validateAndRegister(
         onError("Пароли не совпадают")
         return false
     }
-    viewModel.register(email.trim(), pass, username.trim())
+    viewModel.register(email.trim(), pass, username.trim(), inviteCode.trim().ifBlank { null })
     return true
 }

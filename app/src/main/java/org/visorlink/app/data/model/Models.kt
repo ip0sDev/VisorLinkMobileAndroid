@@ -34,7 +34,13 @@ data class UserProfile(
     val showStreak: Boolean = true,
     val proUntil: Timestamp? = null,
     val trialUsed: Boolean = false,
+    /** Пишет только сервер (`set2FAEnabled` с кодом) — правила запрещают клиенту менять поле. */
     val tfaEnabled: Boolean = false,
+    /** Коды 2FA можно получать в Telegram (`setTfaTelegram`). Пишет только сервер. */
+    val tfaTelegram: Boolean? = null,
+    /** Привязка Telegram (бот пишет число или строку — читаем как есть). */
+    val telegramId: Any? = null,
+    val telegramUsername: String? = null,
     val registeredViaOfficialClient: Boolean = true,
 
     // ДОБАВЛЕНО:
@@ -70,6 +76,18 @@ data class UserProfile(
         if (proUntil == null) return false
         return proUntil.toDate().time > System.currentTimeMillis()
     }
+
+    /** Telegram привязан (`telegramId`). */
+    val hasTelegram: Boolean
+        @com.google.firebase.firestore.Exclude get() = telegramId?.toString()?.isNotBlank() == true
+
+    /** «@ник» привязанного Telegram, иначе «ID 123». */
+    val telegramAccount: String?
+        @com.google.firebase.firestore.Exclude get() = when {
+            !telegramUsername.isNullOrBlank() -> "@$telegramUsername"
+            hasTelegram -> "ID $telegramId"
+            else -> null
+        }
 }
 
 enum class ChatType { DIRECT, GROUP, CHANNEL, EMERGENCY }
@@ -507,6 +525,14 @@ data class Message(
     val spoiler: Boolean = false,
     val commentsEnabled: Boolean? = null,
     val commentsCount: Int = 0,
+    /** Просмотры поста канала: пишет только сервер (recordPostViews), один человек — один просмотр. */
+    val viewsCount: Int = 0,
+    /** Скрыт модерацией (3 жалобы — submitAbuseReport). Пишет сервер. */
+    @get:PropertyName("is_hidden") @set:PropertyName("is_hidden")
+    var isHidden: Boolean? = null,
+    /** `false` — пост канала ещё не опубликован (виден только автору). */
+    @get:PropertyName("is_published") @set:PropertyName("is_published")
+    var isPublished: Boolean? = null,
     val caption: String? = null,
     val images: List<AlbumImage> = emptyList(),
     val forwardFrom: Map<String, Any?>? = null,
@@ -844,101 +870,6 @@ data class Incident(
     val isActive: Boolean get() = !resolved
 }
 
-// ─── Feed ──────────────────────────────────────────────────────────────────────
-
-@IgnoreExtraProperties
-data class FeedChannelData(
-    var name: String? = null,
-    var avatarUrl: String? = null,
-    var avatar_url: String? = null,
-    var cdnMediaId: String? = null,
-    var cdn_media_id: String? = null,
-    var tag: String? = null
-)
-
-@IgnoreExtraProperties
-data class FeedItem(
-    var id: String = "",
-    var chatId: String? = null,
-    var messageId: String? = null,
-    var channelData: FeedChannelData? = null,
-    var channel_data: FeedChannelData? = null,
-    var authorData: FeedChannelData? = null,
-
-    // Web version might put author name at root too
-    var author_name: String? = null,
-    var authorName: String? = null,
-    var author_avatar_url: String? = null,
-    var authorAvatarUrl: String? = null,
-
-    var type: String = "post",
-    var title: String? = null,
-    var text: String? = null,
-    var caption: String? = null,
-    var url: String? = null,
-    var media_url: String? = null,
-    var mediaUrl: String? = null,
-    var image_url: String? = null,
-    var cdnMediaId: String? = null,
-    var cdn_media_id: String? = null,
-    var images: List<AlbumImage>? = null,
-    var duration: Int? = null,
-    var tags: List<String> = emptyList(),
-
-    // Field names from web
-    var likeCount: Int = 0,
-    var likers: List<String> = emptyList(),
-
-    // Field names from previous turn (fallback)
-    var likes_count: Int = 0,
-    var liked_uids: List<String> = emptyList(),
-    var views_count: Int = 0,
-    var comments_count: Int = 0,
-
-    var createdAt: Timestamp? = null
-) {
-    val displayImageUrl: String?
-        get() {
-            val bestUrl = url ?: media_url ?: mediaUrl ?: image_url
-            if (!bestUrl.isNullOrEmpty()) return bestUrl
-
-            val firstAlbum = images?.firstOrNull()
-            if (firstAlbum != null) {
-                if (!firstAlbum.url.isNullOrEmpty()) return firstAlbum.url
-            }
-            return null
-        }
-
-    val displayAuthorName: String
-        get() = (channelData?.name ?: channel_data?.name ?: authorData?.name ?: author_name ?: authorName ?: "Unknown Channel").ifEmpty { "Unknown Channel" }
-
-    val displayAuthorAvatarUrl: String?
-        get() {
-            val url = channelData?.avatarUrl ?: channelData?.avatar_url ?:
-            channel_data?.avatarUrl ?: channel_data?.avatar_url ?:
-            authorData?.avatarUrl ?: authorData?.avatar_url ?:
-            author_avatar_url ?: authorAvatarUrl
-
-            if (!url.isNullOrEmpty() && url.startsWith("http")) return url
-            return null
-        }
-
-    val displayChatId: String?
-        get() = chatId
-
-    val displayLikesCount: Int
-        get() = if (likeCount != 0) likeCount else likes_count
-
-    val displayViewsCount: Int
-        get() = views_count
-
-    val displayCommentsCount: Int
-        get() = comments_count
-
-    val displayLikedUids: List<String>
-        get() = if (likers.isNotEmpty()) likers else liked_uids
-}
-
 data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null)
 
 sealed class TopbarStatus {
@@ -986,10 +917,6 @@ enum class AppTheme(
     /** Biolume: неоморфный рельеф + редкий сигнальный неон (Abyss / Tidepool). */
     BIOLUME("biolume"),
 
-    /** Forge: прямые углы, жёсткая тень, сильный красный (Steel / Concrete). */
-    @Deprecated("Заменяется Forge v2 (FORGE_PROTOGEN / FORGE_BEAST) после включения id_cards_enabled; будет удалён")
-    FORGE("forge"),
-
     /** Forge v2, оттенок Protogen: холодный неон. Включается особым режимом ID-карты. */
     FORGE_PROTOGEN("forge_protogen", selectable = false),
 
@@ -1008,8 +935,6 @@ enum class AppTheme(
 }
 
 val AppTheme.isBiolume: Boolean get() = this == AppTheme.BIOLUME
-@Suppress("DEPRECATION")
-val AppTheme.isForge: Boolean get() = this == AppTheme.FORGE
 val AppTheme.isForgeV2: Boolean get() = this == AppTheme.FORGE_PROTOGEN || this == AppTheme.FORGE_BEAST
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }

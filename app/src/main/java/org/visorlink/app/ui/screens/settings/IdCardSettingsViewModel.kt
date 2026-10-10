@@ -31,6 +31,9 @@ data class IdCardSettingsUiState(
 )
 
 /** Настройки ID-карты (веб: IdCardTab.jsx): режим, вид, место в профиле. Инвентарь скинов — IdSkinInventory. */
+/** «Моя визитка»: идёт запрос и итог последнего действия. */
+data class PublicCardUiState(val busy: Boolean = false, val message: org.visorlink.app.ui.UiText? = null)
+
 class IdCardSettingsViewModel(
     private val repo: IdCardRepository,
     private val users: UserRepository,
@@ -47,6 +50,40 @@ class IdCardSettingsViewModel(
     val ui: StateFlow<IdCardSettingsUiState> = _ui.asStateFlow()
 
     fun clearError() = _ui.update { it.copy(error = null) }
+
+    // ── Визитка /card ──
+
+    private val _publicCard = MutableStateFlow(PublicCardUiState())
+    val publicCard: StateFlow<PublicCardUiState> = _publicCard.asStateFlow()
+
+    fun publishPublicCard(tagline: String) = runPublicCard(org.visorlink.app.R.string.public_card_published) {
+        repo.publishPublicCard(tagline)
+    }
+
+    fun unpublishPublicCard() = runPublicCard(org.visorlink.app.R.string.public_card_unpublished) {
+        repo.unpublishPublicCard()
+    }
+
+    private fun runPublicCard(okRes: Int, action: suspend () -> Unit) {
+        if (_publicCard.value.busy) return
+        _publicCard.value = PublicCardUiState(busy = true)
+        viewModelScope.launch {
+            val message = try {
+                action()
+                org.visorlink.app.ui.UiText.StringResource(okRes)
+            } catch (e: IdCardException) {
+                if (e.reason == "cooldown" && e.waitMs > 0) {
+                    org.visorlink.app.ui.UiText.StringResource(org.visorlink.app.R.string.public_card_cooldown, ((e.waitMs + 999) / 1000).toString())
+                } else {
+                    e.message?.let { org.visorlink.app.ui.UiText.DynamicString(it) }
+                        ?: org.visorlink.app.ui.UiText.StringResource(org.visorlink.app.R.string.public_card_failed)
+                }
+            } catch (e: Exception) {
+                org.visorlink.app.ui.UiText.StringResource(org.visorlink.app.R.string.public_card_failed)
+            }
+            _publicCard.value = PublicCardUiState(message = message)
+        }
+    }
 
     private fun run(onSuccess: () -> Unit = {}, action: suspend () -> Unit) {
         if (_ui.value.busy) return

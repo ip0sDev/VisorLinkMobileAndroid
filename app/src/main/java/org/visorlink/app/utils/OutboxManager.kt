@@ -177,7 +177,8 @@ class OutboxManager(
                                 } catch (e: Exception) {
                                     val nextRetry = action.retryCount + 1
                                     outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
-                                    if (nextRetry >= MAX_RETRIES) {
+                                    // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
+                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException) {
                                         outboxDataSource.updateStatus(context, action.id, 2)
                                     }
                                     // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
@@ -279,7 +280,7 @@ class OutboxManager(
                     val file = File(localPath)
                     if (file.exists()) {
                         val token = googleDriveAuthManager?.getValidAccessToken()
-                            ?: throw IllegalStateException("Google Drive не подключен. Перейдите в Настройки -> Хранилище для подключения.")
+                            ?: throw DriveNotConnectedException()
                         val folderId = googleDriveMediaService?.getOrCreateVisorLinkFolder(token)
                             ?: throw IllegalStateException("Не удалось получить папку Google Drive.")
 
@@ -312,7 +313,7 @@ class OutboxManager(
                     val file = File(localPath)
                     if (file.exists()) {
                         val token = googleDriveAuthManager?.getValidAccessToken()
-                            ?: throw IllegalStateException("Google Drive не подключен. Перейдите в Настройки -> Хранилище для подключения.")
+                            ?: throw DriveNotConnectedException()
                         val folderId = googleDriveMediaService?.getOrCreateVisorLinkFolder(token)
                             ?: throw IllegalStateException("Не удалось получить папку Google Drive.")
 
@@ -346,7 +347,7 @@ class OutboxManager(
                     val file = File(localPath)
                     if (file.exists()) {
                         val token = googleDriveAuthManager?.getValidAccessToken()
-                            ?: throw IllegalStateException("Google Drive не подключен. Перейдите в Настройки -> Хранилище для подключения.")
+                            ?: throw DriveNotConnectedException()
                         val folderId = googleDriveMediaService?.getOrCreateVisorLinkFolder(token)
                             ?: throw IllegalStateException("Не удалось получить папку Google Drive.")
 
@@ -392,7 +393,7 @@ class OutboxManager(
                     val file = File(localPath)
                     if (file.exists()) {
                         val token = googleDriveAuthManager?.getValidAccessToken()
-                            ?: throw IllegalStateException("Google Drive не подключен. Перейдите в Настройки -> Хранилище для подключения.")
+                            ?: throw DriveNotConnectedException()
                         val folderId = googleDriveMediaService?.getOrCreateVisorLinkFolder(token)
                             ?: throw IllegalStateException("Не удалось получить папку Google Drive.")
 
@@ -524,6 +525,8 @@ class OutboxManager(
                         }
                     }
                 }
+                // Лайки ленты старых версий (сейчас лента зовёт toggleLike напрямую). Сервер
+                // идемпотентен — повтор из очереди не даст второго голоса
                 "like" -> {
                     withTimeout(15_000) {
                         val messageId = data.getString("messageId")

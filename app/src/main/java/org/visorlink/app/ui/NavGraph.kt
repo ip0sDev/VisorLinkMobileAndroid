@@ -11,6 +11,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.navigation.*
 import androidx.navigation.compose.*
+import org.visorlink.app.ui.components.TerminalMotion
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.repository.AuthState
 import org.visorlink.app.utils.ChatDataCache
@@ -85,44 +86,53 @@ fun VisorLinkNavGraph(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
+    // Тема чата — по верхнему экрану чата в стеке: меняется в момент навигации, до анимации
+    // перехода (а не когда экран чата появился или, при выходе, уже исчез)
+    val chatThemeController: org.visorlink.app.ui.idcard.ChatThemeController = org.koin.compose.koinInject()
+    val backStack by navController.currentBackStack.collectAsState()
+    val topChat = backStack.lastOrNull { it.destination.route == Screen.Chat.route }
+    val topChatId = topChat?.arguments?.getString("chatId")
+    androidx.compose.runtime.SideEffect { chatThemeController.setActive(topChat?.id, topChatId) }
+
     val authState by authViewModel.authState.collectAsState()
     val showOnboarding by themeViewModel.showOnboarding.collectAsState()
     val isTfaRequired by authViewModel.isTfaRequired.collectAsState()
     val isSessionReady by authViewModel.isSessionReady.collectAsState()
+    val needsGoogleSignup by authViewModel.needsGoogleSignup.collectAsState()
 
-    // ── Three-state auth guard + Onboarding + 2FA ─────────────────────────────
-    LaunchedEffect(authState, isStealthUnlocked, showOnboarding, isTfaRequired, isSessionReady) {
+    // ── Three-state auth guard + Onboarding + Google-регистрация + 2FA ─────────
+    // Переход только если экран действительно другой: иначе любой пересчёт ворот (например,
+    // 2FA включили в настройках) сбрасывал бы стек и выкидывал из открытого экрана.
+    fun go(route: String) {
+        if (navController.currentDestination?.route == route) return
+        navController.navigate(route) { popUpTo(0) { inclusive = true } }
+    }
+    LaunchedEffect(authState, isStealthUnlocked, showOnboarding, isTfaRequired, isSessionReady, needsGoogleSignup) {
         if (stealthManager.isEnabled() && !isStealthUnlocked) {
             return@LaunchedEffect
         }
 
         if (showOnboarding) {
-            navController.navigate(Screen.Onboarding.route) {
-                popUpTo(0) { inclusive = true }
-            }
-            return@LaunchedEffect
-        }
-
-        if (isTfaRequired) {
-            navController.navigate(Screen.Tfa.route) {
-                popUpTo(0) { inclusive = true }
-            }
+            go(Screen.Onboarding.route)
             return@LaunchedEffect
         }
 
         when (authState) {
-            is AuthState.NoSession  -> navController.navigate(Screen.Login.route) {
-                popUpTo(0) { inclusive = true }
-            }
-            is AuthState.Unverified -> navController.navigate(Screen.VerifyEmail.route) {
-                popUpTo(0) { inclusive = true }
-            }
+            is AuthState.NoSession  -> go(Screen.Login.route)
+            is AuthState.Unverified -> go(Screen.VerifyEmail.route)
             is AuthState.Verified   -> {
-                if (isSessionReady) {
-                    authViewModel.onSessionReadyAfter2FA()
-                    navController.navigate(Screen.ChatList.route) {
-                        popUpTo(0) { inclusive = true }
+                val current = navController.currentDestination?.route
+                val inApp = current != null && current !in GATE_ROUTES
+                when {
+                    // Профиля нет — незавершённая регистрация через Google: только этот шаг
+                    needsGoogleSignup -> go(Screen.GoogleSignup.route)
+                    isTfaRequired -> go(Screen.Tfa.route)
+                    isSessionReady -> {
+                        authViewModel.onSessionReadyAfter2FA()
+                        if (!inApp) go(Screen.ChatList.route)
                     }
+                    // Ждём ответа сервера; внутри приложения экран не трогаем
+                    !inApp -> go(Screen.SessionCheck.route)
                 }
             }
         }
@@ -151,36 +161,44 @@ fun VisorLinkNavGraph(
     val start = when {
         stealthManager.isEnabled() && !isStealthUnlocked -> Screen.Decoy.route
         showOnboarding                    -> Screen.Onboarding.route
+        needsGoogleSignup                 -> Screen.GoogleSignup.route
         isTfaRequired                     -> Screen.Tfa.route
-        isSessionReady                    -> Screen.ChatList.route
+        // Вошедший сразу видит чаты; ворота 2FA переведут на экран кода, если он нужен
+        authState is AuthState.Verified   -> Screen.ChatList.route
         authState is AuthState.Unverified -> Screen.VerifyEmail.route
         else                              -> Screen.Login.route
     }
 
+    val glitchNav = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
     NavHost(
         navController = navController,
         startDestination = start,
         contentAlignment = Alignment.TopStart,
+        // Forge v2 — терминал: короткий ровный сдвиг с проявлением вместо въезда на весь экран
         enterTransition = {
-            slideInHorizontally(
+            if (glitchNav) fadeIn(TerminalMotion.tween(280)) + slideInHorizontally(TerminalMotion.tween(280)) { it / 10 }
+            else slideInHorizontally(
                 initialOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
             )
         },
         exitTransition = {
-            slideOutHorizontally(
+            if (glitchNav) fadeOut(TerminalMotion.tween(180))
+            else slideOutHorizontally(
                 targetOffsetX = { fullWidth -> -fullWidth / 4 },
                 animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
             )
         },
         popEnterTransition = {
-            slideInHorizontally(
+            if (glitchNav) fadeIn(TerminalMotion.tween(280)) + slideInHorizontally(TerminalMotion.tween(280)) { -it / 10 }
+            else slideInHorizontally(
                 initialOffsetX = { fullWidth -> -fullWidth / 4 },
                 animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
             )
         },
         popExitTransition = {
-            slideOutHorizontally(
+            if (glitchNav) fadeOut(TerminalMotion.tween(180)) + slideOutHorizontally(TerminalMotion.tween(180)) { it / 10 }
+            else slideOutHorizontally(
                 targetOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
             )
@@ -260,7 +278,10 @@ fun VisorLinkNavGraph(
                 },
                 onEditDiaryEntry = { id ->
                     navController.navigate(Screen.DiaryEntry.createRoute(id))
-                }
+                },
+                // Профиль во вкладке навбара (enable_profile_navbar) — как у экрана Screen.Profile
+                onLoggedOut = { authViewModel.logout() },
+                onOpenStickers = { navController.navigate(Screen.Stickers.route) }
             )
         }
 
@@ -536,3 +557,9 @@ fun VisorLinkNavGraph(
         }
     }
 }
+
+/** Экраны до входа в приложение: на них ворота авторизации переводят дальше сами. */
+private val GATE_ROUTES = setOf(
+    Screen.Decoy.route, Screen.Onboarding.route, Screen.Login.route, Screen.Register.route,
+    Screen.VerifyEmail.route, Screen.Tfa.route, Screen.SessionCheck.route, Screen.GoogleSignup.route,
+)

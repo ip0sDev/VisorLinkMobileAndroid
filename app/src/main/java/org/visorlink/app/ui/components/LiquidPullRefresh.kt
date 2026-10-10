@@ -49,8 +49,8 @@ private const val PULL_RESISTANCE = 0.50f
 
 /**
  * Pull-to-Refresh: список уезжает вниз вслед за пальцем, в освободившемся месте под
- * верхней панелью появляется круглый индикатор с кольцом прогресса. Пружины — как у
- * остальных «жидких» компонентов; [liquidEnabled] влияет только на резинку натяжения.
+ * верхней панелью появляется круглый индикатор с кольцом прогресса. Пружины и резинка
+ * натяжения — как у остальных «жидких» компонентов.
  */
 @Composable
 fun LiquidPullRefreshLayout(
@@ -59,7 +59,6 @@ fun LiquidPullRefreshLayout(
     modifier: Modifier = Modifier,
     topPadding: Dp = 0.dp,
     enabled: Boolean = true,
-    liquidEnabled: Boolean = true,
     hapticEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
@@ -101,11 +100,7 @@ fun LiquidPullRefreshLayout(
                     // Тот же коэффициент 0.5, что и при натяжении: индикатор следует за пальцем 1:1 в обе стороны
                     val consumed = available.y.coerceAtLeast(-rawPullPx / PULL_RESISTANCE)
                     rawPullPx = (rawPullPx + consumed * PULL_RESISTANCE).coerceAtLeast(0f)
-                    val newTarget = if (liquidEnabled) {
-                        rubberBand(rawPullPx, thresholdPx, maxOverflowPx, tension = 0.50f)
-                    } else {
-                        rawPullPx.coerceAtMost(thresholdPx * 1.25f)
-                    }
+                    val newTarget = rubberBand(rawPullPx, thresholdPx, maxOverflowPx, tension = 0.50f)
                     scope.launch { pullAnim.snapTo(newTarget) }
                     return Offset(0f, consumed)
                 }
@@ -120,11 +115,7 @@ fun LiquidPullRefreshLayout(
                 if (!enabled || isRefreshing) return Offset.Zero
                 if (available.y > 0f && source == NestedScrollSource.UserInput) {
                     rawPullPx += available.y * PULL_RESISTANCE
-                    val newTarget = if (liquidEnabled) {
-                        rubberBand(rawPullPx, thresholdPx, maxOverflowPx, tension = 0.50f)
-                    } else {
-                        rawPullPx.coerceAtMost(thresholdPx * 1.25f)
-                    }
+                    val newTarget = rubberBand(rawPullPx, thresholdPx, maxOverflowPx, tension = 0.50f)
                     scope.launch { pullAnim.snapTo(newTarget) }
 
                     if (rawPullPx >= thresholdPx && !hasTriggeredHaptic) {

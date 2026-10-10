@@ -4,10 +4,6 @@ package org.visorlink.app.di
 import org.visorlink.app.data.aegis.*
 import org.visorlink.app.data.remote.flags.AegisKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
-import org.visorlink.app.data.remote.chat.ChatWebSocketClient
-import org.visorlink.app.data.remote.chat.DynamicBaseUrlInterceptor
-import org.visorlink.app.data.remote.chat.FirebaseAuthInterceptor
-import org.visorlink.app.data.remote.chat.VisorLinkApi
 import org.visorlink.app.data.repository.*
 import org.visorlink.app.ui.aegis.AegisLifeViewModel
 import org.visorlink.app.ui.aegis.LinkDebugViewModel
@@ -49,11 +45,9 @@ import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
-import okhttp3.OkHttpClient
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
-import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 import retrofit2.Retrofit
@@ -87,23 +81,6 @@ val appModule = module {
     single { AegisKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
 
-    // --- Chat Backend ---
-    single(named("chatOkHttp")) {
-        OkHttpClient.Builder()
-            .addInterceptor(DynamicBaseUrlInterceptor(androidContext()))
-            .addInterceptor(FirebaseAuthInterceptor())
-            .build()
-    }
-    single {
-        Retrofit.Builder()
-            .baseUrl("https://backend.visorlink.org/")
-            .client(get(named("chatOkHttp")))
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-            .create(VisorLinkApi::class.java)
-    }
-    single { ChatWebSocketClient(get(named("chatOkHttp"))) }
-
     // --- Google Drive Storage ---
     single { org.visorlink.app.data.repository.GoogleDriveConfigRepository(get()) }
     single { org.visorlink.app.utils.GoogleDriveAuthManager(androidContext()) }
@@ -115,7 +92,7 @@ val appModule = module {
     single { org.visorlink.app.data.remote.yandex.YandexDeadDropManager(androidContext(), get(), get()) }
 
     single { SessionRepository(get(), get(), get()) }
-    single { AuthRepository(get(), get(), get(), get(), get()) }
+    single { AuthRepository(get(), get(), get(), get()) }
     single {
         ChatRepository(
             auth = get(),
@@ -123,26 +100,25 @@ val appModule = module {
             functions = get(),
             context = androidContext(),
             networkMonitor = get(),
-            api = get(),
-            wsClient = get(),
-            flagsRepository = get(),
             googleDriveAuthManager = get(),
             googleDriveMediaService = get(),
             yandexDeadDropManager = get()
         )
     }
-    single { UserRepository(get(), get(), get(), androidContext(), get(), get()) }
+    single { UserRepository(get(), get(), get(), androidContext()) }
     // ID-карты: карта и callables, Mask Mode (только на устройстве), контекст темы открытого чата
-    single { org.visorlink.app.data.repository.IdCardRepository(get(), get(), get()) }
+    single { org.visorlink.app.data.repository.IdCardRepository(get(), get()) }
     single { org.visorlink.app.utils.MaskModeManager(androidContext()) }
-    single { org.visorlink.app.ui.idcard.ChatThemeController() }
+    single { org.visorlink.app.ui.idcard.ChatThemeController(org.visorlink.app.ui.idcard.PrefsChatThemeMemory(androidContext())) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
-    single { LegalRepository(get(), androidContext(), get(), get()) }
+    single { LegalRepository(get(), androidContext(), get()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
+    // Удержание/пересчёт ворот 2FA: общий для AuthViewModel, экрана кода и настроек
+    single { org.visorlink.app.data.auth.TfaGateHold() }
     single { org.visorlink.app.utils.StealthManager(androidContext()) }
     single { VoicePlayerManager(androidContext()) }
     single { org.visorlink.app.utils.MusicPlayerManager(androidContext()) }
@@ -170,7 +146,14 @@ val appModule = module {
 
     viewModel { AppCheckViewModel() }
 
-    viewModel { AuthViewModel(get(), get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
+    viewModel {
+        org.visorlink.app.ui.screens.auth.TfaLockViewModel(
+            get(), get(), get(), get(), get(), get(),
+            androidContext().getSharedPreferences("visorlink_settings", android.content.Context.MODE_PRIVATE),
+        )
+    }
+    viewModel { org.visorlink.app.ui.screens.settings.AccountSecurityViewModel(get(), get(), get()) }
     viewModel { ThemeViewModel(get()) }
     viewModel { org.visorlink.app.ui.screens.settings.SessionsViewModel(get(), get()) }
     viewModel { MainViewModel(get(), get()) }
@@ -202,7 +185,8 @@ val appModule = module {
             musicPlayerManager = get(),
             musicRepository = get(),
             networkMonitor = get(),
-            usageRankManager = get()
+            usageRankManager = get(),
+            driveAuth = get()
         )
     }
 
@@ -260,11 +244,11 @@ val appModule = module {
 
     viewModel { CacheViewModel(get(), androidApplication()) }
     viewModel { StorageViewModel(get(), get(), get()) }
-    viewModel { StatusViewModel(get(), get(), get(named("chatOkHttp"))) }
+    viewModel { StatusViewModel(get(), get()) }
 
     single { SavedMessagesRepository(get(), androidContext()) }
-    single { FeedRepository(get(), get(), androidContext(), get(), get(), get()) }
-    single { ForwardRepository(get(), get(), get()) }
+    single { FeedRepository(get(), get()) }
+    single { ForwardRepository(get(), get()) }
     single { org.visorlink.app.utils.BiometricPinManager(androidContext()) }
 
     viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get()) }
@@ -279,7 +263,7 @@ val appModule = module {
     
     // ── Bug Reports & FaultyWire ──
     single { org.visorlink.app.data.repository.BugReportRepository(get()) }
-    single { org.visorlink.app.data.repository.ReportRepository(get(), get(), get()) }
+    single { org.visorlink.app.data.repository.ReportRepository(get()) }
     viewModel { org.visorlink.app.ui.screens.settings.BugReportViewModel(get()) }
     
     // ── Aegis Project ──

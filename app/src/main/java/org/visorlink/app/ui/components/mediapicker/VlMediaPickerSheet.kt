@@ -85,7 +85,7 @@ fun VlMediaPickerSheet(
     onMediaSelected: (List<SelectedMediaItem>) -> Unit,
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
-    /** «ID-карта на обмен» — только в ЛС и группах при флаге id_cards_enabled, не с ботом. */
+    /** «ID-карта на обмен» — только в ЛС и группах, не с ботом. */
     onOpenIdTrade: (() -> Unit)? = null,
     viewModel: MediaPickerViewModel = koinViewModel()
 ) {

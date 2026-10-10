@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import org.visorlink.app.R
+import org.visorlink.app.ui.components.NAV_TAB_PROFILE
 import org.visorlink.app.ui.components.VlNavigationBar
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
@@ -43,6 +44,8 @@ import org.visorlink.app.ui.screens.diary.DiaryScreen
 import org.visorlink.app.ui.screens.feed.FeedScreen
 import org.visorlink.app.ui.screens.music.MusicLibraryScreen
 import org.visorlink.app.ui.screens.music.MusicViewModel
+import org.visorlink.app.ui.screens.profile.ProfileScreen
+import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
 import org.visorlink.app.ui.components.music.MusicOnboardingDialog
 import org.visorlink.app.ui.components.chat.AudioPlaybackDockBar
@@ -68,6 +71,8 @@ fun MainScreen(
     onOpenImageViewer: (String, String) -> Unit,
     onAddDiaryEntry: () -> Unit,
     onEditDiaryEntry: (String) -> Unit,
+    onLoggedOut: () -> Unit = {},
+    onOpenStickers: () -> Unit = {},
     mainViewModel: MainViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -100,7 +105,12 @@ fun MainScreen(
     val musicRepository: MusicRepository = koinInject()
     val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsState()
 
-    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled
+    // Профиль — вкладкой навбара вместо кнопки-аватара в шапке чатов (флаг enable_profile_navbar)
+    val flagsRepository: FlagsRepository = koinInject()
+    val flags by flagsRepository.flags.collectAsState()
+    val profileTabEnabled = flags.profileNavbar
+
+    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled
     val isOnline by mainViewModel.isOnline.collectAsState()
 
     if (showMusicOnboarding) {
@@ -172,6 +182,7 @@ fun MainScreen(
                         onOpenTopicList = onOpenTopicList,
                         onOpenSearch = onOpenSearch,
                         onOpenProfile = onOpenProfile,
+                        showProfileButton = !profileTabEnabled,
                         onOpenSettings = onOpenSettings,
                         onCreateChat = onCreateChat,
                         onFindChannel = onFindChannel,
@@ -219,6 +230,16 @@ fun MainScreen(
                             } else {
                                 selectedTab = 0
                             }
+                            NAV_TAB_PROFILE -> if (profileTabEnabled) {
+                                ProfileScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    onLoggedOut = onLoggedOut,
+                                    onOpenStickers = onOpenStickers,
+                                    asTab = true,
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
                         }
                     }
                 }
@@ -252,7 +273,8 @@ fun MainScreen(
                             discoverEnabled = discoverEnabled,
                             musicEnabled = musicEnabled,
                             onOpenDiary = onOpenDiaryTab,
-                            onOpenMusic = onOpenMusicTab
+                            onOpenMusic = onOpenMusicTab,
+                            profileEnabled = profileTabEnabled
                         )
                     }
                 }

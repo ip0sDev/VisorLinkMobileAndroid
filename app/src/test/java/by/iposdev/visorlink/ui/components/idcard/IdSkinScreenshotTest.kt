@@ -55,6 +55,7 @@ import org.visorlink.app.data.repository.IdTradeState
 import org.visorlink.app.data.repository.UserRepository
 import org.visorlink.app.ui.components.VlSettingsSection
 import org.visorlink.app.ui.idcard.IdModeUiState
+import org.visorlink.app.ui.idcard.LocalIdCardClock
 import org.visorlink.app.ui.idcard.IdSkinInventory
 import org.visorlink.app.ui.idcard.IdSkinPicker
 import org.visorlink.app.ui.idcard.IdSkinRoll
@@ -158,7 +159,11 @@ class IdSkinScreenshotTest {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             VisorLinkTheme(appTheme = theme, themeMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT, setStatusBarColor = false) {
-                CompositionLocalProvider(LocalIdModeState provides IdModeUiState(enabled = true, myUid = "me")) {
+                // Снимки в обмене без даты выпуска показывают «Выдана сегодня» — день фиксирован
+                CompositionLocalProvider(
+                    LocalIdModeState provides IdModeUiState(enabled = true, myUid = "me"),
+                    LocalIdCardClock provides { now },
+                ) {
                     Surface(color = MaterialTheme.colorScheme.background) { content() }
                 }
             }

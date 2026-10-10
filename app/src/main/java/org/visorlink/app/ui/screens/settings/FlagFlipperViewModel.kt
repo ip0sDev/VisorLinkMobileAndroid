@@ -2,29 +2,10 @@ package org.visorlink.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import org.visorlink.app.data.repository.FlagsRepository
-import kotlinx.coroutines.flow.map
 
 class FlagFlipperViewModel(
     private val flagsRepository: FlagsRepository
 ) : ViewModel() {
-
-    val flippableFlags = flagsRepository.flags.map { flags ->
-        val keys = flags.serverClaims.filter { 
-            it.value is Boolean && it.value == true 
-        }.keys.toMutableSet()
-        
-        // Ensure core flags are present
-        keys.add("animation_test")
-        keys.add("enable_alternative_outbox")
-        // ID-карты: основной источник — Remote Config, здесь локальное переопределение для отладки
-        keys.add("id_cards_enabled")
-        if (flags.testFlag) keys.add("test_flag")
-        if (flags.isAegisDebugMode) {
-            keys.add("aegis_debug_mode_enabled")
-        }
-        
-        keys.toList().sorted()
-    }
 
     val flags = flagsRepository.flags
 

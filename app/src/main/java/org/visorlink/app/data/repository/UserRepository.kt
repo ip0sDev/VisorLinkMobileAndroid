@@ -10,9 +10,6 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.Sticker
 import org.visorlink.app.data.model.UserProfile
-import org.visorlink.app.data.remote.chat.UpdateProfileRequest
-import org.visorlink.app.data.remote.chat.UserDto
-import org.visorlink.app.data.remote.chat.VisorLinkApi
 import org.visorlink.app.utils.ChatDataCache
 import org.visorlink.app.data.repository.FlagsRepository
 import kotlinx.coroutines.channels.awaitClose
@@ -38,78 +35,32 @@ class UserRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
     private val functions: FirebaseFunctions,
-    private val context: Context,
-    private val api: VisorLinkApi,
-    private val flagsRepository: FlagsRepository
+    private val context: Context
 ) {
     private val currentUid: String get() = auth.currentUser?.uid ?: ""
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val backendPrefs = context.getSharedPreferences("visorlink_backend_settings", Context.MODE_PRIVATE)
-
-    private fun isProfileBackendEnabled(): Boolean {
-        val serverFlag = flagsRepository.flags.value.isEnabled("test_backend_enabled")
-        val userSetting = backendPrefs.getBoolean("use_backend_profile", false)
-        return serverFlag && userSetting
-    }
-
-    private fun isFirestoreDisabled(): Boolean {
-        return flagsRepository.flags.value.isEnabled("test_backend_enabled") && 
-                backendPrefs.getBoolean("disable_firestore_completely", false)
-    }
-
 
     private val memoryProfiles = java.util.concurrent.ConcurrentHashMap<String, MutableStateFlow<UserProfile?>>()
     private val lastFetchTimes = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     fun updateCachedProfile(uid: String, update: (UserProfile) -> UserProfile) {
-        val cacheUid = if (isProfileBackendEnabled()) uid + "_backend" else uid
         val current = memoryProfiles[uid]?.value
         if (current != null) {
             val updated = update(current)
             memoryProfiles[uid]?.value = updated
             scope.launch(Dispatchers.IO) {
-                ChatDataCache.saveProfile(context, updated.copy(uid = cacheUid))
+                ChatDataCache.saveProfile(context, updated.copy(uid = uid))
             }
         } else {
             scope.launch(Dispatchers.IO) {
-                val loaded = ChatDataCache.loadProfile(context, cacheUid)
+                val loaded = ChatDataCache.loadProfile(context, uid)
                 if (loaded != null) {
                     val updated = update(loaded)
                     memoryProfiles.getOrPut(uid) { MutableStateFlow(null) }.value = updated
-                    ChatDataCache.saveProfile(context, updated.copy(uid = cacheUid))
+                    ChatDataCache.saveProfile(context, updated.copy(uid = uid))
                 }
             }
         }
-    }
-
-    private fun UserDto.toDomain(): UserProfile {
-        val custMap = customization
-        val diary = diaryEnabled
-            ?: (custMap["diaryEnabled"] as? Boolean)
-            ?: context.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE).getBoolean("diary_enabled_$id", true)
-
-        return UserProfile(
-            uid = id,
-            username = username,
-            displayName = displayName?.ifEmpty { username } ?: username,
-            bio = bio ?: "",
-            avatarUrl = avatarUrl,
-            online = isOnline,
-            isAdmin = isAdmin,
-            isBot = isBot,
-            botBadge = botBadge ?: "unverified",
-            bits = bits,
-            streak = if (showStreak) streak else 0,
-            showStreak = showStreak,
-            proUntil = proUntil?.let { Timestamp(Date(it)) },
-            trialUsed = trialUsed,
-            tfaEnabled = tfaEnabled,
-            registeredViaOfficialClient = registeredViaOfficialClient,
-            diaryEnabled = diary,
-            customization = custMap,
-            acceptedAt = acceptedAt?.let { Timestamp(Date(it)) },
-            acceptedVersion = acceptedVersion ?: (custMap["acceptedVersion"] as? String)
-        )
     }
 
     fun updateDiaryEnabled(uid: String, enabled: Boolean) {
@@ -120,19 +71,7 @@ class UserRepository(
 
         updateCachedProfile(uid) { it.copy(diaryEnabled = enabled) }
 
-        if (isProfileBackendEnabled()) {
-            scope.launch {
-                try {
-                    api.updateProfile(UpdateProfileRequest(
-                        customization = mapOf("diaryEnabled" to enabled)
-                    ))
-                } catch (e: Exception) {
-                    Log.w("UserRepository", "Failed to sync diaryEnabled to backend: ${e.message}")
-                }
-            }
-        } else if (!isFirestoreDisabled()) {
-            db.collection("users").document(uid).update("diaryEnabled", enabled)
-        }
+        db.collection("users").document(uid).update("diaryEnabled", enabled)
     }
 
     fun currentUserFlow(): Flow<UserProfile?> = userProfileFlow(auth.currentUser?.uid ?: "")
@@ -140,43 +79,15 @@ class UserRepository(
     fun userProfileFlow(uid: String): Flow<UserProfile?> = channelFlow {
         if (uid.isEmpty()) { send(null); close(); return@channelFlow }
 
-        val cacheUid = if (isProfileBackendEnabled()) uid + "_backend" else uid
         val stateFlow = memoryProfiles.getOrPut(uid) {
             MutableStateFlow(null)
         }
 
         launch(Dispatchers.IO) {
-            val cached = stateFlow.value ?: ChatDataCache.loadProfile(context, cacheUid)
+            val cached = stateFlow.value ?: ChatDataCache.loadProfile(context, uid)
             if (cached != null) {
                 stateFlow.value = cached
             }
-        }
-
-        if (isProfileBackendEnabled()) {
-            val now = System.currentTimeMillis()
-            val lastFetch = lastFetchTimes[uid] ?: 0L
-            if (now - lastFetch > 10_000L || stateFlow.value == null) {
-                lastFetchTimes[uid] = now
-                launch(Dispatchers.IO) {
-                    try {
-                        val net = api.getUserProfile(uid).toDomain()
-                        stateFlow.value = net
-                        ChatDataCache.saveProfile(context, net.copy(uid = cacheUid))
-                    } catch (e: Exception) {
-                        Log.w("UserRepository", "Failed to fetch profile for $uid: ${e.message}")
-                    }
-                }
-            }
-
-            stateFlow.collect { profile ->
-                send(profile)
-            }
-            return@channelFlow
-        }
-
-        if (isFirestoreDisabled()) {
-            awaitClose { }
-            return@channelFlow
         }
 
         val reg = db.collection("users").document(uid)
@@ -191,29 +102,23 @@ class UserRepository(
         awaitClose { reg.remove() }
     }
 
+    /**
+     * Есть ли документ `users/{uid}`. «Нет» — только по снимку **с сервера**: офлайн-кэш без
+     * документа ещё не ответ (иначе офлайн-вход вёл бы на завершение регистрации). Ошибки
+     * чтения ничего не решают и не отдаются.
+     */
+    fun profileExistsFlow(uid: String): Flow<Boolean> = callbackFlow {
+        val reg = db.collection("users").document(uid)
+            .addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snap, _ ->
+                if (snap == null) return@addSnapshotListener
+                if (snap.exists() || !snap.metadata.isFromCache) trySend(snap.exists())
+            }
+        awaitClose { reg.remove() }
+    }.distinctUntilChanged()
+
     suspend fun getUserProfile(uid: String): UserProfile? = withContext(Dispatchers.IO) {
-        val cacheUid = if (isProfileBackendEnabled()) uid + "_backend" else uid
-        val cached = memoryProfiles[uid]?.value ?: ChatDataCache.loadProfile(context, cacheUid)
+        val cached = memoryProfiles[uid]?.value ?: ChatDataCache.loadProfile(context, uid)
         
-        if (isProfileBackendEnabled()) {
-            val now = System.currentTimeMillis()
-            val lastFetch = lastFetchTimes[uid] ?: 0L
-            if (cached != null && (now - lastFetch <= 10_000L)) {
-                return@withContext cached
-            }
-            return@withContext try {
-                val net = api.getUserProfile(uid).toDomain()
-                lastFetchTimes[uid] = now
-                memoryProfiles.getOrPut(uid) { MutableStateFlow(null) }.value = net
-                ChatDataCache.saveProfile(context, net.copy(uid = cacheUid))
-                net
-            } catch (e: Exception) {
-                cached
-            }
-        }
-
-        if (isFirestoreDisabled()) return@withContext cached
-
         if (cached != null) {
             launch {
                 try {
@@ -232,12 +137,7 @@ class UserRepository(
         }
     }
 
-    suspend fun findUserByUsername(username: String): UserProfile? = if (isProfileBackendEnabled()) {
-        try {
-            val results = api.searchUsers(username)
-            results.firstOrNull()?.toDomain()
-        } catch (e: Exception) { null }
-    } else try {
+    suspend fun findUserByUsername(username: String): UserProfile? = try {
         val clean = username.lowercase().removePrefix("@").trim()
         val doc = db.collection("usernames").document(clean).get().await()
         if (!doc.exists()) null
@@ -310,10 +210,9 @@ class UserRepository(
         val result = uploadAvatarWithModeration(uid, imageBytes)
         val avatarUrl = result.getOrThrow()
 
-        if (!isFirestoreDisabled()) {
-            db.collection("users").document(uid)
-                .update("avatarUrl", avatarUrl, "updatedAt", FieldValue.serverTimestamp()).await()
-        }
+        db.collection("users").document(uid)
+            .update("avatarUrl", avatarUrl, "updatedAt", FieldValue.serverTimestamp()).await()
+
         updateCachedProfile(uid) { it.copy(avatarUrl = avatarUrl) }
         return@withContext avatarUrl
     }
@@ -338,14 +237,6 @@ class UserRepository(
     }
 
     suspend fun checkUsername(username: String): Pair<Boolean, String?> {
-        if (isProfileBackendEnabled()) {
-            return try {
-                val res = api.checkUsername(username)
-                Pair(res.available, null)
-            } catch (e: Exception) {
-                Pair(false, e.message)
-            }
-        }
         val result = functions.getHttpsCallable("checkUsername")
             .call(mapOf("username" to username)).await()
         val data = result.data as Map<*, *>
@@ -353,27 +244,17 @@ class UserRepository(
     }
 
     suspend fun changeUsername(newUsername: String, displayName: String) {
-        if (isProfileBackendEnabled()) {
-            api.updateUsername(org.visorlink.app.data.remote.chat.UpdateUsernameRequest(username = newUsername, displayName = displayName))
-            return
-        }
         functions.getHttpsCallable("changeUsername")
             .call(mapOf("newUsername" to newUsername, "displayName" to displayName)).await()
     }
 
     suspend fun updateProfile(displayName: String, bio: String) {
-        if (isProfileBackendEnabled()) {
-            try {
-                api.updateProfile(UpdateProfileRequest(displayName = displayName, bio = bio))
-            } catch (e: Exception) {}
-        } else {
-            functions.getHttpsCallable("updateProfile")
-                .call(mapOf("displayName" to displayName, "bio" to bio)).await()
-        }
+        functions.getHttpsCallable("updateProfile")
+            .call(mapOf("displayName" to displayName, "bio" to bio)).await()
+
         
         scope.launch {
-            val cacheUid = if (isProfileBackendEnabled()) currentUid + "_backend" else currentUid
-            val profile = ChatDataCache.loadProfile(context, cacheUid)
+            val profile = ChatDataCache.loadProfile(context, currentUid)
             if (profile != null) {
                 ChatDataCache.saveProfile(context, profile.copy(displayName = displayName, bio = bio))
             }
@@ -381,27 +262,6 @@ class UserRepository(
     }
 
     fun stickersFlow(uid: String): Flow<List<Sticker>> = callbackFlow {
-        if (isProfileBackendEnabled()) {
-            try {
-                val packs = api.getMyStickers()
-                val stickers = packs.flatMap { pack ->
-                    pack.stickers?.map { s ->
-                        Sticker(id = s.id ?: s.url, url = s.url, name = s.name ?: "")
-                    } ?: emptyList()
-                }
-                trySend(stickers)
-            } catch (_: Exception) {
-                trySend(emptyList())
-            }
-            awaitClose { }
-            return@callbackFlow
-        }
-
-        if (isFirestoreDisabled()) {
-            trySend(emptyList())
-            awaitClose { }
-            return@callbackFlow
-        }
         val reg = db.collection("users").document(uid).collection("stickers")
             .addSnapshotListener { snap, _ ->
                 val stickers = snap?.documents?.mapNotNull { doc ->
@@ -413,16 +273,14 @@ class UserRepository(
     }
 
     suspend fun deleteSticker(sticker: Sticker) {
-        if (!isFirestoreDisabled()) {
-            val uid = currentUid.ifEmpty { return }
-            db.collection("users").document(uid)
-                .collection("stickers").document(sticker.id).delete().await()
-        }
+        val uid = currentUid.ifEmpty { return }
+        db.collection("users").document(uid)
+            .collection("stickers").document(sticker.id).delete().await()
     }
 
     suspend fun saveFcmToken(token: String) {
         val uid = currentUid
-        if (uid.isNotEmpty() && !isFirestoreDisabled()) {
+        if (uid.isNotEmpty()) {
             try {
                 db.collection("users").document(uid)
                     .set(mapOf("fcmTokens" to FieldValue.arrayUnion(token)), SetOptions.merge()).await()
@@ -431,43 +289,20 @@ class UserRepository(
                 android.util.Log.w("UserRepository", "Direct Firestore FCM token sync failed: ${e.message}")
             }
         }
-
-        if (isProfileBackendEnabled()) {
-            try {
-                api.saveFcmToken(org.visorlink.app.data.remote.chat.FcmTokenRequest(token = token))
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to save FCM token to backend", e)
-            }
-        }
     }
 
     suspend fun removeFcmToken(token: String) {
         val uid = currentUid.ifEmpty { return }
-        if (isProfileBackendEnabled()) {
-            try {
-                api.removeFcmToken(org.visorlink.app.data.remote.chat.FcmTokenRequest(token = token))
-                android.util.Log.d("UserRepository", "FCM token removed from Backend")
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to remove FCM token from backend", e)
-            }
-        }
-        if (!isFirestoreDisabled()) {
-            try {
-                db.collection("users").document(uid)
-                    .update("fcmTokens", FieldValue.arrayRemove(token)).await()
-                android.util.Log.d("UserRepository", "FCM token removed from Firestore")
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to remove FCM token from Firestore", e)
-            }
+        try {
+            db.collection("users").document(uid)
+                .update("fcmTokens", FieldValue.arrayRemove(token)).await()
+            android.util.Log.d("UserRepository", "FCM token removed from Firestore")
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Failed to remove FCM token from Firestore", e)
         }
     }
 
     fun clientStatusFlow(uid: String): Flow<Boolean> = callbackFlow {
-        if (isProfileBackendEnabled()) {
-            trySend(true)
-            awaitClose { }
-            return@callbackFlow
-        }
         val ref = Firebase.database.getReference("users/$uid/clientStatus/isOfficial")
         val listener = object : ValueEventListener {
             override fun onDataChange(snap: DataSnapshot) {
@@ -483,46 +318,12 @@ class UserRepository(
     }
 
     suspend fun buyPro(useTrial: Boolean) {
-        if (isProfileBackendEnabled()) {
-            try {
-                val res = api.buyPro(org.visorlink.app.data.remote.chat.BuyProRequest(useTrial = useTrial))
-                val newProUntil = res.proUntil?.let { Timestamp(Date(it)) }
-                val newBits = res.bits
-                updateCachedProfile(currentUid) { current ->
-                    current.copy(
-                        proUntil = newProUntil ?: current.proUntil,
-                        bits = newBits ?: current.bits,
-                        trialUsed = if (useTrial) true else current.trialUsed
-                    )
-                }
-                try {
-                    val net = api.getUserProfile(currentUid).toDomain()
-                    val cacheUid = currentUid + "_backend"
-                    memoryProfiles.getOrPut(currentUid) { MutableStateFlow(null) }.value = net
-                    ChatDataCache.saveProfile(context, net.copy(uid = cacheUid))
-                } catch (_: Exception) {}
-                return
-            } catch (e: retrofit2.HttpException) {
-                val errorBody = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
-                val errorMsg = errorBody?.let {
-                    try { org.json.JSONObject(it).optString("error", it) } catch (_: Exception) { it }
-                } ?: e.message()
-                throw Exception(errorMsg)
-            }
-        }
         functions.getHttpsCallable("buyProSubscription")
             .call(mapOf("useTrial" to useTrial))
             .await()
     }
 
     suspend fun updateShowStreak(show: Boolean) {
-        if (isProfileBackendEnabled()) {
-            try {
-                api.updateProfile(UpdateProfileRequest(showStreak = show))
-            } catch (_: Exception) {}
-            return
-        }
-        if (isFirestoreDisabled()) return
         db.collection("users").document(currentUid)
             .update("showStreak", show).await()
     }
@@ -531,75 +332,49 @@ class UserRepository(
         // Оптимистично: экран профиля и превью редактора обновляются сразу, не
         // дожидаясь снапшота Firestore (а в режиме бэкенда снапшота нет вовсе)
         updateCachedProfile(currentUid) { it.copy(customization = customization) }
-        if (isProfileBackendEnabled()) {
-            // Ошибку не глотаем: раньше редактор показывал «сохранено», а сервер отказал
-            api.updateProfile(UpdateProfileRequest(customization = customization))
-        } else if (!isFirestoreDisabled()) {
-            db.collection("users").document(currentUid)
-                .update("customization", customization).await()
-        }
+        db.collection("users").document(currentUid)
+            .update("customization", customization).await()
     }
 
     suspend fun updateIgnoreCustomizations(ignore: Boolean) {
         // У бэкенда пока нет поля ignoreCustomizations — там настройка живёт только локально
         updateCachedProfile(currentUid) { it.copy(ignoreCustomizations = ignore) }
-        if (!isFirestoreDisabled()) {
-            db.collection("users").document(currentUid)
-                .update("ignoreCustomizations", ignore).await()
-        }
+        db.collection("users").document(currentUid)
+            .update("ignoreCustomizations", ignore).await()
     }
 
     suspend fun generateTgCode(): String {
-        if (isProfileBackendEnabled()) {
-            val res = api.generateTelegramCode()
-            return res.code
-        }
         val result = functions.getHttpsCallable("generateTgCode").call().await()
         return (result.data as Map<*, *>)["code"] as String
     }
 
     suspend fun updateDiaryReminders(enabled: Boolean, time: String) {
-        if (isProfileBackendEnabled()) {
-            try {
-                api.updateProfile(UpdateProfileRequest(
-                    customization = mapOf(
-                        "diaryRemindersEnabled" to enabled,
-                        "diaryReminderTime" to time
-                    )
-                ))
-            } catch (_: Exception) {}
-        } else if (!isFirestoreDisabled()) {
-            val uid = currentUid.ifEmpty { return }
-            db.collection("users").document(uid).update(
-                "diaryRemindersEnabled", enabled,
-                "diaryReminderTime", time
-            ).await()
-        }
+        val uid = currentUid.ifEmpty { return }
+        db.collection("users").document(uid).update(
+            "diaryRemindersEnabled", enabled,
+            "diaryReminderTime", time
+        ).await()
+
         updateCachedProfile(currentUid) {
             it.copy(diaryRemindersEnabled = enabled, diaryReminderTime = time)
         }
     }
 
     suspend fun unbindTelegram() {
-        if (isProfileBackendEnabled()) {
-            api.unbindTelegram()
-            return
-        }
         functions.getHttpsCallable("unbindTelegram").call().await()
     }
 
     // ── UGC Compliance: Block & Unblock Users ────────────────────────────────
     suspend fun blockUser(targetUid: String) {
         val uid = currentUid.ifEmpty { return }
-        if (!isFirestoreDisabled()) {
-            try {
-                db.collection("users").document(uid)
-                    .update("blockedUserIds", FieldValue.arrayUnion(targetUid))
-                    .await()
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to block user in Firestore", e)
-            }
+        try {
+            db.collection("users").document(uid)
+                .update("blockedUserIds", FieldValue.arrayUnion(targetUid))
+                .await()
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Failed to block user in Firestore", e)
         }
+
         updateCachedProfile(uid) { current ->
             if (!current.blockedUserIds.contains(targetUid)) {
                 current.copy(blockedUserIds = current.blockedUserIds + targetUid)
@@ -611,15 +386,14 @@ class UserRepository(
 
     suspend fun unblockUser(targetUid: String) {
         val uid = currentUid.ifEmpty { return }
-        if (!isFirestoreDisabled()) {
-            try {
-                db.collection("users").document(uid)
-                    .update("blockedUserIds", FieldValue.arrayRemove(targetUid))
-                    .await()
-            } catch (e: Exception) {
-                android.util.Log.e("UserRepository", "Failed to unblock user in Firestore", e)
-            }
+        try {
+            db.collection("users").document(uid)
+                .update("blockedUserIds", FieldValue.arrayRemove(targetUid))
+                .await()
+        } catch (e: Exception) {
+            android.util.Log.e("UserRepository", "Failed to unblock user in Firestore", e)
         }
+
         updateCachedProfile(uid) { current ->
             current.copy(blockedUserIds = current.blockedUserIds - targetUid)
         }

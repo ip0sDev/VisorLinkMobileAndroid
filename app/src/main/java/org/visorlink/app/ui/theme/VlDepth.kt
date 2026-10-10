@@ -14,8 +14,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -114,18 +118,6 @@ fun Modifier.vlRaised(
             .vlHairline(outline, shape)
     }
 
-    // Forge: сплошной смещённый силуэт вместо рассеянной тени. Контр-подсветки
-    // нет — у одного жёсткого источника света её и не бывает.
-    if (tokens.hardEdge) {
-        return this.drawBehind {
-            val path = shape.toPath(size, layoutDirection, this)
-            val off = tokens.raisedOffset.toPx()
-            translate(left = off, top = off) {
-                drawPath(path, color = tokens.shadowDark)
-            }
-        }
-    }
-
     return this.drawBehind {
         val path = shape.toPath(size, layoutDirection, this)
         // Светлая контр-подсветка идёт первой, чтобы тёмная тень легла поверх неё.
@@ -174,28 +166,6 @@ fun Modifier.vlInset(
                     strokeWidthPx = tokens.insetOffset.toPx() * 2f,
                 )
                 drawPath(path = path, color = outline, style = Stroke(width = 1.dp.toPx() * 2f))
-            }
-        }
-    }
-
-    // Forge: вместо мягкой вдавленности — резкая фаска, тёмная сверху-слева и
-    // светлая снизу-справа, как на металлической панели.
-    if (tokens.hardEdge) {
-        return this.drawWithContent {
-            drawContent()
-            val path = shape.toPath(size, layoutDirection, this)
-            val off = tokens.insetOffset.toPx()
-            // Обводка центрирована по контуру: сдвиг на off/2 при ширине off даёт
-            // полосу ровно [0, off] внутри формы, наружную половину срезает clipPath.
-            // Раньше было «сдвиг off, ширина 2·off» — фаска выходила вдвое толще
-            // токена (4dp вместо 2dp) и на тумблере съедала весь зазор до бегунка.
-            clipPath(path) {
-                translate(left = off / 2f, top = off / 2f) {
-                    drawPath(path, color = tokens.shadowDark, style = Stroke(width = off))
-                }
-                translate(left = -off / 2f, top = -off / 2f) {
-                    drawPath(path, color = tokens.shadowLight, style = Stroke(width = off))
-                }
             }
         }
     }
@@ -257,13 +227,15 @@ fun Modifier.vlSignalGlow(
     shape: Shape,
     active: Boolean = true,
     alphaOverride: Float? = null,
+    /** false — постоянное свечение темы (кнопка Forge v2), а не сигнал: в счёт §10 не идёт. */
+    counted: Boolean = true,
 ): Modifier {
     if (!tokens.enabled || !active) return this
     val alpha = alphaOverride ?: tokens.glowAlpha
     if (alpha <= 0.001f) return this
 
     return this.composed {
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.DEBUG && counted) {
             val counter = LocalSignalCounter.current
             DisposableEffect(Unit) {
                 val current = counter?.incrementAndGet() ?: 0
@@ -409,23 +381,56 @@ fun Modifier.vlBiopulse(
  */
 private inline fun DrawScope.clipPathInverseSafe(block: DrawScope.() -> Unit) = block()
 
-// ── Forge v2: сканлайны ──────────────────────────────────────────────────────
+// ── Forge v2: фон-дисплей терминала ──────────────────────────────────────────
 
 /**
- * Едва заметные горизонтальные линии поверх интерфейса (веб: `.app-layout::after` у Forge
- * Protogen — белый 1.8 % каждые 3 px). Только при [VlTokens.terminal]?.scanlines.
+ * Дисплей терминала поверх интерфейса ([VlTokens.terminal]): неоновая дымка сверху и
+ * сканлайны (веб: `.app-layout::after` у Protogen). Рисуется поверх содержимого с малой
+ * непрозрачностью — экраны сами заливают фон, и подложка под ними была бы не видна.
+ * Ставится один раз у корня приложения; в остальных темах — no-op.
  */
-fun Modifier.vlScanlines(tokens: VlTokens): Modifier {
-    if (tokens.terminal?.scanlines != true) return this
-    val line = Color.White.copy(alpha = 0.018f)
+fun Modifier.vlTerminalBackdrop(tokens: VlTokens): Modifier {
+    val t = tokens.terminal ?: return this
+    return this.drawWithCache {
+        val w = size.width
+        val h = size.height
+        val big = maxOf(w, h)
+        val haze = t.haze?.let {
+            Brush.radialGradient(listOf(it, Color.Transparent), center = Offset(w * 0.5f, -h * 0.06f), radius = big * 0.7f)
+        }
+        val scan = if (t.scanlines) Path().apply {
+            val line = 1.dp.toPx()
+            val gap = 3.dp.toPx()
+            var y = 0f
+            while (y < h) { addRect(Rect(0f, y, w, y + line)); y += gap }
+        } else null
+
+        onDrawWithContent {
+            drawContent()
+            haze?.let { drawRect(it) }
+            scan?.let { drawPath(it, Color.White.copy(alpha = t.scanlineAlpha)) }
+        }
+    }
+}
+
+/**
+ * Неоновая линия под элементом (Forge v2: под верхней панелью): основной цвет слева,
+ * второй к середине, к правому краю гаснет.
+ */
+fun Modifier.vlNeonRule(tokens: VlTokens, width: Dp = 1.dp): Modifier {
+    val t = tokens.terminal ?: return this
     return this.drawWithContent {
         drawContent()
-        val step = 3.dp.toPx()
-        val h = 1.dp.toPx()
-        var y = 0f
-        while (y < size.height) {
-            drawRect(line, topLeft = androidx.compose.ui.geometry.Offset(0f, y), size = Size(size.width, h))
-            y += step
-        }
+        val y = size.height - width.toPx() / 2f
+        drawLine(
+            brush = Brush.horizontalGradient(
+                0f to t.neon.copy(alpha = 0.9f),
+                0.55f to t.neonAlt.copy(alpha = 0.45f),
+                1f to Color.Transparent,
+            ),
+            start = Offset(0f, y),
+            end = Offset(size.width, y),
+            strokeWidth = width.toPx(),
+        )
     }
 }

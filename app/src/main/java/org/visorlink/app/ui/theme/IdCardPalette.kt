@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.lerp
 import org.visorlink.app.data.idcard.IdCardGenerator
 import org.visorlink.app.data.idcard.IdFinish
 import org.visorlink.app.data.idcard.IdMode
@@ -77,9 +76,21 @@ private val BEAST = listOf(
 internal fun hsl(h: Float, s: Float, l: Float, a: Float = 1f): Color =
     Color.hsl(((h % 360f) + 360f) % 360f, s / 100f, l / 100f, a)
 
-/** `color-mix(in srgb, a p%, b)`; с `transparent` — тот же цвет с альфой p. */
-internal fun mix(a: Color, pct: Float, b: Color?): Color =
-    if (b == null) a.copy(alpha = a.alpha * pct / 100f) else lerp(b, a, pct / 100f)
+/**
+ * `color-mix(in srgb, a p%, b)`; с `transparent` — тот же цвет с альфой p.
+ *
+ * Смешивание — покомпонентно в sRGB, как в CSS. Не Compose `lerp`: он смешивает в Oklab, и
+ * каждый оттенок пластика и краски уходил от веба на несколько единиц (#DCE1E6 вместо #DFE3E7).
+ */
+internal fun mix(a: Color, pct: Float, b: Color?): Color {
+    if (b == null) return a.copy(alpha = a.alpha * pct / 100f)
+    val t = pct / 100f
+    // Полупрозрачные операнды смешиваются премультиплицированными, как в CSS Color 5
+    val alpha = a.alpha * t + b.alpha * (1f - t)
+    if (alpha <= 0f) return Color.Transparent
+    fun ch(ca: Float, cb: Float) = ((ca * a.alpha * t + cb * b.alpha * (1f - t)) / alpha).coerceIn(0f, 1f)
+    return Color(ch(a.red, b.red), ch(a.green, b.green), ch(a.blue, b.blue), alpha)
+}
 
 internal fun cardPalette(mode: IdMode, variant: Int, finish: IdFinish): CardPalette {
     val v = ((variant % 12) + 12) % 12
@@ -158,6 +169,59 @@ internal fun cardPalette(mode: IdMode, variant: Int, finish: IdFinish): CardPale
             )
         }
     }
+}
+
+// ── Кастомный скин (подарок админа): палитра из трёх HEX — cardStyle.customPalette ──
+
+/** Порог яркости: ниже на цвете лучше читается белое, выше — тёмное (равный контраст ≈ 0.18). */
+private const val INK_SWITCH = 0.18
+
+/** Относительная яркость WCAG по HEX — как `luminance(hex)` в cardStyle.js. */
+internal fun hexLuminance(hex: String): Double {
+    fun f(i: Int): Double {
+        val c = hex.substring(i, i + 2).toInt(16) / 255.0
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+    }
+    return 0.2126 * f(1) + 0.7152 * f(3) + 0.0722 * f(5)
+}
+
+private fun hexColor(hex: String) = Color(hex.substring(1).toLong(16) or 0xFF000000)
+
+/**
+ * Палитра кастомного скина: фон — пластик, основной — шапка, линии и неон, дополнительный —
+ * узор, штамп и второй неон. Тон — по яркости фона. Обсидиан затемняет пластик, металл и
+ * золото дают полосы блеска (у золота — тёплые). Режим карты (раскладка, графика) не меняется.
+ */
+internal fun customPalette(base: String, primary: String, secondary: String, finish: IdFinish): CardPalette {
+    val p = hexColor(primary)
+    val s = hexColor(secondary)
+    val bg = hexColor(base)
+    val plastic = if (finish == IdFinish.OBSIDIAN) mix(bg, 24f, Color(0xFF050607)) else bg
+    val dark = finish == IdFinish.OBSIDIAN || hexLuminance(base) < INK_SWITCH
+    val shiny = finish == IdFinish.METALLIC || finish == IdFinish.GOLD
+    val hi = mix(if (finish == IdFinish.GOLD) Color(0xFFFFE9A8) else Color.White, if (shiny) (if (dark) 18f else 40f) else (if (dark) 8f else 30f), plastic)
+    val lo = mix(Color.Black, if (dark) 32f else 14f, plastic)
+    val glow = listOf(
+        BaseLayer.Radial(1.2f, 1f, 1f, 0f, listOf(0f to mix(p, if (dark) 18f else 12f, null), 0.55f to Color.Transparent)),
+        BaseLayer.Radial(0.9f, 0.8f, 0f, 1f, listOf(0f to mix(s, if (dark) 12f else 9f, null), 0.6f to Color.Transparent)),
+    )
+    val baseLayers = if (shiny) {
+        listOf(BaseLayer.Linear(125f, listOf(0f to hi, 0.46f to lo, 0.7f to hi, 1f to plastic)))
+    } else {
+        glow + BaseLayer.Linear(150f, listOf(0f to hi, 0.55f to plastic, 1f to lo))
+    }
+    return CardPalette(
+        tone = if (dark) CardTone.DARK else CardTone.LIGHT,
+        base = baseLayers,
+        ink = if (dark) mix(p, 10f, Color(0xFFF4F7FA)) else mix(p, 14f, Color(0xFF101418)),
+        muted = if (dark) mix(p, 40f, Color(0xFF8E98A4)) else mix(p, 22f, Color(0xFF4F5964)),
+        line = mix(p, 30f, null), line2 = mix(s, 26f, null),
+        band = p, bandInk = if (hexLuminance(primary) < INK_SWITCH) Color.White else Color(0xFF101418),
+        neon = p, neon2 = s, stamp = s,
+        edge = if (dark) mix(p, 36f, null) else Color.White.copy(alpha = 0.7f),
+        photoBg = mix(p, if (dark) 12f else 16f, plastic),
+        core = if (dark) Color(0xFFC9D0D8) else Color.White,
+    )
 }
 
 // ── CSS-градиенты в Compose ──

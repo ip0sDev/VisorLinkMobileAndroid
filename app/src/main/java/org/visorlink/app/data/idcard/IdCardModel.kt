@@ -113,7 +113,14 @@ data class IdCard(
     val slots: Int? = null,
     val rolledAt: Long? = null,
     val equippedAt: Long? = null,
+    /** Опубликованная визитка `/card/{slug}` (пишет только сервер); `null` — не опубликована. */
+    val publicCard: PublicCardRef? = null,
+    /** Кастомный скин (подарок админа) — от надетого скина; `null` — обычная палитра режима. */
+    val custom: IdCustomLook? = null,
 ) {
+    /** Тираж карты: кастомный скин — всегда эпический (веб `cardEdition`), иначе — из признаков. */
+    val edition: IdEdition get() = if (custom != null) IdEdition.EPIC else traits.edition
+
     companion object {
         /** Разбор документа `idCards/{uid}` или ответа callable (`{ card }`). */
         fun parse(raw: Map<*, *>?): IdCard? {
@@ -132,8 +139,25 @@ data class IdCard(
                 slots = (raw["slots"] as? Number)?.toInt(),
                 rolledAt = millis(raw["rolledAt"]),
                 equippedAt = millis(raw["equippedAt"]),
+                custom = IdCustomLook.parse(raw["custom"]),
+                publicCard = (raw["publicCard"] as? Map<*, *>)?.let { pc ->
+                    (pc["slug"] as? String)?.takeIf { it.isNotBlank() }?.let { slug ->
+                        PublicCardRef(slug, (pc["skinId"] as? String)?.takeIf { it.isNotEmpty() }, millis(pc["updatedAt"]))
+                    }
+                },
             )
         }
+    }
+}
+
+/** `idCards/{uid}.publicCard` — визитка с ID-картой по ссылке `https://visorlink.org/card/{slug}`. */
+data class PublicCardRef(val slug: String, val skinId: String?, val updatedAt: Long?) {
+    val url: String get() = "$PUBLIC_CARD_BASE${java.net.URLEncoder.encode(slug, "UTF-8")}"
+
+    companion object {
+        const val PUBLIC_CARD_BASE = "https://visorlink.org/card/"
+        /** Ограничение статуса (functions/publicCardLogic.js). */
+        const val TAGLINE_MAX = 80
     }
 }
 
@@ -199,4 +223,43 @@ internal fun millis(v: Any?): Long? = when (v) {
     is com.google.firebase.Timestamp -> v.toDate().time
     is java.util.Date -> v.time
     else -> null
+}
+
+/**
+ * Кастомный скин (подарок админа, `custom` у карты и скина; веб `cardStyle.customColors`):
+ * три HEX-цвета палитры, своя форма голограммы и надпись выпуска на обороте. Данные чужие —
+ * цвета применяются, только если **все три** — корректный `#RRGGBB` ([colors]).
+ */
+data class IdCustomLook(
+    val base: String?,
+    val primary: String?,
+    val secondary: String?,
+    /** Форма голограммы вместо `deriveDetails().holoShape`, если допустима. */
+    val holo: IdCardGenerator.HoloShape?,
+    /** Подпись скина на обороте (не подпись владельца), до [LABEL_MAX] символов. */
+    val label: String?,
+) {
+    /** Цвета палитры или `null`, если хоть один невалиден — тогда палитра режима. */
+    val colors: Triple<String, String, String>?
+        get() = if (base != null && primary != null && secondary != null && listOf(base, primary, secondary).all { HEX.matches(it) })
+            Triple(base, primary, secondary) else null
+
+    /** Надпись на обороте: только при валидной палитре (как в вебе). */
+    val labelText: String? get() = if (colors != null) label?.take(LABEL_MAX)?.takeIf { it.isNotEmpty() } else null
+
+    companion object {
+        const val LABEL_MAX = 32
+        private val HEX = Regex("^#[0-9a-fA-F]{6}$")
+
+        fun parse(raw: Any?): IdCustomLook? {
+            val m = raw as? Map<*, *> ?: return null
+            return IdCustomLook(
+                base = m["base"] as? String,
+                primary = m["primary"] as? String,
+                secondary = m["secondary"] as? String,
+                holo = (m["holo"] as? String)?.let { h -> IdCardGenerator.HoloShape.entries.firstOrNull { it.name.equals(h, ignoreCase = true) } },
+                label = m["label"] as? String,
+            )
+        }
+    }
 }

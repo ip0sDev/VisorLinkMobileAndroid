@@ -26,7 +26,6 @@ import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.diary.*
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.HapticType
@@ -43,7 +42,6 @@ fun DiaryScreen(
     viewModel: DiaryViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val isLiquidEnabled = rememberLiquidEnabled()
     val uiState by viewModel.uiState.collectAsState()
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
@@ -99,12 +97,12 @@ fun DiaryScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             VlTopAppBar(
-                modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                modifier = Modifier.liquidJelly(topBarJelly),
                 title = { Text(stringResource(R.string.diary_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
-                        if (isLiquidEnabled) topBarJelly.press(0.06f)
+                        topBarJelly.press(0.06f)
                         onNavigateBack()
                     }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
@@ -115,7 +113,7 @@ fun DiaryScreen(
                     IconButton(
                         onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
-                            if (isLiquidEnabled) exportJelly.pulse(0.12f)
+                            exportJelly.pulse(0.12f)
                             val xml = viewModel.exportToXml()
                             val sendIntent = Intent().apply {
                                 action = Intent.ACTION_SEND
@@ -125,7 +123,7 @@ fun DiaryScreen(
                             val shareIntent = Intent.createChooser(sendIntent, exportChooserTitle)
                             context.startActivity(shareIntent)
                         },
-                        modifier = Modifier.liquidJelly(exportJelly, enabled = isLiquidEnabled)
+                        modifier = Modifier.liquidJelly(exportJelly)
                     ) {
                         Icon(Icons.Default.Share, stringResource(R.string.diary_action_export))
                     }
@@ -136,11 +134,11 @@ fun DiaryScreen(
             Box(
                 modifier = Modifier
                     .padding(bottom = 80.dp)
-                    .liquidJelly(fabJelly, enabled = isLiquidEnabled)
+                    .liquidJelly(fabJelly)
             ) {
                 VlFab(
                     onClick = {
-                        if (isLiquidEnabled) fabJelly.pulse(0.14f)
+                        fabJelly.pulse(0.14f)
                         onAddEntry()
                     },
                     icon = Icons.Default.Add,
@@ -176,7 +174,6 @@ fun DiaryScreen(
                             .fillMaxWidth()
                             .liquidPillCardSlideOut(
                                 index = 0,
-                                enabled = isLiquidEnabled,
                                 triggerKey = triggerKey
                             )
                     ) {
@@ -189,7 +186,6 @@ fun DiaryScreen(
                             .fillMaxWidth()
                             .liquidPillCardSlideOut(
                                 index = 1,
-                                enabled = isLiquidEnabled,
                                 triggerKey = triggerKey
                             )
                     ) {
@@ -203,13 +199,13 @@ fun DiaryScreen(
                 if (filteredEntries.isEmpty()) {
                     item(key = "empty_state") {
                         LaunchedEffect(uiState.selectedDate) {
-                            if (isLiquidEnabled) emptyJelly.pulse(0.12f)
+                            emptyJelly.pulse(0.12f)
                         }
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 48.dp)
-                                .liquidJelly(emptyJelly, enabled = isLiquidEnabled),
+                                .liquidJelly(emptyJelly),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -217,7 +213,7 @@ fun DiaryScreen(
                                     Icons.Outlined.EditNote,
                                     null,
                                     modifier = Modifier.size(64.dp),
-                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = if (isLiquidEnabled) 0.5f else 0.3f)
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
@@ -238,7 +234,6 @@ fun DiaryScreen(
                                 .fillMaxWidth()
                                 .liquidPillCardSlideOut(
                                     index = index + 2,
-                                    enabled = isLiquidEnabled,
                                     triggerKey = triggerKey
                                 )
                         ) {

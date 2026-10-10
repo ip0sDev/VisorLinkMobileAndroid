@@ -12,7 +12,6 @@ object FirestoreCollections {
     const val TOPICS = "topics"
     const val INVITES = "invites"
     const val NOTIFICATIONS = "notifications"
-    const val DISCOVER_FEED = "discover_feed"
     const val SAVED_MESSAGES = "savedMessages"
     const val SAVED_MESSAGES_SETTINGS = "savedMessagesSettings"
     const val STICKER_PACKS = "stickerPacks"

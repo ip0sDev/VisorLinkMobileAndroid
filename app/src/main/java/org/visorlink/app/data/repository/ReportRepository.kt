@@ -1,89 +1,59 @@
 package org.visorlink.app.data.repository
 
 import android.util.Log
-import com.google.firebase.Timestamp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import java.util.UUID
+import org.visorlink.app.BuildConfig
 
 enum class ReportCategory(val key: String) {
-    SPAM("SPAM"),
-    VIOLENCE("VIOLENCE"),
-    HARASSMENT("HARASSMENT"),
-    ILLEGAL("ILLEGAL"),
-    COPYRIGHT("COPYRIGHT")
+    SPAM("spam"),
+    VIOLENCE("violence"),
+    HARASSMENT("harassment"),
+    ILLEGAL("illegal"),
+    COPYRIGHT("copyright")
 }
 
-data class ContentReport(
-    val reportId: String = UUID.randomUUID().toString(),
-    val reporterUid: String = "",
-    val targetType: String = "message", // "message", "user", "post", "chat"
-    val targetId: String = "",
-    val targetSenderUid: String? = null,
-    val category: String = ReportCategory.SPAM.key,
-    val details: String = "",
-    val createdAt: Timestamp = Timestamp.now()
-)
-
+/**
+ * Жалобы на контент — callable `submitAbuseReport` (как `ReportModal.jsx` в вебе): сервер пишет
+ * `abuse_reports`, не принимает повторную жалобу того же человека и после трёх разных
+ * жалоб на сообщение скрывает его (`is_hidden`), для чего ему нужен [chatId].
+ *
+ * Раньше здесь вызывалась несуществующая функция `submitReport`, а затем шла запись в
+ * `/reports`, которую правила Firestore запрещают, — жалобы с Android не доходили никуда.
+ */
 class ReportRepository(
-    private val firestore: FirebaseFirestore,
     private val functions: FirebaseFunctions,
-    private val auth: FirebaseAuth
 ) {
     companion object {
         private const val TAG = "ReportRepository"
     }
 
+    /**
+     * @param targetType `message`, `post` или `user`.
+     * @param chatId чат сообщения или канал поста; для жалобы на пользователя — `null`.
+     */
     suspend fun submitReport(
         targetType: String,
         targetId: String,
-        targetSenderUid: String?,
+        chatId: String?,
         category: ReportCategory,
-        details: String
-    ): Result<String> = withContext(Dispatchers.IO) {
-        val reporterUid = auth.currentUser?.uid ?: "anonymous"
-        val report = ContentReport(
-            reporterUid = reporterUid,
-            targetType = targetType,
-            targetId = targetId,
-            targetSenderUid = targetSenderUid,
-            category = category.key,
-            details = details.trim()
-        )
-
+        details: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // 1. Попытка вызова Callable Cloud Function
-            try {
-                functions.getHttpsCallable("submitReport").call(
-                    mapOf(
-                        "reportId" to report.reportId,
-                        "reporterUid" to report.reporterUid,
-                        "targetType" to report.targetType,
-                        "targetId" to report.targetId,
-                        "targetSenderUid" to report.targetSenderUid,
-                        "category" to report.category,
-                        "details" to report.details,
-                        "timestamp" to System.currentTimeMillis()
-                    )
-                ).await()
-            } catch (e: Exception) {
-                Log.w(TAG, "submitReport Cloud Function call failed or not deployed: ${e.message}")
-            }
-
-            // 2. Гарантированная запись в коллекцию /reports Firestore
-            firestore.collection("reports")
-                .document(report.reportId)
-                .set(report)
-                .await()
-
-            Log.i(TAG, "Report ${report.reportId} successfully submitted for target $targetId ($targetType)")
-            Result.success(report.reportId)
+            functions.getHttpsCallable("submitAbuseReport").call(
+                mapOf(
+                    "targetType" to targetType,
+                    "targetId" to targetId,
+                    "chatId" to chatId,
+                    "reason" to category.key,
+                    "comment" to details.trim(),
+                )
+            ).await()
+            Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to submit report", e)
+            if (BuildConfig.DEBUG) Log.e(TAG, "submitAbuseReport failed for $targetType $targetId", e)
             Result.failure(e)
         }
     }

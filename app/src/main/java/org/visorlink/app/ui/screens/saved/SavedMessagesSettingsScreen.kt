@@ -26,20 +26,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SavedMessagesSettingsScreen(
     onNavigateBack: () -> Unit,
-    themeViewModel: ThemeViewModel = koinViewModel(),
-    flagsRepository: FlagsRepository = koinInject()
+    themeViewModel: ThemeViewModel = koinViewModel()
 ) {
     val viewModel: SavedMessagesViewModel = koinViewModel()
     val uiState by viewModel.uiState.collectAsState()
@@ -47,14 +44,10 @@ fun SavedMessagesSettingsScreen(
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val haptic = rememberHaptic()
 
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
-        if (isLiquidEnabled) {
-            topBarJelly.pulse(0.06f)
-        }
+        topBarJelly.pulse(0.06f)
     }
 
     val pinEnabled = uiState.settings?.pinEnabled == true
@@ -75,12 +68,12 @@ fun SavedMessagesSettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 VlTopAppBar(
-                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text("Настройки Избранного", fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            topBarJelly.press(0.06f)
                             onNavigateBack()
                         }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, "Назад")
@@ -98,7 +91,7 @@ fun SavedMessagesSettingsScreen(
 
                 VlSettingsSection(
                     title = "PIN-защита и шифрование",
-                    modifier = Modifier.liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 0)
                 ) {
                     VlSettingsItem(
                         icon = if (pinEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
@@ -181,8 +174,7 @@ fun SavedMessagesSettingsScreen(
                     exit = fadeOut() + shrinkVertically()
                 ) {
                     WarningBanner(
-                        modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
-                        isLiquidEnabled = isLiquidEnabled
+                        modifier = Modifier.liquidPillCardSlideOut(index = 1)
                     )
                 }
 
@@ -245,11 +237,10 @@ fun SavedMessagesSettingsScreen(
 
 @Composable
 private fun WarningBanner(
-    modifier: Modifier = Modifier,
-    isLiquidEnabled: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp))
 
     Surface(
         shape = shape,

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.data.model.AppNotification
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
@@ -39,9 +40,7 @@ import org.visorlink.app.utils.NotificationHelper
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.launch
 import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.calculateJellyScale
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
@@ -57,21 +56,23 @@ fun ChatListScreen(
     onOpenSearch: () -> Unit,
     onOpenProfile: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** `false` — профиль живёт во вкладке навбара (флаг enable_profile_navbar), аватар в шапке не нужен. */
+    showProfileButton: Boolean = true,
     onCreateChat: () -> Unit,
     onFindChannel: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenFeed: () -> Unit,
     isActive: Boolean = true,
     viewModel: ChatListViewModel = koinViewModel(),
-    themeViewModel: ThemeViewModel = koinViewModel(),
-    flagsRepository: FlagsRepository = koinInject()
+    themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val chats by viewModel.chats.collectAsState()
     val currentUser by viewModel.currentUser.collectAsState()
     val profileCache by viewModel.profileCache.collectAsState()
-    val unreadNotifications by viewModel.unreadNotificationsCount.collectAsState()
+    // Приглашения живут строкой в списке чатов (InvitesEntry.kt), а не кнопкой в топбаре
+    val invites by viewModel.invites.collectAsState()
+    val entries by viewModel.listEntries.collectAsState()
+    val invitesPreview = invitesPreview(invites)
     val drafts by viewModel.drafts.collectAsState()
     val typingMap by viewModel.typingMap.collectAsState()
     val syncState by viewModel.syncState.collectAsState()
@@ -105,22 +106,20 @@ fun ChatListScreen(
         containerColor = Color.Transparent,
         topBar = {
             val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
-            if (isLiquidEnabled) {
-                LaunchedEffect(triggerKey) {
-                    if (isActive) {
-                        topBarJelly.pulse(0.08f)
-                    }
+            LaunchedEffect(triggerKey) {
+                if (isActive) {
+                    topBarJelly.pulse(0.08f)
                 }
-                LaunchedEffectAfterFirst(syncState) {
-                    topBarJelly.pulse(0.06f)
-                }
-                LaunchedEffectAfterFirst(isScrolled) {
-                    topBarJelly.pulse(0.07f)
-                }
+            }
+            LaunchedEffectAfterFirst(syncState) {
+                topBarJelly.pulse(0.06f)
+            }
+            LaunchedEffectAfterFirst(isScrolled) {
+                topBarJelly.pulse(0.07f)
             }
 
             VlTopAppBar(
-                modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                modifier = Modifier.liquidJelly(topBarJelly),
                 title = {
                     Column {
                         VlBarBrandText(stringResource(R.string.chatlist_title))
@@ -163,30 +162,6 @@ fun ChatListScreen(
                     }
                 },
                 actions = {
-                    val badgeScale = remember { Animatable(if (unreadNotifications > 0) 1f else 0f) }
-                    LaunchedEffect(unreadNotifications > 0) {
-                        if (unreadNotifications > 0) {
-                            badgeScale.animateTo(1.3f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMedium))
-                            badgeScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-                        } else {
-                            badgeScale.animateTo(0f, tween(150))
-                        }
-                    }
-
-                    BadgedBox(
-                        badge = {
-                            if (unreadNotifications > 0) {
-                                Badge(
-                                    modifier = Modifier.scale(badgeScale.value)
-                                ) { Text("$unreadNotifications") }
-                            }
-                        }
-                    ) {
-                        IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenNotifications() }) {
-                            Icon(if (unreadNotifications > 0) Icons.Default.Notifications else Icons.Outlined.Notifications, stringResource(R.string.notifications_title))
-                        }
-                    }
-
                     // Mask Mode: маска до выключения / индикатор «Маска до 18:30» (спека §8)
                     org.visorlink.app.ui.idcard.MaskToolbarButton()
 
@@ -198,12 +173,14 @@ fun ChatListScreen(
                         Icon(Icons.Outlined.Settings, stringResource(R.string.settings_title))
                     }
 
-                    AvatarChip(
-                        avatarUrl = currentUser?.avatarUrl,
-                        displayName = currentUser?.displayName ?: "",
-                        hapticEnabled = hapticEnabled,
-                        onClick = { onOpenProfile() }
-                    )
+                    if (showProfileButton) {
+                        AvatarChip(
+                            avatarUrl = currentUser?.avatarUrl,
+                            displayName = currentUser?.displayName ?: "",
+                            hapticEnabled = hapticEnabled,
+                            onClick = { onOpenProfile() }
+                        )
+                    }
                     Spacer(Modifier.width(8.dp))
                 }
             )
@@ -231,12 +208,11 @@ fun ChatListScreen(
             LiquidPullRefreshLayout(
                 isRefreshing = isRefreshing,
                 onRefresh = { viewModel.refresh() },
-                liquidEnabled = isLiquidEnabled,
                 hapticEnabled = hapticEnabled,
                 topPadding = padding.calculateTopPadding(),
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (chats.isEmpty()) {
+                if (chats.isEmpty() && invites.isEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -272,7 +248,6 @@ fun ChatListScreen(
                                         .fillMaxWidth()
                                         .liquidPillCardSlideOut(
                                             index = 0,
-                                            enabled = isLiquidEnabled,
                                             triggerKey = triggerKey
                                         )
                                         .padding(horizontal = 12.dp)
@@ -292,7 +267,7 @@ fun ChatListScreen(
                                         onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
                                     )
 
-                                    if (chats.isNotEmpty()) {
+                                    if (entries.isNotEmpty()) {
                                         HorizontalDivider(
                                             modifier = Modifier.padding(start = 76.dp, end = 16.dp),
                                             thickness = 0.5.dp,
@@ -300,8 +275,29 @@ fun ChatListScreen(
                                         )
                                     }
 
-                                    // 📌 ВСЕ ОСТАЛЬНЫЕ ЧАТЫ
-                                    chats.forEachIndexed { index, chat ->
+                                    // 📌 ВСЕ ОСТАЛЬНЫЕ ЧАТЫ (и строка «Приглашения» по дате)
+                                    entries.forEachIndexed { index, chat ->
+                                        if (viewModel.isInvitesEntry(chat)) {
+                                            ChatListItemCompact(
+                                                chat = chat,
+                                                chatType = ChatType.DIRECT,
+                                                currentUid = viewModel.currentUid,
+                                                otherProfile = null,
+                                                draftText = null,
+                                                unreadCount = invites.size,
+                                                isInvites = true,
+                                                previewOverride = invitesPreview,
+                                                onClick = onOpenNotifications
+                                            )
+                                            if (index < entries.size - 1) {
+                                                HorizontalDivider(
+                                                    modifier = Modifier.padding(start = 76.dp, end = 16.dp),
+                                                    thickness = 0.5.dp,
+                                                    color = cs.outlineVariant.copy(alpha = 0.4f)
+                                                )
+                                            }
+                                            return@forEachIndexed
+                                        }
                                         val chatType = chat.chatType()
                                         val otherUid = when (chatType) {
                                             ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
@@ -322,7 +318,7 @@ fun ChatListScreen(
                                             }
                                         )
 
-                                        if (index < chats.size - 1) {
+                                        if (index < entries.size - 1) {
                                             HorizontalDivider(
                                                 modifier = Modifier.padding(start = 76.dp, end = 16.dp),
                                                 thickness = 0.5.dp,
@@ -342,7 +338,6 @@ fun ChatListScreen(
                                         .fillMaxWidth()
                                         .liquidPillCardSlideOut(
                                             index = 0,
-                                            enabled = isLiquidEnabled,
                                             triggerKey = triggerKey
                                         )
                                 ) {
@@ -362,10 +357,34 @@ fun ChatListScreen(
                                 Spacer(Modifier.height(8.dp))
                             }
                             itemsIndexed(
-                                items = chats,
+                                items = entries,
                                 key = { _, chat -> chat.id },
                                 contentType = { _, _ -> "chat_item" }
                             ) { index, chat ->
+                                if (viewModel.isInvitesEntry(chat)) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .liquidPillCardSlideOut(
+                                                index = index + 1,
+                                                triggerKey = triggerKey
+                                            )
+                                    ) {
+                                        ChatListItem(
+                                            chat = chat,
+                                            chatType = ChatType.DIRECT,
+                                            currentUid = viewModel.currentUid,
+                                            otherProfile = null,
+                                            draftText = null,
+                                            unreadCount = invites.size,
+                                            isCompactList = compactList,
+                                            isInvites = true,
+                                            previewOverride = invitesPreview,
+                                            onClick = onOpenNotifications
+                                        )
+                                    }
+                                    return@itemsIndexed
+                                }
                                 val chatType = chat.chatType()
                                 val otherUid = when (chatType) {
                                     ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
@@ -377,7 +396,6 @@ fun ChatListScreen(
                                         .fillMaxWidth()
                                         .liquidPillCardSlideOut(
                                             index = index + 1,
-                                            enabled = isLiquidEnabled,
                                             triggerKey = triggerKey
                                         )
                                 ) {
@@ -421,3 +439,14 @@ fun ChatListScreen(
     }
 }
 
+/**
+ * Подпись строки «Приглашения»: одно — от кого, несколько — сколько, ни одного — что их нет.
+ * `invitedBy` — ник пригласившего, как на экране приглашений.
+ */
+@Composable
+private fun invitesPreview(invites: List<AppNotification>): String = when {
+    invites.isEmpty() -> stringResource(R.string.invites_preview_none)
+    invites.size > 1 -> pluralStringResource(R.plurals.invites_preview_count, invites.size, invites.size)
+    invites.first().invitedBy.isNotBlank() -> stringResource(R.string.invites_preview_from, invites.first().invitedBy)
+    else -> stringResource(R.string.notification_group_invite_title)
+}

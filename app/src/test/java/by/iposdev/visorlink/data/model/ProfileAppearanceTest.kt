@@ -14,7 +14,7 @@ class ProfileAppearanceTest {
     private val proUntilPast = Timestamp(Date(System.currentTimeMillis() - 86_400_000))
 
     private val fullCustomization = mapOf<String, Any?>(
-        "theme" to "forge",
+        "theme" to "biolume",
         "accent" to "crimson",
         "font" to "rounded",
         "layout" to "compact",
@@ -29,7 +29,7 @@ class ProfileAppearanceTest {
     @Test
     fun `parse reads every known key`() {
         val a = ProfileAppearance.parse(fullCustomization)
-        assertEquals(AppTheme.FORGE, a.theme)
+        assertEquals(AppTheme.BIOLUME, a.theme)
         assertEquals(ColorPreset.CRIMSON, a.accent)
         assertEquals(ProfileFont.ROUNDED, a.font)
         assertEquals(ProfileLayout.COMPACT, a.layout)
@@ -42,6 +42,12 @@ class ProfileAppearanceTest {
     fun `unknown theme falls back to viewer instead of M3E`() {
         // Старый CustomizationHelper.parseStyle превращал мусор в MATERIAL3_EXPRESSIVE
         assertNull(ProfileAppearance.parse(mapOf("theme" to "neon")).theme)
+    }
+
+    @Test
+    fun `removed Forge theme falls back to viewer`() {
+        // Старый Forge удалён: у профилей, где он остался, тема берётся у смотрящего
+        assertNull(ProfileAppearance.parse(mapOf("theme" to "forge")).theme)
     }
 
     @Test
@@ -76,7 +82,7 @@ class ProfileAppearanceTest {
     @Test
     fun `own profile is always shown even without PRO`() {
         val me = user("me", pro = proUntilPast)
-        assertEquals(AppTheme.FORGE, ProfileAppearance.resolve(owner = me, viewer = me).theme)
+        assertEquals(AppTheme.BIOLUME, ProfileAppearance.resolve(owner = me, viewer = me).theme)
     }
 
     @Test
@@ -84,7 +90,7 @@ class ProfileAppearanceTest {
         val viewer = user("v", cust = emptyMap())
         assertTrue(ProfileAppearance.resolve(user("o", pro = proUntilPast), viewer).isEmpty)
         assertTrue(ProfileAppearance.resolve(user("o", pro = null), viewer).isEmpty)
-        assertEquals(AppTheme.FORGE, ProfileAppearance.resolve(user("o", pro = proUntilFuture), viewer).theme)
+        assertEquals(AppTheme.BIOLUME, ProfileAppearance.resolve(user("o", pro = proUntilFuture), viewer).theme)
     }
 
     @Test

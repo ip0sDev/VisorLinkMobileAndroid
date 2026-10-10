@@ -40,8 +40,7 @@ data class StatusUiState(
 
 class StatusViewModel(
     private val db: FirebaseFirestore,
-    private val functions: FirebaseFunctions,
-    private val client: OkHttpClient
+    private val functions: FirebaseFunctions
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StatusUiState())

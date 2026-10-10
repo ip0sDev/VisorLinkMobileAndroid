@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -26,7 +27,8 @@ import org.visorlink.app.ui.screens.auth.AuthViewModel
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.ui.theme.VisorLinkTheme
 import org.visorlink.app.ui.theme.toAppTheme
-import org.visorlink.app.ui.theme.vlScanlines
+import org.visorlink.app.ui.theme.proAccent
+import org.visorlink.app.ui.theme.vlTerminalBackdrop
 import androidx.compose.runtime.remember
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.functions
@@ -51,7 +53,6 @@ class MainActivity : AppCompatActivity() {
     private val fcmManager: org.visorlink.app.utils.FcmManager by inject()
     private val musicPlayerManager: org.visorlink.app.utils.MusicPlayerManager by inject()
     private val yandexRelayConfigManager: org.visorlink.app.data.remote.yandex.YandexRelayConfigManager by inject()
-    private val idCardRepository: org.visorlink.app.data.repository.IdCardRepository by inject()
     private val maskModeManager: org.visorlink.app.utils.MaskModeManager by inject()
     private val chatThemeController: org.visorlink.app.ui.idcard.ChatThemeController by inject()
 
@@ -98,26 +99,41 @@ class MainActivity : AppCompatActivity() {
             val colorPreset by themeViewModel.colorPreset.collectAsState()
             val showDebugIds by themeViewModel.showDebugIds.collectAsState()
 
-            // Тема по режиму ID-карты (веб: ModeThemeSync): при включённом id_cards_enabled её
-            // решает режим (Biolume / Forge v2), а не выбор в настройках
+            // Тема по режиму ID-карты (веб: ModeThemeSync): после входа её решает режим
+            // (Biolume / Forge v2), а не выбор в настройках
             val authState by authViewModel.authState.collectAsState()
             val myUid = (authState as? org.visorlink.app.data.repository.AuthState.Verified)?.user?.uid
             val myProfile by remember(myUid) {
                 if (myUid == null) kotlinx.coroutines.flow.flowOf(null) else userRepository.userProfileFlow(myUid)
             }.collectAsState(initial = null)
-            val idCardsEnabled by idCardRepository.idCardsEnabled.collectAsState()
+            // Режим и акцент последнего входа: профиль приходит позже первого кадра, и без этого
+            // каждый запуск рисовался в Biolume и через мгновение рывком перекрашивался в Forge
+            val themePrefs = remember { getSharedPreferences("visorlink_settings", MODE_PRIVATE) }
+            LaunchedEffect(myUid, myProfile) {
+                val p = myProfile ?: return@LaunchedEffect
+                if (myUid == null || p.uid != myUid) return@LaunchedEffect
+                themePrefs.edit()
+                    .putString(KEY_LAST_ID_MODE + myUid, p.idMode.orEmpty())
+                    .putString(KEY_LAST_PRO_ACCENT + myUid, p.proAccent()?.let { "#%06X".format(it.toArgb() and 0xFFFFFF) }.orEmpty())
+                    .apply()
+            }
+            val cachedIdMode = remember(myUid) { myUid?.let { themePrefs.getString(KEY_LAST_ID_MODE + it, null) }?.ifEmpty { null } }
+            val cachedProAccent = remember(myUid) {
+                myUid?.let { themePrefs.getString(KEY_LAST_PRO_ACCENT + it, null) }?.takeIf { it.length == 7 }
+                    ?.let { androidx.compose.ui.graphics.Color(it.substring(1).toLong(16) or 0xFF000000) }
+            }
             val maskState by maskModeManager.state.collectAsState()
             val chatThemeContext by chatThemeController.context.collectAsState()
             val modeTheme = org.visorlink.app.data.idcard.ModeThemeRules.resolve(
-                idCardsEnabled = idCardsEnabled && myUid != null,
-                idMode = myProfile?.idMode,
+                idCardsEnabled = myUid != null,
+                idMode = if (myProfile != null) myProfile?.idMode else cachedIdMode,
                 masked = maskState.active,
                 chatTheme = chatThemeContext,
             )
             val idModeState = org.visorlink.app.ui.idcard.IdModeUiState(
-                enabled = idCardsEnabled && myUid != null,
+                enabled = myUid != null,
                 myUid = myUid,
-                myMode = org.visorlink.app.data.idcard.IdMode.of(myProfile?.idMode),
+                myMode = org.visorlink.app.data.idcard.IdMode.of(if (myProfile != null) myProfile?.idMode else cachedIdMode),
                 mask = maskState,
                 theme = modeTheme,
             )
@@ -127,6 +143,8 @@ class MainActivity : AppCompatActivity() {
                     themeMode = if (modeTheme.forceDark) org.visorlink.app.data.model.ThemeMode.DARK else themeMode,
                     colorPreset = colorPreset,
                     modeDriven = true,
+                    // Цвет профиля PRO — акцент всего интерфейса (Biolume и Forge v2)
+                    proAccent = if (myProfile != null) myProfile?.proAccent() else cachedProAccent,
                 )
             } else {
                 org.visorlink.app.ui.theme.ViewerTheme(appTheme, themeMode, colorPreset)
@@ -143,15 +161,21 @@ class MainActivity : AppCompatActivity() {
                 org.visorlink.app.utils.UpdateManager.onAppForegroundCheck(this@MainActivity)
             }
 
+            // Смена темы целиком (Biolume ↔ Forge, светлая ↔ тёмная) — растворением снимка
+            org.visorlink.app.ui.theme.ThemeCrossfade(
+                value = viewerTheme,
+                key = { it.appTheme to it.themeMode },
+            ) { shownTheme ->
             VisorLinkTheme(
-                appTheme = viewerTheme.appTheme,
-                themeMode = viewerTheme.themeMode,
-                colorPreset = viewerTheme.colorPreset,
+                appTheme = shownTheme.appTheme,
+                themeMode = shownTheme.themeMode,
+                colorPreset = shownTheme.colorPreset,
                 showDebugIds = showDebugIds,
                 animateColors = idModeState.enabled,
+                proAccent = shownTheme.proAccent,
             ) {
               androidx.compose.runtime.CompositionLocalProvider(
-                  org.visorlink.app.ui.theme.LocalViewerTheme provides viewerTheme,
+                  org.visorlink.app.ui.theme.LocalViewerTheme provides shownTheme,
                   org.visorlink.app.ui.idcard.LocalIdModeState provides idModeState,
               ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
@@ -161,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .background(MaterialTheme.colorScheme.background)
-                                    .vlScanlines(org.visorlink.app.ui.theme.VlTheme.tokens)
+                                    .vlTerminalBackdrop(org.visorlink.app.ui.theme.VlTheme.tokens)
                             ) {
                                 // Изолированная полоска статусбара на уровне всего приложения
                                 Box(
@@ -189,13 +213,17 @@ class MainActivity : AppCompatActivity() {
                                     // Выдача ID-карты: без карты в приложение не пускаем (спека §5)
                                     org.visorlink.app.ui.idcard.IdCardGate()
                                     FlagsOverlay()
-                                    org.visorlink.app.utils.UpdateManager.UpdateHost()
+                                    // force_update_min_version > versionCode — обновление обязательно
+                                    val flagsRepository: org.visorlink.app.data.repository.FlagsRepository = org.koin.compose.koinInject()
+                                    val appFlags by flagsRepository.flags.collectAsState()
+                                    org.visorlink.app.utils.UpdateManager.UpdateHost(force = appFlags.forceUpdateRequired())
                                 }
                             }
                         }
                     }
                 }
               }
+            }
             }
         }
     }
@@ -299,5 +327,11 @@ class MainActivity : AppCompatActivity() {
                 Log.e("VisorLink", "App Check verification failed: ${e.message}", e)
             }
         }
+    }
+
+    private companion object {
+        /** Режим ID-карты и цвет профиля последнего входа (тема до прихода профиля). */
+        const val KEY_LAST_ID_MODE = "last_id_mode_"
+        const val KEY_LAST_PRO_ACCENT = "last_pro_accent_"
     }
 }

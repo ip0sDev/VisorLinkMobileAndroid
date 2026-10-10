@@ -8,15 +8,9 @@ import org.visorlink.app.utils.encryptText
 import kotlinx.coroutines.tasks.await
 import javax.crypto.SecretKey
 
-import org.visorlink.app.data.remote.chat.AlbumImageDto
-import org.visorlink.app.data.remote.chat.ForwardDto
-import org.visorlink.app.data.remote.chat.SendMessageRequest
-import org.visorlink.app.data.remote.chat.VisorLinkApi
-
 class ForwardRepository(
     private val db: FirebaseFirestore,
-    private val flagsRepository: FlagsRepository? = null,
-    private val api: VisorLinkApi? = null
+    private val flagsRepository: FlagsRepository? = null
 ) {
 
     /**

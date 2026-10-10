@@ -45,9 +45,16 @@ class ChatListViewModel(
     val chats: StateFlow<List<Chat>> = chatRepository.allChatsFlow(currentUid)
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val unreadNotificationsCount: StateFlow<Int> = chatRepository.notificationsFlow(currentUid)
-        .map { it.size }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+    /** Непрочитанные приглашения в группы и каналы (`users/{uid}/notifications`). */
+    val invites: StateFlow<List<AppNotification>> = chatRepository.notificationsFlow(currentUid)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    /** Чаты со строкой «Приглашения», вставленной по дате последнего приглашения. */
+    val listEntries: StateFlow<List<Chat>> = combine(chats, invites) { list, inv ->
+        withEntryByDate(list, invitesEntry(currentUid, inv))
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun isInvitesEntry(chat: Chat): Boolean = chat.id == invitesEntryId(currentUid)
 
     val drafts: StateFlow<Map<String, String>> = draftManager.draftsFlow
 

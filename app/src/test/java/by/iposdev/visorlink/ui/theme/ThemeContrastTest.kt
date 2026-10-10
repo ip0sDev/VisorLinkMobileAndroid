@@ -99,6 +99,53 @@ class ThemeContrastTest {
         assertSchemeReadable("Forge v2 Beast", forgeV2ColorScheme(ForgeV2.Beast))
     }
 
+    /**
+     * Цвет профиля PRO заменяет оттенок Forge v2 ([tintedBy]) — любой HEX, от белого до чёрного.
+     * Неон остаётся цветом подписей, фоны не меняются: тема узнаётся.
+     */
+    @Test
+    fun `forge v2 tinted by any pro accent stays readable and recognizable`() {
+        val accents = listOf(Color(0xFFFFE45C), Color(0xFFE11D48), Color(0xFF0EA5E9), Color(0xFF1A1A1A), Color(0xFF000000), Color(0xFFFFFFFF), Color(0xFF10B981))
+        listOf("Protogen" to ForgeV2.Protogen, "Beast" to ForgeV2.Beast).forEach { (name, base) ->
+            accents.forEach { accent ->
+                val f = base.tintedBy(accent)
+                val cs = forgeV2ColorScheme(f)
+                val p = "Forge v2 $name/$accent"
+                assertEquals("$p: оттенок режима сохраняется", base.beast, f.beast)
+                assertReadable("$p primary/background", cs.primary, cs.background)
+                assertReadable("$p primary/surfaceContainer", cs.primary, cs.surfaceContainer)
+                assertReadable("$p onPrimary/primary", cs.onPrimary, cs.primary)
+                assertReadable("$p onSurface/surfaceContainerHigh", cs.onSurface, cs.surfaceContainerHigh)
+                assertReadable("$p onSurfaceVariant/surface", cs.onSurfaceVariant, cs.surface)
+                val fill = ForgeV2.mix(cs.primary, 0.16f, cs.surfaceContainer)
+                assertReadable("$p primary/selectionFill", cs.primary, fill, min = 3.0)
+                // «Лёгкая» подкраска: фон темнее/светлее исходного не больше чем на пару процентов
+                val shift = kotlin.math.abs(luminance(f.background) - luminance(base.background))
+                assertTrue("$p: фон сдвинулся слишком сильно (Δ=$shift)", shift < 0.02)
+            }
+        }
+    }
+
+    /**
+     * Цвет профиля PRO как акцент Biolume ([withProAccent], веб `uiAccentVars`): любой HEX
+     * читается как подпись на каждом фоне темы, текст на кнопке — тоже.
+     */
+    @Test
+    fun `biolume with any pro accent stays readable`() {
+        val accents = listOf(Color(0xFFFFE45C), Color(0xFFE11D48), Color(0xFF0EA5E9), Color(0xFF1A1A1A), Color(0xFF000000), Color(0xFFFFFFFF), Color(0xFF94A3B8))
+        listOf(true to AbyssColorScheme, false to TidepoolColorScheme).forEach { (dark, base) ->
+            accents.forEach { accent ->
+                val cs = base.withProAccent(accent, dark)
+                val p = "Biolume ${if (dark) "Abyss" else "Tidepool"}/$accent"
+                assertReadable("$p primary/background", cs.primary, cs.background)
+                assertReadable("$p primary/surface", cs.primary, cs.surface)
+                assertReadable("$p primary/surfaceContainer", cs.primary, cs.surfaceContainer)
+                assertReadable("$p onPrimary/primary", cs.onPrimary, cs.primary)
+                assertEquals("$p: поверхности темы не меняются", base.background, cs.background)
+            }
+        }
+    }
+
     @Test
     fun `forge v2 selection fill and secondary text stay readable`() {
         listOf("Protogen" to ForgeV2.Protogen, "Beast" to ForgeV2.Beast).forEach { (name, f) ->
@@ -108,34 +155,6 @@ class ThemeContrastTest {
             assertReadable("Forge v2 $name onSurfaceVariant/surface", cs.onSurfaceVariant, cs.surface)
             assertReadable("Forge v2 $name onSurfaceVariant/surfaceContainerHigh", cs.onSurfaceVariant, cs.surfaceContainerHigh)
         }
-    }
-
-    @Test
-    fun `forge steel palette meets text contrast requirements`() {
-        assertSchemeReadable("Forge Steel", ForgeSteelColorScheme)
-    }
-
-    @Test
-    fun `forge concrete palette meets text contrast requirements`() {
-        assertSchemeReadable("Forge Concrete", ForgeConcreteColorScheme)
-    }
-
-    /**
-     * Forge вынужденно держит primary и error в одном красном семействе: тема
-     * требует красный как основной акцент. Цвет один различать их не может, но они
-     * обязаны расходиться хотя бы по светлоте — иначе «отправить» и «удалить»
-     * выглядят одинаково.
-     */
-    @Test
-    fun `forge separates primary and error by lightness`() {
-        listOf("Steel" to ForgeSteelColorScheme, "Concrete" to ForgeConcreteColorScheme)
-            .forEach { (label, cs) ->
-                val delta = kotlin.math.abs(luminance(cs.primary) - luminance(cs.error))
-                assertTrue(
-                    "$label: primary и error слишком близки по светлоте (Δ=${"%.3f".format(delta)})",
-                    delta >= 0.05,
-                )
-            }
     }
 
     /**
@@ -196,6 +215,24 @@ class ThemeContrastTest {
      * из базовой схемы — значит контраст надо проверять для каждого пресета, иначе
      * выбор акцента может втихую сделать текст на кнопках нечитаемым.
      */
+    /**
+     * PRO-оформление даёт любой HEX, а не только пресет: акцент — это ещё и цвет @ника,
+     * ссылок и заголовков секций. Светлый акцент на Tidepool и тёмный на Abyss раньше
+     * давали подписи 1.1–1.5:1 — их не было видно.
+     */
+    @Test
+    fun `arbitrary profile accents keep primary text visible in Biolume`() {
+        val accents = listOf(Color(0xFFFFF59D), Color(0xFFFFFFFF), Color(0xFF0EA5E9), Color(0xFF1A1A1A), Color(0xFF000000), Color(0xFF7FFFD4))
+        listOf(Triple("Abyss", AbyssColorScheme, true), Triple("Tidepool", TidepoolColorScheme, false))
+            .forEach { (label, base, isDark) ->
+                accents.forEach { accent ->
+                    val cs = base.withSignalAccent(accent, isDark)
+                    assertReadable("$label/$accent primary/background", cs.primary, cs.background, min = 3.0)
+                    assertReadable("$label/$accent onPrimary/primary", cs.onPrimary, cs.primary, min = 4.5)
+                }
+            }
+    }
+
     @Test
     fun `every color preset keeps primary readable in both palettes`() {
         listOf(Triple("Abyss", AbyssColorScheme, true), Triple("Tidepool", TidepoolColorScheme, false))
@@ -238,27 +275,16 @@ class ThemeContrastTest {
     }
 
     @Test
-    fun `selection fill is readable in Biolume and Forge`() {
-        listOf(AppTheme.BIOLUME, AppTheme.FORGE).forEach { theme ->
-            listOf(true, false).forEach { isDark ->
-                val cs = when (theme) {
-                    AppTheme.BIOLUME -> if (isDark) AbyssColorScheme else TidepoolColorScheme
-                    AppTheme.FORGE -> if (isDark) ForgeSteelColorScheme else ForgeConcreteColorScheme
-                    else -> error("Unsupported")
-                }
+    fun `selection fill is readable in Biolume`() {
+        listOf(true, false).forEach { isDark ->
+            val cs = if (isDark) AbyssColorScheme else TidepoolColorScheme
+            val selectionFill = biolumeSelectionFill(isDark, cs.primary)
 
-                val selectionFill = when (theme) {
-                    AppTheme.BIOLUME -> biolumeSelectionFill(isDark, cs.primary)
-                    AppTheme.FORGE -> forgeSelectionFill(isDark, cs.primary)
-                    else -> error("Unsupported")
-                }
-
-                val label = "${theme.id} ${if (isDark) "dark" else "light"}"
-                // Контраст текста (primary) на фоне выделения (selectionFill)
-                // Накладываем selectionFill на surfaceContainer (где обычно живут чипы/навбар)
-                val background = composite(selectionFill, cs.surfaceContainer)
-                assertReadable("$label primary/selectionFill", cs.primary, background, min = 3.0)
-            }
+            val label = "biolume ${if (isDark) "dark" else "light"}"
+            // Контраст текста (primary) на фоне выделения (selectionFill)
+            // Накладываем selectionFill на surfaceContainer (где обычно живут чипы/навбар)
+            val background = composite(selectionFill, cs.surfaceContainer)
+            assertReadable("$label primary/selectionFill", cs.primary, background, min = 3.0)
         }
     }
 }
@@ -273,7 +299,12 @@ class AppThemeIdTest {
         // Значения зафиксированы: их меняют только вместе с миграцией prefs.
         assertEquals("m3e", AppTheme.MATERIAL3_EXPRESSIVE.id)
         assertEquals("biolume", AppTheme.BIOLUME.id)
-        assertEquals("forge", AppTheme.FORGE.id)
+    }
+
+    @Test
+    fun `removed Forge id falls back to default`() {
+        // Старый Forge удалён: у тех, кто его выбрал, prefs читаются как тема по умолчанию
+        assertSame(AppTheme.Default, AppTheme.fromId("forge"))
     }
 
     @Test
@@ -301,23 +332,12 @@ class AppThemeIdTest {
     }
 
     @Test
-    fun `structure and signal layers are off for material3 and on for biolume and forge`() {
+    fun `structure and signal layers are off for material3 and on for biolume`() {
         // Инвариант, на котором держится «один код компонента на две темы»:
         // в M3E модификаторы глубины обязаны быть no-op.
         assertTrue(VlStructureTokens.Disabled.enabled.not())
         assertTrue(VlSignalTokens.Disabled.enabled.not())
         assertTrue(biolumeStructure(isDark = true).enabled)
         assertTrue(biolumeSignal(isDark = true).enabled)
-        assertTrue(forgeStructure(isDark = true).enabled)
-        assertTrue(forgeSignal(isDark = true).enabled)
-    }
-
-    @Test
-    fun `forge motion is linear and mechanical`() {
-        val motion = ForgeMotion
-        assertEquals(VlPressStyle.STAMP, motion.pressStyle)
-        assertEquals(1f, motion.pressScale)
-        assertEquals(false, motion.useSpring)
-        assertTrue("Forge должен иметь резкую механическую анимацию", motion.durationMs <= 100)
     }
 }

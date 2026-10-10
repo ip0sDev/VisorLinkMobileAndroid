@@ -29,9 +29,6 @@ import kotlin.math.roundToInt
  * цветных пятна противоречат §1.2 («один сигнал за раз») и §10 («не
  * подсвечивать glow-ом состояние покоя»), роль фона там играет рельеф.
  *
- * При жёсткой тени (Forge) не рисуется вовсе: мягкие размытые пятна на
- * индустриальном фоне читались как грязь за секциями.
- *
  * Также уважает системное отключение анимаций (§8).
  */
 @Composable
@@ -44,7 +41,6 @@ fun VlAmbientGlow(
 
     val tokens = VlTheme.tokens
     if (tokens.reduceMotion) return
-    if (tokens.structure.hardEdge) return
 
     val cs = MaterialTheme.colorScheme
     val isBiolume = tokens.isBiolume

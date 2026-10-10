@@ -10,13 +10,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Forge v2 — киберпанк-терминал особых режимов ID-карты (веб: блок FORGE v2 в
- * src/styles/variables.css). Пользователь его не выбирает: тему включает режим
- * Protogen / Beast (см. ModeThemeRules), поэтому в селекторе её нет.
+ * Forge v2 — киберпанк-терминал особых режимов ID-карты. Пользователь его не выбирает:
+ * тему включает режим Protogen / Beast (см. ModeThemeRules), поэтому в селекторе её нет.
  *
- * Отличия от старого [Forge]: только тёмная, вместо жёсткой тени — плоские панели
- * с контуром `primary` 16 % (structure.outline), малые скругления 2–8 dp (Beast — до 10),
- * два оттенка: Protogen (холодный неон) и Beast (тёплый янтарь, спокойнее).
+ * Палитра, формы (скругления 2–8 dp, у Beast до 10) и контур панелей `primary` 16 % — из веба
+ * (блок FORGE v2 в src/styles/variables.css). Поверх них Android-слой света, а не геометрии:
+ *  - заголовки — Unbounded с мягким неоновым свечением (см. forgeV2Typography);
+ *  - заголовки разделов с линией до края, неоновая линия под верхней панелью;
+ *  - основная кнопка светится и в покое, тумблер — светящаяся «риска» ([ForgeV2Switch]);
+ *  - неоновая дымка сверху экрана, у Protogen ещё сканлайны.
+ * Только тёмная. Protogen — холодный неон, Beast — тёплый янтарь, спокойнее.
  */
 object ForgeV2 {
 
@@ -43,6 +46,10 @@ object ForgeV2 {
         val radiusLg: Dp,
         /** --radius-2xl: потолок любого скругления в теме. */
         val radius2xl: Dp,
+        /** Сила неона: свечение заголовков и кнопки. Beast спокойнее. */
+        val neon: Float,
+        /** Оттенок Beast — по признаку, а не по ссылке: подкрашенная копия ([tintedBy]) — уже другой объект. */
+        val beast: Boolean = false,
     )
 
     val Protogen = Flavor(
@@ -66,6 +73,7 @@ object ForgeV2 {
         onError = Color(0xFF2A0008),
         radiusLg = 6.dp,
         radius2xl = 8.dp,
+        neon = 1f,
     )
 
     val Beast = Flavor(
@@ -89,10 +97,27 @@ object ForgeV2 {
         onError = Color(0xFF2A0705),
         radiusLg = 8.dp,
         radius2xl = 10.dp,
+        neon = 0.7f,
+        beast = true,
     )
 
     /** `color-mix(in srgb, a p%, b)` для непрозрачного b. */
     internal fun mix(a: Color, fraction: Float, b: Color): Color = a.copy(alpha = fraction).compositeOver(b)
+}
+
+/**
+ * Цвет профиля PRO **заменяет** оттенок Protogen / Beast (веб `uiAccentVars(…, { forge: true })`):
+ * перекрашиваются только primary и onPrimary. Неоновые линии, свечение, пузыри, выделение,
+ * контейнеры и дымка Forge выводит из primary своими формулами — форма темы остаётся Forge.
+ * Вторичный цвет, ошибки, статусы и поверхности — цвета режима.
+ *
+ * Основной цвет здесь ещё и цвет подписей (@ник, заголовки разделов) — на фоне и на панелях:
+ * тон подстраивается под тёмную тему как в вебе ([ProAccent.readable]) и на всякий случай
+ * доводится до 4.5:1 к самой светлой панели с текстом (`containerHigh`).
+ */
+internal fun ForgeV2.Flavor.tintedBy(accent: Color): ForgeV2.Flavor {
+    val neon = ProAccent.readable(accent, light = false).withContrastAgainst(containerHigh, min = 4.5f, towards = Color.White)
+    return copy(primary = neon, onPrimary = ProAccent.onColor(neon))
 }
 
 /**
@@ -186,14 +211,45 @@ internal fun forgeV2Structure(f: ForgeV2.Flavor) = VlStructureTokens(
     insetBlur = 8.dp,
 )
 
-/** Неон: --glow-primary (Beast мягче). По-прежнему не больше одного свечения на экране. */
+/** Неон: --glow-primary, у Beast мягче. Основная кнопка светится и в покое. */
 internal fun forgeV2Signal(f: ForgeV2.Flavor) = VlSignalTokens(
     enabled = true,
-    glowBlur = if (f === ForgeV2.Beast) 12.dp else 14.dp,
-    glowAlpha = if (f === ForgeV2.Beast) 0.22f else 0.35f,
-    fabRestAlpha = if (f === ForgeV2.Beast) 0.14f else 0.2f,
+    glowBlur = if (f.beast) 12.dp else 14.dp,
+    glowAlpha = if (f.beast) 0.22f else 0.35f,
+    fabRestAlpha = if (f.beast) 0.14f else 0.2f,
     focusBorder = 1.dp,
     pulsePeriodMs = 2000,
+    buttonRestAlpha = 0.2f * f.neon,
+)
+
+/** Дисплей терминала: неоновая дымка основного цвета сверху, у Protogen ещё сканлайны. */
+internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
+    VlTerminalTokens(
+        labelPrefix = "",
+        neon = f.primary,
+        neonAlt = f.secondary,
+        haze = f.primary.copy(alpha = 0.05f),
+    )
+} else {
+    VlTerminalTokens(
+        labelPrefix = "> ",
+        scanlineAlpha = 0.018f,
+        neon = f.primary,
+        neonAlt = f.secondary,
+        haze = f.primary.copy(alpha = 0.06f),
+    )
+}
+
+/**
+ * Тумблер «риска»: тонкая светящаяся планка вместо круглого бегунка — круг не вписывался
+ * в трек со скруглением 6–8 dp. Включённый трек подсвечен контуром и заливкой.
+ */
+internal val ForgeV2Switch = VlSwitchTokens(
+    thumb = RoundedCornerShape(2.dp),
+    thumbWidth = 8.dp,
+    thumbHeight = 22.dp,
+    thumbGlow = 0.6f,
+    litTrack = true,
 )
 
 internal fun forgeV2Status(f: ForgeV2.Flavor) = VlStatusTokens(
@@ -214,9 +270,9 @@ internal fun forgeV2Bubbles(f: ForgeV2.Flavor) = VlBubbleTokens(
 internal val ForgeV2Motion = VlMotionTokens(
     pressStyle = VlPressStyle.SCALE,
     pressScale = 0.98f,
-    pressOffset = 0.dp,
     useSpring = false,
     dampingRatio = 1f,
     stiffness = 0f,
     durationMs = 120,
+    glitch = true,
 )

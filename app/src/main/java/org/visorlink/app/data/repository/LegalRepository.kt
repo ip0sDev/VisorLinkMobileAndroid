@@ -17,7 +17,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import org.visorlink.app.data.remote.chat.VisorLinkApi
 import org.visorlink.app.data.repository.FlagsRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -25,7 +24,6 @@ import org.json.JSONObject
 class LegalRepository(
     private val firestore: FirebaseFirestore,
     private val context: Context,
-    private val api: VisorLinkApi? = null,
     private val flagsRepository: FlagsRepository? = null
 ) {
     companion object {

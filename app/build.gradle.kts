@@ -17,7 +17,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         isIgnoreExitValue = true
     }.standardOutput.asText.map { it.trim() }.getOrElse("")
 }
-val currentChannel = "BETA"
+val currentChannel = "RELEASE"
 
 android {
     namespace = "org.visorlink.app"
@@ -27,12 +27,12 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 175
-        versionName = "4.3.00"
+        versionCode = 182
+        versionName = "4.3.07"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"BETA\"")
-        buildConfigField("boolean", "InternalBuild", "true")
+        buildConfigField("String", "CHANNEL", "\"RELEASE\"")
+        buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
 
@@ -155,13 +155,16 @@ dependencies {
     implementation(libs.firebase.functions)
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
-    implementation(libs.firebase.config)
     implementation(libs.firebase.appcheck.playintegrity)
     debugImplementation(libs.firebase.appcheck.debug)
 
     // ── Other ────────────────────────────────────────────────────────────────
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.play.services.auth)
+    // Вход через Google: Credential Manager + Sign in with Google
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     implementation(libs.lottie.compose)

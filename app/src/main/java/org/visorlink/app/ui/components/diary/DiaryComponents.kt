@@ -48,7 +48,6 @@ import org.visorlink.app.data.model.SavedMessage
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPopIn
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.screens.diary.DiaryStats
@@ -59,16 +58,15 @@ import java.util.*
 
 @Composable
 fun MarkdownToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
-    val isLiquidEnabled = rememberLiquidEnabled()
     val jelly = rememberLiquidJellyState(softness = 0.14f, damping = 0.60f)
     IconButton(
         onClick = {
-            if (isLiquidEnabled) jelly.pulse(0.16f)
+            jelly.pulse(0.16f)
             onClick()
         },
         modifier = Modifier
             .size(48.dp)
-            .liquidJelly(jelly, enabled = isLiquidEnabled)
+            .liquidJelly(jelly)
     ) {
         Icon(icon, label, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
     }
@@ -78,25 +76,20 @@ fun MarkdownToolButton(icon: ImageVector, label: String, onClick: () -> Unit) {
 fun DiaryStatsCard(stats: DiaryStats) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
-    val isLiquidEnabled = rememberLiquidEnabled()
     val isDark = cs.surface.luminance() < 0.5f
 
-    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else tokens.shapes.card
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp))
 
-    val cardBrush = remember(isLiquidEnabled, isDark, cs) {
-        if (isLiquidEnabled) {
-            val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
-            val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
-            Brush.verticalGradient(listOf(top, bottom))
-        } else null
+    val cardBrush = remember(isDark, cs) {
+        val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+        val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
+        Brush.verticalGradient(listOf(top, bottom))
     }
 
-    val cardBorder = remember(isLiquidEnabled, isDark, cs) {
-        if (isLiquidEnabled) {
-            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.60f)
-            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
-            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
-        } else null
+    val cardBorder = remember(isDark, cs) {
+        val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.60f)
+        val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+        BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
     }
 
     Box(
@@ -107,18 +100,8 @@ fun DiaryStatsCard(stats: DiaryStats) {
                 else Modifier
             )
             .clip(shape)
-            .then(
-                if (cardBrush != null) Modifier.background(cardBrush, shape)
-                else Modifier.background(
-                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
-                    shape
-                )
-            )
-            .then(
-                if (cardBorder != null) Modifier.border(cardBorder, shape)
-                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, shape)
-                else Modifier
-            )
+            .background(cardBrush, shape)
+            .border(cardBorder, shape)
             .padding(16.dp)
     ) {
         Row(
@@ -129,21 +112,18 @@ fun DiaryStatsCard(stats: DiaryStats) {
             StatItem(
                 label = stringResource(R.string.diary_stats_total),
                 value = stats.totalEntries.toString(),
-                icon = Icons.Default.Book,
-                isLiquid = isLiquidEnabled
+                icon = Icons.Default.Book
             )
             StatItem(
                 label = stringResource(R.string.diary_stats_month),
                 value = stats.monthlyEntries.toString(),
-                icon = Icons.Default.CalendarMonth,
-                isLiquid = isLiquidEnabled
+                icon = Icons.Default.CalendarMonth
             )
             StatItem(
                 label = stringResource(R.string.diary_stats_streak),
                 value = "${stats.currentStreak}d",
                 icon = Icons.Default.Whatshot,
-                iconColor = Color(0xFFF97316),
-                isLiquid = isLiquidEnabled
+                iconColor = Color(0xFFF97316)
             )
         }
     }
@@ -154,27 +134,24 @@ private fun StatItem(
     label: String,
     value: String,
     icon: ImageVector,
-    iconColor: Color? = null,
-    isLiquid: Boolean = false
+    iconColor: Color? = null
 ) {
     val jelly = rememberLiquidJellyState(softness = 0.08f)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
-            .liquidJelly(jelly, enabled = isLiquid)
+            .liquidJelly(jelly)
             .clickable(
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 indication = null
             ) {
-                if (isLiquid) jelly.pulse(0.10f)
+                jelly.pulse(0.10f)
             }
             .then(
-                if (isLiquid) {
-                    Modifier
-                        .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                } else Modifier
+                Modifier
+                    .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f))
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
             )
     ) {
         Icon(icon, null, tint = iconColor ?: MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
@@ -187,10 +164,9 @@ private fun StatItem(
 @Composable
 fun DateSelector(selectedDate: Calendar, onDateSelected: (Calendar) -> Unit) {
     val df = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
-    val isLiquidEnabled = rememberLiquidEnabled()
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
-    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
 
     val leftJelly = rememberLiquidJellyState(softness = 0.12f)
     val rightJelly = rememberLiquidJellyState(softness = 0.12f)
@@ -199,20 +175,18 @@ fun DateSelector(selectedDate: Calendar, onDateSelected: (Calendar) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (isLiquidEnabled) {
-                    Modifier
-                        .then(
-                            if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, shape)
-                            else Modifier
-                        )
-                        .clip(shape)
-                        .background(cs.surfaceContainerHigh.copy(alpha = 0.6f), shape)
-                        .then(
-                            if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, shape)
-                            else Modifier.border(1.dp, cs.outlineVariant.copy(alpha = 0.2f), shape)
-                        )
-                        .padding(horizontal = 6.dp, vertical = 4.dp)
-                } else Modifier
+                Modifier
+                    .then(
+                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, shape)
+                        else Modifier
+                    )
+                    .clip(shape)
+                    .background(cs.surfaceContainerHigh.copy(alpha = 0.6f), shape)
+                    .then(
+                        if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, shape)
+                        else Modifier.border(1.dp, cs.outlineVariant.copy(alpha = 0.2f), shape)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
             )
     ) {
         Row(
@@ -222,11 +196,11 @@ fun DateSelector(selectedDate: Calendar, onDateSelected: (Calendar) -> Unit) {
         ) {
             IconButton(
                 onClick = {
-                    if (isLiquidEnabled) leftJelly.pulse(0.12f)
+                    leftJelly.pulse(0.12f)
                     val newDate = (selectedDate.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, -1) }
                     onDateSelected(newDate)
                 },
-                modifier = Modifier.liquidJelly(leftJelly, enabled = isLiquidEnabled)
+                modifier = Modifier.liquidJelly(leftJelly)
             ) {
                 Icon(Icons.Default.ChevronLeft, contentDescription = "Previous Day", tint = cs.primary)
             }
@@ -250,11 +224,11 @@ fun DateSelector(selectedDate: Calendar, onDateSelected: (Calendar) -> Unit) {
 
             IconButton(
                 onClick = {
-                    if (isLiquidEnabled) rightJelly.pulse(0.12f)
+                    rightJelly.pulse(0.12f)
                     val newDate = (selectedDate.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 1) }
                     onDateSelected(newDate)
                 },
-                modifier = Modifier.liquidJelly(rightJelly, enabled = isLiquidEnabled)
+                modifier = Modifier.liquidJelly(rightJelly)
             ) {
                 Icon(Icons.Default.ChevronRight, contentDescription = "Next Day", tint = cs.primary)
             }
@@ -269,25 +243,22 @@ fun DiaryEntryCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isLiquidEnabled = rememberLiquidEnabled()
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
-    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(22.dp)) else tokens.shapes.card
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(22.dp))
     val cardJelly = rememberLiquidJellyState(softness = 0.05f)
 
-    val cardBorder = remember(isLiquidEnabled, isDark, cs) {
-        if (isLiquidEnabled) {
-            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.55f)
-            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.03f) else cs.outlineVariant.copy(alpha = 0.10f)
-            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
-        } else null
+    val cardBorder = remember(isDark, cs) {
+        val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.55f)
+        val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.03f) else cs.outlineVariant.copy(alpha = 0.10f)
+        BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .liquidJelly(cardJelly, enabled = isLiquidEnabled)
+            .liquidJelly(cardJelly)
             .then(
                 if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, shape)
                 else Modifier
@@ -297,14 +268,10 @@ fun DiaryEntryCard(
                 if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
                 shape
             )
-            .then(
-                if (cardBorder != null) Modifier.border(cardBorder, shape)
-                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, shape)
-                else Modifier
-            )
+            .border(cardBorder, shape)
             .clickable(
                 onClick = {
-                    if (isLiquidEnabled) cardJelly.pulse(0.06f)
+                    cardJelly.pulse(0.06f)
                     onClick()
                 }
             )
@@ -339,10 +306,10 @@ fun DiaryEntryCard(
             val deleteJelly = rememberLiquidJellyState(softness = 0.14f)
             IconButton(
                 onClick = {
-                    if (isLiquidEnabled) deleteJelly.pulse(0.15f)
+                    deleteJelly.pulse(0.15f)
                     onDelete()
                 },
-                modifier = Modifier.liquidJelly(deleteJelly, enabled = isLiquidEnabled)
+                modifier = Modifier.liquidJelly(deleteJelly)
             ) {
                 Icon(
                     Icons.Default.Delete,
@@ -365,15 +332,14 @@ fun DiaryPinDialog(
     onDismiss: () -> Unit,
     clearError: () -> Unit
 ) {
-    val isLiquidEnabled = rememberLiquidEnabled()
-    val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.65f, stiffness = 420f)
+    val popProgress = rememberLiquidPopProgress(damping = 0.65f, stiffness = 420f)
     var pin by remember { mutableStateOf("") }
     var saveBio by remember { mutableStateOf(false) }
-    val shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else MaterialTheme.shapes.extraLarge
+    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp))
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.liquidPopIn(popProgress, isLiquidEnabled),
+        modifier = Modifier.liquidPopIn(popProgress),
         shape = shape,
         title = {
             Text(
@@ -435,12 +401,12 @@ fun DiaryPinDialog(
                     val bioJelly = rememberLiquidJellyState(softness = 0.10f)
                     TextButton(
                         onClick = {
-                            if (isLiquidEnabled) bioJelly.pulse(0.12f)
+                            bioJelly.pulse(0.12f)
                             onBiometric()
                         },
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
-                            .liquidJelly(bioJelly, enabled = isLiquidEnabled)
+                            .liquidJelly(bioJelly)
                     ) {
                         Icon(Icons.Default.Fingerprint, null)
                         Spacer(Modifier.width(8.dp))
@@ -453,12 +419,12 @@ fun DiaryPinDialog(
             val confirmJelly = rememberLiquidJellyState(softness = 0.10f)
             Button(
                 onClick = {
-                    if (isLiquidEnabled) confirmJelly.pulse(0.10f)
+                    confirmJelly.pulse(0.10f)
                     onPinEntered(pin, saveBio)
                 },
                 enabled = pin.length >= 4,
-                modifier = Modifier.liquidJelly(confirmJelly, enabled = isLiquidEnabled),
-                shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)) else ButtonDefaults.shape
+                modifier = Modifier.liquidJelly(confirmJelly),
+                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp))
             ) {
                 Text(stringResource(R.string.tfa_action_confirm))
             }
@@ -475,8 +441,7 @@ fun VlDrawingDialog(
     onDismiss: () -> Unit,
     onSave: (Uri) -> Unit
 ) {
-    val isLiquidEnabled = rememberLiquidEnabled()
-    val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.60f, stiffness = 380f)
+    val popProgress = rememberLiquidPopProgress(damping = 0.60f, stiffness = 380f)
     val context = LocalContext.current
     var currentPath by remember { mutableStateOf(Path()) }
     var paths by remember { mutableStateOf(listOf<Path>()) }
@@ -489,7 +454,7 @@ fun VlDrawingDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .liquidPopIn(popProgress, isLiquidEnabled),
+                .liquidPopIn(popProgress),
             color = MaterialTheme.colorScheme.background
         ) {
             Column(Modifier.fillMaxSize()) {
@@ -502,17 +467,17 @@ fun VlDrawingDialog(
                         val saveJelly = rememberLiquidJellyState()
                         IconButton(
                             onClick = {
-                                if (isLiquidEnabled) saveJelly.pulse()
+                                saveJelly.pulse()
                                 // Dummy implementation for saving drawing
                                 onSave(Uri.EMPTY)
                             },
-                            modifier = Modifier.liquidJelly(saveJelly, enabled = isLiquidEnabled)
+                            modifier = Modifier.liquidJelly(saveJelly)
                         ) { Icon(Icons.Default.Check, null) }
                     }
                 )
 
                 val colors = listOf(Color.Black, Color.Red, Color.Green, Color.Blue, Color.Yellow)
-                val paletteShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
+                val paletteShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -531,7 +496,7 @@ fun VlDrawingDialog(
                             Box(
                                 Modifier
                                     .size(42.dp)
-                                    .liquidJelly(dotJelly, enabled = isLiquidEnabled)
+                                    .liquidJelly(dotJelly)
                                     .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                     .background(c)
                                     .then(
@@ -539,7 +504,7 @@ fun VlDrawingDialog(
                                         else Modifier
                                     )
                                     .clickable {
-                                        if (isLiquidEnabled) dotJelly.pulse(0.18f)
+                                        dotJelly.pulse(0.18f)
                                         color = c
                                     }
                             )
@@ -547,7 +512,7 @@ fun VlDrawingDialog(
                     }
                 }
 
-                val canvasShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
+                val canvasShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp))
                 Box(
                     Modifier
                         .fillMaxSize()
