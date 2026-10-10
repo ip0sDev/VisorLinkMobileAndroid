@@ -189,8 +189,7 @@ fun Modifier.messageGestures(
 @Composable
 internal fun DoubleTapHeartAnimation(
     triggerKey: Int,
-    modifier: Modifier = Modifier,
-    liquidEnabled: Boolean = true
+    modifier: Modifier = Modifier
 ) {
     var isPlaying by remember { mutableStateOf(false) }
     val progress = remember { Animatable(0f) }
@@ -214,32 +213,26 @@ internal fun DoubleTapHeartAnimation(
     // Фаза 1 (0..0.30): взрывной рост капли сердца с вытягиванием по X
     // Фаза 2 (0.30..0.65): упругие затухающие колебания (Squash & Stretch)
     // Фаза 3 (0.65..1.0): всплывание вверх и растворение
-    val (scaleX, scaleY, alpha, offsetY) = remember(p, liquidEnabled) {
-        if (!liquidEnabled) {
-            val s = if (p < 0.4f) (p / 0.4f) * 1.15f else 1.15f + (p - 0.4f) * 0.2f
-            val a = if (p > 0.65f) (1f - (p - 0.65f) / 0.35f).coerceIn(0f, 1f) else 1f
-            listOf(s, s, a, 0f)
-        } else {
-            when {
-                p < 0.30f -> {
-                    val sub = p / 0.30f
-                    val sX = 0.2f + 1.15f * sub
-                    val sY = 0.2f + 0.95f * sub
-                    listOf(sX, sY, sub.coerceIn(0f, 1f), 0f)
-                }
-                p < 0.65f -> {
-                    val sub = (p - 0.30f) / 0.35f
-                    val bounce = kotlin.math.sin(sub * Math.PI.toFloat() * 2f) * 0.12f * (1f - sub)
-                    listOf(1.10f + bounce, 1.10f - bounce * 0.8f, 1f, 0f)
-                }
-                else -> {
-                    val sub = (p - 0.65f) / 0.35f
-                    val sX = 1.10f + sub * 0.15f
-                    val sY = 1.10f + sub * 0.15f
-                    val a = (1f - sub).coerceIn(0f, 1f)
-                    val y = -sub * 28f
-                    listOf(sX, sY, a, y)
-                }
+    val (scaleX, scaleY, alpha, offsetY) = remember(p) {
+        when {
+            p < 0.30f -> {
+                val sub = p / 0.30f
+                val sX = 0.2f + 1.15f * sub
+                val sY = 0.2f + 0.95f * sub
+                listOf(sX, sY, sub.coerceIn(0f, 1f), 0f)
+            }
+            p < 0.65f -> {
+                val sub = (p - 0.30f) / 0.35f
+                val bounce = kotlin.math.sin(sub * Math.PI.toFloat() * 2f) * 0.12f * (1f - sub)
+                listOf(1.10f + bounce, 1.10f - bounce * 0.8f, 1f, 0f)
+            }
+            else -> {
+                val sub = (p - 0.65f) / 0.35f
+                val sX = 1.10f + sub * 0.15f
+                val sY = 1.10f + sub * 0.15f
+                val a = (1f - sub).coerceIn(0f, 1f)
+                val y = -sub * 28f
+                listOf(sX, sY, a, y)
             }
         }
     }
@@ -251,7 +244,7 @@ internal fun DoubleTapHeartAnimation(
         contentAlignment = Alignment.Center
     ) {
         // Микро-капли (Metaball Droplets Splash) при liquid-режиме
-        if (liquidEnabled && p in 0.12f..0.85f) {
+        if (p in 0.12f..0.85f) {
             val splashProgress = ((p - 0.12f) / 0.73f).coerceIn(0f, 1f)
             Canvas(modifier = Modifier.size(110.dp)) {
                 val dropletCount = 6
@@ -518,7 +511,6 @@ fun MessageBubble(
     chat: Chat? = null,
     onStickerClick: ((packId: String?, stickerId: String?) -> Unit)? = null,
     onCancelUpload: ((String) -> Unit)? = null,
-    liquidEnabled: Boolean = true,
 ) {
     val haptic = rememberHaptic()
     val isReadByOther = otherUid in message.readBy
@@ -527,9 +519,7 @@ fun MessageBubble(
     val onDoubleTapLike = {
         heartAnimKey++
         haptic.perform(HapticType.REACTION, hapticEnabled)
-        if (liquidEnabled) {
-            bubbleJelly.pulse(0.08f)
-        }
+        bubbleJelly.pulse(0.08f)
         onReact("❤️")
     }
 
@@ -541,7 +531,7 @@ fun MessageBubble(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (isMine) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Box(modifier = uploadProgressModifier.liquidJelly(bubbleJelly, enabled = liquidEnabled)) {
+        Box(modifier = uploadProgressModifier.liquidJelly(bubbleJelly)) {
             when {
                 !message.deleted && isLegacyMediaMessage(message) -> {
                     LegacyMediaPlaceholder(
@@ -644,8 +634,7 @@ fun MessageBubble(
 
             DoubleTapHeartAnimation(
                 triggerKey = heartAnimKey,
-                modifier = Modifier.matchParentSize(),
-                liquidEnabled = liquidEnabled
+                modifier = Modifier.matchParentSize()
             )
         }
     }

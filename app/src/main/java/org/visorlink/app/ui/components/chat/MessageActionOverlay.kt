@@ -55,7 +55,6 @@ import org.visorlink.app.data.model.MessageType
 import org.visorlink.app.data.model.Reaction
 import org.visorlink.app.data.model.SendStatus
 import org.visorlink.app.ui.components.liquidPopIn
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.utils.HapticType
@@ -116,7 +115,6 @@ fun MessageActionOverlay(
 
     val usageRankManager: UsageRankManager = koinInject()
     val rankedReactions by usageRankManager.rankedReactionsFlow.collectAsState()
-    val isLiquidEnabled = rememberLiquidEnabled()
     val haptic = rememberHaptic()
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -226,11 +224,11 @@ fun MessageActionOverlay(
 
     val bgAlpha by animateFloatAsState(
         targetValue = if (isVisible) 1f else 0f,
-        animationSpec = if (isLiquidEnabled) spring(dampingRatio = 0.85f, stiffness = 420f) else tween(200),
+        animationSpec = spring(dampingRatio = 0.85f, stiffness = 420f),
         label = "overlay_bg"
     )
 
-    val popProgress = rememberLiquidPopProgress(isLiquidEnabled)
+    val popProgress = rememberLiquidPopProgress()
     val popOrigin = TransformOrigin(
         pivotFractionX = if (alignRight) 0.85f else 0.15f,
         pivotFractionY = if (showAbove) 1f else 0f
@@ -253,7 +251,7 @@ fun MessageActionOverlay(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .offset { IntOffset(0, containerY.toInt()) }
-                .liquidPopIn(popProgress, isLiquidEnabled, popOrigin)
+                .liquidPopIn(popProgress, popOrigin)
                 .onGloballyPositioned { containerHeightPx = it.size.height.toFloat() },
             horizontalAlignment = if (alignRight) Alignment.End else Alignment.Start,
             verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -295,7 +293,6 @@ fun MessageActionOverlay(
                         existingReactions = contextMenuData.message.parsedReactions,
                         isDragging = isDragging,
                         fingerPos = fingerPos,
-                        isLiquidEnabled = isLiquidEnabled,
                         onHoverReactionChanged = { hoveredReaction = it },
                         onSelectReaction = { emoji ->
                             haptic.perform(HapticType.REACTION, true)
@@ -313,7 +310,6 @@ fun MessageActionOverlay(
                         existingReactions = contextMenuData.message.parsedReactions,
                         isDragging = isDragging,
                         fingerPos = fingerPos,
-                        isLiquidEnabled = isLiquidEnabled,
                         onHoverReactionChanged = { hoveredReaction = it },
                         onSelectReaction = { emoji ->
                             haptic.perform(HapticType.REACTION, true)
@@ -366,7 +362,6 @@ private fun LiquidReactionCapsule(
     existingReactions: List<Reaction>,
     isDragging: Boolean,
     fingerPos: Offset,
-    isLiquidEnabled: Boolean,
     onHoverReactionChanged: (String?) -> Unit,
     onSelectReaction: (String) -> Unit
 ) {
@@ -418,9 +413,9 @@ private fun LiquidReactionCapsule(
                     val maxRadius = with(density) { 72.dp.toPx() }
                     val proximity = if (dist < maxRadius) (1f - dist / maxRadius).coerceIn(0f, 1f) else 0f
 
-                    val targetScale = 1.0f + (if (isLiquidEnabled) 0.45f else 0.25f) * (proximity * proximity)
-                    val targetSquashX = if (isLiquidEnabled) 1.0f + 0.08f * proximity else 1.0f
-                    val targetSquashY = if (isLiquidEnabled) 1.0f - 0.08f * proximity else 1.0f
+                    val targetScale = 1.0f + (0.45f) * (proximity * proximity)
+                    val targetSquashX = 1.0f + 0.08f * proximity
+                    val targetSquashY = 1.0f - 0.08f * proximity
 
                     val animScale by animateFloatAsState(
                         targetValue = targetScale,
@@ -437,7 +432,7 @@ private fun LiquidReactionCapsule(
                         animationSpec = spring(dampingRatio = 0.55f, stiffness = 550f),
                         label = "dock_squash_y_$emoji"
                     )
-                    val liftY = if (isLiquidEnabled) -(animScale - 1f) * with(density) { 16.dp.toPx() } else 0f
+                    val liftY = -(animScale - 1f) * with(density) { 16.dp.toPx() }
 
                     EmojiDockItem(
                         emoji = emoji,

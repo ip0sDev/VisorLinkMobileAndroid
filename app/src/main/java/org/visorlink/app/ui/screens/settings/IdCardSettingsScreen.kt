@@ -82,7 +82,11 @@ fun IdCardSettingsScreen(
         val me = profile
         if (cardState !is IdCardState.Ready || me == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                if (cardState is IdCardState.Ready) Text(stringResource(R.string.idcard_tab_no_card)) else CircularProgressIndicator()
+                when (cardState) {
+                    is IdCardState.Ready -> Text(stringResource(R.string.idcard_tab_no_card))
+                    IdCardState.Unavailable, IdCardState.Denied -> Text(stringResource(R.string.idcard_load_failed), color = cs.onSurfaceVariant)
+                    else -> CircularProgressIndicator()
+                }
             }
             return@Scaffold
         }
@@ -159,6 +163,11 @@ fun IdCardSettingsScreen(
                 IdSkinInventory(card = card, profile = me)
             }
 
+            // Визитка /card/{ник}: надетый скин, статус; читать её — только по ссылке
+            VlSettingsSection(title = stringResource(R.string.public_card_title)) {
+                PublicCardSection(card = card, viewModel = viewModel)
+            }
+
             if (special || org.visorlink.app.ui.idcard.LocalIdModeState.current.mask.active) {
                 VlSettingsSection(title = stringResource(R.string.idcard_mask_title)) {
                     MaskSection(Modifier.padding(vertical = 12.dp))
@@ -193,5 +202,43 @@ fun IdCardSettingsScreen(
                 )
             }
         }
+    }
+}
+
+/** «Моя визитка» (спека ANDROID_AUTH_2FA_ACCENT_SPEC.md, часть 6): публикация, снятие, ссылка. */
+@Composable
+private fun PublicCardSection(card: org.visorlink.app.data.idcard.IdCard, viewModel: IdCardSettingsViewModel) {
+    val state by viewModel.publicCard.collectAsState()
+    val cs = MaterialTheme.colorScheme
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val published = card.publicCard
+    var tagline by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(
+            if (published != null) stringResource(R.string.public_card_on, published.url.removePrefix("https://"))
+            else stringResource(R.string.public_card_off),
+            style = MaterialTheme.typography.bodyMedium,
+            color = cs.onSurfaceVariant,
+        )
+        org.visorlink.app.ui.components.VlTextField(
+            value = tagline,
+            onValueChange = { tagline = it.take(org.visorlink.app.data.idcard.PublicCardRef.TAGLINE_MAX) },
+            label = stringResource(R.string.public_card_tagline),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            org.visorlink.app.ui.components.VlDialogButton(
+                onClick = { viewModel.publishPublicCard(tagline) }, isPrimary = true, isLoading = state.busy,
+            ) { Text(stringResource(if (published != null) R.string.public_card_update else R.string.public_card_publish)) }
+            if (published != null) {
+                org.visorlink.app.ui.components.VlDialogButton(onClick = { uriHandler.openUri(published.url) }, enabled = !state.busy) {
+                    Text(stringResource(R.string.public_card_open))
+                }
+                org.visorlink.app.ui.components.VlDialogButton(onClick = { viewModel.unpublishPublicCard() }, isDestructive = true, enabled = !state.busy) {
+                    Text(stringResource(R.string.public_card_unpublish))
+                }
+            }
+        }
+        state.message?.let { Text(it.asString(), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant) }
     }
 }

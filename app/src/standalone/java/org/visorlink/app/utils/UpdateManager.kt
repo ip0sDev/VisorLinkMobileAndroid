@@ -3,7 +3,17 @@ package org.visorlink.app.utils
 import android.app.Application
 import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.ipos.store.sdk.UpdateState
+import com.ipos.store.sdk.UpdateType
+import org.visorlink.app.ui.maintenance.ForceUpdateScreen
 import com.ipos.store.sdk.IposStoreUpdates
 import com.ipos.store.sdk.UpdateChannel
 import kotlinx.coroutines.CoroutineScope
@@ -105,9 +115,50 @@ object UpdateManager {
         }
     }
 
+    /**
+     * @param force обновление обязательно (`AppFlags.forceUpdateRequired`): приложение закрыто
+     *   экраном «Требуется обновление», Ipos Store показывает полноэкранное обновление
+     *   (`UpdateType.IMMEDIATE`, без «Позже»). Сервер Ipos Store ещё не отдал версию — экран
+     *   остаётся с «Проверить снова».
+     */
     @Composable
-    fun UpdateHost() {
-        IposStoreUpdates.IposUpdateHost()
+    fun UpdateHost(force: Boolean = false) {
+        if (!force) {
+            IposStoreUpdates.IposUpdateHost()
+            return
+        }
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val state by IposStoreUpdates.updateState.collectAsState()
+        // Флаг пришёл — сразу проверяем обновление (иначе SDK узнал бы о нём при следующем запуске)
+        LaunchedEffect(Unit) { runCatching { IposStoreUpdates.checkUpdate(channel = parseChannel(getSavedChannel(context))) } }
+        val progress = (state as? UpdateState.Downloading)?.progress?.let { if (it > 1f) it / 100f else it }
+        ForceUpdateScreen(
+            progress = progress,
+            onUpdate = {
+                val activity = context.findActivity()
+                val channel = parseChannel(getSavedChannel(context))
+                if (activity != null) {
+                    runCatching { IposStoreUpdates.showUpdateIfAvailable(activity, UpdateType.IMMEDIATE, channel) }
+                        .onFailure { Log.e(TAG, "Force update failed", it) }
+                }
+            },
+            secondaryLabel = stringResource(R.string.service_mode_retry),
+            onSecondary = {
+                scope.launch {
+                    val found = runCatching { IposStoreUpdates.checkUpdate(channel = parseChannel(getSavedChannel(context))) }.getOrNull()
+                    if (found == null) Toast.makeText(context, R.string.update_force_not_found, Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
+        // Полноэкранное обновление SDK — поверх экрана, как только версия найдена
+        IposStoreUpdates.IposUpdateHost(UpdateType.IMMEDIATE)
+    }
+
+    private tailrec fun Context.findActivity(): android.app.Activity? = when (this) {
+        is android.app.Activity -> this
+        is android.content.ContextWrapper -> baseContext.findActivity()
+        else -> null
     }
 
     private fun parseChannel(channelStr: String): UpdateChannel {

@@ -2,6 +2,7 @@ package org.visorlink.app.ui.theme
 
 import android.app.Application
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -114,8 +115,8 @@ class ThemeScreenshotTest(
     @get:Rule
     val compose = createComposeRule()
 
-    // Базовые компоненты (VlSwitch, VlSettingsSection, VlAlertDialog) берут флаги
-    // через koinInject() — подкладываем заглушку со всеми флагами по умолчанию.
+    // Компоненты, которые берут FlagsRepository через koinInject(), получают
+    // заглушку без серверных флагов.
     private val flagsRepository = mock<FlagsRepository> { on { flags } doReturn MutableStateFlow(AppFlags()) }
 
     @Before
@@ -140,8 +141,9 @@ class ThemeScreenshotTest(
                 setStatusBarColor = false,
             ) {
                 // Surface, а не Box.background: как и Scaffold в реальных экранах,
-                // он выставляет LocalContentColor = onBackground
-                Surface(color = MaterialTheme.colorScheme.background) {
+                // он выставляет LocalContentColor = onBackground. Фон-терминал Forge v2 —
+                // как у корня приложения в MainActivity
+                Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.vlTerminalBackdrop(VlTheme.tokens)) {
                     Box(Modifier.width(400.dp).padding(16.dp)) { content() }
                 }
             }
@@ -271,6 +273,18 @@ class ThemeScreenshotTest(
                 isTyping = true,
                 onClick = {},
             )
+            // Строка «Приглашения»: синтетический чат, встаёт в список по дате приглашения
+            ChatListItem(
+                chat = Chat(id = "invites_me", lastMessageAt = now),
+                chatType = ChatType.DIRECT,
+                currentUid = me,
+                otherProfile = null,
+                draftText = null,
+                unreadCount = 2,
+                isInvites = true,
+                previewOverride = "2 новых приглашения",
+                onClick = {},
+            )
             ChatListItem(
                 chat = chat("u4", "Компактный режим", "Длинное сообщение, которое должно обрезаться многоточием в конце строки", "u4", 12),
                 chatType = ChatType.DIRECT,
@@ -326,7 +340,6 @@ class ThemeScreenshotTest(
                 diaryEnabled = true,
                 discoverEnabled = true,
                 onOpenDiary = {},
-                flagsRepository = flagsRepository,
             )
         }
     }
@@ -336,13 +349,125 @@ class ThemeScreenshotTest(
      * без оформления: должна совпадать с темой зрителя. Остальные переопределяют
      * акцент, шрифт, тему и раскладку — превью редактора рисуется так же.
      */
+    /**
+     * Страница профиля поверх фото: вуаль ([ProfileBackdropScrim]), шапка и детали. Владелец —
+     * PRO со светлым HEX-акцентом: раньше в светлой теме @ник и ссылки на нём пропадали, а
+     * тёмный текст на тёмном фото под белой вуалью 20 % не читался.
+     */
+    @Test
+    fun profilePage() = snap("profilepage") {
+        val user = UserProfile(
+            uid = "u1", displayName = "Иван Петров", username = "ivan", online = true, isAdmin = true,
+            bio = "Пишу код и катаюсь на велике. Сайт: https://visorlink.org",
+            proUntil = Timestamp(java.util.Date(System.currentTimeMillis() + 86_400_000L)),
+        )
+        val appearance = ProfileAppearance(accentHex = "#FFE45C", emojis = "🚲")
+        ProfileAppearanceTheme(
+            appearance = appearance,
+            viewerTheme = appTheme,
+            viewerMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT,
+            viewerPreset = ColorPreset.DEFAULT,
+            // Цвет профиля PRO заменяет оттенок Forge v2 (в Biolume его перекрывает accentHex профиля)
+            proAccent = androidx.compose.ui.graphics.Color(0xFFFFE45C),
+        ) {
+            Box(Modifier.fillMaxWidth()) {
+                // Пёстрое «фото» фона: тёмные и светлые пятна, как у настоящей фотографии
+                Box(
+                    Modifier.matchParentSize().background(
+                        androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(
+                                androidx.compose.ui.graphics.Color(0xFF1B263B),
+                                androidx.compose.ui.graphics.Color(0xFFE76F51),
+                                androidx.compose.ui.graphics.Color(0xFFF4F1DE),
+                                androidx.compose.ui.graphics.Color(0xFF264653),
+                            )
+                        )
+                    )
+                )
+                org.visorlink.app.ui.screens.profile.ProfileBackdropScrim(Modifier.matchParentSize())
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                    org.visorlink.app.ui.screens.profile.ProfileHeader(user = user, appearance = appearance, isMe = false)
+                    org.visorlink.app.ui.screens.profile.ProfileDetails(user, isMe = false)
+                }
+            }
+        }
+    }
+
+    /**
+     * Лента «Каналы»: пост с моим 👍, комментариями и просмотрами, пост с вложением, которое
+     * лента не проигрывает, и каталог — «Подписаться» / «Перейти».
+     */
+    @Test
+    fun feed() = snap("feed") {
+        val channel = Chat(id = "c1", type = "channel", name = "VisorLink News")
+        val liked = org.visorlink.app.data.model.FeedPost(
+            channel,
+            Message(
+                id = "m1", senderId = "author", commentsCount = 12, viewsCount = 1834,
+                text = "Вышло обновление 4.3: инвентарь скинов ID-карт и обмен в чатах. Подробности — https://visorlink.org",
+                reactions = listOf(mapOf("emoji" to org.visorlink.app.data.model.FEED_LIKE_EMOJI, "uids" to listOf("me", "a", "b"), "count" to 3L)),
+            ),
+        )
+        val video = org.visorlink.app.data.model.FeedPost(
+            channel.copy(settings = org.visorlink.app.data.model.ChatSettings(allowComments = false)),
+            Message(id = "m2", senderId = "author", type = "video", url = "https://lh3.googleusercontent.com/d/v", driveFileId = "v", caption = "Как работает обмен"),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            listOf(liked, video).forEach { post ->
+                org.visorlink.app.ui.components.feed.FeedPostCard(
+                    post = post, currentUid = "me",
+                    onLike = {}, onComments = {}, onOpenChannel = {}, onOpenImage = {}, onAction = {},
+                )
+            }
+            org.visorlink.app.ui.components.feed.CuratedChannelCard(
+                channel = org.visorlink.app.data.model.CuratedChannel("c2", "Спорт", "Главные матчи дня и разборы", tag = "sport", memberCount = 15400),
+                subscribed = false, joining = false, onSubscribe = {}, onOpen = {},
+            )
+            org.visorlink.app.ui.components.feed.CuratedChannelCard(
+                channel = org.visorlink.app.data.model.CuratedChannel("c1", "VisorLink News", tag = "news", memberCount = 3),
+                subscribed = true, joining = false, onSubscribe = {}, onOpen = {},
+            )
+        }
+    }
+
+    /**
+     * Вкладка «Профиль» (флаг enable_profile_navbar): шапка — ID-карта вместо аватара, под ней
+     * детали профиля без второй карты, внизу навбар с выбранной вкладкой «Профиль».
+     */
+    @Test
+    fun profileTab() = snap("profiletab") {
+        val user = UserProfile(
+            uid = "u1", displayName = "Иван Петров", username = "ivan_petrov", online = true,
+            bio = "Пишу код и катаюсь на велике.",
+        )
+        val card = org.visorlink.app.data.idcard.IdCard(
+            serial = org.visorlink.app.data.idcard.IdCardGenerator.generateSerial(42L),
+            traits = org.visorlink.app.data.idcard.IdCardGenerator.generateTraits(42L),
+            issuedAt = 1_791_200_000_000L,
+            registeredAt = 1_741_910_400_000L,
+            version = 1,
+        )
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+            org.visorlink.app.ui.idcard.IdCardHeader(card, user)
+            org.visorlink.app.ui.screens.profile.ProfileDetails(user, isMe = true, idCardSlot = false)
+            VlNavigationBar(
+                selectedTab = org.visorlink.app.ui.components.NAV_TAB_PROFILE,
+                onTabSelected = {},
+                diaryEnabled = true,
+                discoverEnabled = true,
+                onOpenDiary = {},
+                profileEnabled = true,
+            )
+        }
+    }
+
     @Test
     fun profileAppearance() = snap("profile") {
         val profile = UserProfile(uid = "u1", displayName = "Иван Петров", username = "ivan")
         val cases = listOf(
             "без оформления" to ProfileAppearance.None,
             "акцент + округлый" to ProfileAppearance(accent = ColorPreset.CRIMSON, font = ProfileFont.ROUNDED, emojis = "🔥"),
-            "Forge + засечки, компактный" to ProfileAppearance(theme = AppTheme.FORGE, font = ProfileFont.SERIF, layout = ProfileLayout.COMPACT),
+            "M3E + засечки, компактный" to ProfileAppearance(theme = AppTheme.MATERIAL3_EXPRESSIVE, font = ProfileFont.SERIF, layout = ProfileLayout.COMPACT),
             "Biolume + моно + синий" to ProfileAppearance(theme = AppTheme.BIOLUME, font = ProfileFont.MONO, accent = ColorPreset.BLUE),
         )
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

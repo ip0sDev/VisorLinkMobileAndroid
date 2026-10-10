@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
 import org.visorlink.app.data.model.Incident
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.VlCard
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlLiveDot
@@ -34,7 +33,6 @@ import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.VlTheme
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -49,15 +47,10 @@ fun StatusScreen(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 
-    val flagsRepository: FlagsRepository = koinInject()
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
-        if (isLiquidEnabled) {
-            topBarJelly.pulse(0.06f)
-        }
+        topBarJelly.pulse(0.06f)
     }
 
     val isAllSystemsUp = uiState.incidents.none { it.isActive }
@@ -73,11 +66,11 @@ fun StatusScreen(
             containerColor = Color.Transparent,
             topBar = {
                 VlTopAppBar(
-                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text("Статус системы", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = cs.onSurface) },
                     navigationIcon = {
                         IconButton(onClick = {
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            topBarJelly.press(0.06f)
                             onNavigateBack()
                         }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = cs.onSurface)
@@ -85,7 +78,7 @@ fun StatusScreen(
                     },
                     actions = {
                         IconButton(onClick = {
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            topBarJelly.press(0.06f)
                             viewModel.refreshStatus()
                         }, enabled = !uiState.isRefreshing) {
                             if (uiState.isRefreshing) {
@@ -134,8 +127,7 @@ fun StatusScreen(
                 itemsIndexed(uiState.services) { idx, service ->
                     ServiceStatusCard(
                         service = service,
-                        modifier = Modifier.liquidPillCardSlideOut(index = idx, enabled = isLiquidEnabled),
-                        isLiquidEnabled = isLiquidEnabled
+                        modifier = Modifier.liquidPillCardSlideOut(index = idx)
                     )
                 }
 
@@ -168,7 +160,7 @@ fun StatusScreen(
                     item {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else tokens.shapes.card,
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)),
                             color = cs.surfaceContainerLow.copy(alpha = 0.6f),
                             border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.1f))
                         ) {
@@ -197,8 +189,7 @@ fun StatusScreen(
                 itemsIndexed(uiState.incidents, key = { _, it -> it.id }) { idx, incident ->
                     IncidentCard(
                         incident = incident,
-                        modifier = Modifier.liquidPillCardSlideOut(index = uiState.services.size + idx, enabled = isLiquidEnabled),
-                        isLiquidEnabled = isLiquidEnabled
+                        modifier = Modifier.liquidPillCardSlideOut(index = uiState.services.size + idx)
                     )
                 }
                 
@@ -240,14 +231,13 @@ fun UptimeTimeline(timeline: List<TimelineBar>) {
 @Composable
 fun ServiceStatusCard(
     service: ServiceStatus,
-    modifier: Modifier = Modifier,
-    isLiquidEnabled: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
     
     val statusColor = if (service.isUp) Color(0xFF10B981) else Color(0xFFEF4444)
     val statusIcon = if (service.isUp) Icons.Default.CheckCircle else Icons.Default.Error
-    val cardShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else null
+    val cardShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp))
 
     VlCard(modifier = modifier.fillMaxWidth(), shape = cardShape) {
         Row(
@@ -284,13 +274,12 @@ fun ServiceStatusCard(
 @Composable
 fun IncidentCard(
     incident: Incident,
-    modifier: Modifier = Modifier,
-    isLiquidEnabled: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
     val green = Color(0xFF27AE60)
     val red = Color(0xFFE74C3C)
-    val cardShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else null
+    val cardShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp))
 
     VlCard(modifier = modifier.fillMaxWidth(), shape = cardShape) {
         Column(Modifier.padding(16.dp)) {

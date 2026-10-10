@@ -70,7 +70,6 @@ import org.visorlink.app.ui.components.CachedImage
 import org.visorlink.app.ui.components.liquidDragStretch
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPopIn
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.theme.VlTheme
@@ -108,8 +107,7 @@ fun FullscreenPlayerDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val tokens = VlTheme.tokens
-    val isLiquidEnabled = rememberLiquidEnabled()
-    val popProgress = rememberLiquidPopProgress(isLiquidEnabled)
+    val popProgress = rememberLiquidPopProgress()
 
     // Линейка состояний шторок
     var showPlaylistPicker by remember { mutableStateOf(false) }
@@ -160,15 +158,14 @@ fun FullscreenPlayerDialog(
         Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .liquidPopIn(popProgress, enabled = isLiquidEnabled),
+                .liquidPopIn(popProgress),
             color = MaterialTheme.colorScheme.background
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Живая аврора на заднем плане
                 PlayerAuraBackdrop(
                     track = track,
-                    isPlaying = state.isPlaying,
-                    isLiquidEnabled = isLiquidEnabled
+                    isPlaying = state.isPlaying
                 )
 
                 Column(
@@ -192,7 +189,7 @@ fun FullscreenPlayerDialog(
                                 collapseJelly.press()
                                 onDismiss()
                             },
-                            modifier = Modifier.liquidJelly(collapseJelly, enabled = isLiquidEnabled)
+                            modifier = Modifier.liquidJelly(collapseJelly)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowDown,
@@ -205,8 +202,7 @@ fun FullscreenPlayerDialog(
                         PlayerVisualModeSelector(
                             currentMode = visualMode,
                             onModeSelected = { visualMode = it },
-                            isLiquidEnabled = isLiquidEnabled,
-                            modifier = Modifier.liquidJelly(modeJelly, enabled = isLiquidEnabled)
+                            modifier = Modifier.liquidJelly(modeJelly)
                         )
 
                         // Правые быстрые действия (Таймер сна + Очередь)
@@ -220,7 +216,7 @@ fun FullscreenPlayerDialog(
                                     sleepJelly.press()
                                     showSleepTimerSheet = true
                                 },
-                                modifier = Modifier.liquidJelly(sleepJelly, enabled = isLiquidEnabled)
+                                modifier = Modifier.liquidJelly(sleepJelly)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -258,7 +254,7 @@ fun FullscreenPlayerDialog(
                                     queueJelly.press()
                                     showQueueSheet = true
                                 },
-                                modifier = Modifier.liquidJelly(queueJelly, enabled = isLiquidEnabled)
+                                modifier = Modifier.liquidJelly(queueJelly)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -311,7 +307,6 @@ fun FullscreenPlayerDialog(
                                     PlayerArtCard(
                                         track = track,
                                         isPlaying = state.isPlaying,
-                                        isLiquidEnabled = isLiquidEnabled,
                                         onTap = { visualMode = PlayerVisualMode.VINYL }
                                     )
                                 }
@@ -319,14 +314,12 @@ fun FullscreenPlayerDialog(
                                     PlayerVinylTurntable(
                                         track = track,
                                         isPlaying = state.isPlaying,
-                                        isLiquidEnabled = isLiquidEnabled,
                                         onTap = { visualMode = PlayerVisualMode.WAVE }
                                     )
                                 }
                                 PlayerVisualMode.WAVE -> {
                                     PlayerAudioVisualizer(
                                         isPlaying = state.isPlaying,
-                                        isLiquidEnabled = isLiquidEnabled,
                                         onTap = { visualMode = PlayerVisualMode.COVER }
                                     )
                                 }
@@ -398,7 +391,7 @@ fun FullscreenPlayerDialog(
                                         scaleX = favScale
                                         scaleY = favScale
                                     }
-                                    .liquidJelly(favJelly, enabled = isLiquidEnabled)
+                                    .liquidJelly(favJelly)
                             ) {
                                 Icon(
                                     imageVector = if (track.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -513,7 +506,7 @@ fun FullscreenPlayerDialog(
                                 playerManager.toggleShuffle()
                             },
                             modifier = Modifier
-                                .liquidJelly(shuffleJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(shuffleJelly)
                                 .then(
                                     if (state.isShuffle) {
                                         Modifier
@@ -549,7 +542,7 @@ fun FullscreenPlayerDialog(
                             },
                             modifier = Modifier
                                 .size(54.dp)
-                                .liquidJelly(prevJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(prevJelly)
                                 .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape)) else Modifier),
                             shape = VlTheme.tokens.shapes.adapt(CircleShape),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -569,7 +562,7 @@ fun FullscreenPlayerDialog(
                             contentAlignment = Alignment.Center
                         ) {
                             // Расходящиеся кольца пульсации при воспроизведении
-                            if (isLiquidEnabled && state.isPlaying) {
+                            if (state.isPlaying) {
                                 val pulseTransition = rememberInfiniteTransition(label = "pulse_rings")
                                 val pulseRadius1 by pulseTransition.animateFloat(
                                     initialValue = 76f, targetValue = 114f,
@@ -597,7 +590,7 @@ fun FullscreenPlayerDialog(
                                 },
                                 modifier = Modifier
                                     .size(80.dp)
-                                    .liquidJelly(playPauseJelly, enabled = isLiquidEnabled)
+                                    .liquidJelly(playPauseJelly)
                                     .then(
                                         if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape))
                                         else Modifier.shadow(elevation = 12.dp, shape = VlTheme.tokens.shapes.adapt(CircleShape), ambientColor = MaterialTheme.colorScheme.primary, spotColor = MaterialTheme.colorScheme.primary)
@@ -632,7 +625,7 @@ fun FullscreenPlayerDialog(
                             },
                             modifier = Modifier
                                 .size(54.dp)
-                                .liquidJelly(nextJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(nextJelly)
                                 .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(CircleShape)) else Modifier),
                             shape = VlTheme.tokens.shapes.adapt(CircleShape),
                             colors = IconButtonDefaults.filledTonalIconButtonColors(
@@ -653,7 +646,7 @@ fun FullscreenPlayerDialog(
                                 playerManager.cycleRepeatMode()
                             },
                             modifier = Modifier
-                                .liquidJelly(repeatJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(repeatJelly)
                                 .then(
                                     if (state.repeatMode != MusicRepeatMode.OFF) {
                                         Modifier
@@ -703,7 +696,7 @@ fun FullscreenPlayerDialog(
                             shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                             modifier = Modifier
-                                .liquidJelly(speedJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(speedJelly)
                                 .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
@@ -725,7 +718,7 @@ fun FullscreenPlayerDialog(
                             shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
                             modifier = Modifier
-                                .liquidJelly(playlistAddJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(playlistAddJelly)
                                 .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
@@ -777,7 +770,7 @@ fun FullscreenPlayerDialog(
                                     },
                                     shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
                                     modifier = Modifier
-                                        .liquidJelly(saveJelly, enabled = isLiquidEnabled)
+                                        .liquidJelly(saveJelly)
                                         .then(if (tokens.isBiolume) Modifier.vlRaised(tokens.structure, VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))) else Modifier),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
@@ -805,7 +798,6 @@ fun FullscreenPlayerDialog(
             playlist = state.playlist,
             currentTrack = track,
             isPlaying = state.isPlaying,
-            isLiquidEnabled = isLiquidEnabled,
             onTrackClick = { selectedTrack, index ->
                 playerManager.playTrack(selectedTrack, state.playlist, index)
             },
@@ -818,7 +810,6 @@ fun FullscreenPlayerDialog(
         SleepTimerBottomSheet(
             currentMinutesLeft = sleepMinutesLeft,
             isSleepAtEnd = isSleepAtEnd,
-            isLiquidEnabled = isLiquidEnabled,
             onSetTimer = { minutes ->
                 playerManager.setSleepTimer(minutes)
                 Toast.makeText(context, context.getString(R.string.music_sleep_timer_set), Toast.LENGTH_SHORT).show()
@@ -842,7 +833,7 @@ fun FullscreenPlayerDialog(
     if (showPlaylistPicker) {
         ModalBottomSheet(
             onDismissRequest = { showPlaylistPicker = false },
-            shape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) else BottomSheetDefaults.ExpandedShape,
+            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)),
             containerColor = MaterialTheme.colorScheme.surface
         ) {
             Column(
@@ -865,7 +856,7 @@ fun FullscreenPlayerDialog(
                             createJelly.pulse()
                             showCreatePlaylistDialog = true
                         },
-                        modifier = Modifier.liquidJelly(createJelly, enabled = isLiquidEnabled)
+                        modifier = Modifier.liquidJelly(createJelly)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(4.dp))
@@ -884,7 +875,7 @@ fun FullscreenPlayerDialog(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .liquidJelly(rowJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(rowJelly)
                                 .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp)))
                                 .clickable {
                                     rowJelly.press()
@@ -924,11 +915,11 @@ fun FullscreenPlayerDialog(
 
     // Диалог создания нового плейлиста
     if (showCreatePlaylistDialog) {
-        val dialogPop = rememberLiquidPopProgress(isLiquidEnabled)
+        val dialogPop = rememberLiquidPopProgress()
         AlertDialog(
             onDismissRequest = { showCreatePlaylistDialog = false },
             shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(28.dp)),
-            modifier = Modifier.liquidPopIn(dialogPop, enabled = isLiquidEnabled),
+            modifier = Modifier.liquidPopIn(dialogPop),
             title = { Text(stringResource(R.string.music_playlist_create)) },
             text = {
                 OutlinedTextField(
@@ -957,7 +948,7 @@ fun FullscreenPlayerDialog(
                             }
                         }
                     },
-                    modifier = Modifier.liquidJelly(confirmJelly, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidJelly(confirmJelly)
                 ) {
                     Text("Создать")
                 }
@@ -982,7 +973,6 @@ fun FullscreenPlayerDialog(
 private fun PlayerVisualModeSelector(
     currentMode: PlayerVisualMode,
     onModeSelected: (PlayerVisualMode) -> Unit,
-    isLiquidEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -1034,7 +1024,6 @@ private fun PlayerVisualModeSelector(
 private fun PlayerArtCard(
     track: MusicTrack,
     isPlaying: Boolean,
-    isLiquidEnabled: Boolean,
     onTap: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "art_motion")
@@ -1067,7 +1056,7 @@ private fun PlayerArtCard(
         contentAlignment = Alignment.Center
     ) {
         // Фоновый амбиентный ореол с мягким градиентом
-        if (isLiquidEnabled && isPlaying) {
+        if (isPlaying) {
             Box(
                 modifier = Modifier
                     .size(280.dp)
@@ -1091,7 +1080,7 @@ private fun PlayerArtCard(
                 .graphicsLayer {
                     scaleX = animatedScale
                     scaleY = animatedScale
-                    translationY = if (isPlaying && isLiquidEnabled) floatOffset else 0f
+                    translationY = if (isPlaying) floatOffset else 0f
                 }
                 .shadow(elevation = 16.dp, shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)), spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
                 .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)))
@@ -1151,7 +1140,6 @@ private fun PlayerArtCard(
 private fun PlayerVinylTurntable(
     track: MusicTrack,
     isPlaying: Boolean,
-    isLiquidEnabled: Boolean,
     onTap: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "vinyl_rotate")
@@ -1300,7 +1288,6 @@ private fun PlayerVinylTurntable(
 @Composable
 private fun PlayerAudioVisualizer(
     isPlaying: Boolean,
-    isLiquidEnabled: Boolean,
     onTap: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "viz_motion")
@@ -1424,8 +1411,7 @@ private fun GenerativeCoverArt(
 @Composable
 private fun PlayerAuraBackdrop(
     track: MusicTrack,
-    isPlaying: Boolean,
-    isLiquidEnabled: Boolean
+    isPlaying: Boolean
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "backdrop_blur")
     val blurRadius by infiniteTransition.animateFloat(
@@ -1433,7 +1419,7 @@ private fun PlayerAuraBackdrop(
         animationSpec = infiniteRepeatable(tween(4000, easing = LinearEasing), RepeatMode.Reverse),
         label = "blur_anim"
     )
-    val currentBlur = if (isPlaying && isLiquidEnabled) blurRadius.dp else 80.dp
+    val currentBlur = if (isPlaying) blurRadius.dp else 80.dp
     val coverUrl = track.coverUrl
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1619,7 +1605,6 @@ private fun QueueBottomSheet(
     playlist: List<MusicTrack>,
     currentTrack: MusicTrack,
     isPlaying: Boolean,
-    isLiquidEnabled: Boolean,
     onTrackClick: (MusicTrack, Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -1676,7 +1661,7 @@ private fun QueueBottomSheet(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .liquidJelly(rowJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(rowJelly)
                                 .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp)))
                                 .clickable {
                                     rowJelly.press()
@@ -1740,7 +1725,6 @@ private fun QueueBottomSheet(
 private fun SleepTimerBottomSheet(
     currentMinutesLeft: Int?,
     isSleepAtEnd: Boolean,
-    isLiquidEnabled: Boolean,
     onSetTimer: (Int) -> Unit,
     onSetEndOfTrack: () -> Unit,
     onCancelTimer: () -> Unit,

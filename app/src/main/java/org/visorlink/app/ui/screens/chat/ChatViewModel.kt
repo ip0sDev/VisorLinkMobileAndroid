@@ -55,6 +55,10 @@ data class ChatUiState(
     val chat: Chat? = null,
     val chatType: ChatType = ChatType.DIRECT,
     val otherUser: UserProfile? = null,
+    /** Медиа хранятся на Google Диске, а он не подключён: окно «Подключите Google Диск». */
+    val driveRequired: Boolean = false,
+    val driveConnecting: Boolean = false,
+    val driveError: String? = null,
     val myMember: Member? = null,
     val members: List<Member> = emptyList(),
     val topbarStatus: TopbarStatus = TopbarStatus.Offline,
@@ -108,7 +112,9 @@ class ChatViewModel(
     val musicPlayerManager: MusicPlayerManager,
     val musicRepository: MusicRepository,
     private val networkMonitor: org.visorlink.app.utils.NetworkMonitor? = null,
-    private val usageRankManager: org.visorlink.app.utils.UsageRankManager? = null
+    private val usageRankManager: org.visorlink.app.utils.UsageRankManager? = null,
+    /** Google Диск: медиа загружаются на Диск отправителя. `null` — проверка выключена (тесты). */
+    private val driveAuth: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
 ) : AndroidViewModel(context) {
 
     val currentUid: String get() = auth.currentUser!!.uid
@@ -569,6 +575,7 @@ class ChatViewModel(
         val caption = _uiState.value.albumCaption.trim().ifEmpty { null }
         val reply = _uiState.value.replyingTo?.toReplyData()
         if (draft.isEmpty() || !_uiState.value.canSendMedia) return
+        if (needsDrive { sendAlbum() }) return
         if (!startCooldown()) return
 
         val tempId = "temp_${System.currentTimeMillis()}_${UUID.randomUUID().toString().take(6)}"
@@ -639,6 +646,7 @@ class ChatViewModel(
 
     fun sendVideoOrGif(file: java.io.File, isGif: Boolean) {
         if (!_uiState.value.canSendMedia) return
+        if (needsDrive { sendVideoOrGif(file, isGif) }) return
         if (!startCooldown()) return
 
         val type = if (isGif) MessageType.GIF else MessageType.VIDEO
@@ -899,6 +907,7 @@ class ChatViewModel(
 
     fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
         if (!_uiState.value.canSendMedia) return
+        if (needsDrive { sendImage(uri, isSpoiler) }) return
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
@@ -927,6 +936,7 @@ class ChatViewModel(
 
     fun sendVideo(uri: Uri) {
         if (!_uiState.value.canSendMedia) return
+        if (needsDrive { sendVideo(uri) }) return
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
@@ -1011,8 +1021,15 @@ class ChatViewModel(
         val duration = ((System.currentTimeMillis() - recordingStart) / 1000).toInt().coerceAtLeast(1)
         try { recorder?.apply { stop(); release() } } catch (_: Exception) {}
         recorder = null
-        val reply = _uiState.value.replyingTo?.toReplyData()
         _uiState.update { it.copy(isRecording = false) }
+        recordingFile = null
+        sendVoiceFile(file, duration)
+    }
+
+    /** Отправка записанного голосового; без Диска — после его подключения. */
+    private fun sendVoiceFile(file: File, duration: Int) {
+        if (needsDrive { sendVoiceFile(file, duration) }) return
+        val reply = _uiState.value.replyingTo?.toReplyData()
 
         if (!startCooldown()) return
 
@@ -1040,6 +1057,7 @@ class ChatViewModel(
     }
 
     fun sendAudio(file: File, title: String, performer: String, durationSec: Int, coverFile: File?) {
+        if (needsDrive { sendAudio(file, title, performer, durationSec, coverFile) }) return
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
         val (nextSeq, isDirect, targetUserId) = getSendMeta()
@@ -1067,6 +1085,77 @@ class ChatViewModel(
                 _uiState.update { it.copy(isUploading = false) }
             }
         }
+    }
+
+    // ── Google Диск для медиа ─────────────────────────────────────────────────
+
+    /** Отправка, отложенная до подключения Диска. */
+    private var pendingDriveSend: (() -> Unit)? = null
+
+    /**
+     * Медиа загружаются на Google Диск отправителя. Если он не подключён, отправка не уходит
+     * в очередь (раньше она висела со спиннером, пока не кончатся повторы), а откладывается:
+     * показываем окно «Подключите Google Диск», после подключения [retry] выполнится сам.
+     */
+    private fun needsDrive(retry: () -> Unit): Boolean {
+        val drive = driveAuth ?: return false
+        if (drive.isConnected()) return false
+        pendingDriveSend = retry
+        _uiState.update { it.copy(driveRequired = true, driveConnecting = false, driveError = null) }
+        return true
+    }
+
+    fun dismissDriveRequired() {
+        pendingDriveSend = null
+        _uiState.update { it.copy(driveRequired = false, driveConnecting = false, driveError = null) }
+    }
+
+    /** «Подключить»: тихая авторизация или окно согласия Google ([onResolution]). */
+    fun connectDrive(onResolution: (android.app.PendingIntent) -> Unit) {
+        val drive = driveAuth ?: return
+        _uiState.update { it.copy(driveConnecting = true, driveError = null) }
+        viewModelScope.launch {
+            try {
+                val auth = drive.authorize()
+                val intent = auth.pendingIntent
+                if (auth.hasResolution() && intent != null) {
+                    onResolution(intent)
+                } else {
+                    finishDriveAuth(drive.handleAuthorizationResult(auth))
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.update { it.copy(driveConnecting = false, driveError = context.getString(org.visorlink.app.R.string.drive_required_failed)) }
+            }
+        }
+    }
+
+    /** Ответ окна согласия Google. */
+    fun onDriveAuthResult(resultCode: Int, data: android.content.Intent?) {
+        val drive = driveAuth ?: return
+        if (resultCode != android.app.Activity.RESULT_OK || data == null) {
+            _uiState.update { it.copy(driveConnecting = false) }
+            return
+        }
+        viewModelScope.launch {
+            try {
+                finishDriveAuth(drive.handleAuthorizationResult(drive.getAuthorizationResultFromIntent(data)))
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _uiState.update { it.copy(driveConnecting = false, driveError = context.getString(org.visorlink.app.R.string.drive_required_failed)) }
+            }
+        }
+    }
+
+    private fun finishDriveAuth(result: Result<String>) {
+        if (result.isFailure) {
+            _uiState.update { it.copy(driveConnecting = false, driveError = context.getString(org.visorlink.app.R.string.drive_required_failed)) }
+            return
+        }
+        val retry = pendingDriveSend
+        pendingDriveSend = null
+        _uiState.update { it.copy(driveRequired = false, driveConnecting = false, driveError = null) }
+        retry?.invoke()
     }
 
     fun cancelRecording() {

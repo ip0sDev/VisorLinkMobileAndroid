@@ -36,6 +36,8 @@ lottie = "6.7.1"
 # Оставляем только одну версию Firebase
 firebaseBom = "34.19.0"
 playServicesAuth = "22.0.0"
+credentials = "1.6.0"
+googleId = "1.2.0"
 playAppUpdate = "2.1.0"
 
 # ── Test ──────────────────────────────────────────────────────────────────────
@@ -95,13 +97,15 @@ firebase-storage = { module = "com.google.firebase:firebase-storage" }
 firebase-functions = { module = "com.google.firebase:firebase-functions" }
 firebase-messaging = { module = "com.google.firebase:firebase-messaging" }
 firebase-database = { module = "com.google.firebase:firebase-database" }
-firebase-config = { module = "com.google.firebase:firebase-config" }
 firebase-appcheck-debug = { module = "com.google.firebase:firebase-appcheck-debug" }
 firebase-appcheck-playintegrity = { module = "com.google.firebase:firebase-appcheck-playintegrity" }
 
 # --- Other ---
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services" }
 play-services-auth = { module = "com.google.android.gms:play-services-auth", version.ref = "playServicesAuth" }
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+androidx-credentials-play-services-auth = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+googleid = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleId" }
 play-app-update-ktx = { module = "com.google.android.play:app-update-ktx", version.ref = "playAppUpdate" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-gif = { module = "io.coil-kt:coil-gif", version.ref = "coil" }

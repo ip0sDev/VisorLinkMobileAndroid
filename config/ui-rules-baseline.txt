@@ -11,12 +11,10 @@ components/chat/GiftMessage.kt hex-color 17
 components/chat/LegacyMediaPlaceholder.kt hex-color 2
 components/chatlist/ChatListItem.kt hex-color 2
 components/diary/DiaryComponents.kt hex-color 1
-components/feed/FeedComponents.kt hex-color 1
 components/music/FullscreenPlayerDialog.kt hex-color 19
 components/settings/SettingsSheets.kt hex-color 1
 screens/auth/AuthCard.kt raw-m3 1
 screens/auth/RegisterScreen.kt raw-m3 5
-screens/auth/TfaScreen.kt raw-m3 3
 screens/auth/VerifyEmailScreen.kt raw-m3 2
 screens/chat/ForwardPickerDialog.kt hex-color 1
 screens/chat/ImageEditorScreen.kt hex-color 8
@@ -33,8 +31,7 @@ screens/legal/LegalConsentDialog.kt raw-m3 4
 screens/music/MusicLibraryScreen.kt hex-color 1
 screens/music/MusicLibraryScreen.kt raw-m3 6
 screens/onboarding/OnboardingScreen.kt hex-color 1
-screens/profile/OtherProfileScreen.kt raw-m3 3
-screens/profile/ProfileScreen.kt raw-m3 4
+screens/profile/ProfileScreen.kt raw-m3 1
 screens/saved/SavedMessagesSettingsScreen.kt raw-m3 6
 screens/search/SearchScreen.kt raw-m3 1
 screens/settings/AppCheckDiagnosticScreen.kt hex-color 1

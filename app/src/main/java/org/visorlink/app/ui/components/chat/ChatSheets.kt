@@ -55,7 +55,6 @@ import org.visorlink.app.ui.components.VlTextField
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.liquidDragStretch
 import org.visorlink.app.ui.components.liquidPopIn
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.components.rubberBand
 import org.visorlink.app.utils.HapticType
@@ -85,13 +84,12 @@ fun WallpaperBottomSheet(
         containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        val isLiquidEnabled = rememberLiquidEnabled()
-        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.68f, stiffness = 480f)
+        val popProgress = rememberLiquidPopProgress(damping = 0.68f, stiffness = 480f)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .liquidPopIn(popProgress, isLiquidEnabled, TransformOrigin(0.5f, 1f))
+                .liquidPopIn(popProgress, TransformOrigin(0.5f, 1f))
                 .navigationBarsPadding()
                 .padding(bottom = 24.dp, top = 8.dp)
         ) {
@@ -178,13 +176,12 @@ fun AlbumPreviewSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        val isLiquidEnabled = rememberLiquidEnabled()
-        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.68f, stiffness = 480f)
+        val popProgress = rememberLiquidPopProgress(damping = 0.68f, stiffness = 480f)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .liquidPopIn(popProgress, isLiquidEnabled, TransformOrigin(0.5f, 1f))
+                .liquidPopIn(popProgress, TransformOrigin(0.5f, 1f))
                 .navigationBarsPadding()
                 .imePadding()
         ) {
@@ -296,7 +293,6 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
     val swipeOffset = remember { Animatable(0f) }
     val dismissThreshold = 300f
     val isDismissing = remember { mutableStateOf(false) }
-    val isLiquidEnabled = rememberLiquidEnabled()
 
     Dialog(
         onDismissRequest = { if (!isDismissing.value) onDismiss() },
@@ -408,12 +404,8 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                                             // Scale == 1f: проверяем вертикальный свайп для закрытия
                                             if (abs(pan.y) > abs(pan.x) * 2f && abs(pan.y) > 5.dp.toPx()) {
                                                 rawSwipeY += pan.y
-                                                val target = if (isLiquidEnabled) {
-                                                    // У порога закрытия картинка вязнет, как капля перед отрывом
-                                                    rubberBand(rawSwipeY, dismissThreshold, dismissThreshold * 0.8f)
-                                                } else {
-                                                    swipeOffset.value + pan.y
-                                                }
+                                                // У порога закрытия картинка вязнет, как капля перед отрывом
+                                                val target = rubberBand(rawSwipeY, dismissThreshold, dismissThreshold * 0.8f)
                                                 scope.launch { swipeOffset.snapTo(target) }
                                                 change.consume()
                                             }
@@ -431,8 +423,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                                         scope.launch {
                                             swipeOffset.animateTo(
                                                 0f,
-                                                if (isLiquidEnabled) spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
-                                                else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                                                spring(dampingRatio = 0.45f, stiffness = Spring.StiffnessMedium)
                                             )
                                         }
                                     }
@@ -465,7 +456,7 @@ fun AlbumLightbox(images: List<AlbumImage>, startIndex: Int, onDismiss: () -> Un
                             .liquidDragStretch(
                                 dragPx = swipeOffset.value,
                                 referencePx = dismissThreshold,
-                                enabled = isLiquidEnabled && scale <= 1f,
+                                enabled = scale <= 1f,
                                 maxStretch = 0.08f,
                                 vertical = true
                             )

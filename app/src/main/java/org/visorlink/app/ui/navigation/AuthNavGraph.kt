@@ -7,6 +7,8 @@ import org.visorlink.app.ui.Screen
 import org.visorlink.app.ui.screens.auth.AuthViewModel
 import org.visorlink.app.ui.screens.auth.LoginScreen
 import org.visorlink.app.ui.screens.auth.RegisterScreen
+import org.visorlink.app.ui.screens.auth.GoogleSignupScreen
+import org.visorlink.app.ui.screens.auth.SessionCheckScreen
 import org.visorlink.app.ui.screens.auth.TfaScreen
 import org.visorlink.app.ui.screens.auth.VerifyEmailScreen
 
@@ -43,5 +45,13 @@ fun NavGraphBuilder.authNavGraph(
             onTfaPassed = { /* handled by authState/tfa guard */ },
             viewModel = authViewModel
         )
+    }
+
+    composable(Screen.SessionCheck.route) {
+        SessionCheckScreen()
+    }
+
+    composable(Screen.GoogleSignup.route) {
+        GoogleSignupScreen(viewModel = authViewModel)
     }
 }

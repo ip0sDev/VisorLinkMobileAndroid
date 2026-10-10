@@ -33,14 +33,13 @@ fun VlAlertDialog(
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val isLiquidEnabled = rememberLiquidEnabled()
 
     Dialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(dismissOnBackPress = dismissible, dismissOnClickOutside = dismissible),
     ) {
         // Диалог «всплывает» каплей: пружина с перелётом вместо мгновенной подстановки
-        val popProgress = rememberLiquidPopProgress(isLiquidEnabled)
+        val popProgress = rememberLiquidPopProgress()
 
         val body: @Composable () -> Unit = {
             // Ширина как у M3 AlertDialog: без минимума короткий диалог («Выйти?»)
@@ -52,7 +51,10 @@ fun VlAlertDialog(
             ) {
                 title?.let {
                     CompositionLocalProvider(
+                        // Гарнитура — из роли темы: Inter в Biolume, моно со свечением в Forge v2
                         LocalTextStyle provides TextStyle(
+                            fontFamily = MaterialTheme.typography.titleLarge.fontFamily,
+                            shadow = MaterialTheme.typography.titleLarge.shadow,
                             fontSize = 19.sp, fontWeight = FontWeight.ExtraBold, color = cs.onSurface
                         )
                     ) { it() }
@@ -61,6 +63,7 @@ fun VlAlertDialog(
                 text?.let {
                     CompositionLocalProvider(
                         LocalTextStyle provides TextStyle(
+                            fontFamily = MaterialTheme.typography.bodyMedium.fontFamily,
                             fontSize = 15.sp, color = cs.onSurfaceVariant, lineHeight = 21.sp
                         )
                     ) { it() }
@@ -84,7 +87,7 @@ fun VlAlertDialog(
             val shape = tokens.shapes.card
             Box(
                 modifier = modifier
-                    .liquidPopIn(popProgress, isLiquidEnabled)
+                    .liquidPopIn(popProgress)
                     .vlRaised(tokens.structure, shape)
                     .clip(shape)
                     .background(cs.surfaceContainerHigh, shape)
@@ -92,7 +95,7 @@ fun VlAlertDialog(
             ) { body() }
         } else {
             VlSurface(
-                modifier = modifier.liquidPopIn(popProgress, isLiquidEnabled),
+                modifier = modifier.liquidPopIn(popProgress),
                 isInput = false,
                 overrideColor = cs.surface,
             ) { body() }
@@ -125,7 +128,7 @@ fun VlAlertDialog(
             {
                 Column {
                     icon?.let {
-                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.secondary) { it() }
+                        CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.primary) { it() }
                         if (title != null) Spacer(Modifier.height(16.dp))
                     }
                     title?.invoke()
@@ -178,6 +181,7 @@ fun VlDialogButton(
         } else {
             CompositionLocalProvider(
                 LocalTextStyle provides TextStyle(
+                    fontFamily = MaterialTheme.typography.labelLarge.fontFamily,
                     color = color,
                     fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
                     fontSize = 15.sp

@@ -2,7 +2,14 @@ package org.visorlink.app.ui.screens.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import org.visorlink.app.BuildConfig
+import org.visorlink.app.R
+import org.visorlink.app.data.auth.GoogleAuthErrors
+import org.visorlink.app.data.auth.TfaGate
+import org.visorlink.app.data.auth.TfaGateHold
+import org.visorlink.app.data.auth.requestGoogleIdToken
 import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.ui.UiText
 import org.visorlink.app.data.repository.AuthRepository
 import org.visorlink.app.data.repository.AuthState
 import org.visorlink.app.data.repository.UserRepository
@@ -18,6 +25,8 @@ import kotlinx.coroutines.launch
 data class AuthUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
+    /** Локализованная ошибка (вход через Google); показывается, если нет [error]. */
+    @androidx.annotation.StringRes val errorRes: Int? = null,
     val success: Boolean = false
 )
 
@@ -29,10 +38,10 @@ data class VerifyEmailUiState(
     val verified: Boolean = false
 )
 
-data class TfaUiState(
+/** Шаг «Завершите регистрацию» после входа через Google. */
+data class GoogleSignupUiState(
     val isLoading: Boolean = false,
-    val error: String? = null,
-    val tfaPassed: Boolean = false
+    val error: UiText? = null,
 )
 
 // ─── ViewModel ────────────────────────────────────────────────────────────────
@@ -41,7 +50,8 @@ class AuthViewModel(
     private val authRepository: AuthRepository,
     private val userRepository: UserRepository,
     private val tfaManager: TfaManager,
-    private val fcmManager: org.visorlink.app.utils.FcmManager
+    private val fcmManager: org.visorlink.app.utils.FcmManager,
+    private val tfaHold: TfaGateHold = TfaGateHold(),
 ) : ViewModel() {
 
     private val initialAuthState = authRepository.getCurrentAuthState()
@@ -61,138 +71,124 @@ class AuthViewModel(
         if (uid != null) userRepository.userProfileFlow(uid) else flowOf(null)
     }
 
-    // ── 2FA state ─────────────────────────────────────────────────────────────
+    // ── Профиль: есть / нет / ещё неизвестно ──────────────────────────────────
 
-    private val _tfaPassed = MutableStateFlow(false)
-    val tfaPassed: StateFlow<Boolean> = _tfaPassed.asStateFlow()
+    private val verifiedUid: Flow<String?> = authState
+        .map { (it as? AuthState.Verified)?.user?.uid }
+        .distinctUntilChanged()
 
-    private val _tfaUiState = MutableStateFlow(TfaUiState())
-    val tfaUiState: StateFlow<TfaUiState> = _tfaUiState.asStateFlow()
+    /**
+     * Есть ли `users/{uid}` — только по ответу сервера (`null` — ответа ещё нет). Аккаунт без
+     * профиля — незавершённая регистрация через Google.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val profileExists: StateFlow<Boolean?> = verifiedUid
+        .flatMapLatest { uid ->
+            if (uid == null) flowOf(null)
+            else userRepository.profileExistsFlow(uid).map<Boolean, Boolean?> { it }.onStart { emit(null) }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /**
+     * Вошёл через Google, а профиля нет: регистрацию нужно завершить (ник + инвайт), и никуда,
+     * кроме этого шага, не пускаем. Пароль среди провайдеров — обычный аккаунт, его это не касается
+     * (веб — `needsGoogleSignup` в App.jsx).
+     */
+    val needsGoogleSignup: StateFlow<Boolean> = profileExists
+        .map { exists -> exists == false && authRepository.currentUser != null && !authRepository.hasPassword }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    // ── 2FA ───────────────────────────────────────────────────────────────────
+
+    // ── Watchdog: профиль не пришёл за 3,5 с после входа (офлайн без кэша) — интерфейс не блокируем ──
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val _watchdogExpired: Flow<Boolean> = verifiedUid.flatMapLatest { uid ->
+        if (uid == null) flowOf(false) else flow { emit(false); delay(3500); emit(true) }
+    }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val isTfaRequired: StateFlow<Boolean> = combine(
-        authState,
-        currentUserProfile,
-        _tfaPassed
-    ) { state, profile, passed ->
-        Triple(state, profile, passed)
-    }.flatMapLatest { (state, profile, passed) ->
-        flow {
-            if (state is AuthState.Verified && profile?.tfaEnabled == true && !passed) {
-                // Check cache
-                val authTime = authRepository.getAuthTime()
-                if (authTime != null && tfaManager.isTfaPassed(authTime)) {
-                    _tfaPassed.value = true
-                    emit(false)
-                } else if (authTime != null && authRepository.isSessionAuthorized()) {
-                    // Кэш пуст (переустановка), но сервер уже авторизовал эту сессию
-                    tfaManager.setTfaPassed(authTime)
-                    _tfaPassed.value = true
-                    emit(false)
-                } else {
-                    emit(true)
-                }
-            } else {
-                emit(false)
-            }
+    private val tfaEnabled: Flow<Boolean?> = currentUserProfile.map { it?.tfaEnabled }.distinctUntilChanged()
+
+    /**
+     * Ворота 2FA. Зависят только от сессии, флага 2FA в профиле и локальных событий — не от
+     * каждого снимка профиля, иначе экран перескакивал бы при любом его изменении.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val tfaGate: StateFlow<TfaGate> = combine(authState, tfaEnabled, profileExists, _watchdogExpired, tfaHold.refreshTick) { state, tfa, exists, watchdog, tick ->
+        // Профиль пришёл — сторожевой таймер и «профиля нет» больше ни на что не влияют:
+        // иначе их смена через 3,5 с перезапускала бы уже идущую проверку сессии
+        val giveUp = tfa == null && (exists == false || watchdog)
+        GateInput(state as? AuthState.Verified, tfa, giveUp, tick)
+    }
+        .distinctUntilChanged()
+        .flatMapLatest { input -> gateFlow(input) }
+        .combine(tfaHold.held) { gate, held -> if (held) TfaGate.Required() else gate }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, TfaGate.Off)
+
+    private data class GateInput(
+        val verified: AuthState.Verified?,
+        val tfaEnabled: Boolean?,
+        /** Профиля нет (по серверу) или он не пришёл за время сторожевого таймера — не ждём. */
+        val profileGiveUp: Boolean,
+        val refreshTick: Int,
+    )
+
+    private fun gateFlow(input: GateInput): Flow<TfaGate> {
+        val user = input.verified?.user ?: return flowOf(TfaGate.Off)
+        // Профиль ещё не пришёл: ждём, но не дольше сторожевого таймера
+        if (input.tfaEnabled == null) {
+            return flowOf(if (input.profileGiveUp) TfaGate.Off else TfaGate.Checking)
         }
+        if (!input.tfaEnabled) return flowOf(TfaGate.Off)
+        return flow {
+            val authTime = runCatching { authRepository.getAuthTime() }.getOrNull()
+            if (authTime == null) { emit(TfaGate.Required(slow = true)); return@flow }
+            // Уже подтверждали эту сессию на устройстве — не ждём сервер
+            if (tfaManager.isTfaPassed(authTime)) { emit(TfaGate.Passed); return@flow }
+            emit(TfaGate.Checking)
+            emitAll(serverGate(user.uid, authTime))
+        }
+    }
+
+    /** Ответ белого списка; молчание дольше [TfaGate.SLOW_CHECK_MS] — экран кода с пометкой, подписка живёт дальше. */
+    private fun serverGate(uid: String, authTime: String): Flow<TfaGate> = channelFlow {
+        val slow = launch {
+            delay(TfaGate.SLOW_CHECK_MS)
+            send(TfaGate.Required(slow = true))
+        }
+        try {
+            authRepository.sessionAuthorizedFlow(uid, authTime).collect { authorized ->
+                slow.cancel()
+                if (authorized) tfaManager.setTfaPassed(authTime)
+                send(if (authorized) TfaGate.Passed else TfaGate.Required())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Ошибка чтения — экран кода с пометкой о связи, а не молчаливая блокировка
+            slow.cancel()
+            if (BuildConfig.DEBUG) android.util.Log.w("AuthViewModel", "2FA session check failed: ${e.message}")
+            send(TfaGate.Required(slow = true))
+        }
+    }
+
+    val isTfaRequired: StateFlow<Boolean> = tfaGate
+        .map { it is TfaGate.Required }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    /**
+     * Сессия готова: вход подтверждён, профиль есть (или не пришёл за время сторожевого таймера),
+     * 2FA пройдена или не нужна.
+     */
+    val isSessionReady: StateFlow<Boolean> = combine(authState, tfaGate, needsGoogleSignup) { state, gate, signup ->
+        state is AuthState.Verified && !signup && (gate == TfaGate.Off || gate == TfaGate.Passed)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    // ── Watchdog Timer для предотвращения бесконечной загрузки при старте (3.5-4s) ──
-    private val _watchdogExpired = MutableStateFlow(false)
-
-    init {
+    /** Включили 2FA в настройках: эта сессия уже авторизована сервером. */
+    fun onTfaEnabledHere() {
         viewModelScope.launch {
-            delay(3500)
-            _watchdogExpired.value = true
-        }
-    }
-
-    /**
-     * Флаг полной готовности пользовательской сессии.
-     * true ТОЛЬКО если:
-     * 1. Пользователь верифицирован (AuthState.Verified).
-     * 2. Профиль пользователя загружен (profile != null).
-     * 3. 2FA либо подтверждена, либо отключена.
-     *
-     * Защищен watchdog-таймером (3.5с): если Firestore документ задерживается при старте,
-     * UI не блокируется бесконечной загрузкой, а пускает пользователя в интерфейс.
-     */
-    val isSessionReady: StateFlow<Boolean> = combine(
-        authState,
-        currentUserProfile,
-        _tfaPassed,
-        _watchdogExpired
-    ) { state, profile, passed, _ ->
-        if (state !is AuthState.Verified) return@combine false
-        if (profile == null) return@combine true // Профиль грузится асинхронно из кэша/сети, не блокируем UI (Watchdog)
-        if (profile.tfaEnabled) {
-            passed
-        } else {
-            true
-        }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, initialAuthState is AuthState.Verified)
-
-
-    fun request2FA(method: String) {
-        viewModelScope.launch {
-            _tfaUiState.update { it.copy(isLoading = true, error = null) }
-            runCatching { authRepository.request2FA(method) }
-                .onSuccess { _tfaUiState.update { it.copy(isLoading = false) } }
-                .onFailure { error -> _tfaUiState.update { it.copy(isLoading = false, error = friendlyMessage(error)) } }
-        }
-    }
-
-    fun verify2FA(code: String) {
-        viewModelScope.launch {
-            _tfaUiState.update { it.copy(isLoading = true, error = null) }
-            runCatching { authRepository.verify2FA(code) }
-                .onSuccess {
-                    val authTime = authRepository.getAuthTime()
-                    if (authTime != null) {
-                        tfaManager.setTfaPassed(authTime)
-                    }
-                    _tfaPassed.value = true
-                    _tfaUiState.update { it.copy(isLoading = false, tfaPassed = true) }
-                    viewModelScope.launch {
-                        fcmManager.syncTokenAfter2FA()
-                    }
-                }
-                .onFailure { _tfaUiState.update { it.copy(isLoading = false, error = "Invalid code or expired") } }
-        }
-    }
-
-    /**
-     * Включение/выключение 2FA кодом. При включении признак «2FA пройдена» ставится сразу,
-     * до прихода нового профиля, — иначе пользователь упрётся в экран кода.
-     */
-    fun set2FAEnabled(enabled: Boolean, code: String, onDone: () -> Unit) {
-        viewModelScope.launch {
-            _tfaUiState.update { it.copy(isLoading = true, error = null) }
-            runCatching { authRepository.set2FAEnabled(enabled, code.trim()) }
-                .onSuccess {
-                    if (enabled) {
-                        authRepository.getAuthTime()?.let { tfaManager.setTfaPassed(it) }
-                        _tfaPassed.value = true
-                    } else {
-                        tfaManager.clearCache()
-                        _tfaPassed.value = false
-                    }
-                    _tfaUiState.update { it.copy(isLoading = false) }
-                    onDone()
-                }
-                .onFailure { e -> _tfaUiState.update { it.copy(isLoading = false, error = tfaErrorMessage(e)) } }
-        }
-    }
-
-    private fun tfaErrorMessage(t: Throwable): String {
-        val e = t as? com.google.firebase.functions.FirebaseFunctionsException ?: return friendlyMessage(t)
-        return when (e.code) {
-            com.google.firebase.functions.FirebaseFunctionsException.Code.NOT_FOUND -> "Код не запрошен"
-            com.google.firebase.functions.FirebaseFunctionsException.Code.FAILED_PRECONDITION -> "Код истёк, запросите новый"
-            com.google.firebase.functions.FirebaseFunctionsException.Code.RESOURCE_EXHAUSTED -> "Слишком много попыток, запросите новый код"
-            com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT -> e.message ?: "Неверный код"
-            else -> friendlyMessage(t)
+            authRepository.getAuthTime()?.let { tfaManager.setTfaPassed(it) }
+            tfaHold.refresh()
         }
     }
 
@@ -210,8 +206,96 @@ class AuthViewModel(
         }
     }
 
-    fun clearTfaError() {
-        _tfaUiState.update { it.copy(error = null) }
+    // ── Google ────────────────────────────────────────────────────────────────
+
+    private val _googleSignup = MutableStateFlow(GoogleSignupUiState())
+    val googleSignup: StateFlow<GoogleSignupUiState> = _googleSignup.asStateFlow()
+
+    /** Почта, под которой вошли через Google (шаг «Завершите регистрацию»). */
+    val currentEmail: String? get() = authRepository.currentUser?.email
+
+    /**
+     * «Войти через Google» / «Зарегистрироваться через Google». Если ник и код уже введены на
+     * экране регистрации и аккаунт новый — профиль создаётся сразу, без второго шага.
+     * [context] — Activity для окна выбора аккаунта.
+     */
+    fun signInWithGoogle(context: android.content.Context, username: String? = null, inviteCode: String? = null) {
+        if (_uiState.value.isLoading) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, errorRes = null) }
+            try {
+                val idToken = requestGoogleIdToken(context)
+                // Как при входе по паролю: старый FCM-токен отзываем до входа. Ограничено по
+                // времени — офлайн-запись в Firestore не должна вешать вход
+                kotlinx.coroutines.withTimeoutOrNull(REVOKE_TIMEOUT_MS) { fcmManager.revokeToken() }
+                val isNew = authRepository.signInWithGoogle(idToken)
+                val name = username?.trim().orEmpty()
+                val code = (inviteCode?.trim()?.ifBlank { null } ?: _pendingInviteCode.value?.trim()).orEmpty()
+                if (isNew && name.length >= 3 && code.isNotBlank()) {
+                    runCatching { authRepository.completeGoogleProfile(name, code) }
+                        .onFailure { e -> _googleSignup.update { it.copy(error = signupError(e)) } }
+                }
+                _uiState.update { it.copy(isLoading = false, success = true) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) android.util.Log.w("AuthViewModel", "Google sign-in failed", e)
+                _uiState.update { it.copy(isLoading = false, errorRes = GoogleAuthErrors.messageRes(e)) }
+            } finally {
+                // Отмена, сбой, что угодно — кнопка не должна остаться в «загрузке»
+                if (_uiState.value.isLoading) _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    /** «Создать аккаунт» на шаге завершения регистрации. Ошибка оставляет на шаге — Google-аккаунт не удаляется. */
+    fun completeGoogleSignup(username: String, inviteCode: String) {
+        val name = username.trim()
+        val code = inviteCode.trim()
+        if (name.length < 3 || !USERNAME_RE.matches(name)) {
+            _googleSignup.update { it.copy(error = UiText.StringResource(R.string.auth_google_bad_username)) }
+            return
+        }
+        if (code.isBlank()) {
+            _googleSignup.update { it.copy(error = UiText.StringResource(R.string.auth_google_need_invite)) }
+            return
+        }
+        viewModelScope.launch {
+            _googleSignup.update { it.copy(isLoading = true, error = null) }
+            runCatching { authRepository.completeGoogleProfile(name, code) }
+                .onSuccess { _googleSignup.update { GoogleSignupUiState() } }
+                .onFailure { e -> _googleSignup.update { it.copy(isLoading = false, error = signupError(e)) } }
+        }
+    }
+
+    /** «Отменить регистрацию»: удалить Google-аккаунт без профиля (при ошибке — выйти). */
+    fun cancelGoogleSignup() {
+        viewModelScope.launch {
+            _googleSignup.update { it.copy(isLoading = true, error = null) }
+            runCatching { fcmManager.revokeToken() }
+            authRepository.cancelGoogleSignup()
+            _googleSignup.value = GoogleSignupUiState()
+        }
+    }
+
+    fun clearGoogleSignupError() {
+        _googleSignup.update { it.copy(error = null) }
+    }
+
+    private fun signupError(e: Throwable): UiText {
+        val fe = e as? com.google.firebase.functions.FirebaseFunctionsException
+        return when (fe?.code) {
+            com.google.firebase.functions.FirebaseFunctionsException.Code.ALREADY_EXISTS ->
+                UiText.StringResource(R.string.auth_google_username_taken)
+            com.google.firebase.functions.FirebaseFunctionsException.Code.INVALID_ARGUMENT ->
+                UiText.StringResource(R.string.auth_google_bad_username)
+            com.google.firebase.functions.FirebaseFunctionsException.Code.UNAVAILABLE,
+            com.google.firebase.functions.FirebaseFunctionsException.Code.DEADLINE_EXCEEDED ->
+                UiText.StringResource(R.string.auth_google_network)
+            // Сервер объясняет сам: «Недействительный код приглашения» и т. п.
+            else -> fe?.message?.takeIf { it.isNotBlank() }?.let { UiText.DynamicString(it) }
+                ?: UiText.StringResource(R.string.auth_google_failed)
+        }
     }
 
     // ── Auth (login / register) ───────────────────────────────────────────────
@@ -232,10 +316,10 @@ class AuthViewModel(
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, errorRes = null) }
             // Перед логином убеждаемся, что старый FCM токен отозван,
             // чтобы 2FA код не пришёл в пуше на ещё не аутентифицированное устройство
-            fcmManager.revokeToken()
+            kotlinx.coroutines.withTimeoutOrNull(REVOKE_TIMEOUT_MS) { fcmManager.revokeToken() }
             runCatching { authRepository.login(email.trim(), password) }
                 .onSuccess { _uiState.update { it.copy(isLoading = false, success = true) } }
                 .onFailure { error -> _uiState.update { it.copy(isLoading = false, error = friendlyMessage(error)) } }
@@ -252,7 +336,7 @@ class AuthViewModel(
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, errorRes = null) }
             val codeToUse = inviteCode?.trim()?.ifBlank { null } ?: _pendingInviteCode.value?.trim()?.ifBlank { null }
             runCatching { authRepository.register(email.trim(), password, username.trim(), codeToUse) }
                 .onSuccess { _uiState.update { it.copy(isLoading = false, success = true) } }
@@ -282,7 +366,7 @@ class AuthViewModel(
     }
 
     fun clearError() {
-        _uiState.update { it.copy(error = null) }
+        _uiState.update { it.copy(error = null, errorRes = null) }
     }
 
     fun sendPasswordReset(email: String, onResult: (Boolean, String?) -> Unit) {
@@ -376,14 +460,13 @@ class AuthViewModel(
 
     fun deleteAccount(password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, errorRes = null) }
             runCatching {
                 fcmManager.revokeToken()
                 authRepository.deleteAccount(password)
             }.onSuccess {
                 stopVerificationPolling()
                 tfaManager.clearCache()
-                _tfaPassed.value = false
                 _uiState.update { it.copy(isLoading = false) }
                 onSuccess()
             }.onFailure { error ->
@@ -398,7 +481,7 @@ class AuthViewModel(
     fun logout() {
         stopVerificationPolling()
         tfaManager.clearCache()
-        _tfaPassed.value = false
+        tfaHold.release()
         viewModelScope.launch {
             // FCM токены автоматически отзываются при сбросе приложения / логауте
             fcmManager.revokeToken()
@@ -409,4 +492,16 @@ class AuthViewModel(
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private fun friendlyMessage(t: Throwable): String = t.message ?: "Something went wrong"
+
+    companion object {
+        private val USERNAME_RE = Regex("^[a-zA-Z0-9_]+$")
+        private const val REVOKE_TIMEOUT_MS = 3_000L
+
+        /**
+         * Ник по умолчанию для регистрации через Google: часть почты до `@`, недопустимые символы
+         * заменены на `_`, не длиннее 24 символов.
+         */
+        fun defaultUsername(email: String?): String =
+            email.orEmpty().substringBefore('@').replace(Regex("[^a-zA-Z0-9_]"), "_").take(24)
+    }
 }

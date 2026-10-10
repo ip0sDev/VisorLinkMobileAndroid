@@ -29,7 +29,6 @@ import org.visorlink.app.data.model.StickerPack
 import org.visorlink.app.data.repository.StickerPackRepository
 import org.visorlink.app.ui.components.CachedImage
 import org.visorlink.app.ui.components.liquidPopIn
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -67,13 +66,12 @@ fun StickerPackBottomSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
-        val isLiquidEnabled = rememberLiquidEnabled()
-        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.68f, stiffness = 480f)
+        val popProgress = rememberLiquidPopProgress(damping = 0.68f, stiffness = 480f)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .liquidPopIn(popProgress, isLiquidEnabled, TransformOrigin(0.5f, 1f))
+                .liquidPopIn(popProgress, TransformOrigin(0.5f, 1f))
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally

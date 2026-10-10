@@ -34,9 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.koin.compose.koinInject
 import org.visorlink.app.R
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidRevealEnter
 import org.visorlink.app.ui.components.liquidRevealExit
@@ -78,11 +76,8 @@ fun ChatBottomBar(
     onSendRecord: () -> Unit,
     onClearReply: () -> Unit,
     onCancelEdit: () -> Unit = {},
-    onJoinChannel: (() -> Unit)? = null,
-    flagsRepository: FlagsRepository = koinInject()
+    onJoinChannel: (() -> Unit)? = null
 ) {
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
@@ -194,8 +189,6 @@ fun ChatBottomBar(
                     val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
                     val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.90f) else cs.surfaceContainer.copy(alpha = 0.92f)
                     Brush.verticalGradient(listOf(topColor, bottomColor))
-                } else if (tokens.isForge) {
-                    Brush.verticalGradient(listOf(cs.surfaceContainerHigh, cs.surfaceContainerHigh))
                 } else {
                     Brush.verticalGradient(listOf(cs.surfaceContainerLow, cs.surfaceContainerLow))
                 }
@@ -212,21 +205,20 @@ fun ChatBottomBar(
 
             // Панель ввода слегка пружинит, принимая цитату реплая или блок редактирования
             val panelJelly = rememberLiquidJellyState(softness = 0.05f, damping = 0.62f, stiffness = 340f)
-            if (isLiquidEnabled) {
-                LaunchedEffectAfterFirst(uiState.replyingTo?.id to uiState.editingMessage?.id) {
-                    panelJelly.pulse(0.05f)
-                }
+            LaunchedEffectAfterFirst(uiState.replyingTo?.id to uiState.editingMessage?.id) {
+                panelJelly.pulse(0.05f)
             }
 
             // Спецификации «вылезания» вложенных баннеров: жидкие под флагом, штатные без него
-            val bannerEnter = if (isLiquidEnabled) liquidRevealEnter() else expandVertically() + fadeIn()
-            val bannerExit = if (isLiquidEnabled) liquidRevealExit() else shrinkVertically() + fadeOut()
+            val glitch = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
+            val bannerEnter = liquidRevealEnter(glitch = glitch)
+            val bannerExit = liquidRevealExit(glitch = glitch)
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer { clip = false }
-                    .liquidJelly(panelJelly, enabled = isLiquidEnabled)
+                    .liquidJelly(panelJelly)
                     .then(
                         if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                         else Modifier
@@ -296,8 +288,8 @@ fun ChatBottomBar(
 
                 AnimatedVisibility(
                     visible = uiState.isUploading,
-                    enter = if (isLiquidEnabled) liquidRevealEnter() else expandVertically(),
-                    exit = if (isLiquidEnabled) liquidRevealExit() else shrinkVertically()
+                    enter = bannerEnter,
+                    exit = bannerExit
                 ) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp).clip(tokens.shapes.indicator), color = cs.primary, trackColor = Color.Transparent)
                 }
@@ -338,8 +330,7 @@ fun ChatBottomBar(
                         RecordingBar(
                             hapticEnabled = hapticEnabled,
                             onCancel = onCancelRecord,
-                            onSend = onSendRecord,
-                            liquidEnabled = isLiquidEnabled
+                            onSend = onSendRecord
                         )
                     } else {
                         val isBot = uiState.otherUser?.isBot == true
@@ -422,10 +413,8 @@ fun ChatBottomBar(
                             val isSendMode = inputText.isNotBlank() || uiState.editingMessage != null
                             val sendBtnJelly = rememberLiquidJellyState(softness = 0.09f, damping = 0.70f, stiffness = 300f)
 
-                            if (isLiquidEnabled) {
-                                LaunchedEffect(isSendMode) {
-                                    sendBtnJelly.pulse(0.10f)
-                                }
+                            LaunchedEffect(isSendMode) {
+                                sendBtnJelly.pulse(0.10f)
                             }
 
                             AnimatedContent(
@@ -449,7 +438,7 @@ fun ChatBottomBar(
                                             .size(48.dp)
                                             .graphicsLayer { clip = false }
                                             .scale(sendScale)
-                                            .liquidJelly(sendBtnJelly, enabled = isLiquidEnabled)
+                                            .liquidJelly(sendBtnJelly)
                                             .then(
                                                 if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
@@ -465,9 +454,7 @@ fun ChatBottomBar(
                                                 indication = null
                                             ) { 
                                                 haptic.perform(HapticType.CLICK, hapticEnabled)
-                                                if (isLiquidEnabled) {
-                                                    sendBtnJelly.pulse(0.09f)
-                                                }
+                                                sendBtnJelly.pulse(0.09f)
                                                 onSend() 
                                             },
                                         contentAlignment = Alignment.Center
@@ -479,7 +466,7 @@ fun ChatBottomBar(
                                         modifier = Modifier
                                             .size(48.dp)
                                             .graphicsLayer { clip = false }
-                                            .liquidJelly(sendBtnJelly, enabled = isLiquidEnabled)
+                                            .liquidJelly(sendBtnJelly)
                                             .then(
                                                 if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
@@ -496,9 +483,7 @@ fun ChatBottomBar(
                                             ) {
                                                 if (audioPermission.status.isGranted) {
                                                     haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
-                                                    if (isLiquidEnabled) {
-                                                        sendBtnJelly.pulse(0.09f)
-                                                    }
+                                                    sendBtnJelly.pulse(0.09f)
                                                     onStartRecord()
                                                 } else {
                                                     onRequestAudioPerm()

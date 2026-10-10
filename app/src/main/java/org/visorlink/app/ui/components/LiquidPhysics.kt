@@ -17,7 +17,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,22 +38,10 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
-import org.visorlink.app.data.repository.FlagsRepository
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sign
-
-/**
- * Единая точка чтения флага жидких анимаций.
- * Все Liquid Glass эффекты обязаны проходить через неё, чтобы ключ флага не расползался по UI.
- */
-@Composable
-fun rememberLiquidEnabled(flagsRepository: FlagsRepository = koinInject()): Boolean {
-    val flags by flagsRepository.flags.collectAsState()
-    return flags.isEnabled("animation_test")
-}
 
 /**
  * Состояние упругой желейной деформации (Squash & Stretch).
@@ -65,24 +52,28 @@ class LiquidJellyState(
     private val scope: CoroutineScope,
     val softness: Float = 0.10f,
     val damping: Float = 0.65f,
-    val stiffness: Float = 320f
+    val stiffness: Float = 320f,
+    /** Forge v2: терминал не «желирует» — импульсы не деформируют и не сдвигают элемент. */
+    val glitch: Boolean = false,
 ) {
     val animatable = Animatable(0f)
 
     val scaleX: Float
-        get() = calculateJellyScale(animatable.value).first
+        get() = if (glitch) 1f else calculateJellyScale(animatable.value).first
 
     val scaleY: Float
-        get() = calculateJellyScale(animatable.value).second
+        get() = if (glitch) 1f else calculateJellyScale(animatable.value).second
 
     fun press(customSoftness: Float = softness) {
         scope.launch {
+            if (glitch) return@launch
             animatable.animateTo(-customSoftness, tween(80))
         }
     }
 
     fun release(bounceStretch: Float = softness * 0.7f) {
         scope.launch {
+            if (glitch) return@launch
             animatable.animateTo(bounceStretch, tween(70))
             animatable.animateTo(0f, spring(dampingRatio = damping, stiffness = stiffness))
         }
@@ -90,6 +81,7 @@ class LiquidJellyState(
 
     fun pulse(intensity: Float = softness) {
         scope.launch {
+            if (glitch) return@launch
             animatable.animateTo(intensity, tween(80))
             animatable.animateTo(0f, spring(dampingRatio = damping, stiffness = stiffness))
         }
@@ -125,8 +117,9 @@ fun rememberLiquidJellyState(
     stiffness: Float = 320f
 ): LiquidJellyState {
     val scope = rememberCoroutineScope()
-    return remember(softness, damping, stiffness) {
-        LiquidJellyState(scope, softness, damping, stiffness)
+    val glitch = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
+    return remember(softness, damping, stiffness, glitch) {
+        LiquidJellyState(scope, softness, damping, stiffness, glitch)
     }
 }
 
@@ -135,16 +128,13 @@ fun rememberLiquidJellyState(
  */
 fun Modifier.liquidJelly(
     state: LiquidJellyState,
-    enabled: Boolean = true,
     /** Для панелей, прижатых к краю экрана: центр масштаба на краю, иначе между панелью и краем открывается щель. */
     transformOrigin: TransformOrigin = TransformOrigin.Center
-): Modifier = if (enabled) {
-    this.graphicsLayer {
-        this.transformOrigin = transformOrigin
-        this.scaleX = state.scaleX
-        this.scaleY = state.scaleY
-    }
-} else this
+): Modifier = this.graphicsLayer {
+    this.transformOrigin = transformOrigin
+    this.scaleX = state.scaleX
+    this.scaleY = state.scaleY
+}
 
 /**
  * Состояние непрерывного жидкостного бегунка для таббаров и навбаров.
@@ -265,8 +255,8 @@ fun Modifier.liquidDragStretch(
  * Появление панели, «выливающейся» из края контейнера: пружинный рост по высоте
  * с лёгким перелётом плюс подтягивание масштаба.
  */
-fun liquidRevealEnter(fromBottom: Boolean = true): EnterTransition =
-    expandVertically(
+fun liquidRevealEnter(fromBottom: Boolean = true, glitch: Boolean = false): EnterTransition =
+    if (glitch) terminalRevealEnter(fromBottom) else expandVertically(
         animationSpec = spring(dampingRatio = 0.58f, stiffness = 420f),
         expandFrom = if (fromBottom) Alignment.Bottom else Alignment.Top
     ) + scaleIn(
@@ -279,8 +269,8 @@ fun liquidRevealEnter(fromBottom: Boolean = true): EnterTransition =
  * Обратное втягивание панели в край контейнера. Заметно жёстче входа —
  * жидкость возвращается в резервуар быстрее, чем вытекает.
  */
-fun liquidRevealExit(toBottom: Boolean = true): ExitTransition =
-    shrinkVertically(
+fun liquidRevealExit(toBottom: Boolean = true, glitch: Boolean = false): ExitTransition =
+    if (glitch) terminalRevealExit(toBottom) else shrinkVertically(
         animationSpec = spring(dampingRatio = 0.88f, stiffness = 620f),
         shrinkTowards = if (toBottom) Alignment.Bottom else Alignment.Top
     ) + scaleOut(
@@ -289,27 +279,40 @@ fun liquidRevealExit(toBottom: Boolean = true): ExitTransition =
         transformOrigin = TransformOrigin(0.5f, if (toBottom) 1f else 0f)
     ) + fadeOut(tween(100))
 
+/** Forge v2: панель раскрывается ровно, как строки терминала, без перелёта и масштаба. */
+private fun terminalRevealEnter(fromBottom: Boolean): EnterTransition =
+    expandVertically(
+        animationSpec = TerminalMotion.tween(240),
+        expandFrom = if (fromBottom) Alignment.Bottom else Alignment.Top
+    ) + fadeIn(TerminalMotion.tween(240))
+
+private fun terminalRevealExit(toBottom: Boolean): ExitTransition =
+    shrinkVertically(
+        animationSpec = TerminalMotion.tween(180),
+        shrinkTowards = if (toBottom) Alignment.Bottom else Alignment.Top
+    ) + fadeOut(TerminalMotion.tween(160))
+
 /**
  * Прогресс пружинного всплывания попапа: 0 → 1 с перелётом за единицу.
- * Запускается один раз при входе в композицию; при выключенных анимациях отдаёт 1f.
- * Состав вызовов не зависит от [enabled] — флаг переключается в рантайме
- * через FlagFlipper, и ранний выход ломал бы слоты композиции.
+ * Запускается один раз при входе в композицию.
  */
 @Composable
 fun rememberLiquidPopProgress(
-    enabled: Boolean,
     damping: Float = 0.58f,
     stiffness: Float = 420f
 ): Float {
     var started by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { started = true }
+    // Forge v2: без пружинного перелёта (liquidPopIn тогда не «желирует»)
+    val glitch = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
 
     val progress by animateFloatAsState(
         targetValue = if (started) 1f else 0f,
-        animationSpec = spring(dampingRatio = damping, stiffness = stiffness),
+        animationSpec = if (glitch) TerminalMotion.tween(220)
+        else spring(dampingRatio = damping, stiffness = stiffness),
         label = "liquid_pop"
     )
-    return if (enabled) progress else 1f
+    return progress
 }
 
 /**
@@ -318,9 +321,8 @@ fun rememberLiquidPopProgress(
  */
 fun Modifier.liquidPopIn(
     progress: Float,
-    enabled: Boolean = true,
     origin: TransformOrigin = TransformOrigin.Center
-): Modifier = if (!enabled) this else this.graphicsLayer {
+): Modifier = this.graphicsLayer {
     transformOrigin = origin
     val base = 0.84f + 0.16f * progress
     // Перелёт пружины превращается в лёгкое желе: шире по X, ниже по Y
@@ -336,18 +338,16 @@ fun Modifier.liquidPopIn(
  * каскадной задержкой по индексу и пружинным приземлением с перелётом.
  *
  * @param index позиция элемента в списке для каскадной задержки (0, 1, 2...)
- * @param enabled флаг активности анимации (animation_test)
  * @param triggerKey ключ перезапуска анимации (например, смена активной вкладки или загрузка чатов)
  */
 @Composable
 fun Modifier.liquidPillCardSlideOut(
     index: Int,
-    enabled: Boolean = true,
     triggerKey: Any? = Unit
 ): Modifier {
-    if (!enabled) return this
-
     val animProgress = remember(triggerKey) { Animatable(0f) }
+    val glitch = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
+    if (glitch) return terminalCardBoot(index, triggerKey)
 
     LaunchedEffect(triggerKey) {
         val delayMs = (index.coerceAtMost(8)) * 36L
@@ -396,6 +396,24 @@ fun Modifier.liquidPillCardSlideOut(
     }
 }
 
+/**
+ * Forge v2: карточка проявляется каскадом по индексу и ровно доводится на место коротким
+ * сдвигом сверху — без растяжения, перелёта, рывков и мерцания.
+ */
+@Composable
+private fun Modifier.terminalCardBoot(index: Int, triggerKey: Any?): Modifier {
+    val p = remember(triggerKey) { Animatable(0f) }
+    LaunchedEffect(triggerKey) {
+        p.animateTo(1f, TerminalMotion.tween(340, delayMs = index.coerceAtMost(8) * 40))
+    }
+    return this.graphicsLayer {
+        val v = p.value
+        if (v >= 1f) return@graphicsLayer
+        alpha = v
+        translationY = (1f - v) * -12f * density
+    }
+}
+
 // ── Перелив (вливание / выливание) ───────────────────────────────────────────
 
 /**
@@ -410,16 +428,14 @@ fun Modifier.liquidPillCardSlideOut(
  */
 @Composable
 fun rememberLiquidPourProgress(
-    visible: Boolean,
-    liquid: Boolean = true
+    visible: Boolean
 ): Float {
     val anim = remember { Animatable(if (visible) 1f else 0f) }
-    LaunchedEffect(visible, liquid) {
+    val glitch = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
+    LaunchedEffect(visible) {
         when {
-            !liquid -> anim.animateTo(
-                if (visible) 1f else 0f,
-                tween(durationMillis = 220, easing = FastOutSlowInEasing)
-            )
+            // Forge v2: без плеска — ровная развёртка туда и обратно
+            glitch -> anim.animateTo(if (visible) 1f else 0f, TerminalMotion.tween(if (visible) 260 else 180))
             visible -> anim.animateTo(1f, spring(dampingRatio = 0.62f, stiffness = 320f))
             else -> anim.animateTo(0f, tween(durationMillis = 260, easing = FastOutSlowInEasing))
         }
@@ -447,9 +463,27 @@ fun Modifier.liquidPour(
     progress: Float,
     fromTop: Boolean,
     accent: Color,
-    waves: Boolean = true
+    waves: Boolean = true,
+    /** Forge v2: вместо волны и капель — ровный срез с неоновой линией развёртки. */
+    glitch: Boolean = false,
 ): Modifier {
     val clamped = progress.coerceIn(0f, 1f)
+    if (glitch) return this
+        .drawWithContent {
+            drawContent()
+            if (clamped in 0.001f..0.999f) {
+                val y = if (fromTop) size.height - 1.dp.toPx() else 0f
+                drawRect(accent.copy(alpha = 0.8f), Offset(0f, y), androidx.compose.ui.geometry.Size(size.width, 1.5.dp.toPx()))
+            }
+        }
+        .clipToBounds()
+        .layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val height = (placeable.height * clamped).roundToInt().coerceAtLeast(0)
+            layout(placeable.width, height) {
+                placeable.place(0, if (fromTop) 0 else height - placeable.height)
+            }
+        }
     return this
         .graphicsLayer {
             val turbulence = pourTurbulence(progress)

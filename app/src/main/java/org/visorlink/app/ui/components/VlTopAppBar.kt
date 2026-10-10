@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlNeonRule
 
 import androidx.compose.ui.draw.clip
 import org.visorlink.app.ui.theme.vlRaised
@@ -89,30 +90,19 @@ fun VlTopAppBar(
         }
     } else {
         val defaultColors = TopAppBarDefaults.topAppBarColors(
-            containerColor = when {
-                tokens.isForge -> cs.surfaceContainerHigh
-                else -> cs.surface
-            },
-            scrolledContainerColor = when {
-                tokens.isForge -> cs.surfaceContainerHigh
-                else -> cs.surface.copy(alpha = 0.85f)
-            }
+            containerColor = cs.surface,
+            scrolledContainerColor = cs.surface.copy(alpha = 0.85f)
         )
 
-        Column(modifier = modifier) {
-            TopAppBar(
-                title = title,
-                navigationIcon = navigationIcon,
-                actions = actions,
-                colors = colors ?: defaultColors,
-                scrollBehavior = scrollBehavior
-            )
-            if (tokens.isForge) {
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = cs.outlineVariant.copy(alpha = 0.4f)
-                )
-            }
-        }
+        TopAppBar(
+            // Forge v2: заголовок печатается за блочным курсором с RGB-расслоением; в M3E — как есть
+            title = { Box(Modifier.terminalTitleReveal()) { title() } },
+            // Forge v2: неоновая линия под панелью; в M3E — no-op
+            modifier = modifier.vlNeonRule(tokens),
+            navigationIcon = navigationIcon,
+            actions = actions,
+            colors = colors ?: defaultColors,
+            scrollBehavior = scrollBehavior
+        )
     }
 }

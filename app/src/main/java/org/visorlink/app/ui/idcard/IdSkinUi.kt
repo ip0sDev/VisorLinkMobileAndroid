@@ -42,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,6 +156,12 @@ internal fun IdCard?.wearer(profile: UserProfile?, masked: Boolean = false): IdS
 // ── Превью скина ──
 
 /**
+ * Часы превью: у снимка без даты выпуска «Выдана» — сегодня. Скриншот-тесты подставляют
+ * фиксированное время, иначе эталоны расходились бы каждые сутки.
+ */
+internal val LocalIdCardClock = staticCompositionLocalOf<() -> Long> { System::currentTimeMillis }
+
+/**
  * Скин в виде карты [wearer] (так он будет выглядеть у смотрящего). Без [width] — по ширине
  * контейнера. [mintedAt] — дата «Выдана»; у снимка в обмене её нет, тогда — сегодня.
  */
@@ -168,7 +175,8 @@ internal fun IdSkinThumb(
     interactive: Boolean = false,
     width: Dp? = null,
 ) {
-    val now = remember { System.currentTimeMillis() }
+    val clock = LocalIdCardClock.current
+    val now = remember(clock) { clock() }
     val card = remember(look, wearer, mintedAt) {
         look.asCard(
             wearer.copy(registeredAt = wearer.registeredAt.takeIf { it > 0 } ?: now),

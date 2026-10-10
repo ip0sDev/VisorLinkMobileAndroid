@@ -186,6 +186,28 @@ object IdCardGenerator {
         return pts.map { (x, y) -> (3 + (x - minX) * scale) to (base - (base - y) * (0.6 + scale * 0.4)) }
     }
 
+    /** Формат своей подписи (functions/publicCardLogic.js `normalizeSignature`). */
+    private val SIGNATURE_RE = Regex("""^(?:[ML]\d{1,3}(?:\.\d)? \d{1,2}(?:\.\d)?)+$""")
+    private val SIGNATURE_CMD = Regex("""([ML])(\d{1,3}(?:\.\d)?) (\d{1,2}(?:\.\d)?)""")
+    const val SIGNATURE_MAX = 6000
+
+    /**
+     * Своя нарисованная подпись: только `M x y` / `L x y`, один знак после точки, x 0–100, y 0–30,
+     * не длиннее [SIGNATURE_MAX], начинается с `M`. Каждое `M` — новый штрих. Невалидная — `null`
+     * (тогда рисуется росчерк из seed).
+     */
+    fun parseSignature(d: String?): List<List<Pair<Double, Double>>>? {
+        if (d.isNullOrEmpty() || d.length > SIGNATURE_MAX || d[0] != 'M' || !SIGNATURE_RE.matches(d)) return null
+        val strokes = ArrayList<MutableList<Pair<Double, Double>>>()
+        for (m in SIGNATURE_CMD.findAll(d)) {
+            val x = m.groupValues[2].toDouble()
+            val y = m.groupValues[3].toDouble()
+            if (x > 100 || y > 30) return null
+            if (m.groupValues[1] == "M" || strokes.isEmpty()) strokes += mutableListOf(x to y) else strokes.last() += x to y
+        }
+        return strokes.takeIf { it.isNotEmpty() }
+    }
+
     /** SVG-путь подписи, байт в байт как в вебе (toFixed(1)). */
     fun signaturePath(seed: Long): String =
         "M" + signaturePoints(seed).joinToString("L") { (x, y) -> "${toFixed1(x)} ${toFixed1(y)}" }

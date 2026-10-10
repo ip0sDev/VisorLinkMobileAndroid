@@ -144,7 +144,7 @@ fun LiquidMorphingChatBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .graphicsLayer { clip = false }
-            .liquidJelly(panelJelly, enabled = true, transformOrigin = TransformOrigin(0.5f, 1f))
+            .liquidJelly(panelJelly, transformOrigin = TransformOrigin(0.5f, 1f))
             .then(
                 if (isExpanded) {
                     Modifier

@@ -4,7 +4,6 @@ import org.visorlink.app.ui.theme.VlTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -12,20 +11,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
 import org.visorlink.app.data.repository.ReportCategory
 import org.visorlink.app.data.repository.ReportRepository
+import org.visorlink.app.ui.components.VlAlertDialog
+import org.visorlink.app.ui.components.VlDialogButton
+import org.visorlink.app.ui.components.VlTextField
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
+/**
+ * Жалоба на сообщение, пост канала или пользователя.
+ *
+ * @param chatId чат сообщения / канал поста: без него сервер не сможет скрыть сообщение после
+ *   трёх жалоб. Для жалобы на пользователя — `null`.
+ */
 @Composable
 fun ReportContentDialog(
     targetType: String,
     targetId: String,
-    targetSenderUid: String?,
+    chatId: String?,
     onDismiss: () -> Unit,
     onReportSubmitted: () -> Unit,
     reportRepository: ReportRepository = koinInject()
@@ -35,22 +41,18 @@ fun ReportContentDialog(
     var isSubmitting by remember { mutableStateOf(false) }
     var submitError by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val fallbackError = stringResource(R.string.report_error)
 
-    AlertDialog(
+    VlAlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
-        title = {
-            Text(
-                text = stringResource(R.string.report_dialog_title),
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp
-            )
-        },
+        dismissible = !isSubmitting,
+        title = { Text(stringResource(R.string.report_dialog_title)) },
         text = {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val categories = listOf(
                     ReportCategory.SPAM to stringResource(R.string.report_cat_spam),
@@ -64,83 +66,69 @@ fun ReportContentDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
-                            .clickable { selectedCategory = cat }
-                            .padding(vertical = 4.dp),
+                            .clip(VlTheme.tokens.shapes.rounded(8.dp))
+                            .clickable(enabled = !isSubmitting) { selectedCategory = cat }
+                            .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         RadioButton(
                             selected = selectedCategory == cat,
-                            onClick = { selectedCategory = cat }
+                            onClick = { selectedCategory = cat },
+                            enabled = !isSubmitting
                         )
                         Text(text = label, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(8.dp))
 
-                OutlinedTextField(
+                VlTextField(
                     value = details,
-                    onValueChange = { details = it },
-                    label = { Text(stringResource(R.string.report_details_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
+                    onValueChange = { details = it.take(500) },
+                    placeholder = stringResource(R.string.report_details_hint),
+                    singleLine = false,
                     maxLines = 4,
-                    shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
+                    enabled = !isSubmitting,
+                    modifier = Modifier.fillMaxWidth()
                 )
 
-                if (submitError != null) {
+                submitError?.let {
                     Text(
-                        text = submitError!!,
+                        text = it,
                         color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
                     )
                 }
             }
         },
         confirmButton = {
-            Button(
+            VlDialogButton(
                 onClick = {
-                    if (!isSubmitting) {
-                        isSubmitting = true
-                        submitError = null
-                        scope.launch {
-                            val res = reportRepository.submitReport(
-                                targetType = targetType,
-                                targetId = targetId,
-                                targetSenderUid = targetSenderUid,
-                                category = selectedCategory,
-                                details = details
-                            )
-                            isSubmitting = false
-                            if (res.isSuccess) {
-                                onReportSubmitted()
-                            } else {
-                                submitError = res.exceptionOrNull()?.message ?: "Ошибка при отправке"
-                            }
-                        }
+                    isSubmitting = true
+                    submitError = null
+                    scope.launch {
+                        val res = reportRepository.submitReport(
+                            targetType = targetType,
+                            targetId = targetId,
+                            chatId = chatId,
+                            category = selectedCategory,
+                            details = details
+                        )
+                        isSubmitting = false
+                        if (res.isSuccess) onReportSubmitted()
+                        else submitError = res.exceptionOrNull()?.message?.takeIf { it.isNotBlank() } ?: fallbackError
                     }
                 },
-                enabled = !isSubmitting,
-                shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
+                isPrimary = true,
+                isLoading = isSubmitting
             ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text(stringResource(R.string.report_submit), fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.report_submit))
             }
         },
         dismissButton = {
-            TextButton(
-                onClick = onDismiss,
-                enabled = !isSubmitting
-            ) {
+            VlDialogButton(onClick = onDismiss, enabled = !isSubmitting) {
                 Text(stringResource(R.string.action_cancel))
             }
         }

@@ -97,19 +97,6 @@ private val BiolumeShapeScale = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/**
- * Forge: ни одного скругления, включая M3-компоненты со своей шкалой форм.
- * `Shapes` принимает только `CornerBasedShape`, поэтому здесь нулевой радиус,
- * а не `RectangleShape`.
- */
-private val ForgeShapeScale = Shapes(
-    extraSmall = RoundedCornerShape(0.dp),
-    small = RoundedCornerShape(0.dp),
-    medium = RoundedCornerShape(0.dp),
-    large = RoundedCornerShape(0.dp),
-    extraLarge = RoundedCornerShape(0.dp),
-)
-
 /** Forge v2: малые скругления и для M3-компонентов со своей шкалой форм. */
 private fun forgeV2ShapeScale(f: ForgeV2.Flavor) = Shapes(
     extraSmall = RoundedCornerShape(2.dp),
@@ -128,11 +115,14 @@ private fun forgeV2Flavor(theme: AppTheme): ForgeV2.Flavor? = when (theme) {
 // ── Действующая тема зрителя ─────────────────────────────────────────────────
 
 /**
- * Тема, которую зритель видит сейчас: при включённых ID-картах её решает режим
+ * Тема, которую зритель видит сейчас: после входа её решает режим ID-карты
  * (Biolume / Forge v2), а не выбор в настройках. Задаёт MainActivity; обёртки профиля
  * и чата накладывают оформление владельца поверх неё, а не поверх настроек.
  *
  * @property modeDriven тему решает режим ID-карты — `customization.theme` владельца не читается.
+ * @property proAccent цвет профиля PRO — акцент всего интерфейса ([ProAccent]): в Biolume, пока
+ *   на устройстве выбран акцент «По умолчанию», в Forge v2 — всегда (заменяет оттенок режима,
+ *   [ForgeV2.Flavor.tintedBy]); `null` — без PRO или без цвета.
  */
 @Immutable
 data class ViewerTheme(
@@ -140,7 +130,14 @@ data class ViewerTheme(
     val themeMode: ThemeMode,
     val colorPreset: ColorPreset,
     val modeDriven: Boolean = false,
+    val proAccent: Color? = null,
 )
+
+/**
+ * Цвет профиля PRO как акцент интерфейса: только при активном PRO — истёкшая подписка оставляет
+ * в профиле цвет, но тема его больше не носит. См. [ProAccent].
+ */
+fun UserProfile.proAccent(): Color? = ProAccent.of(this)
 
 val LocalViewerTheme = staticCompositionLocalOf<ViewerTheme?> { null }
 
@@ -169,15 +166,21 @@ fun UserProfileTheme(
 ) {
     val resolved = ProfileAppearance.resolve(owner = profile, viewer = currentUser)
     val appearance = if (applyAccentHex) resolved else resolved.copy(accentHex = null)
+    // Цвет профиля владельца с PRO — акцент его профиля и чата (важнее акцента смотрящего),
+    // если смотрящий видит чужое оформление
+    val ownerProAccent = if (resolved.isEmpty) null else profile?.proAccent()
     if (ownerModeTheme == null) {
-        ProfileAppearanceTheme(appearance = appearance, content = content)
+        ProfileAppearanceTheme(appearance = appearance, proAccent = ownerProAccent, content = content)
         return
     }
     val viewer = LocalViewerTheme.current ?: ViewerTheme(AppTheme.BIOLUME, ThemeMode.DARK, ColorPreset.DEFAULT)
     CompositionLocalProvider(
-        LocalViewerTheme provides viewer.copy(appTheme = ownerModeTheme.toAppTheme(), themeMode = ThemeMode.DARK, modeDriven = true),
+        // В гамме владельца — его акцент, а не акцент смотрящего
+        LocalViewerTheme provides viewer.copy(
+            appTheme = ownerModeTheme.toAppTheme(), themeMode = ThemeMode.DARK, modeDriven = true, proAccent = ownerProAccent,
+        ),
     ) {
-        ProfileAppearanceTheme(appearance = appearance, content = content)
+        ProfileAppearanceTheme(appearance = appearance, proAccent = ownerProAccent, content = content)
     }
 }
 
@@ -195,6 +198,8 @@ fun ModeTheme.toAppTheme(): AppTheme = when {
 @Composable
 fun ProfileAppearanceTheme(
     appearance: ProfileAppearance,
+    /** Цвет профиля PRO владельца; `null` — остаётся акцент смотрящего. */
+    proAccent: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val themeVm: ThemeViewModel = koinViewModel()
@@ -213,6 +218,7 @@ fun ProfileAppearanceTheme(
         showDebugIds = showDebugIds,
         // Тема по режиму меняется при входе в чат — внутренняя тема чата перетекает так же
         animateColors = viewer.modeDriven,
+        proAccent = proAccent ?: viewer.proAccent,
         content = content,
     )
 }
@@ -226,6 +232,7 @@ fun ProfileAppearanceTheme(
     viewerPreset: ColorPreset,
     showDebugIds: Boolean = LocalShowDebugIds.current,
     animateColors: Boolean = false,
+    proAccent: Color? = null,
     content: @Composable () -> Unit,
 ) {
     val theme = appearance.theme ?: viewerTheme
@@ -240,6 +247,7 @@ fun ProfileAppearanceTheme(
         setStatusBarColor = false,
         typographyOverride = appearance.font?.let { baseTypography(theme).withProfileFont(it) },
         animateColors = animateColors,
+        proAccent = proAccent,
         content = content,
     )
 }
@@ -269,10 +277,21 @@ fun VisorLinkTheme(
     typographyOverride: androidx.compose.material3.Typography? = null,
     /** Плавная смена палитры (~200 мс) — когда тема меняется по режиму (вход в чат и выход). */
     animateColors: Boolean = false,
+    /**
+     * Цвет профиля PRO — акцент всего интерфейса ([ProAccent], веб `ProfileAccentSync`).
+     * Biolume: действует, пока [colorPreset] — «По умолчанию» и нет [accentOverride] (явный выбор
+     * важнее). Forge v2: всегда, заменяет оттенок режима ([ForgeV2.Flavor.tintedBy]). M3E не читает.
+     */
+    proAccent: Color? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
-    val forgeV2 = forgeV2Flavor(appTheme)
+    val forgeV2 = remember(appTheme, proAccent) {
+        forgeV2Flavor(appTheme)?.let { f -> if (proAccent != null) f.tintedBy(proAccent) else f }
+    }
+    // Biolume: явно выбранный пресет (или акцент чата / профиля) важнее цвета профиля
+    val biolumePro = appTheme == AppTheme.BIOLUME && proAccent != null &&
+        colorPreset == ColorPreset.DEFAULT && accentOverride == null
     // Forge v2 — только тёмная, светлой версии нет
     val darkTheme = forgeV2 != null || when (themeMode) {
         ThemeMode.DARK   -> true
@@ -296,12 +315,7 @@ fun VisorLinkTheme(
     val targetScheme = when (appTheme) {
         AppTheme.BIOLUME -> {
             val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
-            base.withSignalAccent(seed, darkTheme)
-        }
-
-        AppTheme.FORGE -> {
-            val base = if (darkTheme) ForgeSteelColorScheme else ForgeConcreteColorScheme
-            base.withSignalAccent(seed, darkTheme)
+            if (biolumePro) base.withProAccent(proAccent, darkTheme) else base.withSignalAccent(seed, darkTheme)
         }
 
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
@@ -313,35 +327,24 @@ fun VisorLinkTheme(
         // Пресеты акцента — только в Biolume: палитра режима фиксирована
         AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!)
     }
-    val colorScheme = if (animateColors) animateColorScheme(targetScheme) else targetScheme
+    // Цвета перетекают только внутри одного стиля (акцент и т. п.). При смене самой темы
+    // (Biolume ↔ Forge, светлая ↔ тёмная) — сразу целевые: переход делает растворение снимка
+    // (ThemeCrossfade), а анимация поверх давала кадры «формы Biolume, цвета Forge».
+    val colorScheme = if (animateColors) key(appTheme, darkTheme) { animateColorScheme(targetScheme) } else targetScheme
 
-    val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme) {
+    val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme, biolumePro) {
         when (appTheme) {
             AppTheme.BIOLUME -> VlTokens(
                 style = VlStyle.BIOLUME,
                 isDark = darkTheme,
                 structure = biolumeStructure(darkTheme),
-                signal = biolumeSignal(darkTheme),
+                signal = if (biolumePro) biolumeProSignal(darkTheme) else biolumeSignal(darkTheme),
                 shapes = BiolumeShapes,
                 motion = BiolumeMotion,
                 status = biolumeStatus(darkTheme),
-                selectionFill = biolumeSelectionFill(darkTheme, colorScheme.primary),
+                selectionFill = biolumeSelectionFill(darkTheme, colorScheme.primary, proAccent = biolumePro),
                 bubbles = biolumeBubbles(darkTheme, colorScheme.primary),
                 data = BiolumeDataTypography,
-                reduceMotion = reduceMotion,
-            )
-
-            AppTheme.FORGE -> VlTokens(
-                style = VlStyle.FORGE,
-                isDark = darkTheme,
-                structure = forgeStructure(darkTheme),
-                signal = forgeSignal(darkTheme),
-                shapes = ForgeShapes,
-                motion = ForgeMotion,
-                status = forgeStatus(darkTheme),
-                selectionFill = forgeSelectionFill(darkTheme, colorScheme.primary),
-                bubbles = forgeBubbles(darkTheme, colorScheme.primary),
-                data = ForgeDataTypography,
                 reduceMotion = reduceMotion,
             )
 
@@ -357,10 +360,8 @@ fun VisorLinkTheme(
                 bubbles = forgeV2Bubbles(forgeV2),
                 data = ForgeDataTypography,
                 reduceMotion = reduceMotion,
-                terminal = VlTerminalTokens(
-                    labelPrefix = if (appTheme == AppTheme.FORGE_PROTOGEN) "> " else "",
-                    scanlines = appTheme == AppTheme.FORGE_PROTOGEN,
-                ),
+                terminal = forgeV2Terminal(forgeV2),
+                switch = ForgeV2Switch,
             )
 
             AppTheme.MATERIAL3_EXPRESSIVE -> VlTokens(
@@ -419,11 +420,13 @@ fun VisorLinkTheme(
             // наших токенов (BottomSheet, Menu, Snackbar и т.п.).
             shapes = when (appTheme) {
                 AppTheme.BIOLUME -> BiolumeShapeScale
-                AppTheme.FORGE -> ForgeShapeScale
                 AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ShapeScale(forgeV2!!)
                 AppTheme.MATERIAL3_EXPRESSIVE -> Material3ShapeScale
             },
-            typography = typographyOverride ?: baseTypography(appTheme),
+            // Свечение заголовков Forge v2 — цвета подкрашенного неона
+            typography = typographyOverride
+                ?: if (forgeV2 != null && proAccent != null) remember(forgeV2) { forgeV2Typography(forgeV2) }
+                else baseTypography(appTheme),
             content = content
         )
     }

@@ -31,7 +31,6 @@ import org.visorlink.app.ui.theme.VisorLinkTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlRaised
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.theme.vlSignalGlow
 
 /**
@@ -81,15 +80,13 @@ private fun ThemePreviewCard(
     val description = when (theme) {
         AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_desc)
         AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_desc)
-        AppTheme.FORGE -> stringResource(R.string.theme_forge_desc)
         AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> stringResource(R.string.theme_forge_v2_desc)
     }
 
     // Рамка выбора рисуется во ВНЕШНЕЙ теме — иначе выделение прыгало бы вместе
     // с палитрой превью и перестало бы читаться как элемент настроек.
-    val isLiquid = rememberLiquidEnabled()
     val outerCs = MaterialTheme.colorScheme
-    val outerShape = if (isLiquid) VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp)) else VlTheme.tokens.shapes.card
+    val outerShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
 
     Column(
         modifier = Modifier
@@ -314,7 +311,6 @@ private fun PreviewChip(selected: Boolean) {
 fun AppTheme.displayName(): String = when (this) {
     AppTheme.MATERIAL3_EXPRESSIVE -> stringResource(R.string.theme_m3e_name)
     AppTheme.BIOLUME -> stringResource(R.string.theme_biolume_name)
-    AppTheme.FORGE -> stringResource(R.string.theme_forge_name)
     AppTheme.FORGE_PROTOGEN -> stringResource(R.string.theme_forge_protogen_name)
     AppTheme.FORGE_BEAST -> stringResource(R.string.theme_forge_beast_name)
 }

@@ -64,13 +64,12 @@ import org.visorlink.app.utils.StealthManager
 import org.visorlink.app.utils.UpdateManager
 import org.visorlink.app.utils.rememberHaptic
 import com.google.firebase.Firebase
-import com.google.firebase.auth.EmailAuthProvider
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.firestore
 import com.google.firebase.functions.functions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import org.koin.compose.koinInject
+import org.visorlink.app.ui.theme.proAccent
 import org.koin.compose.viewmodel.koinViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -129,7 +128,14 @@ fun SettingsScreen(
     var isGeneratingTgCode by remember { mutableStateOf(false) }
     var tgError by remember { mutableStateOf<String?>(null) }
 
-    var showDevMenuSheet by remember { mutableStateOf(false) }
+    // Настройки разработчика: открываются пятью нажатиями на версию и живут секцией в настройках,
+    // пока их не спрячут обратно. Состояние хранится в visorlink_settings
+    val devPrefs = remember { context.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE) }
+    var devSettingsVisible by remember { mutableStateOf(devPrefs.getBoolean(KEY_DEV_SETTINGS, false)) }
+    fun setDevSettingsVisible(visible: Boolean) {
+        devSettingsVisible = visible
+        devPrefs.edit().putBoolean(KEY_DEV_SETTINGS, visible).apply()
+    }
     var devTapCount by remember { mutableIntStateOf(0) }
     var lastDevTapTime by remember { mutableLongStateOf(0L) }
 
@@ -140,12 +146,14 @@ fun SettingsScreen(
     var showBugReportSheet by remember { mutableStateOf(false) }
     var showChannelDialog by remember { mutableStateOf(false) }
 
-    // Флоу 2FA: 0 — нет, 1 — выбор канала, 2 — ввод кода. Состояние профиля не меняется до подтверждения кодом
-    var tfaStep by remember { mutableIntStateOf(0) }
-    var tfaTargetEnabled by remember { mutableStateOf(true) }
-    var tfaMethod by remember { mutableStateOf("bot") }
-    var tfaCode by remember { mutableStateOf("") }
-    val tfaUi by authViewModel.tfaUiState.collectAsState()
+    // Способы входа, 2FA и коды в Telegram — AccountSecurity.kt
+    val security: AccountSecurityViewModel = koinViewModel()
+    val securityBusy by security.busy.collectAsState()
+    val securityNotice by security.notice.collectAsState()
+    val securityError by security.signInError.collectAsState()
+    LaunchedEffect(securityNotice) {
+        securityNotice?.let { Toast.makeText(context, it.asString(context), Toast.LENGTH_LONG).show(); security.consumeNotice() }
+    }
 
     val buildDate = remember { SimpleDateFormat("yyyyMMdd.HHmm", Locale.getDefault()).format(Date(BuildConfig.BUILD_TIMESTAMP)) }
     val commitHash = BuildConfig.CommitID.takeIf { it.isNotBlank() } ?: "unknown"
@@ -160,26 +168,22 @@ fun SettingsScreen(
     val colorStealthBiometric = VlCategoryTint.Teal
     val colorStorage = VlCategoryTint.Blue
     val colorBots = VlCategoryTint.Teal
-    val colorEmail = VlCategoryTint.Slate
-    val colorPassword = VlCategoryTint.Rose
     val colorSecurity = VlCategoryTint.Emerald
     val colorUpdateChan = VlCategoryTint.Indigo
     val colorUpdateCheck = VlCategoryTint.Emerald
 
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
-        if (isLiquidEnabled) {
-            topBarJelly.pulse(0.06f)
-        }
+        topBarJelly.pulse(0.06f)
     }
 
     LaunchedEffect(proState.successMessage) { proState.successMessage?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); proViewModel.clearMessages() } }
     LaunchedEffect(proState.error) { proState.error?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); proViewModel.clearMessages() } }
 
-    LaunchedEffect(profile?.tg_username) {
-        if (showTgBindingDialog && profile?.tg_username != null) {
+    val telegramLinked = profile?.hasTelegram == true || profile?.tg_username != null
+    LaunchedEffect(telegramLinked) {
+        if (showTgBindingDialog && telegramLinked) {
             showTgBindingDialog = false
             isGeneratingTgCode = false
             tgCode = null
@@ -194,12 +198,12 @@ fun SettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 VlTopAppBar(
-                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            topBarJelly.press(0.06f)
                             onNavigateBack()
                         }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
@@ -226,27 +230,23 @@ fun SettingsScreen(
                     val appearance = ProfileAppearance.resolve(owner = p, viewer = p)
                     val tokens = VlTheme.tokens
                     val cs = MaterialTheme.colorScheme
-                    val accountShape = if (isLiquidEnabled) VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp)) else tokens.shapes.card
+                    val accountShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp))
                     val isDark = cs.surface.luminance() < 0.5f
 
-                    val accountBrush = remember(isLiquidEnabled, isDark, cs) {
-                        if (isLiquidEnabled) {
-                            val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
-                            val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
-                            Brush.verticalGradient(listOf(top, bottom))
-                        } else null
+                    val accountBrush = remember(isDark, cs) {
+                        val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+                        val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
+                        Brush.verticalGradient(listOf(top, bottom))
                     }
-                    val accountBorder = remember(isLiquidEnabled, isDark, cs) {
-                        if (isLiquidEnabled) {
-                            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.60f)
-                            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
-                            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
-                        } else null
+                    val accountBorder = remember(isDark, cs) {
+                        val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.60f)
+                        val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+                        BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
                     }
 
                     Box(
                         modifier = Modifier
-                            .liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled)
+                            .liquidPillCardSlideOut(index = 0)
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .then(
@@ -254,18 +254,8 @@ fun SettingsScreen(
                                 else Modifier
                             )
                             .clip(accountShape)
-                            .then(
-                                if (accountBrush != null) Modifier.background(accountBrush, accountShape)
-                                else Modifier.background(
-                                    if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
-                                    accountShape
-                                )
-                            )
-                            .then(
-                                if (accountBorder != null) Modifier.border(accountBorder, accountShape)
-                                else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, accountShape)
-                                else Modifier
-                            )
+                            .background(accountBrush, accountShape)
+                            .border(accountBorder, accountShape)
                     ) {
                         appearance.backgroundUrl?.let { url ->
                             AsyncImage(
@@ -335,14 +325,14 @@ fun SettingsScreen(
                         }
                     }
                   }
-                    Box(modifier = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled)) {
+                    Box(modifier = Modifier.liquidPillCardSlideOut(index = 1)) {
                         ProStatusBanner(profile = p, proViewModel = proViewModel, proState = proState, hapticEnabled = hapticEnabled)
                     }
                 }
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_custom_title),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 2, enabled = isLiquidEnabled),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 2),
                     isPremium = true
                 ) {
                     VlSettingsItem(icon = Icons.Default.Brush, title = stringResource(R.string.settings_custom_design_title), subtitle = stringResource(R.string.settings_custom_design_sub), onClick = { if (profile?.isProActive() == true) onOpenCustomization() else Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show() })
@@ -354,14 +344,14 @@ fun SettingsScreen(
                 if (idModeState.enabled) {
                     VlSettingsSection(
                         title = stringResource(R.string.idcard_title),
-                        modifier = Modifier.liquidPillCardSlideOut(index = 3, enabled = isLiquidEnabled)
+                        modifier = Modifier.liquidPillCardSlideOut(index = 3)
                     ) {
                         VlSettingsItem(icon = Icons.Default.Badge, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.idcard_title), subtitle = stringResource(R.string.idcard_settings_sub), onClick = onOpenIdCard)
                     }
                 } else {
                     VlSettingsSection(
                         title = stringResource(R.string.settings_section_theme),
-                        modifier = Modifier.liquidPillCardSlideOut(index = 3, enabled = isLiquidEnabled)
+                        modifier = Modifier.liquidPillCardSlideOut(index = 3)
                     ) {
                         VlThemeSelector(
                             selected = currentTheme,
@@ -377,11 +367,19 @@ fun SettingsScreen(
                 if (idModeState.theme.style != org.visorlink.app.data.idcard.ModeStyle.FORGE) {
                     VlSettingsSection(
                         title = stringResource(R.string.settings_section_accent),
-                        modifier = Modifier.liquidPillCardSlideOut(index = 4, enabled = isLiquidEnabled)
+                        modifier = Modifier.liquidPillCardSlideOut(index = 4)
                     ) {
+                        // С PRO «По умолчанию» — это цвет профиля: он красит всё приложение, пока не выбран другой пресет
+                        val profileAccent = profile?.proAccent()
                         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                             ColorPreset.entries.forEach { preset ->
-                                ColorPresetCircle(preset = preset, isSelected = currentPreset == preset, onClick = { themeViewModel.setColorPreset(preset) })
+                                ColorPresetCircle(preset = preset, isSelected = currentPreset == preset, defaultColor = profileAccent, onClick = { themeViewModel.setColorPreset(preset) })
+                            }
+                        }
+                        if (profileAccent != null) {
+                            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(stringResource(R.string.accent_profile_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                                Text(stringResource(R.string.accent_profile_note), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
@@ -389,7 +387,7 @@ fun SettingsScreen(
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_dark_title),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 5, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 5)
                 ) {
                     // Особый режим держит тёмную: у Forge нет светлой версии — выбор неактивен с подсказкой
                     val darkLocked = idModeState.theme.forceDark
@@ -412,7 +410,7 @@ fun SettingsScreen(
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_section_language),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 6, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 6)
                 ) {
                     VlOptionRow(icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
                     VlOptionRow(icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
@@ -421,7 +419,7 @@ fun SettingsScreen(
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_section_management),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 7, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 7)
                 ) {
                     VlSettingsItem(icon = Icons.Default.NotificationsActive, iconColor = colorNotif, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
                     VlSettingsItem(icon = Icons.Default.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
@@ -445,7 +443,7 @@ fun SettingsScreen(
 
                 VlSettingsSection(
                     title = stringResource(R.string.diary_title),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 8, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 8)
                 ) {
                     VlSettingsItem(
                         icon = Icons.Default.Book,
@@ -504,7 +502,7 @@ fun SettingsScreen(
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_section_privacy),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 9, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 9)
                 ) {
                     VlSettingsItem(icon = Icons.Default.VisibilityOff, iconColor = colorStealth, title = stringResource(R.string.settings_stealth_title), subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off), trailing = { VlSwitch(checked = isStealthEnabled, onCheckedChange = { if (it) { if (hasStealthPin) { stealthManager.setEnabled(true); isStealthEnabled = true } else showStealthSetup = true } else showStealthDisable = true }) })
                     if (hasStealthPin) {
@@ -543,33 +541,43 @@ fun SettingsScreen(
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_section_storage),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 10, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 10)
                 ) {
                     VlSettingsItem(icon = Icons.Default.Storage, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
-                    VlSettingsItem(icon = Icons.Default.Security, iconColor = VlCategoryTint.Emerald, title = "Устройства", subtitle = "Активные сеансы", onClick = onOpenSessions)
                     VlSettingsItem(icon = Icons.Default.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
-                    VlSettingsItem(icon = Icons.Default.HealthAndSafety, iconColor = colorStorage, title = "Статус системы", onClick = onOpenStatus)
+                }
+
+                // Как войти: почта с паролем (и его смена), Google
+                VlSettingsSection(
+                    title = stringResource(R.string.signin_title),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 11)
+                ) {
+                    SignInMethodsItems(security, onChangePassword = { showPasswordDialog = true })
+                }
+
+                // Защита входа: 2FA, запасной канал кодов и активные устройства
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_security),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 11)
+                ) {
+                    TwoFactorItems(profile, security)
+                    VlSettingsItem(icon = Icons.Default.Devices, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_sessions_title), subtitle = stringResource(R.string.settings_sessions_sub), onClick = onOpenSessions)
                 }
 
                 VlSettingsSection(
-                    title = stringResource(R.string.settings_section_account),
-                    modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
+                    title = stringResource(R.string.settings_section_telegram),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 11)
                 ) {
-                    VlSettingsItem(icon = Icons.Default.Email, iconColor = colorEmail, title = "Email", subtitle = profile?.email ?: "")
-                    VlSettingsItem(icon = Icons.Default.Security, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_tfa_title), subtitle = if (profile?.tfaEnabled == true) stringResource(R.string.settings_tfa_sub_on) else stringResource(R.string.settings_tfa_sub_off), trailing = { VlDialogButton(onClick = { tfaTargetEnabled = profile?.tfaEnabled != true; tfaCode = ""; authViewModel.clearTfaError(); tfaStep = 1 }, isPrimary = true) { Text(if (profile?.tfaEnabled == true) "Выключить" else "Включить") } })
+                    // telegramAccount уже с «@» (или «ID …») — в строке префикса нет
                     VlSettingsItem(
                         icon = Icons.AutoMirrored.Filled.Send,
                         iconColor = VlCategoryTint.Telegram,
-                        title = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked, profile?.tg_username ?: "") else stringResource(R.string.settings_tg_link),
-                        subtitle = if (profile?.tg_username != null) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
+                        title = if (telegramLinked) stringResource(R.string.settings_tg_linked, profile?.telegramAccount ?: profile?.tg_username?.let { "@$it" }.orEmpty()) else stringResource(R.string.settings_tg_link),
+                        subtitle = if (telegramLinked) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
                         onClick = {
-                            if (profile?.tg_username != null) {
-                                scope.launch {
-                                    try {
-                                        Firebase.functions("europe-west1").getHttpsCallable("unlinkTelegram").call().await()
-                                        Toast.makeText(context, context.getString(R.string.settings_tg_unlinked_toast), Toast.LENGTH_SHORT).show()
-                                    } catch (e: Exception) { Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show() }
-                                }
+                            if (telegramLinked) {
+                                // unbindTelegram сам выключает и коды в Telegram
+                                security.unbindTelegram()
                             } else {
                                 showTgBindingDialog = true; isGeneratingTgCode = true; tgCode = null; tgError = null
                                 scope.launch {
@@ -583,7 +591,12 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    VlSettingsItem(icon = Icons.Default.Password, iconColor = colorPassword, title = stringResource(R.string.settings_password_change), onClick = { showPasswordDialog = true })
+                }
+
+                VlSettingsSection(
+                    title = stringResource(R.string.settings_section_account),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 11)
+                ) {
                     VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, iconColor = MaterialTheme.colorScheme.error, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                     VlSettingsItem(
                         icon = Icons.Default.DeleteForever,
@@ -598,7 +611,7 @@ fun SettingsScreen(
                 if (UpdateManager.isSupported) {
                     VlSettingsSection(
                         title = stringResource(R.string.settings_section_updates),
-                        modifier = Modifier.liquidPillCardSlideOut(index = 11, enabled = isLiquidEnabled)
+                        modifier = Modifier.liquidPillCardSlideOut(index = 11)
                     ) {
                         VlSettingsItem(
                             icon = Icons.Default.Storefront,
@@ -648,9 +661,27 @@ fun SettingsScreen(
                     }
                 }
 
+                if (devSettingsVisible) {
+                    DevSettingsSection(
+                        onNavigateToAppCheckDiagnostic = onNavigateToAppCheckDiagnostic,
+                        onOpenAnimationTest = onOpenAnimationTest,
+                        onOpenAegisDebug = onOpenAegisDebug,
+                        onOpenFlagFlipper = onOpenFlagFlipper,
+                        // В debug-сборке Flipper доступен всегда, в релизе — по test_flag с сервера
+                        showFlagFlipper = flags.testFlag || BuildConfig.DEBUG,
+                        showDebugIds = showDebugIds,
+                        onToggleDebugIds = { themeViewModel.setShowDebugIds(it) },
+                        versionString = versionString,
+                        clientFlagsId = remember(flags) { flagsRepository.getClientFlagsId() },
+                        hapticEnabled = hapticEnabled,
+                        onHide = { setDevSettingsVisible(false) },
+                        modifier = Modifier.liquidPillCardSlideOut(index = 11),
+                    )
+                }
+
                 VlSettingsSection(
                     title = "О приложении",
-                    modifier = Modifier.liquidPillCardSlideOut(index = 12, enabled = isLiquidEnabled)
+                    modifier = Modifier.liquidPillCardSlideOut(index = 12)
                 ) {
                     val uriHandler = LocalUriHandler.current
                     VlSettingsItem(
@@ -679,10 +710,14 @@ fun SettingsScreen(
                             if (devTapCount >= 5) {
                                 devTapCount = 0
                                 haptic.perform(HapticType.SUCCESS, hapticEnabled)
-                                showDevMenuSheet = true
+                                if (!devSettingsVisible) {
+                                    setDevSettingsVisible(true)
+                                    Toast.makeText(context, "Настройки разработчика включены", Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }
                     )
+                    VlSettingsItem(icon = Icons.Default.HealthAndSafety, iconColor = MaterialTheme.colorScheme.primary, title = "Статус системы", subtitle = "Доступность сервисов VisorLink", onClick = onOpenStatus)
                     VlSettingsItem(
                         icon = Icons.Default.Gavel,
                         iconColor = MaterialTheme.colorScheme.primary,
@@ -704,55 +739,7 @@ fun SettingsScreen(
         }
     }
 
-    if (showDevMenuSheet) {
-        SecretDevMenuSheet(
-            onDismiss = { showDevMenuSheet = false },
-            onNavigateToAppCheckDiagnostic = onNavigateToAppCheckDiagnostic,
-            onOpenAnimationTest = onOpenAnimationTest,
-            onOpenAegisDebug = onOpenAegisDebug,
-            onOpenFlagFlipper = onOpenFlagFlipper,
-            showDebugIds = showDebugIds,
-            onToggleDebugIds = { themeViewModel.setShowDebugIds(it) },
-            versionString = versionString,
-            clientFlagsId = remember(flags) { flagsRepository.getClientFlagsId() },
-            hapticEnabled = hapticEnabled
-        )
-    }
     if (showBugReportSheet) BugReportSheet(onDismiss = { showBugReportSheet = false })
-    if (tfaStep == 1) VlAlertDialog(
-        onDismissRequest = { tfaStep = 0 },
-        title = { Text(if (tfaTargetEnabled) "Включить 2FA" else "Выключить 2FA") },
-        text = {
-            Column {
-                Text("Куда прислать код подтверждения?")
-                Spacer(Modifier.height(8.dp))
-                VlOptionRow(icon = Icons.Default.Security, label = "Бот VisorLink", selected = tfaMethod == "bot", onClick = { tfaMethod = "bot" })
-                Spacer(Modifier.height(8.dp))
-                VlOptionRow(icon = Icons.Default.Security, label = "Почта", selected = tfaMethod == "email", onClick = { tfaMethod = "email" })
-                tfaUi.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = { VlDialogButton(onClick = { authViewModel.request2FA(tfaMethod); tfaStep = 2 }, isPrimary = true) { Text("Отправить код") } },
-        dismissButton = { VlDialogButton(onClick = { tfaStep = 0 }) { Text("Отмена") } }
-    )
-    if (tfaStep == 2) VlAlertDialog(
-        onDismissRequest = { tfaStep = 0 },
-        title = { Text("Введите код") },
-        text = {
-            Column {
-                VlTextField(value = tfaCode, onValueChange = { tfaCode = it.filter(Char::isDigit).take(8) }, placeholder = "Код", isError = tfaUi.error != null)
-                tfaUi.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = {
-            VlDialogButton(
-                onClick = { authViewModel.set2FAEnabled(tfaTargetEnabled, tfaCode) { tfaStep = 0 } },
-                isPrimary = true, isLoading = tfaUi.isLoading, enabled = tfaCode.length >= 4,
-                isDestructive = !tfaTargetEnabled
-            ) { Text(if (tfaTargetEnabled) "Включить" else "Выключить") }
-        },
-        dismissButton = { VlDialogButton(onClick = { tfaStep = 0 }) { Text("Отмена") } }
-    )
     if (showLogoutDialog) VlAlertDialog(onDismissRequest = { showLogoutDialog = false }, title = { Text("Выйти?") }, confirmButton = { VlDialogButton(onClick = { showLogoutDialog = false; authViewModel.logout() }, isDestructive = true) { Text("Выйти") } }, dismissButton = { VlDialogButton(onClick = { showLogoutDialog = false }) { Text("Отмена") } })
 
     if (showDeleteAccountDialog) {
@@ -898,20 +885,12 @@ fun SettingsScreen(
     }
 
     if (showPasswordDialog) {
+        // Повторный вход и смена пароля выдают новый токен — 2FA переносится (keepSession)
         ChangePasswordDialog(
             onDismiss = { showPasswordDialog = false },
-            onConfirm = { current, newPass ->
-                scope.launch {
-                    try {
-                        val user = FirebaseAuth.getInstance().currentUser
-                        val credential = EmailAuthProvider.getCredential(user?.email!!, current)
-                        user.reauthenticate(credential).await()
-                        user.updatePassword(newPass).await()
-                        showPasswordDialog = false
-                        Toast.makeText(context, context.getString(R.string.dialog_password_success), Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) { Toast.makeText(context, "Ошибка: ${e.message}", Toast.LENGTH_SHORT).show() }
-                }
-            }
+            onConfirm = { current, newPass -> security.changePassword(current, newPass) { showPasswordDialog = false } },
+            isLoading = securityBusy == SignInBusy.CHANGE_PASSWORD,
+            serverError = securityError?.asString(),
         )
     }
 
@@ -1058,7 +1037,12 @@ private fun StealthChangePinDialog(stealthManager: StealthManager, onDismiss: ()
 }
 
 @Composable
-fun ChangePasswordDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+fun ChangePasswordDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit,
+    isLoading: Boolean = false,
+    serverError: String? = null,
+) {
     var current by remember { mutableStateOf("") }
     var newPass by remember { mutableStateOf("") }
     var confirm by remember { mutableStateOf("") }
@@ -1072,12 +1056,12 @@ fun ChangePasswordDialog(onDismiss: () -> Unit, onConfirm: (String, String) -> U
                 VlTextField(value = current, onValueChange = { current = it; error = null }, label = stringResource(R.string.dialog_password_current), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
                 VlTextField(value = newPass, onValueChange = { newPass = it; error = null }, label = stringResource(R.string.dialog_password_new), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
                 VlTextField(value = confirm, onValueChange = { confirm = it; error = null }, label = stringResource(R.string.dialog_password_confirm), visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
-                if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+                (error ?: serverError)?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
             }
         },
         actions = {
             VlDialogButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-            VlDialogButton(isPrimary = true, onClick = {
+            VlDialogButton(isPrimary = true, isLoading = isLoading, onClick = {
                 if (newPass.length < 6) error = "Min 6 characters"
                 else if (newPass != confirm) error = "Passwords don't match"
                 else onConfirm(current, newPass)
@@ -1112,8 +1096,7 @@ private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, pr
         )
 
         if (!profile.isProActive()) {
-            val isLiquid = rememberLiquidEnabled()
-            val buttonShape = if (isLiquid) VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)) else VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
+            val buttonShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 if (!profile.trialUsed) {
                     OutlinedButton(
@@ -1159,59 +1142,28 @@ private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, pr
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val KEY_DEV_SETTINGS = "dev_settings_visible"
+
 @Composable
-private fun SecretDevMenuSheet(
-    onDismiss: () -> Unit,
+private fun DevSettingsSection(
     onNavigateToAppCheckDiagnostic: () -> Unit,
     onOpenAnimationTest: () -> Unit,
     onOpenAegisDebug: () -> Unit,
     onOpenFlagFlipper: () -> Unit,
+    /** Flag Flipper: `test_flag` с сервера или debug-сборка. */
+    showFlagFlipper: Boolean,
     showDebugIds: Boolean,
     onToggleDebugIds: (Boolean) -> Unit,
     versionString: String,
     clientFlagsId: String,
     hapticEnabled: Boolean,
+    onHide: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val haptic = rememberHaptic()
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 8.dp)
-                .navigationBarsPadding()
-                .verticalScroll(rememberScrollState())
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Build,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "Режим разработчика",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
-                }
-            }
-
-            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+    VlSettingsSection(title = "Настройки разработчика", modifier = modifier) {
 
             VlSettingsItem(
                 icon = Icons.Default.VerifiedUser,
@@ -1219,7 +1171,6 @@ private fun SecretDevMenuSheet(
                 title = "App Check Диагностика",
                 subtitle = "Проверка целостности и токенов Play Integrity / Debug",
                 onClick = {
-                    onDismiss()
                     onNavigateToAppCheckDiagnostic()
                 }
             )
@@ -1230,7 +1181,6 @@ private fun SecretDevMenuSheet(
                 title = stringResource(R.string.settings_animation_test_title),
                 subtitle = stringResource(R.string.settings_animation_test_subtitle),
                 onClick = {
-                    onDismiss()
                     onOpenAnimationTest()
                 }
             )
@@ -1254,21 +1204,21 @@ private fun SecretDevMenuSheet(
                 title = "Aegis Project Debug",
                 subtitle = "Отладка локальной базы данных и логов Aegis",
                 onClick = {
-                    onDismiss()
                     onOpenAegisDebug()
                 }
             )
 
-            VlSettingsItem(
-                icon = Icons.Default.ToggleOn,
-                iconColor = VlCategoryTint.Pink,
-                title = "Flag Flipper",
-                subtitle = "Управление Feature Flags в реальном времени",
-                onClick = {
-                    onDismiss()
-                    onOpenFlagFlipper()
-                }
-            )
+            if (showFlagFlipper) {
+                VlSettingsItem(
+                    icon = Icons.Default.ToggleOn,
+                    iconColor = VlCategoryTint.Pink,
+                    title = stringResource(R.string.flag_flipper_title),
+                    subtitle = "Управление Feature Flags в реальном времени",
+                    onClick = {
+                            onOpenFlagFlipper()
+                    }
+                )
+            }
 
             VlSettingsItem(
                 icon = Icons.Default.Fingerprint,
@@ -1295,7 +1245,15 @@ private fun SecretDevMenuSheet(
                 }
             )
 
-            Spacer(Modifier.height(16.dp))
-        }
+            VlSettingsItem(
+                icon = Icons.Default.VisibilityOff,
+                iconColor = MaterialTheme.colorScheme.error,
+                title = "Скрыть настройки разработчика",
+                subtitle = "Вернуть можно пятью нажатиями на версию",
+                onClick = {
+                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                    onHide()
+                }
+            )
     }
 }

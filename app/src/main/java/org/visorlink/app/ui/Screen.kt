@@ -6,6 +6,10 @@ sealed class Screen(val route: String) {
     object Register : Screen("register")
     object VerifyEmail : Screen("verify_email")
     object Tfa : Screen("tfa")
+    /** «Проверяем сессию…» — ворота 2FA ждут ответа сервера. */
+    object SessionCheck : Screen("session_check")
+    /** «Завершите регистрацию» после входа через Google без профиля. */
+    object GoogleSignup : Screen("google_signup")
     object Onboarding : Screen("onboarding")
     object ChatList : Screen("chat_list")
     object Profile : Screen("profile")

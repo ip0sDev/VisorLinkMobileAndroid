@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.GroupAdd
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -80,6 +81,9 @@ fun ChatListItem(
     isSavedMessages: Boolean = false,
     isCompactList: Boolean = false,
     isTyping: Boolean = false,
+    /** Строка «Приглашения»: своя иконка и заголовок, вместо последнего сообщения — [previewOverride]. */
+    isInvites: Boolean = false,
+    previewOverride: String? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -99,7 +103,7 @@ fun ChatListItem(
     val titleColor = cs.onSurface
     val subColor = cs.onSurfaceVariant
 
-    val isOwnLast = !isSavedMessages && (chat.lastMessageSenderId == currentUid ||
+    val isOwnLast = !isSavedMessages && !isInvites && (chat.lastMessageSenderId == currentUid ||
             chat.lastMessageInfo()?.senderId == currentUid)
     val isRead = remember(chat, currentUid) {
         isLastMessageRead(chat, currentUid)
@@ -161,7 +165,9 @@ fun ChatListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {
-                if (isSavedMessages) {
+                if (isInvites) {
+                    InvitesIcon(size = 52.dp)
+                } else if (isSavedMessages) {
                     SavedMessagesIcon(size = 52.dp)
                 } else {
                     when (chatType) {
@@ -211,6 +217,7 @@ fun ChatListItem(
                         )
                         Text(
                             text = when {
+                                isInvites -> stringResource(R.string.notifications_title)
                                 isSavedMessages -> stringResource(R.string.saved_messages_title)
                                 chatType == ChatType.EMERGENCY -> {
                                     val name = chat.otherDisplayName(currentUid).ifEmpty { chat.name }
@@ -295,7 +302,8 @@ fun ChatListItem(
                                     else org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
                                 }
                                 Text(
-                                    text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                                    text = previewOverride
+                                        ?: if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = subColor,
                                     maxLines = 1,
@@ -325,6 +333,9 @@ fun ChatListItemCompact(
     unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
     isTyping: Boolean = false,
+    /** Строка «Приглашения» — см. [ChatListItem]. */
+    isInvites: Boolean = false,
+    previewOverride: String? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -336,7 +347,7 @@ fun ChatListItemCompact(
     val subColor = MaterialTheme.colorScheme.onSurfaceVariant
     val cs = MaterialTheme.colorScheme
 
-    val isOwnLast = !isSavedMessages && (chat.lastMessageSenderId == currentUid ||
+    val isOwnLast = !isSavedMessages && !isInvites && (chat.lastMessageSenderId == currentUid ||
             chat.lastMessageInfo()?.senderId == currentUid)
     val isRead = remember(chat, currentUid) {
         isLastMessageRead(chat, currentUid)
@@ -351,7 +362,9 @@ fun ChatListItemCompact(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.size(54.dp)) {
-            if (isSavedMessages) {
+            if (isInvites) {
+                InvitesIcon(size = 54.dp)
+            } else if (isSavedMessages) {
                 SavedMessagesIcon(size = 54.dp)
             } else {
                 when (chatType) {
@@ -401,6 +414,7 @@ fun ChatListItemCompact(
                     )
                     Text(
                         text = when {
+                            isInvites -> stringResource(R.string.notifications_title)
                             isSavedMessages -> stringResource(R.string.saved_messages_title)
                             chatType == ChatType.EMERGENCY -> {
                                 val name = chat.otherDisplayName(currentUid).ifEmpty { chat.name }
@@ -485,7 +499,8 @@ fun ChatListItemCompact(
                                 else org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
                             }
                             Text(
-                                text = if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
+                                text = previewOverride
+                                    ?: if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = subColor,
                                 maxLines = 1,
@@ -579,7 +594,14 @@ fun GroupChannelAvatar(
 }
 
 @Composable
-fun SavedMessagesIcon(size: Dp) {
+fun SavedMessagesIcon(size: Dp) = SpecialChatIcon(Icons.Default.Bookmark, size)
+
+/** Иконка строки «Приглашения» — та же плашка, что у «Избранного». */
+@Composable
+fun InvitesIcon(size: Dp) = SpecialChatIcon(Icons.Default.GroupAdd, size)
+
+@Composable
+private fun SpecialChatIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, size: Dp) {
     val accent = MaterialTheme.colorScheme.primary
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val bgGradient = Brush.linearGradient(
@@ -606,7 +628,7 @@ fun SavedMessagesIcon(size: Dp) {
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = Icons.Default.Bookmark,
+            imageVector = icon,
             contentDescription = null,
             modifier = Modifier.size((size.value * 0.45f).dp),
             tint = accent

@@ -1,6 +1,8 @@
 package org.visorlink.app.ui.theme
 
 import androidx.compose.material3.Typography
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -65,6 +67,16 @@ private val Nunito = FontFamily(
     Font(R.font.nunito_regular, FontWeight.Normal),
     Font(R.font.nunito_semibold, FontWeight.SemiBold),
     Font(R.font.nunito_bold, FontWeight.Bold),
+)
+
+/**
+ * Заголовки Forge v2: Unbounded — широкий футуристичный гротеск (OFL, кириллица целиком).
+ * Medium — основное начертание; SemiBold нужен жирным заголовкам (диалог), чтобы Android
+ * не утолщал Medium синтетически.
+ */
+private val Unbounded = FontFamily(
+    Font(R.font.unbounded_medium, FontWeight.Medium),
+    Font(R.font.unbounded_semibold, FontWeight.SemiBold),
 )
 
 /** Заголовочная роль: Inter SemiBold вместо Space Grotesk — причина выше. */
@@ -185,68 +197,9 @@ val BiolumeDataTypography = VlDataTypography(
     ),
 )
 
-// ── Forge: техническая типографика ───────────────────────────────────────────
+// ── Forge v2: терминал ───────────────────────────────────────────────────────
 
-private val ForgeBase = Typography()
-
-/**
- * Заголовки — JetBrains Mono с расширенным трекингом: моноширинный шрифт в роли
- * display читается как машинная маркировка, что и нужно индустриальной теме.
- * Текст остаётся на Inter: моноширинный body утомляет на длинных сообщениях.
- *
- * Максимальный доступный вес мono — Medium: JetBrains Mono Bold в `res/font` не
- * лежит (см. TODO.md), поэтому заголовки заданы Medium явно, а не Bold с
- * синтетическим утолщением.
- */
-val ForgeTypography = Typography(
-    displayLarge = ForgeBase.displayLarge.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
-    ),
-    displayMedium = ForgeBase.displayMedium.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 1.sp,
-    ),
-    displaySmall = ForgeBase.displaySmall.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp,
-    ),
-    headlineLarge = ForgeBase.headlineLarge.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.8.sp,
-    ),
-    headlineMedium = ForgeBase.headlineMedium.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp,
-    ),
-    headlineSmall = ForgeBase.headlineSmall.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp,
-    ),
-    titleLarge = ForgeBase.titleLarge.copy(
-        fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp,
-    ),
-    titleMedium = ForgeBase.titleMedium.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
-    ),
-    titleSmall = ForgeBase.titleSmall.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
-    ),
-    bodyLarge = ForgeBase.bodyLarge.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Normal,
-    ),
-    bodyMedium = ForgeBase.bodyMedium.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Normal,
-    ),
-    bodySmall = ForgeBase.bodySmall.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Normal,
-    ),
-    // Подписи-«шильдики»: широкий трекинг имитирует трафаретную маркировку.
-    labelLarge = ForgeBase.labelLarge.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
-    ),
-    labelMedium = ForgeBase.labelMedium.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
-    ),
-    labelSmall = ForgeBase.labelSmall.copy(
-        fontFamily = TextFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp,
-    ),
-)
-
+/** Моно-данные Forge v2: JetBrains Mono с лёгким трекингом. */
 val ForgeDataTypography = VlDataTypography(
     dataMedium = TextStyle(
         fontFamily = DataFamily,
@@ -264,22 +217,42 @@ val ForgeDataTypography = VlDataTypography(
     ),
 )
 
-// ── Forge v2: терминал ───────────────────────────────────────────────────────
-
 /**
- * Forge v2 (веб: --font-brand JetBrains Mono): заголовки и метки моноширинные, текст
- * сообщений и описаний — Inter, как в вебе (--font-ui). Капитель у заголовков разделов
- * задаёт [VlTerminalTokens], а не шкала: роль labelLarge — ещё и текст кнопок.
+ * Forge v2: крупные заголовки (display, headline, titleLarge — в том числе заголовок верхней
+ * панели) — Unbounded; метки и текст кнопок (labelLarge) — моно с трекингом, как командная
+ * строка; текст сообщений и описаний — Inter, как в вебе (--font-ui). Капитель у заголовков
+ * разделов задаёт [VlTerminalTokens], а не шкала. В вебе заголовки — JetBrains Mono
+ * (--font-brand); Unbounded — Android-слой, см. спеку §7.
  */
 val ForgeV2Typography = BiolumeTypography.copy(
-    displayLarge = BiolumeTypography.displayLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium),
-    displayMedium = BiolumeTypography.displayMedium.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium),
-    displaySmall = BiolumeTypography.displaySmall.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium),
-    headlineLarge = BiolumeTypography.headlineLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp),
-    headlineMedium = BiolumeTypography.headlineMedium.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp),
-    headlineSmall = BiolumeTypography.headlineSmall.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp),
-    titleLarge = BiolumeTypography.titleLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.4.sp),
+    displayLarge = BiolumeTypography.displayLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium),
+    displayMedium = BiolumeTypography.displayMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium),
+    displaySmall = BiolumeTypography.displaySmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium),
+    headlineLarge = BiolumeTypography.headlineLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
+    headlineMedium = BiolumeTypography.headlineMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
+    headlineSmall = BiolumeTypography.headlineSmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
+    titleLarge = BiolumeTypography.titleLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
+    labelLarge = BiolumeTypography.labelLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp),
 )
+
+/**
+ * Шкала оттенка: крупные заголовки (display, headline, titleLarge — в том числе заголовок
+ * верхней панели) светятся неоном своего основного цвета, у Beast мягче.
+ */
+fun forgeV2Typography(f: ForgeV2.Flavor): Typography {
+    val glow = Shadow(color = f.primary.copy(alpha = 0.4f * f.neon), offset = Offset.Zero, blurRadius = 14f * f.neon)
+    fun TextStyle.neon() = copy(shadow = glow)
+    return with(ForgeV2Typography) {
+        copy(
+            displayLarge = displayLarge.neon(), displayMedium = displayMedium.neon(), displaySmall = displaySmall.neon(),
+            headlineLarge = headlineLarge.neon(), headlineMedium = headlineMedium.neon(), headlineSmall = headlineSmall.neon(),
+            titleLarge = titleLarge.neon(),
+        )
+    }
+}
+
+private val ForgeV2ProtogenTypography = forgeV2Typography(ForgeV2.Protogen)
+private val ForgeV2BeastTypography = forgeV2Typography(ForgeV2.Beast)
 
 /** Заголовок раздела Forge v2: моно, 11 sp, трекинг 0.08em. */
 val ForgeV2SectionLabel = TextStyle(
@@ -293,8 +266,8 @@ val ForgeV2SectionLabel = TextStyle(
 
 fun baseTypography(theme: AppTheme): Typography = when (theme) {
     AppTheme.BIOLUME -> BiolumeTypography
-    AppTheme.FORGE -> ForgeTypography
-    AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> ForgeV2Typography
+    AppTheme.FORGE_PROTOGEN -> ForgeV2ProtogenTypography
+    AppTheme.FORGE_BEAST -> ForgeV2BeastTypography
     AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
 }
 

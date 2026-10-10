@@ -1,6 +1,5 @@
 package org.visorlink.app.ui.components
 
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -9,7 +8,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +61,7 @@ fun VlSurface(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    // Радиусы всегда из токенов: у Forge они нулевые, и «квадратность» должна
+    // Радиусы всегда из токенов: ограничение темы (у Forge v2 — maxRadius) должно
     // распространяться в том числе на скругления элементов группы.
     val baseRadius = customRadius ?: if (isButton) {
         tokens.shapes.buttonRadius
@@ -89,15 +87,11 @@ fun VlSurface(
     val depth = when {
         !tokens.structure.enabled -> VlDepth.Flat
         isInput -> VlDepth.Inset
-        // Forge нажимается «штампом»: элемент уезжает в свою тень, поэтому рельеф
-        // при нажатии не врезается, а снимается — иначе тень и вдавленность спорят.
-        isPressed && tokens.motion.pressStyle == VlPressStyle.STAMP -> VlDepth.Flat
         isPressed -> VlDepth.Inset
         else -> VlDepth.Raised
     }
 
-    // Каждая тема нажимается по-своему: M3E сжимается, Biolume меняет рельеф,
-    // Forge механически садится в тень.
+    // Каждая тема нажимается по-своему: M3E сжимается, Biolume меняет рельеф.
     val scale by animateFloatAsState(
         targetValue = if (isPressed && !isInput && tokens.motion.pressStyle == VlPressStyle.SCALE) {
             tokens.motion.pressScale
@@ -106,15 +100,6 @@ fun VlSurface(
         },
         animationSpec = tokens.motion.motionSpec(),
         label = "vlsurface_scale",
-    )
-    val stampOffset by animateDpAsState(
-        targetValue = if (isPressed && !isInput && tokens.motion.pressStyle == VlPressStyle.STAMP) {
-            tokens.motion.pressOffset
-        } else {
-            0.dp
-        },
-        animationSpec = tokens.motion.motionSpec(),
-        label = "vlsurface_stamp",
     )
 
     val clickModifier = if (onClick != null) {
@@ -125,14 +110,13 @@ fun VlSurface(
 
     val bg = overrideColor ?: when {
         // §3.1: и карточки, и поля в покое сидят на surfaceContainer — рельеф
-        // различает их роли, а не заливка. В Forge то же самое, только рельеф жёсткий.
+        // различает их роли, а не заливка.
         tokens.structure.enabled -> cs.surfaceContainer
         isInput -> cs.surfaceContainerHighest
         else -> cs.surfaceContainerLow
     }
 
-    // Грань нужна там, где рельеф может не прочитаться (§3.1); в Forge она ещё и
-    // самостоятельный элемент языка — кромка металла. На цветной заливке
+    // Грань нужна там, где рельеф может не прочитаться (§3.1). На цветной заливке
     // (overrideColor) не рисуем: там уже есть свой контур.
     val hairlineModifier = if (tokens.structure.enabled && !isInput && overrideColor == null) {
         Modifier.vlHairline(cs.outlineVariant, shape)
@@ -142,7 +126,6 @@ fun VlSurface(
 
     Box(
         modifier = modifier
-            .offset(x = stampOffset, y = stampOffset)
             .scale(scale)
             .vlStructure(tokens.structure, depth, shape)
             .clip(shape)

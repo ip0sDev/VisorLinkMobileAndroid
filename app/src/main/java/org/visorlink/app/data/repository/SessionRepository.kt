@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import org.visorlink.app.BuildConfig
 
@@ -61,9 +62,28 @@ class SessionRepository(
     suspend fun register(): String? = try {
         val res = functions.getHttpsCallable("registerSession").call(deviceInfo()).await()
         (res.data as? Map<*, *>)?.get("sessionId")?.toString()
+            .also { registeredId = it ?: currentSessionId() }
     } catch (e: Exception) {
         if (!handleError(e) && BuildConfig.DEBUG) Log.w(TAG, "registerSession failed: ${e.message}")
         null
+    }
+
+    /** id сессии, которую уже зарегистрировали в этом процессе. */
+    @Volatile private var registeredId: String? = null
+    private val registerLock = kotlinx.coroutines.sync.Mutex()
+
+    /**
+     * Карточка текущей сессии существует на сервере. Сообщения 2FA и «новый вход» описывают
+     * устройство по ней (модель, версии, App Check), поэтому её создают сразу после входа и
+     * **до** `request2FA` — иначе в сообщении будет просто «VisorLink для Android».
+     * Повторно не регистрирует: тот же auth_time уже записан.
+     */
+    suspend fun ensureRegistered() {
+        registerLock.withLock {
+            val id = currentSessionId() ?: return
+            if (registeredId == id) return
+            register()
+        }
     }
 
     /** Завершает свою сессию (при выходе); вызывающий ограничивает время ожиданием. */

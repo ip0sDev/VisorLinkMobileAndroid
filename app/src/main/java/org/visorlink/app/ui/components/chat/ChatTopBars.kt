@@ -23,11 +23,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.koin.compose.koinInject
 import org.visorlink.app.R
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.TopbarStatus
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.liquidJelly
@@ -57,21 +55,18 @@ fun ChatTopBar(
     onLeaveClick: () -> Unit,
     onAegisClick: () -> Unit = {},
     isAegisEnabled: Boolean = false,
-    onOpenTopicList: (() -> Unit)? = null,
-    flagsRepository: FlagsRepository = koinInject()
+    onOpenTopicList: (() -> Unit)? = null
 ) {
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val haptic = rememberHaptic()
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     VlTopAppBar(
-        modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+        modifier = Modifier.liquidJelly(topBarJelly),
         navigationIcon = {
             IconButton(onClick = {
                 haptic.perform(HapticType.CLICK, hapticEnabled)
-                if (isLiquidEnabled) topBarJelly.press(0.06f)
+                topBarJelly.press(0.06f)
                 onNavigateBack()
             }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))

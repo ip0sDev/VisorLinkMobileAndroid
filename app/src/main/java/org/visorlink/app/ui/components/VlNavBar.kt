@@ -18,9 +18,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material3.Icon
@@ -50,9 +52,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
-import org.koin.compose.koinInject
 import org.visorlink.app.R
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
@@ -60,8 +60,8 @@ import org.visorlink.app.ui.theme.vlRaised
 import kotlin.math.abs
 
 /**
- * Нижняя навигация — плавающая панель в стиле Biolume.
- * При включенном флаге animation_test активируется неоморфный желейный бегунок (Liquid Runner).
+ * Нижняя навигация — плавающая панель в стиле Biolume с неоморфным желейным бегунком
+ * (Liquid Runner).
  */
 @Composable
 fun VlNavigationBar(
@@ -72,12 +72,10 @@ fun VlNavigationBar(
     musicEnabled: Boolean = false,
     onOpenDiary: () -> Unit,
     onOpenMusic: () -> Unit = {},
-    modifier: Modifier = Modifier,
-    flagsRepository: FlagsRepository = koinInject()
+    /** Вкладка «Профиль» (флаг `enable_profile_navbar`) — последняя, значок ID-карты. */
+    profileEnabled: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
-
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val isDark = cs.surface.luminance() < 0.5f
@@ -89,101 +87,29 @@ fun VlNavigationBar(
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(
-                start = if (tokens.isForge) 0.dp else 24.dp,
-                end = if (tokens.isForge) 0.dp else 24.dp,
+                start = 24.dp,
+                end = 24.dp,
                 top = 8.dp,
-                bottom = if (tokens.isForge) 0.dp else 16.dp
+                bottom = 16.dp
             ),
         contentAlignment = Alignment.Center
     ) {
-        if (isLiquidEnabled) {
-            NeumorphicLiquidNavBarContent(
-                selectedTab = selectedTab,
-                onTabSelected = onTabSelected,
-                diaryEnabled = diaryEnabled,
-                discoverEnabled = discoverEnabled,
-                musicEnabled = musicEnabled,
-                onOpenDiary = onOpenDiary,
-                onOpenMusic = onOpenMusic,
-                barShape = barShape
-            )
-        } else {
-            val barBrush = remember(tokens.isBiolume, tokens.structure.enabled, cs) {
-                if (tokens.isBiolume) {
-                    val topColor = cs.surfaceContainerHigh.copy(alpha = 0.96f)
-                    val bottomColor = cs.surfaceContainer.copy(alpha = 0.94f)
-                    Brush.verticalGradient(listOf(topColor, bottomColor))
-                } else {
-                    val color = if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow
-                    Brush.verticalGradient(listOf(color, color))
-                }
-            }
-
-            val barBorder = remember(tokens.isBiolume, cs, isDark) {
-                if (tokens.isBiolume) {
-                    val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.50f)
-                    val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
-                    BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
-                } else null
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .then(
-                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, barShape)
-                        else Modifier
-                    )
-                    .clip(barShape)
-                    .background(barBrush, barShape)
-                    .then(
-                        if (barBorder != null) Modifier.border(barBorder, barShape)
-                        else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, barShape)
-                        else Modifier
-                    )
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceAround,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                VlTabItem(
-                    selected = selectedTab == 0,
-                    onClick = { onTabSelected(0) },
-                    icon = Icons.Outlined.ChatBubbleOutline,
-                    selectedIcon = Icons.Filled.ChatBubble,
-                    label = stringResource(R.string.nav_tab_chats),
-                )
-                if (discoverEnabled) {
-                    VlTabItem(
-                        selected = selectedTab == 1,
-                        onClick = { onTabSelected(1) },
-                        icon = Icons.Outlined.Explore,
-                        selectedIcon = Icons.Filled.Explore,
-                        label = stringResource(R.string.feed_title),
-                    )
-                }
-                if (musicEnabled) {
-                    VlTabItem(
-                        selected = selectedTab == 3,
-                        onClick = onOpenMusic,
-                        icon = Icons.Default.Audiotrack,
-                        selectedIcon = Icons.Default.Audiotrack,
-                        label = stringResource(R.string.nav_tab_music),
-                    )
-                }
-                if (diaryEnabled) {
-                    VlTabItem(
-                        selected = selectedTab == 2,
-                        onClick = onOpenDiary,
-                        icon = Icons.Default.Edit,
-                        selectedIcon = Icons.Default.Edit,
-                        label = stringResource(R.string.diary_title),
-                    )
-                }
-            }
-        }
+        NeumorphicLiquidNavBarContent(
+            selectedTab = selectedTab,
+            onTabSelected = onTabSelected,
+            diaryEnabled = diaryEnabled,
+            discoverEnabled = discoverEnabled,
+            musicEnabled = musicEnabled,
+            onOpenDiary = onOpenDiary,
+            onOpenMusic = onOpenMusic,
+            profileEnabled = profileEnabled,
+            barShape = barShape
+        )
     }
 }
+
+/** Номер вкладки «Профиль» в MainScreen (0 — чаты, 1 — каналы, 2 — дневник, 3 — музыка). */
+const val NAV_TAB_PROFILE = 4
 
 /**
  * Описание вкладки для жидкостного бара
@@ -214,8 +140,16 @@ private fun calculateTabSlots(
     val count = tabs.size
     if (count == 0) return emptyList()
 
-    val widths = tabs.mapIndexed { idx, tab ->
+    var widths = tabs.mapIndexed { idx, tab ->
         if (idx == activeIdx) getActiveTabWidthDp(tab.label) else 48f
+    }
+    // Пять вкладок на узком экране (360dp) не помещаются: сначала ужимаем неактивные до 40dp,
+    // потом подпись активной (она обрезается многоточием)
+    if (count > 1 && widths.sum() > totalWidthDp) {
+        val activeWanted = widths[activeIdx]
+        val inactive = ((totalWidthDp - activeWanted) / (count - 1)).coerceIn(40f, 48f)
+        val active = activeWanted.coerceAtMost((totalWidthDp - inactive * (count - 1)).coerceAtLeast(48f))
+        widths = List(count) { if (it == activeIdx) active else inactive }
     }
     val contentSum = widths.sum()
     val availableSpace = (totalWidthDp - contentSum).coerceAtLeast(0f)
@@ -249,6 +183,7 @@ private fun NeumorphicLiquidNavBarContent(
     musicEnabled: Boolean,
     onOpenDiary: () -> Unit,
     onOpenMusic: () -> Unit,
+    profileEnabled: Boolean,
     barShape: Shape
 ) {
     val cs = MaterialTheme.colorScheme
@@ -259,8 +194,9 @@ private fun NeumorphicLiquidNavBarContent(
     val feedLabel = stringResource(R.string.feed_title)
     val musicLabel = stringResource(R.string.nav_tab_music)
     val diaryLabel = stringResource(R.string.diary_title)
+    val profileLabel = stringResource(R.string.nav_tab_profile)
 
-    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, diaryEnabled, discoverEnabled, musicEnabled, onOpenDiary, onOpenMusic) {
+    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, profileLabel, diaryEnabled, discoverEnabled, musicEnabled, profileEnabled, onOpenDiary, onOpenMusic) {
         buildList {
             add(
                 VlNavTabDef(
@@ -304,6 +240,17 @@ private fun NeumorphicLiquidNavBarContent(
                     )
                 )
             }
+            if (profileEnabled) {
+                add(
+                    VlNavTabDef(
+                        tabId = NAV_TAB_PROFILE,
+                        icon = Icons.Outlined.Badge,
+                        selectedIcon = Icons.Filled.Badge,
+                        label = profileLabel,
+                        onClick = { onTabSelected(NAV_TAB_PROFILE) }
+                    )
+                )
+            }
         }
     }
 
@@ -312,8 +259,8 @@ private fun NeumorphicLiquidNavBarContent(
 
     val configuration = LocalConfiguration.current
     val screenWidthDp = configuration.screenWidthDp.toFloat()
-    val initialEstimatedWidthDp = remember(screenWidthDp, tokens.isForge) {
-        val horizontalMargin = if (tokens.isForge) 0f else 48f
+    val initialEstimatedWidthDp = remember(screenWidthDp) {
+        val horizontalMargin = 48f
         val innerPadding = 16f
         (screenWidthDp - horizontalMargin - innerPadding).coerceAtLeast(100f)
     }
@@ -327,6 +274,8 @@ private fun NeumorphicLiquidNavBarContent(
     val initialLeftPx = with(density) { (initialSlot?.leftDp ?: 0f).dp.toPx() }
     val initialWidthPx = with(density) { (initialSlot?.widthDp ?: 48f).dp.toPx() }
 
+    // Forge v2: бегунок едет ровно, без пружины и растяжения
+    val glitch = VlTheme.tokens.glitchMotion
     val runnerLeft = remember { Animatable(initialLeftPx) }
     val runnerWidth = remember { Animatable(initialWidthPx) }
     val stretchAnim = remember { Animatable(0f) }
@@ -346,13 +295,13 @@ private fun NeumorphicLiquidNavBarContent(
             launch {
                 runnerLeft.animateTo(
                     targetLeft,
-                    spring(dampingRatio = 0.72f, stiffness = 320f)
+                    navSpring(glitch)
                 )
             }
             launch {
                 runnerWidth.animateTo(
                     targetWidth,
-                    spring(dampingRatio = 0.72f, stiffness = 320f)
+                    navSpring(glitch)
                 )
             }
         }
@@ -363,7 +312,7 @@ private fun NeumorphicLiquidNavBarContent(
             val diff = activeIndex - prevActiveIndex
             prevActiveIndex = activeIndex
             val dir = if (diff > 0) 1f else -1f
-            launch {
+            if (!glitch) launch {
                 stretchAnim.animateTo(dir * 0.16f, tween(80, easing = FastOutSlowInEasing))
                 stretchAnim.animateTo(0f, spring(dampingRatio = 0.60f, stiffness = 320f))
             }
@@ -417,27 +366,18 @@ private fun NeumorphicLiquidNavBarContent(
 
             val animLeftDp by animateFloatAsState(
                 targetValue = slot.leftDp,
-                animationSpec = spring(
-                    dampingRatio = 0.72f,
-                    stiffness = 320f
-                ),
+                animationSpec = navSpring(glitch),
                 label = "liquid_tab_left_$index"
             )
             val animWidthDp by animateFloatAsState(
                 targetValue = slot.widthDp,
-                animationSpec = spring(
-                    dampingRatio = 0.72f,
-                    stiffness = 320f
-                ),
+                animationSpec = navSpring(glitch),
                 label = "liquid_tab_width_$index"
             )
 
             val contentColor by animateColorAsState(
                 targetValue = if (isSelected) cs.primary else cs.onSurfaceVariant,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
+                animationSpec = navBouncy(glitch),
                 label = "liquid_tab_content_color_$index"
             )
 
@@ -463,10 +403,7 @@ private fun NeumorphicLiquidNavBarContent(
                 ) {
                     val scale by animateFloatAsState(
                         targetValue = if (isSelected) 1.12f else 1.0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
+                        animationSpec = navBouncy(glitch),
                         label = "liquid_icon_scale_$index"
                     )
 
@@ -482,10 +419,7 @@ private fun NeumorphicLiquidNavBarContent(
                     AnimatedVisibility(
                         visible = isSelected,
                         enter = fadeIn(tween(140, delayMillis = 30)) + expandHorizontally(
-                            spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessMediumLow
-                            )
+                            navBouncy(glitch, Spring.StiffnessMediumLow)
                         ),
                         exit = fadeOut(tween(80)) + shrinkHorizontally(tween(90))
                     ) {
@@ -653,3 +587,12 @@ fun VlTabItem(
         }
     }
 }
+
+/** Пружина бегунка; в Forge v2 — ровный переход терминала. */
+private fun <T> navSpring(glitch: Boolean): androidx.compose.animation.core.FiniteAnimationSpec<T> =
+    if (glitch) TerminalMotion.tween(260) else spring(dampingRatio = 0.72f, stiffness = 320f)
+
+/** Упругий акцент выбранной вкладки; в Forge v2 — без отскока. */
+private fun <T> navBouncy(glitch: Boolean, stiffness: Float = Spring.StiffnessLow): androidx.compose.animation.core.FiniteAnimationSpec<T> =
+    if (glitch) TerminalMotion.tween(200)
+    else spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = stiffness)

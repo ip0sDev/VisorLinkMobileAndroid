@@ -44,3 +44,10 @@
 }
 -keep class org.visorlink.app.data.remote.** { *; }
 -keepclassmembers class org.visorlink.app.data.remote.** { *; }
+# Credential Manager (вход через Google): провайдер Play Services находится рефлексией
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** {
+  *;
+}
+# Sign in with Google: учётные данные собираются из Bundle по типу — классы не трогаем
+-keep class com.google.android.libraries.identity.googleid.** { *; }

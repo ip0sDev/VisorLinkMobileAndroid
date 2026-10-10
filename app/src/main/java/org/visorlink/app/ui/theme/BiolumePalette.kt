@@ -249,7 +249,6 @@ val Material3Shapes = VlShapeTokens(
 internal val Material3Motion = VlMotionTokens(
     pressStyle = VlPressStyle.SCALE,
     pressScale = 0.97f,
-    pressOffset = 0.dp,
     useSpring = true,
     dampingRatio = 1f,
     stiffness = 1500f,
@@ -260,7 +259,6 @@ internal val Material3Motion = VlMotionTokens(
 internal val BiolumeMotion = VlMotionTokens(
     pressStyle = VlPressStyle.INSET,
     pressScale = 1f,
-    pressOffset = 0.dp,
     useSpring = true,
     dampingRatio = 0.75f,
     stiffness = 400f,
@@ -297,11 +295,34 @@ internal fun biolumeBubbles(isDark: Boolean, primary: Color) = VlBubbleTokens(
     otherFg = if (isDark) Biolume.AbyssOnSurface else Biolume.TidepoolOnSurface,
 )
 
-internal fun biolumeSelectionFill(isDark: Boolean, primary: Color): Color = lerp(
+internal fun biolumeSelectionFill(isDark: Boolean, primary: Color, proAccent: Boolean = false): Color = lerp(
     if (isDark) Biolume.AbyssContainer else Biolume.TidepoolContainer,
     primary,
-    if (isDark) 0.20f else 0.14f,
+    // Цвет профиля PRO — как --selection-fill в uiAccentVars: 20 % / 15 %
+    if (isDark) 0.20f else if (proAccent) 0.15f else 0.14f,
 )
+
+/** Свечение при акценте из цвета профиля PRO (веб `--glow-primary` в uiAccentVars). */
+internal fun biolumeProSignal(isDark: Boolean) = biolumeSignal(isDark).copy(
+    glowBlur = if (isDark) 14.dp else 8.dp,
+    glowAlpha = if (isDark) 0.30f else 0.22f,
+)
+
+/**
+ * Цвет профиля PRO как акцент всего интерфейса (веб `uiAccentVars`): primary подстроен под тему
+ * ([ProAccent.readable] — ≥ 4.5 к каждому фону), текст на нём — белый или `#0B0F12`,
+ * контейнер — primary с альфой 0.14 / 0.12. Поверхности Abyss/Tidepool не меняются.
+ */
+internal fun ColorScheme.withProAccent(accent: Color, isDark: Boolean): ColorScheme {
+    val primary = ProAccent.readable(accent, light = !isDark)
+    return copy(
+        primary = primary,
+        onPrimary = ProAccent.onColor(primary),
+        primaryContainer = primary.copy(alpha = if (isDark) 0.14f else 0.12f),
+        onPrimaryContainer = accentOnContainer(primary, isDark),
+        surfaceTint = primary,
+    )
+}
 
 internal fun biolumeStatus(isDark: Boolean) = VlStatusTokens(
     success = if (isDark) Biolume.AbyssSuccess else Biolume.TidepoolSuccess,
@@ -322,12 +343,16 @@ internal fun biolumeStatus(isDark: Boolean) = VlStatusTokens(
  */
 internal fun ColorScheme.withSignalAccent(accent: Color?, isDark: Boolean): ColorScheme {
     if (accent == null) return this
+    // Акцент — ещё и цвет подписей (@ник, ссылки, заголовки секций), поэтому тон доводится
+    // до 3:1 к фону, как в M3E. Иначе произвольный HEX из PRO-оформления (светлый на
+    // Tidepool, тёмный на Abyss) делал их невидимыми; пресеты, которые уже читаются, не меняются.
+    val primary = accent.withContrastAgainst(background, min = 3f, towards = if (isDark) Color.White else Color.Black)
     return copy(
-        primary = accent,
-        onPrimary = onColorFor(accent),
+        primary = primary,
+        onPrimary = onColorFor(primary),
         primaryContainer = accent.copy(alpha = primaryContainer.alpha),
         onPrimaryContainer = accentOnContainer(accent, isDark),
-        surfaceTint = accent,
+        surfaceTint = primary,
     )
 }
 
@@ -364,7 +389,7 @@ internal fun ColorScheme.withMaterialAccent(accent: Color?, isDark: Boolean): Co
 }
 
 /** Сдвигает цвет к [towards] шагами по 5%, пока контраст с [bg] не станет ≥ [min]. */
-private fun Color.withContrastAgainst(bg: Color, min: Float, towards: Color): Color {
+internal fun Color.withContrastAgainst(bg: Color, min: Float, towards: Color): Color {
     var c = this
     var t = 0f
     while (wcagContrast(c, bg) < min && t < 1f) {
@@ -388,7 +413,7 @@ private fun readableOn(bg: Color, accent: Color): Color {
  * «на глаз» это светлый цвет, но белый текст на нём даёт 2.8:1, а тёмный — 6.8:1.
  * Поэтому считаем оба варианта по WCAG и выбираем лучший.
  */
-private fun onColorFor(accent: Color): Color {
+internal fun onColorFor(accent: Color): Color {
     val dark = Color(0xFF06131A)
     return if (wcagContrast(accent, dark) >= wcagContrast(accent, Color.White)) dark else Color.White
 }

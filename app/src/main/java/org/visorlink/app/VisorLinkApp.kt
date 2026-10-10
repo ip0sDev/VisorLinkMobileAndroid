@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import androidx.lifecycle.lifecycleScope
 import org.visorlink.app.di.appModule
 import org.visorlink.app.utils.ActiveChatTracker
 import org.visorlink.app.utils.NotificationHelper
@@ -141,10 +142,13 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) {
                 ActiveChatTracker.isAppInForeground = true
+                // Конфиг флагов — раз в 10 минут, пока приложение на экране
+                runCatching { GlobalContext.get().get<FlagsRepository>().startAutoRefresh(owner.lifecycleScope) }
             }
 
             override fun onStop(owner: LifecycleOwner) {
                 ActiveChatTracker.isAppInForeground = false
+                runCatching { GlobalContext.get().get<FlagsRepository>().stopAutoRefresh() }
             }
         })
 
@@ -175,7 +179,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                 if (auth.currentUser?.isEmailVerified == true) {
                     val sessions = GlobalContext.get().get<org.visorlink.app.data.repository.SessionRepository>()
                     sessions.watchRevocation(uid)
-                    MainScope().launch { sessions.register() }
+                    MainScope().launch { sessions.ensureRegistered() }
                 }
                 MainScope().launch {
                     try {

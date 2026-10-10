@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -114,6 +115,7 @@ import org.visorlink.app.ui.theme.CardPalette
 import org.visorlink.app.ui.theme.CardTextures
 import org.visorlink.app.ui.theme.CardTone
 import org.visorlink.app.ui.theme.cardPalette
+import org.visorlink.app.ui.theme.customPalette
 import org.visorlink.app.ui.theme.clamp
 import org.visorlink.app.ui.theme.cssLinear
 import org.visorlink.app.ui.theme.cssRepeating
@@ -179,6 +181,11 @@ fun VlIdCard(
     issueTime: Float? = null,
     /** 1 — показать оборот сразу (скриншот-тесты, превью). */
     initialFace: Int = 0,
+    /**
+     * Своя нарисованная подпись (SVG-путь `M x y L x y …` в 100×30, спека §2.2). Заменяет росчерк
+     * из seed везде, где он рисуется; невалидная строка — росчерк. У Protogen не видна (ключ).
+     */
+    signature: String? = null,
 ) {
     val reduceMotion = VlTheme.tokens.reduceMotion
     val tilt = remember {
@@ -191,7 +198,7 @@ fun VlIdCard(
     val aria = stringResource(R.string.idcard_aria, name, person.username ?: "user", modeLabel, registered, card.serial)
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        IdCardScene(card, person, name, width, accent, emojis, issueTime, tilt, active, reduceMotion, Modifier.semantics { contentDescription = aria })
+        IdCardScene(card, person, name, width, accent, emojis, issueTime, tilt, active, reduceMotion, signature, Modifier.semantics { contentDescription = aria })
         if (active) {
             val label = stringResource(if (tilt.face == 1) R.string.idcard_show_front else R.string.idcard_show_back)
             Row(
@@ -249,6 +256,8 @@ internal class CardTiltState {
     /** Пиковая скорость с последнего приземления — для силы удара. */
     var peakSpeed = 0f
     var haptics: CardHaptics? = null
+    /** Карта реагирует на наклон; у неинтерактивной «скрытое изображение» — постоянные 0.2. */
+    var interactive = true
     private var lastDetent = 0
     private var lastShowBack = false
     private var lastVySign = 0
@@ -328,6 +337,7 @@ private fun IdCardScene(
     tilt: CardTiltState,
     active: Boolean,
     reduceMotion: Boolean,
+    signature: String?,
     modifier: Modifier,
 ) {
     val density = LocalDensity.current
@@ -335,7 +345,15 @@ private fun IdCardScene(
     val height = width * (54f / 85.6f)
     val traits = card.traits
     val details = remember(traits.seed) { IdCardGenerator.deriveDetails(traits.seed) }
-    val palette = remember(card.mode, traits.variant, traits.finish) { cardPalette(card.mode, traits.variant, traits.finish) }
+    // Кастомный скин заменяет палитру режима (раскладка и графика — режима), если все три цвета валидны
+    val palette = remember(card.mode, traits.variant, traits.finish, card.custom) {
+        card.custom?.colors?.let { (b, pr, se) -> customPalette(b, pr, se, traits.finish) } ?: cardPalette(card.mode, traits.variant, traits.finish)
+    }
+    // Своя подпись (§2.2) или росчерк из seed (§2.1): штрихи в координатах 100×30
+    val strokes = remember(signature, traits.seed) {
+        IdCardGenerator.parseSignature(signature) ?: listOf(IdCardGenerator.signaturePoints(traits.seed))
+    }
+    tilt.interactive = active
     val p = IssueProgress(issueTime)
 
     val haptics = rememberCardHaptics()
@@ -415,12 +433,12 @@ private fun IdCardScene(
             val faceShape = if (card.mode == IdMode.PROTOGEN) ProtogenFaceShape else IdCardMaterials.corner(em * 0.95f)
             if (!tilt.showBack) {
                 Face(card, palette, details, faceShape, em, tilt, p) {
-                    FrontContent(card, person, name, palette, details, em, accent, emojis, p)
+                    FrontContent(card, person, name, palette, details, em, accent, emojis, p, strokes)
                 }
             } else {
                 Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
                     Face(card, palette, details, faceShape, em, tilt, p) {
-                        BackContent(card, person, name, palette, details, em, p)
+                        BackContent(card, person, name, palette, details, em, p, strokes)
                     }
                 }
             }
@@ -647,13 +665,13 @@ private fun Face(
             },
     ) {
         content()
-        Overlays(traits, details, palette, em, tilt, p)
+        Overlays(traits, details, palette, em, tilt, p, protogen = card.mode == IdMode.PROTOGEN)
     }
 }
 
 /** Слои поверх содержимого стороны: отделка, «скрытое изображение», потёртость, плёнка, блик. */
 @Composable
-private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Details, palette: CardPalette, em: Dp, tilt: CardTiltState, p: IssueProgress) {
+private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Details, palette: CardPalette, em: Dp, tilt: CardTiltState, p: IssueProgress, protogen: Boolean) {
     val reveal = traits.foil == IdFoil.AURORA || traits.foil == IdFoil.GALAXY
     val revealArt = remember(traits.foil, traits.seed) { if (reveal) RevealArt(traits.foil == IdFoil.GALAXY, traits.seed) else null }
     val scratches = remember(traits.seed, traits.wear) { IdCardGenerator.scratches(traits.seed, traits.wear * 5) }
@@ -683,7 +701,8 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
             }
         }
         revealArt?.let { art ->
-            val opacity = p.revealFlash ?: clamp(mag * 1.5f - 0.15f, 0.2f, 1f)
+            // Проступает под углом (§11.3 reveal); у неинтерактивной карты — постоянные 0.2
+            val opacity = p.revealFlash ?: if (tilt.interactive) clamp(mag * 1.5f - 0.15f, 0f, 1f) else 0.2f
             val galaxy = traits.foil == IdFoil.GALAXY
             val box = Size(w * 2.2f, h * 2.2f)
             val origin = Offset(-w * 0.6f - fx * 0.16f * box.width, -h * 0.6f - fy * 0.13f * box.height)
@@ -692,9 +711,10 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
             } else {
                 cssRepeating(118f, IdCardMaterials.RainbowAurora, box, origin)
             }
+            // Как каскад CSS: правило светлого тона идёт последним и перекрывает и галактику
             val fillAlpha = when {
-                galaxy -> 0.95f
                 light -> 0.5f
+                galaxy -> 0.95f
                 else -> 0.32f
             }
             scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
@@ -714,12 +734,21 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
         }
         if (traits.laminated) {
             val inset = emPx * 0.28f
-            val r = emPx * 0.72f
+            // Плёнка Protogen — без скругления, как и сама карта
+            val r = if (protogen) 0f else emPx * 0.72f
+            val filmTopLeft = Offset(inset, inset)
+            val filmSize = Size(w - 2 * inset, h - 2 * inset)
+            val corner = androidx.compose.ui.geometry.CornerRadius(r)
             drawRoundRect(
-                Brush.verticalGradient(0f to Color.White.copy(alpha = 0.07f), 0.35f to Color.Transparent),
-                Offset(inset, inset), Size(w - 2 * inset, h - 2 * inset), androidx.compose.ui.geometry.CornerRadius(r),
+                Brush.verticalGradient(0f to Color.White.copy(alpha = 0.07f), 0.35f to Color.Transparent, startY = inset, endY = h - inset),
+                filmTopLeft, filmSize, corner,
             )
-            drawRoundRect(Color.White.copy(alpha = 0.3f), Offset(inset, inset), Size(w - 2 * inset, h - 2 * inset), androidx.compose.ui.geometry.CornerRadius(r), style = Stroke(1f))
+            // inset 0 0 0.7em rgba(255,255,255,.06): мягкое свечение по краю плёнки внутрь
+            val glow = emPx * 0.7f
+            for (i in 1..5) {
+                drawRoundRect(Color.White.copy(alpha = 0.06f / 5f), filmTopLeft, filmSize, corner, style = Stroke(glow * 2f * i / 5f))
+            }
+            drawRoundRect(Color.White.copy(alpha = 0.3f), filmTopLeft, filmSize, corner, style = Stroke(1f))
             details.bubble?.let { b ->
                 val c = Offset(b.x / 100f * w, b.y / 100f * h)
                 val bw = emPx * 1.1f * b.size.toFloat()
@@ -806,11 +835,14 @@ private fun BoxScope.FrontContent(
     accent: Color?,
     emojis: String,
     p: IssueProgress,
+    strokes: List<List<Pair<Double, Double>>>,
 ) {
     val density = LocalDensity.current
     val mode = card.mode
     val traits = card.traits
     val registered = formatCardDate(card.registeredAt)
+    // Форма голограммы: у кастомного скина — своя (§4.5)
+    val holoShape = card.custom?.holo ?: d.holoShape
 
     // Защитная печать: гильош / дорожки / окрас (со сдвигом печати)
     PrintLayer(mode, d, d.artSeed, pal, em, faint = false, p = p)
@@ -853,7 +885,7 @@ private fun BoxScope.FrontContent(
                     stringResource(R.string.idcard_field_signature).uppercase(),
                     style = TextStyle(fontFamily = CardInter, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.06f, density), color = pal.muted),
                 )
-                SignatureCanvas(traits.seed, if (pal.tone == CardTone.DARK) hsl(210f, 80f, 80f) else hsl(226f, 62f, 30f), Modifier.fillMaxWidth().height(em * 3f))
+                SignatureCanvas(strokes, if (pal.tone == CardTone.DARK) hsl(210f, 80f, 80f) else hsl(226f, 62f, 30f), alignStart = false, Modifier.fillMaxWidth().height(em * 3f))
             }
             // «Призрачное» фото
             person.avatarUrl?.let { url ->
@@ -873,7 +905,8 @@ private fun BoxScope.FrontContent(
                 ) {
                     AsyncImage(
                         model = url, contentDescription = null, contentScale = ContentScale.Crop,
-                        colorFilter = ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }),
+                        // grayscale(1) contrast(1.3)
+                        colorFilter = ColorFilter.colorMatrix(saturationContrast(0f, 1.3f)),
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -914,7 +947,7 @@ private fun BoxScope.FrontContent(
             else -> 1.3f to 1.3f
         }
         Holo(
-            mode, traits, d.holoShape, 4.4f,
+            mode, traits, holoShape, 4.4f,
             Modifier
                 .at(EM_W - right - 4.4f, EM_H - bottom - 4.4f, em)
                 .graphicsLayer {
@@ -1096,12 +1129,14 @@ private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPal
         ) {
             val develop = p.develop
             if (person.avatarUrl != null) {
+                // Standard: saturate(0.85) contrast(1.03); при проявлении — из ч/б
                 val saturation = (if (mode == IdMode.STANDARD) 0.85f else 1f) * develop
+                val contrast = if (mode == IdMode.STANDARD) 1.03f else 1f
                 AsyncImage(
                     model = person.avatarUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
-                    colorFilter = if (saturation < 1f) ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(saturation) }) else null,
+                    colorFilter = if (saturation < 1f || contrast != 1f) ColorFilter.colorMatrix(saturationContrast(saturation, contrast)) else null,
                     modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 0.2f + 0.8f * develop },
                 )
             } else {
@@ -1240,19 +1275,40 @@ private fun Fields(card: IdCard, name: String, username: String, registered: Str
     }
 }
 
+/**
+ * Подпись в viewBox 100×30, вписанная с сохранением пропорций: на лице — по центру
+ * (`xMidYMid meet`), на обороте — прижата влево (`xMinYMid meet`). Каждый штрих — отдельный
+ * `M`; линия 1.2, скруглённые концы и стыки.
+ */
 @Composable
-private fun SignatureCanvas(seed: Long, color: Color, modifier: Modifier) {
-    val pts = remember(seed) { IdCardGenerator.signaturePoints(seed) }
+private fun SignatureCanvas(strokes: List<List<Pair<Double, Double>>>, color: Color, alignStart: Boolean, modifier: Modifier) {
+    val path = remember(strokes) {
+        Path().apply {
+            strokes.forEach { stroke ->
+                stroke.forEachIndexed { i, (x, y) -> if (i == 0) moveTo(x.toFloat(), y.toFloat()) else lineTo(x.toFloat(), y.toFloat()) }
+            }
+        }
+    }
     Canvas(modifier) {
-        // viewBox 0 0 100 30, preserveAspectRatio xMidYMid meet
         val s = min(size.width / 100f, size.height / 30f)
-        translate((size.width - 100f * s) / 2f, (size.height - 30f * s) / 2f) {
+        val dx = if (alignStart) 0f else (size.width - 100f * s) / 2f
+        translate(dx, (size.height - 30f * s) / 2f) {
             scale(s, s, pivot = Offset.Zero) {
-                val path = Path().apply { pts.forEachIndexed { i, (x, y) -> if (i == 0) moveTo(x.toFloat(), y.toFloat()) else lineTo(x.toFloat(), y.toFloat()) } }
                 drawPath(path, color, style = Stroke(1.2f, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
             }
         }
     }
+}
+
+/** CSS `saturate(s) contrast(c)`: сначала насыщенность, затем контраст вокруг середины. */
+private fun saturationContrast(saturation: Float, contrast: Float): ColorMatrix {
+    val m = ColorMatrix().apply { setToSaturation(saturation) }
+    val t = 127.5f * (1f - contrast)
+    for (row in 0 until 3) {
+        for (col in 0 until 4) m[row, col] = m[row, col] * contrast
+        m[row, 4] = m[row, 4] * contrast + t
+    }
+    return m
 }
 
 @Composable
@@ -1355,9 +1411,10 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
         val clip = Path().apply { addPath(mask) }.also { it.transform(androidx.compose.ui.graphics.Matrix().apply { scale(s, s) }) }
         clipPath(clip) {
             val box = Size(size.width * 3f, size.height * 3f)
+            // Золото — всегда золотой фон, даже у галактики (правило золота в CSS идёт позже)
             when {
-                traits.foil == IdFoil.GALAXY -> drawRect(Brush.radialGradient(colorStops = IdCardMaterials.HoloGalaxy.toTypedArray(), center = Offset(size.width * 0.32f, size.height * 0.3f), radius = size.width * 0.75f))
                 traits.finish == IdFinish.GOLD -> drawRect(cssLinear(135f, IdCardMaterials.HoloGold, size))
+                traits.foil == IdFoil.GALAXY -> drawRect(Brush.radialGradient(colorStops = IdCardMaterials.HoloGalaxy.toTypedArray(), center = Offset(size.width * 0.32f, size.height * 0.3f), radius = size.width * 0.75f))
                 else -> drawRect(cssLinear(135f, IdCardMaterials.HoloSilver, size))
             }
             val fx = tiltState?.fx ?: 0f
@@ -1371,9 +1428,16 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             }
             drawRect(cssRepeating(118f, stops, box, rainbowOrigin), alpha = alpha)
             if (traits.foil == IdFoil.GALAXY) {
-                val step = (em * 1.1f).toPx()
-                var yy = 0f
-                while (yy < size.height) { var xx = 0f; while (xx < size.width) { drawCircle(Color.White, (em * 0.05f).toPx(), Offset(xx + step / 2, yy + step / 2)); xx += step }; yy += step }
+                // Звёзды — две сетки, 1.1em и 1.4em
+                for ((stepEm, r, a) in listOf(Triple(1.1f, 0.05f, 1f), Triple(1.4f, 0.04f, 0.7f))) {
+                    val step = (em * stepEm).toPx()
+                    var yy = 0f
+                    while (yy < size.height) {
+                        var xx = 0f
+                        while (xx < size.width) { drawCircle(Color.White.copy(alpha = a), (em * r).toPx(), Offset(xx + step / 2, yy + step / 2)); xx += step }
+                        yy += step
+                    }
+                }
             }
             val glintOrigin = Offset(-size.width - fx * 0.34f * box.width, -size.height + fy * 0.26f * box.height)
             drawRect(cssLinear(115f, listOf(0f to Color.Transparent, 0.44f to Color.Transparent, 0.5f to Color.White.copy(alpha = 0.8f), 0.56f to Color.Transparent, 1f to Color.Transparent), box, glintOrigin))
@@ -1387,7 +1451,7 @@ internal val LocalCardTilt = androidx.compose.runtime.staticCompositionLocalOf<C
 // ── Оборот ──
 
 @Composable
-private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: String, pal: CardPalette, d: IdCardGenerator.Details, em: Dp, p: IssueProgress) {
+private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: String, pal: CardPalette, d: IdCardGenerator.Details, em: Dp, p: IssueProgress, strokes: List<List<Pair<Double, Double>>>) {
     val density = LocalDensity.current
     val mode = card.mode
     val traits = card.traits
@@ -1446,41 +1510,57 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
         )
     }
 
-    // Тираж
-    val edition = traits.edition
-    Column(
+    // Тираж: мин. высота 4.4em, мини-голограмма прижата к правому нижнему углу блока
+    val edition = card.edition
+    Box(
         Modifier
             .at(EM_W - 1.2f - 13.4f, 6.6f, em)
             .width(em * 13.4f)
-            .then(Modifier.drawBehind {
+            .heightIn(min = em * 4.4f)
+            .drawBehind {
                 val r = if (protogen) 0f else (em * 0.5f).toPx()
                 drawRoundRect(pal.line, cornerRadius = androidx.compose.ui.geometry.CornerRadius(r), style = Stroke(2f))
-            })
-            .padding(horizontal = em * 0.8f, vertical = em * 0.7f),
-        verticalArrangement = Arrangement.spacedBy(em * 0.3f),
+            },
     ) {
-        Text(
-            stringResource(R.string.idcard_edition_label).uppercase(),
-            style = TextStyle(fontFamily = CardInter, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.08f, density), color = pal.muted),
-        )
-        val editionColor = editionColor(edition, pal.tone)
-        Text(
-            editionName(edition).uppercase(),
-            maxLines = 1,
-            softWrap = false,
-            style = TextStyle(
-                fontFamily = CardInter, fontWeight = FontWeight.Bold, fontSize = emSp(em, 0.92f, density), letterSpacing = emSp(em, 0.055f, density),
-                color = editionColor ?: pal.ink,
-            ).let { if (edition == IdEdition.LEGENDARY) it.copy(brush = Brush.linearGradient(IdCardMaterials.Legendary)) else it },
-        )
-        Text(
-            finishName(traits.finish) + " · " + foilName(traits.foil) + if (protogen) " · FW ${card.version}.${traits.seed % 10}" else "",
-            style = TextStyle(fontFamily = CardMono, fontWeight = FontWeight.Medium, fontSize = emSp(em, 0.56f, density), lineHeight = emSp(em, 0.73f, density), color = pal.muted),
-            modifier = Modifier.fillMaxWidth(0.68f),
-        )
-    }
-    if (traits.foil != IdFoil.NONE) {
-        Holo(mode, traits, d.holoShape, 2.4f, Modifier.at(EM_W - 1.2f - 0.6f - 2.4f, 6.6f + 4.4f - 0.6f - 2.4f, em), em, p)
+        Column(
+            Modifier.padding(horizontal = em * 0.8f, vertical = em * 0.7f),
+            verticalArrangement = Arrangement.spacedBy(em * 0.3f),
+        ) {
+            Text(
+                stringResource(R.string.idcard_edition_label).uppercase(),
+                style = TextStyle(fontFamily = CardInter, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.08f, density), color = pal.muted),
+            )
+            val editionColor = editionColor(edition, pal.tone)
+            Text(
+                editionName(edition).uppercase(),
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(
+                    fontFamily = CardInter, fontWeight = FontWeight.Bold, fontSize = emSp(em, 0.92f, density), letterSpacing = emSp(em, 0.055f, density),
+                    color = editionColor ?: pal.ink,
+                ).let { if (edition == IdEdition.LEGENDARY) it.copy(brush = Brush.linearGradient(IdCardMaterials.Legendary)) else it },
+            )
+            // Надпись кастомного скина (§2.3): бренд 600 0.62em, 0.04em, ink, свечение neon 45 %, перенос по любым символам
+            card.custom?.labelText?.let { label ->
+                Text(
+                    label.toCharArray().joinToString("\u200B"),
+                    style = TextStyle(
+                        fontFamily = CardBrand, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 0.62f, density),
+                        letterSpacing = emSp(em, 0.025f, density), color = pal.ink,
+                        shadow = Shadow(pal.neon.copy(alpha = pal.neon.alpha * 0.45f), blurRadius = with(density) { (em * 0.6f).toPx() }),
+                    ),
+                    modifier = Modifier.fillMaxWidth(0.68f),
+                )
+            }
+            Text(
+                finishName(traits.finish) + " · " + foilName(traits.foil) + if (protogen) " · FW ${card.version}.${traits.seed % 10}" else "",
+                style = TextStyle(fontFamily = CardMono, fontWeight = FontWeight.Medium, fontSize = emSp(em, 0.56f, density), lineHeight = emSp(em, 0.73f, density), color = pal.muted),
+                modifier = Modifier.fillMaxWidth(0.68f),
+            )
+        }
+        if (traits.foil != IdFoil.NONE) {
+            Holo(mode, traits, card.custom?.holo ?: d.holoShape, 2.4f, Modifier.align(Alignment.BottomEnd).offset(x = -em * 0.6f, y = -em * 0.6f), em, p)
+        }
     }
 
     // Полоса подписи (у Protogen — ключ подлинности)
@@ -1520,7 +1600,7 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
                     style = TextStyle(fontFamily = CardMono, fontWeight = FontWeight.Medium, fontSize = emSp(em, 0.82f, density), letterSpacing = emSp(em, 0.066f, density), color = stripInk, shadow = Shadow(stripInk.copy(alpha = 0.5f), blurRadius = with(density) { (em * 0.4f).toPx() })),
                 )
             } else {
-                SignatureCanvas(traits.seed, stripInk, Modifier.weight(1f).height(em * 2.6f))
+                SignatureCanvas(strokes, stripInk, alignStart = true, Modifier.weight(1f).height(em * 2.6f))
                 if (mode == IdMode.BEAST) {
                     Canvas(Modifier.size(em * 1.8f).graphicsLayer { rotationZ = -14f; alpha = 0.85f }) { drawModeGlyph(IdMode.BEAST, stripInk) }
                 }

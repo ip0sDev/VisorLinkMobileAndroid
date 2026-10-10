@@ -20,7 +20,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.components.VlSwitch
@@ -33,7 +32,6 @@ import org.visorlink.app.utils.CacheSizeInfo
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.delay
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,15 +45,10 @@ fun CacheSettingsScreen(
     val haptic = rememberHaptic()
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
 
-    val flagsRepository: FlagsRepository = koinInject()
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
-        if (isLiquidEnabled) {
-            topBarJelly.pulse(0.06f)
-        }
+        topBarJelly.pulse(0.06f)
     }
 
     // Авто-сброс сообщения об успехе
@@ -78,12 +71,12 @@ fun CacheSettingsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 VlTopAppBar(
-                    modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                    modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text(stringResource(R.string.cache_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            topBarJelly.press(0.06f)
                             onNavigateBack()
                         }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
@@ -92,7 +85,7 @@ fun CacheSettingsScreen(
                     actions = {
                         IconButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
-                            if (isLiquidEnabled) topBarJelly.press(0.06f)
+                            topBarJelly.press(0.06f)
                             viewModel.refreshSizes()
                         }) {
                             Icon(Icons.Default.Refresh, stringResource(R.string.action_refresh))
@@ -134,8 +127,7 @@ fun CacheSettingsScreen(
                 CacheUsageCard(
                     sizes           = state.sizes,
                     isLoading       = state.isLoading,
-                    modifier        = Modifier.liquidPillCardSlideOut(index = 0, enabled = isLiquidEnabled),
-                    isLiquidEnabled = isLiquidEnabled
+                    modifier        = Modifier.liquidPillCardSlideOut(index = 0)
                 )
 
                 // ── Очистка ───────────────────────────────────────────────────────
@@ -146,8 +138,7 @@ fun CacheSettingsScreen(
                     onClearImages   = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearImages() },
                     onClearVoice    = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearVoice() },
                     onClearAll      = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.clearAll() },
-                    modifier        = Modifier.liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
-                    isLiquidEnabled = isLiquidEnabled
+                    modifier        = Modifier.liquidPillCardSlideOut(index = 1)
                 )
 
                 // ── Лимиты ────────────────────────────────────────────────────────
@@ -162,8 +153,7 @@ fun CacheSettingsScreen(
                     onImageLimit    = { viewModel.setMaxImageMb(it) },
                     onVoiceLimit    = { viewModel.setMaxVoiceMb(it) },
                     onCacheDays     = { viewModel.setChatCacheDays(it) },
-                    modifier        = Modifier.liquidPillCardSlideOut(index = 2, enabled = isLiquidEnabled),
-                    isLiquidEnabled = isLiquidEnabled
+                    modifier        = Modifier.liquidPillCardSlideOut(index = 2)
                 )
 
                 Spacer(modifier = Modifier.height(padding.calculateBottomPadding() + 32.dp))
@@ -173,10 +163,10 @@ fun CacheSettingsScreen(
 }
 
 @Composable
-private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, modifier: Modifier = Modifier, isLiquidEnabled: Boolean = false) {
+private fun CacheUsageCard(sizes: CacheSizeInfo?, isLoading: Boolean, modifier: Modifier = Modifier) {
     VlSurface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        customRadius = if (isLiquidEnabled) 32.dp else null,
+        customRadius = 32.dp,
         contentPadding = PaddingValues(16.dp)
     ) {
         Column {
@@ -269,14 +259,13 @@ private fun ClearActionsCard(
     onClearImages: () -> Unit,
     onClearVoice: () -> Unit,
     onClearAll: () -> Unit,
-    modifier: Modifier = Modifier,
-    isLiquidEnabled: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     var showConfirmAll by remember { mutableStateOf(false) }
 
     VlSurface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        customRadius = if (isLiquidEnabled) 32.dp else null
+        customRadius = 32.dp
     ) {
         Column {
             ClearButton(
@@ -376,12 +365,11 @@ private fun LimitsCard(
     onImageLimit: (Int) -> Unit,
     onVoiceLimit: (Int) -> Unit,
     onCacheDays:  (Int) -> Unit,
-    modifier: Modifier = Modifier,
-    isLiquidEnabled: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     VlSurface(
         modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-        customRadius = if (isLiquidEnabled) 32.dp else null,
+        customRadius = 32.dp,
         contentPadding = PaddingValues(16.dp)
     ) {
         Column {

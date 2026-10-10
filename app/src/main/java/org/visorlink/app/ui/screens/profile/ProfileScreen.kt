@@ -43,13 +43,11 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.ProfileAppearance
 import org.visorlink.app.data.model.ProfileLayout
 import org.visorlink.app.data.model.UserProfile
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.*
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import coil.compose.AsyncImage
-import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -84,12 +82,20 @@ internal fun DebugUidBadge(uid: String, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Свой профиль: отдельный экран или вкладка нижней навигации.
+ *
+ * @param asTab вкладка «Профиль» (флаг `enable_profile_navbar`): шапка — сама ID-карта вместо
+ *   аватара (аватар и имя на ней есть), снизу — место под навбар. Пока профиль редактируется,
+ *   шапка обычная: аватар меняется нажатием на него.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ProfileScreen(
     onNavigateBack: () -> Unit,
     onLoggedOut: () -> Unit,
     onOpenStickers: () -> Unit,
+    asTab: Boolean = false,
     viewModel: ProfileViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -100,15 +106,10 @@ fun ProfileScreen(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? -> uri?.let { viewModel.uploadAvatar(it) } }
 
-    val flagsRepository: FlagsRepository = koinInject()
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
-        if (isLiquidEnabled) {
-            topBarJelly.pulse(0.06f)
-        }
+        topBarJelly.pulse(0.06f)
     }
 
     val user = uiState.user ?: UserProfile()
@@ -116,7 +117,6 @@ fun ProfileScreen(
     // Свой профиль всегда в своём оформлении — см. ProfileAppearance.resolve
     val appearance = ProfileAppearance.resolve(owner = user, viewer = user)
     val bgUrl = appearance.backgroundUrl
-    val bannerUrl = appearance.bannerUrl
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
     val haptic = rememberHaptic()
@@ -135,32 +135,14 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (bgUrl != null) {
-                AsyncImage(
-                    model = bgUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            if (isDark) Color.Black.copy(alpha = 0.40f)
-                            else Color.White.copy(alpha = 0.20f)
-                        )
-                )
-            } else {
-                VlAmbientGlow()
-            }
+            ProfileBackdrop(bgUrl)
 
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
                 containerColor = Color.Transparent,
                 topBar = {
                     VlTopAppBar(
-                        modifier = Modifier.liquidJelly(topBarJelly, enabled = isLiquidEnabled),
+                        modifier = Modifier.liquidJelly(topBarJelly),
                         title = {
                             val titleText = if (uiState.isEditing) stringResource(R.string.profile_edit_title)
                             else stringResource(R.string.profile_title)
@@ -169,7 +151,7 @@ fun ProfileScreen(
                         navigationIcon = {
                             IconButton(onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
-                                if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                topBarJelly.press(0.06f)
                                 if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
                             }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
@@ -179,7 +161,7 @@ fun ProfileScreen(
                             if (!uiState.isEditing) {
                                 IconButton(onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
-                                    if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                    topBarJelly.press(0.06f)
                                     viewModel.startEditing()
                                 }) {
                                     Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
@@ -187,7 +169,7 @@ fun ProfileScreen(
 
                                 IconButton(onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
-                                    if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                    topBarJelly.press(0.06f)
                                     showLogout = true
                                 }) {
                                     Icon(Icons.AutoMirrored.Filled.Logout, null, tint = MaterialTheme.colorScheme.error)
@@ -196,7 +178,7 @@ fun ProfileScreen(
                                 TextButton(
                                     onClick = {
                                         haptic.perform(HapticType.CLICK, hapticEnabled)
-                                        if (isLiquidEnabled) topBarJelly.press(0.06f)
+                                        topBarJelly.press(0.06f)
                                         viewModel.saveProfile()
                                     },
                                     enabled = !uiState.isLoading,
@@ -208,7 +190,8 @@ fun ProfileScreen(
                         }
                     )
                 },
-                snackbarHost = { SnackbarHost(snackbar) }
+                // На вкладке навбар закрыл бы снекбар
+                snackbarHost = { SnackbarHost(snackbar, Modifier.padding(bottom = if (asTab) 96.dp else 0.dp)) }
             ) { padding ->
                 Column(
                     modifier = Modifier
@@ -217,196 +200,33 @@ fun ProfileScreen(
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // ID-карта: место выбирает владелец (спека §4a)
-                    org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.TOP)
-                    if (appearance.layout == ProfileLayout.COMPACT) {
-                    if (bannerUrl != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(130.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                        ) {
-                            AsyncImage(
-                                model = bannerUrl,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = if (bannerUrl != null) 16.dp else 24.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                                .border(2.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                .clip(VlTheme.tokens.shapes.avatar),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AvatarContent(user, 80.dp)
-                        }
-                        Spacer(Modifier.width(20.dp))
-                        Column {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    user.displayName,
-                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                org.visorlink.app.ui.idcard.ProfileModeMark(user.idMode, isMe = true)
-                                val emojis = appearance.emojis
-                                if (!emojis.isNullOrEmpty()) {
-                                    Text(emojis, modifier = Modifier.padding(start = 4.dp), fontSize = 20.sp)
-                                }
-                            }
-                            Text(
-                                "@${user.username}",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                } else {
-                    // Default / Banner Layout: полоска баннера НАД аватаркой
-                    if (bannerUrl != null) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(170.dp),
-                            contentAlignment = Alignment.BottomCenter
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(170.dp)
-                                    .padding(bottom = 50.dp)
-                                    .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-                            ) {
-                                AsyncImage(
-                                    model = bannerUrl,
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .size(110.dp)
-                                    .background(MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                    .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                    .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                    .clip(VlTheme.tokens.shapes.avatar),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AvatarContent(user, 110.dp)
-                            }
+                    if (asTab && !uiState.isEditing) {
+                        // Вкладка: карта и есть шапка; без карты (не выдана, маска) — аватар
+                        org.visorlink.app.ui.idcard.ProfileIdCardHeader(user) {
+                            ProfileHeader(user = user, appearance = appearance, isMe = true)
                         }
                     } else {
-                        Box(
-                            modifier = Modifier
-                                .padding(top = 24.dp)
-                                .size(130.dp)
-                                .background(MaterialTheme.colorScheme.surfaceContainerLow, VlTheme.tokens.shapes.avatar)
-                                .border(4.dp, MaterialTheme.colorScheme.surface, VlTheme.tokens.shapes.avatar)
-                                .then(if (uiState.isEditing) Modifier.clickable { avatarPicker.launch("image/*") } else Modifier)
-                                .clip(VlTheme.tokens.shapes.avatar),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AvatarContent(user, 130.dp)
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            user.displayName,
-                            style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                            color = MaterialTheme.colorScheme.onSurface
+                        // ID-карта: место выбирает владелец (спека §4a)
+                        org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.TOP)
+                        ProfileHeader(
+                            user = user,
+                            appearance = appearance,
+                            isMe = true,
+                            onAvatarClick = if (uiState.isEditing) ({ avatarPicker.launch("image/*") }) else null,
                         )
-                        org.visorlink.app.ui.idcard.ProfileModeMark(user.idMode, isMe = true)
-                        val emojis = appearance.emojis
-                        if (!emojis.isNullOrEmpty()) {
-                            Text(emojis, modifier = Modifier.padding(start = 6.dp), fontSize = 22.sp)
-                        }
-                    }
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "@${user.username}",
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
 
-                    org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.AFTER_HEADER)
+                        org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.AFTER_HEADER)
+                    }
 
                     if (!uiState.isEditing) {
-                        // Profile body
-                        Column(
-                            modifier = Modifier
-                                .padding(24.dp)
-                                .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            DebugUidBadge(uid = user.uid)
-                            if (user.online) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(Modifier.size(10.dp).background(Color.Green, VlTheme.tokens.shapes.indicator))
-                                    Spacer(Modifier.width(6.dp))
-                                    Text("Online", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Spacer(Modifier.height(16.dp))
-                            }
-
-                            if (user.isAdmin) {
-                                Spacer(Modifier.height(16.dp))
-                                AdminBadge()
-                            }
-
-                            if (isPro) {
-                                Spacer(Modifier.height(12.dp))
-                                ProBadge()
-                            }
-
-                            if (user.bio.isNotEmpty()) {
-                                Spacer(Modifier.height(16.dp))
-                                VlCard(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 4.dp),
-                                    shape = VlTheme.tokens.shapes.card
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(16.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        LinkifiedText(
-                                            text = user.bio,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            linkColor = MaterialTheme.colorScheme.primary,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            textAlign = TextAlign.Center
-                                        )
-                                    }
-                                }
-                            }
-                            org.visorlink.app.ui.idcard.ProfileIdCard(user, isMe = true, slot = org.visorlink.app.data.idcard.IdCardPosition.BOTTOM)
-                        }
+                        ProfileDetails(user, isMe = true, idCardSlot = !asTab)
                     } else {
                         // Editing fields
                         Column(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 24.dp, vertical = 24.dp)
-                                .liquidPillCardSlideOut(index = 1, enabled = isLiquidEnabled),
+                                .liquidPillCardSlideOut(index = 1),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             VlTextField(
@@ -466,26 +286,26 @@ fun ProfileScreen(
                             }
                         }
                     }
-                    Spacer(Modifier.height(32.dp))
+                    // На вкладке снизу плавает навбар
+                    Spacer(Modifier.height(if (asTab) 120.dp else 32.dp))
                 }
             }
         }
 
         if (showLogout) {
-            AlertDialog(
+            VlAlertDialog(
                 onDismissRequest = { showLogout = false },
                 title = { Text(stringResource(R.string.dialog_logout_title)) },
                 text  = { Text(stringResource(R.string.dialog_logout_body)) },
                 confirmButton = {
-                    TextButton(onClick = {
+                    VlDialogButton(onClick = {
                         showLogout = false; viewModel.logout(); onLoggedOut()
-                    }) {
-                        Text(stringResource(R.string.dialog_logout_confirm),
-                            color = MaterialTheme.colorScheme.error)
+                    }, isDestructive = true) {
+                        Text(stringResource(R.string.dialog_logout_confirm))
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showLogout = false }) {
+                    VlDialogButton(onClick = { showLogout = false }) {
                         Text(stringResource(R.string.action_cancel))
                     }
                 }

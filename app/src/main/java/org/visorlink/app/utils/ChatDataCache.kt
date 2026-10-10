@@ -275,34 +275,6 @@ object ChatDataCache {
         val progress: Float = 0f
     )
 
-    // ── Likes ────────────────────────────────────────────────────────────────
-
-    suspend fun saveLike(context: Context, uid: String, itemId: String) =
-        withContext(Dispatchers.IO) {
-            try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("INSERT OR IGNORE INTO likes (uid, item_id) VALUES (?, ?)")
-                stmt.bindString(1, uid)
-                stmt.bindString(2, itemId)
-                stmt.executeInsert()
-            } catch (e: Exception) { Log.e(TAG, "Failed to save like", e) }
-        }
-
-    suspend fun removeLike(context: Context, uid: String, itemId: String) =
-        withContext(Dispatchers.IO) {
-            try {
-                getDb(context).writableDatabase.delete("likes", "uid=? AND item_id=?", arrayOf(uid, itemId))
-            } catch (e: Exception) { Log.e(TAG, "Failed to remove like", e) }
-        }
-
-    suspend fun isLiked(context: Context, uid: String, itemId: String): Boolean =
-        withContext(Dispatchers.IO) {
-            try {
-                val db = getDb(context).readableDatabase
-                db.rawQuery("SELECT 1 FROM likes WHERE uid=? AND item_id=?", arrayOf(uid, itemId)).use { it.moveToFirst() }
-            } catch (e: Exception) { false }
-        }
-
     // ── Списки чатов ─────────────────────────────────────────────────────────
 
     suspend fun saveChatList(context: Context, uid: String, chats: List<Chat>) =

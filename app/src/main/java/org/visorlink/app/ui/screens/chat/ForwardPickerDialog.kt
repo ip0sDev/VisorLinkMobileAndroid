@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.components.liquidPopIn
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.data.model.Chat
 import org.visorlink.app.data.model.ChatType
@@ -93,13 +92,12 @@ fun ForwardPickerDialog(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface
     ) {
-        val isLiquidEnabled = rememberLiquidEnabled()
-        val popProgress = rememberLiquidPopProgress(isLiquidEnabled, damping = 0.68f, stiffness = 480f)
+        val popProgress = rememberLiquidPopProgress(damping = 0.68f, stiffness = 480f)
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .liquidPopIn(popProgress, isLiquidEnabled, TransformOrigin(0.5f, 1f))
+                .liquidPopIn(popProgress, TransformOrigin(0.5f, 1f))
                 .navigationBarsPadding()
                 .padding(bottom = 16.dp)
         ) {

@@ -29,7 +29,12 @@ fun UpdateAvailableDialog(sizeText: String?, onUpdate: () -> Unit, onLater: () -
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.update_recommended_body))
                 sizeText?.let {
-                    Text(stringResource(R.string.update_play_size, it), style = MaterialTheme.typography.bodySmall)
+                    // Явный цвет: стиль bodySmall иначе сбрасывал цвет текста диалога на чёрный
+                    Text(
+                        stringResource(R.string.update_play_size, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         },

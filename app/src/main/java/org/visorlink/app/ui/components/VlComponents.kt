@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
@@ -57,6 +58,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -75,6 +77,8 @@ fun LinkifiedText(
     textAlign: TextAlign = TextAlign.Start,
     modifier: Modifier = Modifier,
     onMentionClick: (String) -> Unit = {},
+    maxLines: Int = Int.MAX_VALUE,
+    onTextLayout: (TextLayoutResult) -> Unit = {},
 ) {
     val uriHandler = LocalUriHandler.current
     val layoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -88,7 +92,9 @@ fun LinkifiedText(
         color = color,
         style = style,
         textAlign = textAlign,
-        onTextLayout = { layoutResult.value = it },
+        maxLines = maxLines,
+        overflow = if (maxLines == Int.MAX_VALUE) TextOverflow.Clip else TextOverflow.Ellipsis,
+        onTextLayout = { layoutResult.value = it; onTextLayout(it) },
         modifier = modifier.pointerInput(annotatedString) {
             detectTapGestures { pos ->
                 layoutResult.value?.let { layout ->
@@ -116,19 +122,20 @@ fun ColorPresetCircle(
     preset: ColorPreset,
     isSelected: Boolean,
     isDark: Boolean = false,
+    /** Цвет профиля PRO: «По умолчанию» тогда и есть он — кружок закрашен им, а не радугой. */
+    defaultColor: Color? = null,
     onClick: () -> Unit
 ) {
-    val isDefault = preset == ColorPreset.DEFAULT
-    val color = preset.seedColor ?: Color.Transparent
+    val isDefault = preset == ColorPreset.DEFAULT && defaultColor == null
+    val color = (if (preset == ColorPreset.DEFAULT) defaultColor else preset.seedColor) ?: Color.Transparent
     val cs = MaterialTheme.colorScheme
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val isLiquidEnabled = rememberLiquidEnabled()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.9f else if (isSelected) 1.25f else 1f,
-        animationSpec = if (isLiquidEnabled) spring(dampingRatio = 0.58f, stiffness = 320f) else VlTheme.tokens.motion.motionSpec<Float>(),
+        animationSpec = spring(dampingRatio = 0.58f, stiffness = 320f),
         label = "scale"
     )
 
@@ -240,19 +247,21 @@ fun VlButton(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            // Свечение — ответ на действие, а не константа (§4.2).
+            // Свечение — ответ на действие, а не константа (§4.2). Forge v2 держит неон
+            // и в покое (buttonRestAlpha): это свойство темы, а не сигнал, поэтому не в счёт §10.
             .vlSignalGlow(
                 tokens = tokens.signal,
                 color = container,
                 shape = shape,
-                active = isPressed && enabled,
+                // Опасное действие в покое не светится — неон не должен звать к «Удалить»
+                active = enabled && (isPressed || (!isDestructive && tokens.signal.buttonRestAlpha > 0f)),
+                alphaOverride = if (isPressed) null else tokens.signal.buttonRestAlpha,
+                counted = isPressed,
             ),
         enabled = enabled,
         shape = shape,
         interactionSource = interactionSource,
-        // Forge: плоская заливка без M3-elevation — объём даёт жёсткая тень.
         elevation = when {
-            tokens.isForge -> ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
             tokens.isBiolume -> ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
             else -> ButtonDefaults.buttonElevation()
         },
@@ -281,22 +290,13 @@ fun VlSwitch(
 ) {
     val haptic = rememberHaptic()
     val tokens = VlTheme.tokens
-    val isLiquidEnabled = rememberLiquidEnabled()
-
-    if (!tokens.structure.enabled && !isLiquidEnabled) {
-        Switch(
-            checked = checked,
-            onCheckedChange = { haptic.perform(HapticType.SELECTION, hapticEnabled); onCheckedChange(it) },
-            modifier = modifier,
-        )
-        return
-    }
 
     val cs = MaterialTheme.colorScheme
     val trackWidth = 52.dp
     val trackHeight = 32.dp
-    val thumbSize = 24.dp
-    val trackShape = tokens.shapes.pill
+    val sw = tokens.switch
+    val trackShape = sw.track ?: tokens.shapes.pill
+    val thumbShape = sw.thumb ?: tokens.shapes.indicator
 
     val trackJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.65f)
     val thumbStretch = remember { Animatable(0f) }
@@ -306,9 +306,9 @@ fun VlSwitch(
     LaunchedEffect(checked) {
         val skipPulse = switchInitial[0]
         switchInitial[0] = false
-        if (isLiquidEnabled && skipPulse) {
+        if (skipPulse) {
             thumbStretch.snapTo(0f)
-        } else if (isLiquidEnabled) {
+        } else {
             trackJelly.pulse(0.08f)
             // Фаза полёта: быстрое растяжение бегунка в каплю вдоль оси X
             thumbStretch.animateTo(0.26f, tween(65, easing = FastOutSlowInEasing))
@@ -320,8 +320,6 @@ fun VlSwitch(
                     stiffness = 300f
                 )
             )
-        } else {
-            thumbStretch.snapTo(0f)
         }
     }
 
@@ -331,16 +329,16 @@ fun VlSwitch(
     // бегунок outline. Раньше выключенный тёмный бегунок на светлом треке
     // читался как «включено».
     val m3Style = !structure.enabled
-    val thumbSizeTarget = if (m3Style && !checked) 16.dp else thumbSize
-    val animatedThumbSize by animateDpAsState(thumbSizeTarget, tokens.motion.motionSpec<Dp>(), label = "vlswitch_thumb_size")
+    val thumbWidthTarget = if (m3Style && !checked) 16.dp else sw.thumbWidth
+    val thumbHeightTarget = if (m3Style && !checked) 16.dp else sw.thumbHeight
+    val thumbWidth by animateDpAsState(thumbWidthTarget, tokens.motion.motionSpec<Dp>(), label = "vlswitch_thumb_w")
+    val thumbHeight by animateDpAsState(thumbHeightTarget, tokens.motion.motionSpec<Dp>(), label = "vlswitch_thumb_h")
+    // Зазор до края трека одинаковый со всех сторон: (высота трека − высота бегунка) / 2
+    val inset = (trackHeight - sw.thumbHeight) / 2
 
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) trackWidth - thumbSize - 4.dp else (trackHeight - thumbSizeTarget) / 2,
-        animationSpec = if (isLiquidEnabled) {
-            spring(dampingRatio = 0.60f, stiffness = 340f)
-        } else {
-            tokens.motion.motionSpec<Dp>()
-        },
+        targetValue = if (checked) trackWidth - sw.thumbWidth - inset else (trackHeight - thumbHeightTarget) / 2,
+        animationSpec = spring(dampingRatio = 0.60f, stiffness = 340f),
         label = "vlswitch_thumb",
     )
     val thumbColor by animateColorAsState(
@@ -356,13 +354,14 @@ fun VlSwitch(
 
     Box(
         modifier = modifier
-            .liquidJelly(trackJelly, enabled = isLiquidEnabled)
+            .liquidJelly(trackJelly)
             .size(width = trackWidth, height = trackHeight)
             .clip(trackShape)
             .background(
                 when {
                     m3Style && checked -> cs.primary
                     m3Style -> cs.surfaceContainerHighest
+                    checked && sw.litTrack -> cs.primary.copy(alpha = 0.28f).compositeOver(cs.surfaceContainer)
                     checked -> cs.primaryContainer
                     else -> cs.surfaceContainer
                 },
@@ -372,9 +371,7 @@ fun VlSwitch(
             .then(
                 when {
                     m3Style && !checked -> Modifier.border(2.dp, cs.outline, trackShape)
-                    // Жёсткая фаска светлой гранью сливается со светлым фоном —
-                    // без контура трек Forge выглядел незамкнутой скобкой
-                    structure.hardEdge -> Modifier.border(1.dp, cs.outlineVariant, trackShape)
+                    checked && sw.litTrack -> Modifier.border(1.dp, cs.primary.copy(alpha = 0.6f), trackShape)
                     else -> Modifier
                 }
             )
@@ -383,9 +380,7 @@ fun VlSwitch(
                 indication = null,
             ) {
                 haptic.perform(HapticType.SELECTION, hapticEnabled)
-                if (isLiquidEnabled) {
-                    trackJelly.press(0.06f)
-                }
+                trackJelly.press(0.06f)
                 onCheckedChange(!checked)
             },
         contentAlignment = Alignment.CenterStart,
@@ -393,19 +388,23 @@ fun VlSwitch(
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
-                .size(animatedThumbSize)
+                .size(width = thumbWidth, height = thumbHeight)
                 .graphicsLayer {
-                    if (isLiquidEnabled) {
-                        val s = thumbStretch.value
-                        scaleX = 1f + s
-                        scaleY = 1f - (s * 0.55f)
-                    }
+                    val s = thumbStretch.value
+                    scaleX = 1f + s
+                    scaleY = 1f - (s * 0.55f)
                 }
-                // Жёсткую тень бегунка обрезает трек, и от неё оставался обрывок
-                // тёмного квадрата — внутри трека Forge бегунок плоский
-                .then(if (structure.hardEdge) Modifier else Modifier.vlRaised(structure, tokens.shapes.indicator))
-                .clip(tokens.shapes.indicator)
-                .background(thumbColor, tokens.shapes.indicator)
+                .vlSignalGlow(
+                    tokens = tokens.signal,
+                    color = thumbColor,
+                    shape = thumbShape,
+                    active = checked && sw.thumbGlow > 0f,
+                    alphaOverride = sw.thumbGlow,
+                    counted = false,
+                )
+                .vlRaised(structure, thumbShape)
+                .clip(thumbShape)
+                .background(thumbColor, thumbShape)
         )
     }
 }
@@ -428,8 +427,6 @@ fun VlSegmentedControl(
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    // Формы из токенов: раньше здесь была проверка isForge с 4/2dp, хотя у Forge
-    // шкала без скруглений
     val shape = tokens.shapes.pill
     val itemShape: Shape = tokens.shapes.pill
 
@@ -568,13 +565,26 @@ fun VlSettingsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Forge v2: моноширинная капитель в цвете primary, у Protogen — префикс «> »
+            // Forge v2: моноширинная капитель в цвете primary (у Protogen — префикс «> ») и
+            // линия до края, гаснущая вправо, — заголовок HUD
             val terminal = VlTheme.tokens.terminal
             if (terminal != null) {
-                Text(
-                    terminal.labelPrefix + title.uppercase(),
-                    color = titleColor.copy(alpha = 0.85f),
+                // Подпись «расшифровывается» при появлении раздела
+                TerminalDecodeText(
+                    text = terminal.labelPrefix + title.uppercase(),
+                    color = titleColor.copy(alpha = 0.9f),
                     style = org.visorlink.app.ui.theme.ForgeV2SectionLabel,
+                )
+                Box(
+                    Modifier
+                        .padding(start = 10.dp)
+                        .weight(1f)
+                        .height(1.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(titleColor.copy(alpha = 0.45f), terminal.neonAlt.copy(alpha = 0.18f), Color.Transparent)
+                            )
+                        )
                 )
             } else {
                 Text(
@@ -598,23 +608,18 @@ fun VlSettingsSection(
         // §7: карточка = neumorphic-raised + нейтральная грань. Это контейнер всех
         // настроек, поэтому именно здесь рельеф даёт максимум читаемости структуры.
         val tokens = VlTheme.tokens
-        val isLiquidEnabled = rememberLiquidEnabled()
-        val sectionShape = if (isLiquidEnabled) tokens.shapes.rounded(32.dp) else tokens.shapes.section
+        val sectionShape = tokens.shapes.rounded(32.dp)
         val isDark = cs.surface.luminance() < 0.5f
 
-        val cardBrush = remember(isLiquidEnabled, isDark, cs) {
-            if (isLiquidEnabled) {
-                val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
-                val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
-                Brush.verticalGradient(listOf(top, bottom))
-            } else null
+        val cardBrush = remember(isDark, cs) {
+            val top = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+            val bottom = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.88f) else cs.surfaceContainer.copy(alpha = 0.92f)
+            Brush.verticalGradient(listOf(top, bottom))
         }
-        val cardBorder = remember(isLiquidEnabled, isDark, cs) {
-            if (isLiquidEnabled) {
-                val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.60f)
-                val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
-                BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
-            } else null
+        val cardBorder = remember(isDark, cs) {
+            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.60f)
+            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
+            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
         }
 
         Box(
@@ -626,18 +631,8 @@ fun VlSettingsSection(
                     else Modifier
                 )
                 .clip(sectionShape)
-                .then(
-                    if (cardBrush != null) Modifier.background(cardBrush, sectionShape)
-                    else Modifier.background(
-                        if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerLow,
-                        sectionShape,
-                    )
-                )
-                .then(
-                    if (cardBorder != null) Modifier.border(cardBorder, sectionShape)
-                    else if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant, sectionShape)
-                    else Modifier
-                )
+                .background(cardBrush, sectionShape)
+                .border(cardBorder, sectionShape)
         ) {
             Column(
                 modifier = Modifier
@@ -669,8 +664,7 @@ fun VlSettingsItem(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
-    val isLiquidEnabled = rememberLiquidEnabled()
-    val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.rounded(14.dp) else VlTheme.tokens.shapes.indicator
+    val iconShape = VlTheme.tokens.shapes.rounded(14.dp)
 
     val color = iconColor ?: if (isDestructive) cs.error else cs.primary
 
@@ -694,16 +688,16 @@ fun VlSettingsItem(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = if (isLiquidEnabled) 15.dp else 14.dp),
+                .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 Modifier
-                    .size(if (isLiquidEnabled) 42.dp else 40.dp)
-                    .background(color.copy(alpha = if (isLiquidEnabled) 0.16f else 0.15f), iconShape),
+                    .size(42.dp)
+                    .background(color.copy(alpha = 0.16f), iconShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, contentDescription = title, tint = color, modifier = Modifier.size(if (isLiquidEnabled) 22.dp else 20.dp))
+                Icon(icon, contentDescription = title, tint = color, modifier = Modifier.size(22.dp))
             }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
@@ -735,17 +729,16 @@ fun VlOptionRow(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
-    val isLiquidEnabled = rememberLiquidEnabled()
-    val iconShape = if (isLiquidEnabled) VlTheme.tokens.shapes.rounded(14.dp) else VlTheme.tokens.shapes.indicator
+    val iconShape = VlTheme.tokens.shapes.rounded(14.dp)
 
     // Концентричность: строка отступает от края секции на 8dp, поэтому её радиус =
     // радиус секции (32 в «жидком» режиме, 24 иначе) минус этот отступ
-    val rowShape: Shape = VlTheme.tokens.shapes.rounded(if (isLiquidEnabled) 24.dp else 16.dp)
+    val rowShape: Shape = VlTheme.tokens.shapes.rounded(24.dp)
 
     val rowJelly = rememberLiquidJellyState(softness = 0.06f, damping = 0.68f)
 
     val targetBgColor = if (selected) {
-        if (isLiquidEnabled) cs.primary.copy(alpha = 0.15f) else cs.primaryContainer
+        cs.primary.copy(alpha = 0.15f)
     } else {
         Color.Transparent
     }
@@ -755,7 +748,7 @@ fun VlOptionRow(
         label = "option_row_bg"
     )
 
-    val rowBorder = if (selected && isLiquidEnabled) {
+    val rowBorder = if (selected) {
         BorderStroke(1.dp, cs.primary.copy(alpha = 0.30f))
     } else null
 
@@ -770,13 +763,13 @@ fun VlOptionRow(
                 top = if (total > 1 && index == 0) 8.dp else 3.dp,
                 bottom = if (total > 1 && index == total - 1) 8.dp else 3.dp,
             )
-            .liquidJelly(rowJelly, enabled = isLiquidEnabled)
+            .liquidJelly(rowJelly)
             .clip(rowShape)
             .then(if (rowBorder != null) Modifier.border(rowBorder, rowShape) else Modifier),
         shape = rowShape,
         onClick = {
             haptic.perform(HapticType.CLICK, hapticEnabled)
-            if (isLiquidEnabled) rowJelly.pulse(0.06f)
+            rowJelly.pulse(0.06f)
             onClick()
         },
         color = animatedBg,
@@ -789,7 +782,7 @@ fun VlOptionRow(
         ) {
             Box(
                 Modifier
-                    .size(if (isLiquidEnabled) 42.dp else 40.dp)
+                    .size(42.dp)
                     .background(
                         if (selected) cs.primary.copy(alpha = 0.22f) else cs.surfaceContainerHigh,
                         iconShape
@@ -800,7 +793,7 @@ fun VlOptionRow(
                     icon,
                     contentDescription = label,
                     tint = if (selected) cs.primary else cs.onSurfaceVariant,
-                    modifier = Modifier.size(if (isLiquidEnabled) 22.dp else 20.dp)
+                    modifier = Modifier.size(22.dp)
                 )
             }
             Spacer(Modifier.width(16.dp))

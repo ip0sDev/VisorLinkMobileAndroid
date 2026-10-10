@@ -1,20 +1,31 @@
 package org.visorlink.app.data.repository
 
+import android.util.Log
+import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthRecentLoginRequiredException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GetTokenResult
+import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-import org.visorlink.app.data.remote.chat.SyncUserRequest
-import org.visorlink.app.data.remote.chat.VisorLinkApi
-import org.visorlink.app.data.repository.FlagsRepository
+import org.visorlink.app.BuildConfig
+import org.visorlink.app.data.auth.TfaCodeInfo
+import org.visorlink.app.data.auth.TfaMethod
 
 // ─── Auth state ───────────────────────────────────────────────────────────────
+
+/** Отвязка Google без пароля оставила бы аккаунт без способа входа. */
+class NoPasswordException : Exception("no-password")
 
 sealed class AuthState {
     object NoSession : AuthState()
@@ -25,7 +36,6 @@ sealed class AuthState {
 class AuthRepository(
     private val auth: FirebaseAuth,
     private val functions: FirebaseFunctions,          // inject via Koin
-    private val api: VisorLinkApi? = null,
     private val flagsRepository: FlagsRepository? = null,
     private val sessions: SessionRepository? = null
 ) {
@@ -125,6 +135,124 @@ class AuthRepository(
         auth.signInWithEmailAndPassword(email, password).await()
     }
 
+    // ── Способы входа ─────────────────────────────────────────────────────────
+
+    /** Провайдеры текущего аккаунта: `password`, `google.com`. */
+    val providerIds: List<String>
+        get() = auth.currentUser?.providerData?.map { it.providerId }.orEmpty()
+
+    val hasPassword: Boolean get() = PROVIDER_PASSWORD in providerIds
+    val hasGoogle: Boolean get() = PROVIDER_GOOGLE in providerIds
+
+    /** Почта привязанного Google-аккаунта (или имя), `null` — Google не привязан. */
+    val googleAccountLabel: String?
+        get() = auth.currentUser?.providerData?.firstOrNull { it.providerId == PROVIDER_GOOGLE }
+            ?.let { it.email ?: it.displayName ?: "" }
+
+    /**
+     * Вход (и начало регистрации) через Google. Возвращает `isNewUser` из `additionalUserInfo`:
+     * у нового Google-аккаунта ещё нет профиля — регистрацию завершает [completeGoogleProfile].
+     */
+    suspend fun signInWithGoogle(idToken: String): Boolean {
+        val result = auth.signInWithCredential(GoogleAuthProvider.getCredential(idToken, null)).await()
+        return result.additionalUserInfo?.isNewUser == true
+    }
+
+    /**
+     * Профиль Google-аккаунта: тот же `createUserProfile` с инвайтом. Почту подтверждать не нужно
+     * (у Google `email_verified = true`); имя и фото сервер берёт из Google. При неверном инвайте
+     * или занятом нике сервер Google-аккаунт **не удаляет** — пользователь правит данные и пробует снова.
+     */
+    suspend fun completeGoogleProfile(username: String, inviteCode: String) {
+        functions.getHttpsCallable("createUserProfile")
+            .call(mapOf("username" to username.trim(), "inviteCode" to inviteCode.trim()))
+            .await()
+    }
+
+    /** «Отменить регистрацию»: удалить незавершённый Google-аккаунт, при ошибке — просто выйти. */
+    suspend fun cancelGoogleSignup() {
+        val user = auth.currentUser ?: return
+        try { user.delete().await() } catch (_: Exception) { auth.signOut() }
+        if (auth.currentUser != null) auth.signOut()
+    }
+
+    /** Привязка Google к текущему аккаунту; новый `auth_time` → перенос 2FA ([keepSession]). */
+    suspend fun linkGoogle(idToken: String) {
+        keepSession {
+            val user = auth.currentUser ?: error("Not authenticated")
+            user.linkWithCredential(GoogleAuthProvider.getCredential(idToken, null)).await()
+        }
+    }
+
+    /** Отвязка Google. Без пароля не разрешается — аккаунт остался бы без способа входа. */
+    suspend fun unlinkGoogle() {
+        val user = auth.currentUser ?: error("Not authenticated")
+        if (!hasPassword) throw NoPasswordException()
+        user.unlink(PROVIDER_GOOGLE).await()
+    }
+
+    /**
+     * «Задать пароль» аккаунту, созданному через Google: вход по почте станет вторым способом.
+     * Если Firebase просит свежий вход — повторно выбираем Google-аккаунт ([googleIdToken]),
+     * делаем `reauthenticate` и повторяем. Обе операции меняют `auth_time` → [keepSession].
+     */
+    suspend fun setPassword(newPassword: String, googleIdToken: suspend () -> String) {
+        val email = auth.currentUser?.email ?: error("Not authenticated")
+        val link: suspend () -> Unit = {
+            keepSession {
+                val user = auth.currentUser ?: error("Not authenticated")
+                user.linkWithCredential(EmailAuthProvider.getCredential(email, newPassword)).await()
+            }
+        }
+        try {
+            link()
+        } catch (e: FirebaseAuthRecentLoginRequiredException) {
+            if (!hasGoogle) throw e
+            val token = googleIdToken()
+            keepSession {
+                val user = auth.currentUser ?: error("Not authenticated")
+                user.reauthenticate(GoogleAuthProvider.getCredential(token, null)).await()
+            }
+            link()
+        }
+    }
+
+    /** Смена пароля: повторный вход + `updatePassword` выдают новый токен — тоже через [keepSession]. */
+    suspend fun changePassword(currentPassword: String, newPassword: String) {
+        val user = auth.currentUser ?: error("Not authenticated")
+        val email = user.email ?: error("No email")
+        keepSession {
+            user.reauthenticate(EmailAuthProvider.getCredential(email, currentPassword)).await()
+            (auth.currentUser ?: user).updatePassword(newPassword).await()
+        }
+    }
+
+    /**
+     * Привязка способа входа и повторный вход выдают токен с новым `auth_time` — для правил Firestore
+     * это новая сессия без 2FA, и всё, что требует пройденной 2FA, начинает отвечать PERMISSION_DENIED.
+     * Переносим подтверждение на новую сессию (`transferTfaSession` проверяет старый токен) и
+     * регистрируем её в менеджере сессий. Веб — `keepSession` в AuthContext.jsx.
+     */
+    suspend fun <T> keepSession(action: suspend () -> T): T {
+        // Старый токен — строго ДО операции: после неё он уже не тот
+        val previous = auth.currentUser?.let { runCatching { it.getIdToken(false).await() }.getOrNull() }
+        val result = action()
+        val after = auth.currentUser ?: return result
+        val previousToken = previous?.token ?: return result
+        val newAuthTime = runCatching { after.getIdToken(true).await().authTimestamp }.getOrNull() ?: return result
+        if (newAuthTime == previous.authTimestamp) return result
+        try {
+            functions.getHttpsCallable("transferTfaSession")
+                .call(mapOf("previousIdToken" to previousToken))
+                .await()
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "2FA carry-over failed: ${(e as? FirebaseFunctionsException)?.details ?: e.message}")
+        }
+        // id сессии = auth_time: новая сессия появится в «Активных сессиях», отзыв проверяется по новому id
+        runCatching { sessions?.register() }
+        return result
+    }
+
 
     suspend fun sendPasswordResetEmail(email: String) {
         auth.sendPasswordResetEmail(email.trim()).await()
@@ -152,11 +280,16 @@ class AuthRepository(
 
     // ── Two-Factor Authentication ─────────────────────────────────────────────
 
-    suspend fun request2FA(method: String) {
-        functions
+    /**
+     * Запрос кода. Идемпотентен: повтор тем же способом раньше чем через минуту не шлёт новый код,
+     * а возвращает срок прежнего (`alreadySent`). Ошибки разбирает [org.visorlink.app.data.auth.TfaError].
+     */
+    suspend fun request2FA(method: TfaMethod): TfaCodeInfo {
+        val res = functions
             .getHttpsCallable("request2FA")
-            .call(mapOf("method" to method))
+            .call(mapOf("method" to method.id))
             .await()
+        return TfaCodeInfo.parse(res.data, method, System.currentTimeMillis())
     }
 
     suspend fun verify2FA(code: String) {
@@ -174,19 +307,39 @@ class AuthRepository(
             .await()
     }
 
-    /** Есть ли документ authorized_sessions/{auth_time} — источник истины «2FA пройдена». */
-    suspend fun isSessionAuthorized(): Boolean {
-        val user = auth.currentUser ?: return false
-        val authTime = getAuthTime() ?: return false
-        return try {
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("users").document(user.uid)
-                .collection("authorized_sessions").document(authTime)
-                .get().await().exists()
-        } catch (_: Exception) {
-            false
-        }
+    /**
+     * Коды 2FA в Telegram. При включении сервер сразу пишет в Telegram: если бот заблокирован или
+     * не запущен — `unavailable` / `send-failed`; без привязки — `no-telegram`.
+     */
+    suspend fun setTfaTelegram(enabled: Boolean) {
+        functions
+            .getHttpsCallable("setTfaTelegram")
+            .call(mapOf("enabled" to enabled))
+            .await()
     }
+
+    /** Отвязка Telegram; сервер сам выключает и `tfaTelegram`. */
+    suspend fun unbindTelegram() {
+        functions.getHttpsCallable("unbindTelegram").call().await()
+    }
+
+    /**
+     * Белый список 2FA: `users/{uid}/authorized_sessions/{auth_time}`. Отдаёт только ответы
+     * **сервера**: «документа нет» из офлайн-кэша — ещё не ответ, его пропускаем. Документ может
+     * появиться позже (код ввели, сессию перенесли) — подписка остаётся живой и сообщит об этом.
+     * Ошибка чтения закрывает поток с исключением.
+     */
+    fun sessionAuthorizedFlow(uid: String, authTime: String): Flow<Boolean> = callbackFlow {
+        val reg = FirebaseFirestore.getInstance()
+            .collection("users").document(uid)
+            .collection("authorized_sessions").document(authTime)
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snap, err ->
+                if (err != null) { close(err); return@addSnapshotListener }
+                if (snap == null || (!snap.exists() && snap.metadata.isFromCache)) return@addSnapshotListener
+                trySend(snap.exists())
+            }
+        awaitClose { reg.remove() }
+    }.distinctUntilChanged()
 
     suspend fun getAuthTime(): String? {
         val user = auth.currentUser ?: return null
@@ -310,5 +463,11 @@ class AuthRepository(
             "invite-required"             in msg -> Exception("A valid invite code is required to register.")
             else                                 -> e
         }
+    }
+
+    companion object {
+        private const val TAG = "AuthRepository"
+        const val PROVIDER_PASSWORD = "password"
+        const val PROVIDER_GOOGLE = "google.com"
     }
 }

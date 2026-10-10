@@ -54,7 +54,6 @@ import org.visorlink.app.data.model.MusicTrack
 import org.visorlink.app.ui.components.CachedImage
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPour
-import org.visorlink.app.ui.components.rememberLiquidEnabled
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.components.rememberLiquidPourProgress
 import org.visorlink.app.ui.theme.VlTheme
@@ -98,13 +97,10 @@ fun AudioPlaybackDockBar(
 
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val isLiquidEnabled = rememberLiquidEnabled()
-    // Волна — жидкостный эффект, Forge с его прямыми углами и линейной механикой её не принимает
-    val wavy = isLiquidEnabled && !tokens.isForge
     val fromTop = anchor == DockAnchor.Top
 
     val isVisible = visible && track != null
-    val pour = rememberLiquidPourProgress(visible = isVisible, liquid = wavy)
+    val pour = rememberLiquidPourProgress(visible = isVisible)
 
     if (shown == null) return
     if (!isVisible && pour <= 0.002f) return
@@ -124,41 +120,33 @@ fun AudioPlaybackDockBar(
 
     val dockShape: Shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(26.dp))
 
-    val dockBrush = remember(isDark, cs, tokens.isForge) {
-        if (tokens.isForge) {
-            null
-        } else {
-            Brush.verticalGradient(
-                listOf(
-                    if (isDark) cs.surfaceContainerHigh.copy(alpha = 0.97f) else cs.surfaceContainerLowest.copy(alpha = 0.99f),
-                    if (isDark) cs.surfaceContainer.copy(alpha = 0.94f) else cs.surfaceContainerHigh.copy(alpha = 0.96f)
-                )
+    val dockBrush = remember(isDark, cs) {
+        Brush.verticalGradient(
+            listOf(
+                if (isDark) cs.surfaceContainerHigh.copy(alpha = 0.97f) else cs.surfaceContainerLowest.copy(alpha = 0.99f),
+                if (isDark) cs.surfaceContainer.copy(alpha = 0.94f) else cs.surfaceContainerHigh.copy(alpha = 0.96f)
             )
-        }
+        )
     }
 
-    val dockBorder = remember(isDark, cs, tokens.isForge) {
-        if (tokens.isForge) {
-            null
-        } else {
-            BorderStroke(
-                1.dp,
-                Brush.verticalGradient(
-                    listOf(
-                        if (isDark) cs.outlineVariant.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.7f),
-                        if (isDark) cs.outlineVariant.copy(alpha = 0.05f) else cs.outlineVariant.copy(alpha = 0.16f)
-                    )
+    val dockBorder = remember(isDark, cs) {
+        BorderStroke(
+            1.dp,
+            Brush.verticalGradient(
+                listOf(
+                    if (isDark) cs.outlineVariant.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.7f),
+                    if (isDark) cs.outlineVariant.copy(alpha = 0.05f) else cs.outlineVariant.copy(alpha = 0.16f)
                 )
             )
-        }
+        )
     }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .liquidPour(progress = pour, fromTop = fromTop, accent = cs.primary, waves = wavy)
+            .liquidPour(progress = pour, fromTop = fromTop, accent = cs.primary, glitch = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion)
             .padding(
-                horizontal = if (tokens.isForge) 8.dp else 12.dp,
+                horizontal = 12.dp,
                 vertical = 6.dp
             )
     ) {
@@ -174,20 +162,14 @@ fun AudioPlaybackDockBar(
                     scaleY = 1f - stretch * 0.55f
                     alpha = 1f - (abs(drag) / (dismissPx * 2.6f)).coerceIn(0f, 0.55f)
                 }
-                .liquidJelly(dockJelly, enabled = isLiquidEnabled)
+                .liquidJelly(dockJelly)
                 .then(
                     if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, dockShape)
                     else Modifier
                 )
                 .clip(dockShape)
-                .then(if (dockBrush != null) Modifier.background(dockBrush, dockShape) else Modifier.background(cs.surfaceContainerHigh, dockShape))
-                .then(
-                    when {
-                        dockBorder != null -> Modifier.border(dockBorder, dockShape)
-                        tokens.structure.enabled -> Modifier.vlHairline(cs.outlineVariant, dockShape)
-                        else -> Modifier
-                    }
-                )
+                .background(dockBrush, dockShape)
+                .border(dockBorder, dockShape)
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -212,7 +194,7 @@ fun AudioPlaybackDockBar(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) {
-                    if (isLiquidEnabled) dockJelly.pulse(0.06f)
+                    dockJelly.pulse(0.06f)
                     onOpenFullscreen()
                 }
         ) {
@@ -272,11 +254,11 @@ fun AudioPlaybackDockBar(
                     Box(
                         modifier = Modifier
                             .size(42.dp)
-                            .liquidJelly(playJelly, enabled = isLiquidEnabled)
+                            .liquidJelly(playJelly)
                             .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(cs.primary)
                             .clickable {
-                                if (isLiquidEnabled) playJelly.pulse(0.18f)
+                                playJelly.pulse(0.18f)
                                 onTogglePlayPause()
                             },
                         contentAlignment = Alignment.Center
@@ -304,10 +286,10 @@ fun AudioPlaybackDockBar(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .liquidJelly(nextJelly, enabled = isLiquidEnabled)
+                                .liquidJelly(nextJelly)
                                 .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                                 .clickable {
-                                    if (isLiquidEnabled) nextJelly.pulse(0.16f)
+                                    nextJelly.pulse(0.16f)
                                     onNext()
                                 },
                             contentAlignment = Alignment.Center
@@ -327,11 +309,11 @@ fun AudioPlaybackDockBar(
                     Box(
                         modifier = Modifier
                             .size(34.dp)
-                            .liquidJelly(closeJelly, enabled = isLiquidEnabled)
+                            .liquidJelly(closeJelly)
                             .clip(VlTheme.tokens.shapes.adapt(CircleShape))
                             .background(cs.onSurface.copy(alpha = 0.07f))
                             .clickable {
-                                if (isLiquidEnabled) closeJelly.pulse(0.16f)
+                                closeJelly.pulse(0.16f)
                                 onClose()
                             },
                         contentAlignment = Alignment.Center
@@ -348,7 +330,7 @@ fun AudioPlaybackDockBar(
                 DockProgressTrack(
                     progress = musicPlayback.progress,
                     isPlaying = isPlaying,
-                    wavy = wavy && !tokens.reduceMotion,
+                    wavy = !tokens.reduceMotion,
                     accent = cs.primary,
                     accentTail = cs.tertiary,
                     trackColor = cs.onSurface.copy(alpha = 0.10f),

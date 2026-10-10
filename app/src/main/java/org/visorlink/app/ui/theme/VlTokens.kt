@@ -39,9 +39,6 @@ enum class VlStyle {
     /** Biolume: неоморфный рельеф + редкий сигнальный неон. */
     BIOLUME,
 
-    /** Forge: прямые углы, жёсткая тень, металл и красный сигнал. */
-    FORGE,
-
     /**
      * Forge v2: терминал особых режимов ID-карты (Protogen / Beast). Только тёмная,
      * контур вместо теней, малые скругления — см. ForgeV2Palette.kt.
@@ -78,12 +75,6 @@ data class VlStructureTokens(
     val enabled: Boolean,
     val shadowDark: Color,
     val shadowLight: Color,
-    /**
-     * true — тень рисуется без размытия, сплошным смещённым силуэтом, а inset
-     * превращается в жёсткую фаску. Так работает Forge: мягкое рассеивание
-     * противоречит индустриальному материалу, у станка тень резкая.
-     */
-    val hardEdge: Boolean = false,
     val raisedOffset: Dp = 6.dp,
     val raisedBlur: Dp = 14.dp,
     val raisedLightOffset: Dp = 5.dp,
@@ -128,6 +119,11 @@ data class VlSignalTokens(
     val focusBorder: Dp = 1.dp,
     /** Период «биопульса» в мс (§6). */
     val pulsePeriodMs: Int = 2400,
+    /**
+     * Постоянное свечение основной кнопки (Forge v2: неон горит и в покое).
+     * 0 — кнопка светится только при нажатии, как требует §10 Biolume.
+     */
+    val buttonRestAlpha: Float = 0f,
 ) {
     companion object {
         val Disabled = VlSignalTokens(enabled = false, glowAlpha = 0f, fabRestAlpha = 0f)
@@ -183,7 +179,7 @@ data class VlShapeTokens(
      */
     val maxRadius: Dp? = null,
 ) {
-    /** Шкала без скруглений (Forge). */
+    /** Шкала без скруглений. */
     val isSquare: Boolean get() = cardRadius == 0.dp
 
     /**
@@ -202,9 +198,8 @@ data class VlShapeTokens(
     }
 
     /**
-     * Скругление на [radius]. В частности — для «жидкого» варианта (флаг
-     * `animation_test`, по умолчанию включён), который скругляет сильнее
-     * обычной шкалы.
+     * Скругление на [radius]. В частности — для «жидких» компонентов, которые
+     * скругляют сильнее обычной шкалы.
      */
     fun rounded(radius: Dp): Shape = adapt(RoundedCornerShape(radius))
 }
@@ -231,12 +226,6 @@ enum class VlPressStyle {
 
     /** Biolume: raised → inset, рельеф сам сообщает нажатие (гайдлайн §4.1). */
     INSET,
-
-    /**
-     * Forge: элемент уезжает в свою же жёсткую тень — механическое «штампование».
-     * Ни масштаба, ни пружины: индустриальные механизмы не пружинят.
-     */
-    STAMP,
 }
 
 /**
@@ -251,13 +240,17 @@ data class VlMotionTokens(
     val pressStyle: VlPressStyle,
     /** Множитель сжатия для [VlPressStyle.SCALE]. */
     val pressScale: Float,
-    /** Смещение для [VlPressStyle.STAMP] — на столько же рисуется жёсткая тень. */
-    val pressOffset: Dp,
     val useSpring: Boolean,
     val dampingRatio: Float,
     val stiffness: Float,
     /** Длительность для линейных переходов (когда [useSpring] == false). */
     val durationMs: Int,
+    /**
+     * Терминальный характер движения (Forge v2): вместо жидких эффектов — ступенчатые
+     * переходы без пружин и перелётов, «глитч»-дрожание вместо желе, раскрытие заголовков
+     * курсором. См. `ui/components/TerminalMotion.kt`.
+     */
+    val glitch: Boolean = false,
 )
 
 // ── Статусные цвета (нет в M3 ColorScheme) ───────────────────────────────────
@@ -315,13 +308,41 @@ data class VlBubbleTokens(
 // ── Терминальная типографика (Forge v2) ──────────────────────────────────────
 
 /**
- * Заголовки разделов в Forge v2 — моноширинные, капителью, в цвете primary; у Protogen
- * с префиксом `> `, плюс едва заметные сканлайны на фоне. `null` в остальных темах.
+ * Терминал Forge v2: заголовки разделов — моноширинная капитель в цвете primary с линией до
+ * края (у Protogen — префикс `> `), неоновая линия под верхней панелью и фон поверх
+ * интерфейса ([vlTerminalBackdrop]): дымка и сканлайны. `null` в остальных темах.
  */
 @Immutable
 data class VlTerminalTokens(
     val labelPrefix: String,
-    val scanlines: Boolean,
+    /** Сканлайны: белый с этой непрозрачностью каждые 3 px, 0 — без них. */
+    val scanlineAlpha: Float = 0f,
+    /** Неоновые линии: основной цвет и второй (градиент вдоль линии). */
+    val neon: Color = Color.Unspecified,
+    val neonAlt: Color = Color.Unspecified,
+    /** Неоновая дымка сверху экрана, `null` — без неё. */
+    val haze: Color? = null,
+) {
+    val scanlines: Boolean get() = scanlineAlpha > 0f
+}
+
+/**
+ * Тумблер ([org.visorlink.app.ui.components.VlSwitch]): формы и размер бегунка. По умолчанию —
+ * трек [VlShapeTokens.pill] и круглый бегунок 24 dp, как было всегда; Forge v2 вписывает
+ * бегунок в свой трек со скруглением 6–8 dp.
+ */
+@Immutable
+data class VlSwitchTokens(
+    /** `null` — [VlShapeTokens.pill]. */
+    val track: Shape? = null,
+    /** `null` — [VlShapeTokens.indicator]. */
+    val thumb: Shape? = null,
+    val thumbWidth: Dp = 24.dp,
+    val thumbHeight: Dp = 24.dp,
+    /** Неон бегунка во включённом состоянии (непрозрачность свечения), 0 — без него. */
+    val thumbGlow: Float = 0f,
+    /** Во включённом состоянии трек подсвечен: контур `primary` и более яркая заливка. */
+    val litTrack: Boolean = false,
 )
 
 @Immutable
@@ -344,9 +365,12 @@ data class VlTokens(
      */
     val reduceMotion: Boolean,
     val terminal: VlTerminalTokens? = null,
+    val switch: VlSwitchTokens = VlSwitchTokens(),
 ) {
     val isBiolume: Boolean get() = style == VlStyle.BIOLUME
-    val isForge: Boolean get() = style == VlStyle.FORGE
+
+    /** Терминальная анимация вместо жидкой (Forge v2), если система не просит убрать анимации. */
+    val glitchMotion: Boolean get() = motion.glitch && !reduceMotion
 }
 
 /**
@@ -396,7 +420,6 @@ val LocalVlTokens = staticCompositionLocalOf {
         motion = VlMotionTokens(
             pressStyle = VlPressStyle.SCALE,
             pressScale = 0.97f,
-            pressOffset = 0.dp,
             useSpring = true,
             dampingRatio = 1f,
             stiffness = 1500f,

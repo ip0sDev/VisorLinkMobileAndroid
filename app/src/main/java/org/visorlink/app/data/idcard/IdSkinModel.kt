@@ -61,11 +61,13 @@ enum class IdSkinOrigin(val id: String) {
     }
 }
 
-/** Вид скина — то, что видно на карте; в обмене хранится снимком `{ seed, serial, traits, edition }`. */
+/** Вид скина — то, что видно на карте; в обмене хранится снимком `{ seed, serial, traits, edition, custom }`. */
 data class IdSkinLook(
     val serial: String,
     val traits: IdCardTraits,
     val edition: IdEdition,
+    /** Кастомный скин (подарок админа): палитра, голограмма, надпись. */
+    val custom: IdCustomLook? = null,
 ) {
     /**
      * Скин на карте [wearer]: режим, вид и дата регистрации — его (чужой режим по скину не узнать),
@@ -79,6 +81,7 @@ data class IdSkinLook(
         issuedAt = issuedAt,
         registeredAt = wearer.registeredAt,
         version = 1,
+        custom = custom,
     )
 
     companion object {
@@ -86,7 +89,10 @@ data class IdSkinLook(
             val m = raw as? Map<*, *> ?: return null
             val serial = m["serial"] as? String ?: return null
             val traits = IdCardTraits.parse(m["traits"], m["seed"])
-            return IdSkinLook(serial, traits, IdEdition.of(m["edition"]) ?: traits.edition)
+            val custom = IdCustomLook.parse(m["custom"])
+            // Кастомный скин — всегда эпический (у старых записей тиража может не быть)
+            val edition = IdEdition.of(m["edition"]) ?: if (custom != null) IdEdition.EPIC else traits.edition
+            return IdSkinLook(serial, traits, edition, custom)
         }
     }
 }
@@ -115,8 +121,9 @@ data class IdSkin(
     val listedIn: String? = null,
     /** Бланк карты, выданной до инвентаря: показывается надетым, действий нет. */
     val virtual: Boolean = false,
+    val custom: IdCustomLook? = null,
 ) {
-    val look: IdSkinLook get() = IdSkinLook(serial, traits, edition)
+    val look: IdSkinLook get() = IdSkinLook(serial, traits, edition, custom)
 
     companion object {
         fun parse(id: String, raw: Map<*, *>?): IdSkin? {
@@ -132,6 +139,7 @@ data class IdSkin(
                 origin = IdSkinOrigin.of(raw["origin"]),
                 trades = (raw["trades"] as? Number)?.toInt() ?: 0,
                 listedIn = (raw["listedIn"] as? String)?.takeIf { it.isNotEmpty() },
+                custom = look.custom,
             )
         }
 
@@ -140,11 +148,12 @@ data class IdSkin(
             id = card.skinId ?: IdSkinRules.VIRTUAL_SKIN_ID,
             serial = card.serial,
             traits = card.traits,
-            edition = card.traits.edition,
+            edition = card.edition,
             mintedAt = card.reissuedAt ?: card.issuedAt,
             obtainedAt = card.issuedAt,
             origin = IdSkinOrigin.ISSUE,
             virtual = true,
+            custom = card.custom,
         )
     }
 }

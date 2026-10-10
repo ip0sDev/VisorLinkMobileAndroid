@@ -28,9 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import org.koin.compose.koinInject
 import org.visorlink.app.R
-import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.rememberLiquidJellyState
@@ -46,11 +44,8 @@ fun ChatListFab(
     onToggle: () -> Unit,
     onNewChat: () -> Unit,
     onNewGroup: () -> Unit,
-    onFindChannel: () -> Unit,
-    flagsRepository: FlagsRepository = koinInject()
+    onFindChannel: () -> Unit
 ) {
-    val flags by flagsRepository.flags.collectAsState()
-    val isLiquidEnabled = flags.isEnabled("animation_test")
     val haptic = rememberHaptic()
     Column(
         horizontalAlignment = Alignment.End,
@@ -100,17 +95,15 @@ fun ChatListFab(
 
         val fabJelly = rememberLiquidJellyState(softness = 0.09f, damping = 0.70f, stiffness = 300f)
 
-        if (isLiquidEnabled) {
-            LaunchedEffectAfterFirst(isPressed) {
-                if (isPressed) {
-                    fabJelly.press(0.09f)
-                } else {
-                    fabJelly.release(0.06f)
-                }
+        LaunchedEffectAfterFirst(isPressed) {
+            if (isPressed) {
+                fabJelly.press(0.09f)
+            } else {
+                fabJelly.release(0.06f)
             }
-            LaunchedEffectAfterFirst(showMenu) {
-                fabJelly.pulse(0.08f)
-            }
+        }
+        LaunchedEffectAfterFirst(showMenu) {
+            fabJelly.pulse(0.08f)
         }
 
         val fabBgOpen = cs.primary
@@ -130,7 +123,7 @@ fun ChatListFab(
             onClick = { haptic.perform(HapticType.SELECTION, hapticEnabled); onToggle() },
             modifier = Modifier
                 .scale(fabScale)
-                .liquidJelly(fabJelly, enabled = isLiquidEnabled),
+                .liquidJelly(fabJelly),
             containerColor = if (showMenu) fabBgOpen else fabBgClosed,
             glowActive = !showMenu,
             shape = fabShape,
