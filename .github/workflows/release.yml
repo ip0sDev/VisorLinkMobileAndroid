@@ -41,8 +41,13 @@ jobs:
             echo "CHAT_ID=${{ secrets.TELEGRAM_NIGHTLY_CHAT_ID }}" >> $GITHUB_ENV
           elif [ "$CHANNEL" = "beta" ]; then
             echo "CHAT_ID=${{ secrets.TELEGRAM_BETA_CHAT_ID }}" >> $GITHUB_ENV
-          else
+          elif [ "$CHANNEL" = "release" ]; then
+            echo "CHAT_ID=${{ secrets.TELEGRAM_RELEASE_CHAT_ID }}" >> $GITHUB_ENV
+          elif [ "$CHANNEL" = "canary" ]; then
             echo "CHAT_ID=${{ secrets.TELEGRAM_CANARY_CHAT_ID }}" >> $GITHUB_ENV
+          else
+            # Неизвестный канал не должен молча уходить в Canary
+            echo "CHAT_ID=" >> $GITHUB_ENV
           fi
 
       - name: Set up JDK 17
@@ -228,7 +233,7 @@ jobs:
           LINK="📲 Доступно внутри приложения (через Updater)
           📥 <a href=\"https://github.com/${{ github.repository }}/releases/tag/${{ steps.commit.outputs.tag_name }}\">Скачать на GitHub Releases</a>"
 
-          printf '🚀 <b>VisorLink %s Release</b>\n\n📦 <code>%s</code>\n🔖 <code>%s</code> | 🌿 <code>%s</code>\n👤 <code>%s</code>\n✅ <b>Tests passed, APK Signed &amp; Released</b>\n\n%s\n\n📋 <b>Latest Commit:</b>\n• %s' \
+          printf '🚀 <b>VisorLink %s</b>\n\n📦 <code>%s</code>\n🔖 <code>%s</code> | 🌿 <code>%s</code>\n👤 <code>%s</code>\n✅ <b>Tests passed, APK Signed &amp; Released</b>\n\n%s\n\n📋 <b>Latest Commit:</b>\n• %s' \
             "$CHANNEL_NAME" "$APK_NAME" "$COMMIT_ID" "$REF_NAME" "$ACTOR" "$LINK" "$CHANGELOG" \
             > /tmp/tg_message.txt
 
@@ -255,6 +260,9 @@ jobs:
           CHAT_BETA: ${{ secrets.VL_BETA_CHAT_ID }}
           KEY_BETA: ${{ secrets.VL_BETA_BOT_KEY }}
 
+          CHAT_RELEASE: ${{ secrets.VL_RELEASE_CHAT_ID }}
+          KEY_RELEASE: ${{ secrets.VL_RELEASE_BOT_KEY }}
+
           CHAT_CANARY: ${{ secrets.VL_CANARY_CHAT_ID }}
           KEY_CANARY: ${{ secrets.VL_CANARY_BOT_KEY }}
         run: |
@@ -264,9 +272,15 @@ jobs:
           elif [ "$CHANNEL" = "beta" ]; then
             VL_CHAT_ID="${CHAT_BETA}"
             VL_BOT_KEY="${KEY_BETA}"
-          else
+          elif [ "$CHANNEL" = "release" ]; then
+            VL_CHAT_ID="${CHAT_RELEASE}"
+            VL_BOT_KEY="${KEY_RELEASE}"
+          elif [ "$CHANNEL" = "canary" ]; then
             VL_CHAT_ID="${CHAT_CANARY}"
             VL_BOT_KEY="${KEY_CANARY}"
+          else
+            VL_CHAT_ID=""
+            VL_BOT_KEY=""
           fi
 
           if [ -z "$VL_BOT_KEY" ] || [ -z "$VL_CHAT_ID" ]; then

@@ -1249,11 +1249,10 @@ class ChatRepository(
     }
 
     suspend fun uploadAndCommentImage(chatId: String, messageId: String, file: Uri, spoiler: Boolean, replyTo: CommentReplyData? = null) = withContext(Dispatchers.IO) {
-        val fileName = "${System.currentTimeMillis()}_${file.lastPathSegment ?: "image.jpg"}"
+        val compressed = org.visorlink.app.utils.ImageCompressor.compress(context, file)
+        val fileName = "${System.currentTimeMillis()}_image.${compressed.extension}"
         val tempFile = File(context.cacheDir, fileName)
-        context.contentResolver.openInputStream(file)?.use { input ->
-            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
-        }
+        tempFile.writeBytes(compressed.bytes)
         val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("comments/$chatId/$fileName")
         storageRef.putFile(Uri.fromFile(tempFile)).await()
         val downloadUrl = storageRef.downloadUrl.await().toString()
