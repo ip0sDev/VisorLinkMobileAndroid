@@ -162,13 +162,13 @@ class SavedMessagesRepository(
     }
 
     suspend fun saveImage(uid: String, uri: Uri, caption: String? = null, key: SecretKey? = null, isSpoiler: Boolean = false, forwardFrom: ForwardFrom? = null, isDiary: Boolean = false): String = withContext(Dispatchers.IO) {
-        val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "image.jpg"}"
+        // Сжимаем до шифрования: зашифрованные байты уже не сжать
+        val compressed = org.visorlink.app.utils.ImageCompressor.compress(context, uri)
+        val fileName = "${System.currentTimeMillis()}_image.${compressed.extension}"
         val tempOriginalFile = File(context.cacheDir, "orig_$fileName")
         val tempUploadFile = File(context.cacheDir, "upload_$fileName")
 
-        context.contentResolver.openInputStream(uri)?.use { input ->
-            tempOriginalFile.outputStream().use { output -> input.copyTo(output) }
-        }
+        tempOriginalFile.writeBytes(compressed.bytes)
 
         val fileIv: String?
         val fileToUpload: File

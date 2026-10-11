@@ -75,24 +75,21 @@ class BugReportViewModel(
                     ?: throw IllegalStateException("Пользователь не авторизован")
                 val contentResolver = context.contentResolver
                 val mime = contentResolver.getType(uri) ?: "image/jpeg"
-                val ext = when (mime) {
-                    "image/png" -> "png"
-                    "image/webp" -> "webp"
-                    "image/gif" -> "gif"
-                    "image/jpeg", "image/jpg" -> "jpg"
-                    else -> throw IllegalArgumentException("Неподдерживаемый формат изображения")
+                if (mime !in setOf("image/png", "image/webp", "image/gif", "image/jpeg", "image/jpg")) {
+                    throw IllegalArgumentException("Неподдерживаемый формат изображения")
                 }
                 val size = contentResolver.openAssetFileDescriptor(uri, "r")?.use { it.length } ?: -1L
                 if (size >= MAX_SCREENSHOT_BYTES) throw IllegalArgumentException("Скриншот должен быть меньше 8 МБ")
-                val bytes = withContext(Dispatchers.IO) {
-                    contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                } ?: throw IllegalArgumentException("Не удалось прочитать файл скриншота")
-
+                val compressed = org.visorlink.app.utils.ImageCompressor.compress(
+                    context, uri,
+                    org.visorlink.app.utils.ImageCompressor.Profile(maxSide = 2560, quality = 85, gifMaxSide = 480)
+                )
+                val bytes = compressed.bytes
                 if (bytes.size >= MAX_SCREENSHOT_BYTES) throw IllegalArgumentException("Скриншот должен быть меньше 8 МБ")
-                val fileName = "${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.$ext"
+                val fileName = "${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}.${compressed.extension}"
                 val storagePath = "bugReports/${user.uid}/$fileName"
                 val storageRef = FirebaseStorage.getInstance().reference.child(storagePath)
-                val metadata = StorageMetadata.Builder().setContentType(mime).build()
+                val metadata = StorageMetadata.Builder().setContentType(compressed.mimeType).build()
                 storageRef.putBytes(bytes, metadata).await()
                 val downloadUrl = storageRef.downloadUrl.await().toString()
 

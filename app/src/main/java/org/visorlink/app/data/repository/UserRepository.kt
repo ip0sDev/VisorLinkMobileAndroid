@@ -11,6 +11,7 @@ import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.Sticker
 import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.utils.ChatDataCache
+import org.visorlink.app.utils.ImageCompressor
 import org.visorlink.app.data.repository.FlagsRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
@@ -148,26 +149,19 @@ class UserRepository(
     } catch (e: Exception) { null }
 
     suspend fun ensureStaticImage(context: Context, imageUri: Uri): ByteArray = withContext(Dispatchers.IO) {
-        val mimeType = context.contentResolver.getType(imageUri)
-        val isGif = mimeType == "image/gif" || imageUri.path?.endsWith(".gif", ignoreCase = true) == true
-        
-        val inputStream = context.contentResolver.openInputStream(imageUri)
-            ?: throw IllegalArgumentException("Не удалось открыть файл изображения")
-        val originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
-        inputStream.close()
-
-        if (originalBitmap == null) {
-            throw IllegalArgumentException("Не удалось декодировать изображение")
-        }
-
-        val outputStream = java.io.ByteArrayOutputStream()
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            originalBitmap.compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 90, outputStream)
-        } else {
-            @Suppress("DEPRECATION")
-            originalBitmap.compress(android.graphics.Bitmap.CompressFormat.WEBP, 90, outputStream)
-        }
-        outputStream.toByteArray()
+        // Аватар: статичный кадр не больше 1024 px
+        val compressed = ImageCompressor.compress(
+            context, imageUri, ImageCompressor.Profile(maxSide = 1024, quality = 88, staticOnly = true)
+        )
+        if (compressed.mimeType == "image/webp") return@withContext compressed.bytes
+        // Не-WebP (JPEG без альфы) перекодируем дальше как раньше: функция обещает WebP
+        val decoded = android.graphics.BitmapFactory.decodeByteArray(compressed.bytes, 0, compressed.bytes.size)
+            ?: throw IllegalArgumentException("Не удалось декодировать изображение")
+        val webp = java.io.ByteArrayOutputStream()
+        @Suppress("DEPRECATION")
+        decoded.compress(android.graphics.Bitmap.CompressFormat.WEBP, 88, webp)
+        decoded.recycle()
+        return@withContext webp.toByteArray()
     }
 
     suspend fun uploadAvatarWithModeration(uid: String, imageBytes: ByteArray): Result<String> = runCatching {
@@ -220,19 +214,16 @@ class UserRepository(
     suspend fun uploadFile(uri: Uri): String = withContext(Dispatchers.IO) {
         val uid = currentUid.ifEmpty { throw IllegalStateException("Пользователь не авторизован") }
         val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
-        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-        val ext = if (mimeType.contains("png")) "png" else if (mimeType.contains("webp")) "webp" else "jpg"
-        val storagePath = "users/$uid/customization_${System.currentTimeMillis()}.$ext"
+        val compressed = ImageCompressor.compress(context, uri, ImageCompressor.Profile(maxSide = 1920, gifMaxSide = 640))
+        // GIF раньше уходил как «.jpg» с contentType image/gif — правила Storage такое не пропускают
+        val storagePath = "users/$uid/customization_${System.currentTimeMillis()}.${compressed.extension}"
         val fileRef = storage.reference.child(storagePath)
 
-        val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw IllegalArgumentException("Не удалось прочитать файл")
-
         val metadata = com.google.firebase.storage.StorageMetadata.Builder()
-            .setContentType(mimeType)
+            .setContentType(compressed.mimeType)
             .build()
 
-        fileRef.putBytes(bytes, metadata).await()
+        fileRef.putBytes(compressed.bytes, metadata).await()
         return@withContext fileRef.downloadUrl.await().toString()
     }
 

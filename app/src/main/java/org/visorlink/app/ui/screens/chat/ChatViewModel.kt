@@ -497,7 +497,13 @@ class ChatViewModel(
                 val docId = if (type == ChatType.GROUP || type == ChatType.CHANNEL) "shared" else currentUid
 
                 val storageRef = com.google.firebase.storage.FirebaseStorage.getInstance().reference.child("chats/$chatId/wallpapers/$docId.jpg")
-                storageRef.putFile(uri).await()
+                // Путь остаётся «.jpg», поэтому всегда JPEG (GIF → первый кадр)
+                val compressed = org.visorlink.app.utils.ImageCompressor.compress(
+                    context, uri,
+                    org.visorlink.app.utils.ImageCompressor.Profile(maxSide = 1920, quality = 80, staticOnly = true, forceJpeg = true)
+                )
+                val meta = com.google.firebase.storage.StorageMetadata.Builder().setContentType(compressed.mimeType).build()
+                storageRef.putBytes(compressed.bytes, meta).await()
                 val downloadUrl = storageRef.downloadUrl.await().toString()
                 val data = hashMapOf(
                     "url" to downloadUrl,
