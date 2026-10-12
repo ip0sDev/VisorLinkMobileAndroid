@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import org.visorlink.app.ui.navigation.*
 import org.visorlink.app.ui.screens.auth.AuthScreen
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
+import org.visorlink.app.ui.screens.profile.ProfileScreen
 import org.visorlink.app.ui.theme.VisorLinkTheme
 
 class MainActivity : ComponentActivity() {
@@ -40,7 +41,14 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         composable<ChatListRoute> {
-                            ChatListScreen()
+                            ChatListScreen(
+                                onNavigateToProfile ={
+                                    navController.navigate(ProfileRoute)
+                                }
+                            )
+                        }
+                        composable<ProfileRoute> {
+                            ProfileScreen()
                         }
                     }
                 }

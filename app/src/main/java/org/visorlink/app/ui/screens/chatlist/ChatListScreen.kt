@@ -1,77 +1,120 @@
 package org.visorlink.app.ui.screens.chatlist
 
-import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import org.visorlink.app.R
-import org.visorlink.app.ui.components.ProfileAvatar
-import org.visorlink.app.ui.screens.auth.AuthScreen
-import org.visorlink.app.ui.screens.auth.AuthViewModel
 import org.visorlink.app.ui.theme.VisorLinkTheme
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
-    viewModel: ChatListViewModel = viewModel()
+    viewModel: ChatListViewModel = viewModel(),
+    onNavigateToProfile: () -> Unit = {},
 ){
+    LaunchedEffect(Unit) {
+        viewModel.loadChats()
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp, vertical = 16.dp)
-    ){
-        Text(
-            text = "VisorLink",
-            modifier = Modifier.align(Alignment.Start),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        val displayName = uiState.userName
-        val uid = uiState.uid
-        Text(
-            text= displayName,
-            modifier = Modifier.align(Alignment.Start),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text= uid,
-            modifier = Modifier.align(Alignment.Start),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Button(
-            onClick = {
-                viewModel.getData(
-                    ""
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "VisorLink",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                },
+                actions = {
+                    Button(
+                        onClick = { onNavigateToProfile() },
+                        shape = CircleShape,
+                        content = {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Settings",
+                                modifier = Modifier.clip(CircleShape)
+                            )
+                        }
+                    )
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(innerPadding)
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator()
+            }
+            if (uiState.errorText!=null) {
+                Text(
+                    text = uiState.errorText!!,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
-            },
-            enabled = true,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        ) {}
-        ProfileAvatar(avatarUrl = uiState.avatarUrl)
+            }
+            if (uiState.chats.isEmpty()) {
+                Text(
+                    text = "У вас пока нет чатов!",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(
+                        items = uiState.chats,
+                        key = { it.id }
+                    ) { chat ->
+                        ChatItem(
+                            avatarUrl = chat.avatarUrl,
+                            title = chat.title
+                        )
+                    }
+                }
+            }
+        }
     }
 }
+
+
 @Preview(showBackground = true)
 @Composable
 private fun ChatListScreenPreview() {

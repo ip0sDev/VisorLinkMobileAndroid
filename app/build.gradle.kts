@@ -15,7 +15,7 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 171
+        versionCode = 184
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -63,4 +63,5 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.compose.material.icons.extended)
 }

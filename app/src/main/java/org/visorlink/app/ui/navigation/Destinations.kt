@@ -5,3 +5,5 @@ import kotlinx.serialization.Serializable
 object AuthRoute
 @Serializable
 object ChatListRoute
+@Serializable
+object ProfileRoute
