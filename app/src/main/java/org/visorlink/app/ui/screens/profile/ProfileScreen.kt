@@ -54,9 +54,6 @@ fun ProfileScreen(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary
         )
-        Spacer(modifier = Modifier.height(32.dp))
-        val versionCode = BuildConfig.VERSION_CODE
-        SettingsCard(icon= Icons.Filled.Info,title = "Версия приложения:",subTitle="$versionCode")
     }
 }
 @Preview(showBackground = true)

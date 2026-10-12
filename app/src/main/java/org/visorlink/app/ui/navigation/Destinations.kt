@@ -7,3 +7,5 @@ object AuthRoute
 object ChatListRoute
 @Serializable
 object ProfileRoute
+@Serializable
+object SettingsRoute

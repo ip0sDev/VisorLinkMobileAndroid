@@ -17,6 +17,7 @@ import org.visorlink.app.ui.navigation.*
 import org.visorlink.app.ui.screens.auth.AuthScreen
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
 import org.visorlink.app.ui.screens.profile.ProfileScreen
+import org.visorlink.app.ui.screens.settings.SettingsScreen
 import org.visorlink.app.ui.theme.VisorLinkTheme
 
 class MainActivity : ComponentActivity() {
@@ -51,11 +52,17 @@ class MainActivity : ComponentActivity() {
                             ChatListScreen(
                                 onNavigateToProfile ={
                                     navController.navigate(ProfileRoute)
+                                },
+                                onNavigateToSettings = {
+                                    navController.navigate(SettingsRoute)
                                 }
                             )
                         }
                         composable<ProfileRoute> {
                             ProfileScreen()
+                        }
+                        composable<SettingsRoute> {
+                            SettingsScreen()
                         }
                     }
             }
