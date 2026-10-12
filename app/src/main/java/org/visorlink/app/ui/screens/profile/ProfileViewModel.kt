@@ -20,6 +20,7 @@ class ProfileViewModel: ViewModel() {
     )
     private val _uiState = MutableStateFlow(ChatListState())
     val uiState = _uiState.asStateFlow()
+
     fun getData(errorText: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(errorText = "", userName = "",uid="", avatarUrl = "")

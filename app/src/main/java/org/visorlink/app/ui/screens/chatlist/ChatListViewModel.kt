@@ -74,35 +74,51 @@ class ChatListViewModel : ViewModel() {
                 val allDocs = (directDocs + groupDocs).distinctBy { it.id }
 
                 // 4. Парсим каждый документ через наш универсальный парсер
+                // Вместо синхронного .map используем нормальный обход
                 val chatList = allDocs.map { doc ->
                     val chatType = doc.getString("type") ?: "direct"
                     var title: String? = null
                     var avatarUrl: String? = null
 
                     if (chatType == "channel" || chatType == "group") {
-                        // Для каналов и групп берем данные из корня документа
                         title = doc.getString("name")
                         avatarUrl = doc.getString("avatarUrl")
                     } else {
-                        // Для личек берем данные собеседника из participantData
+                        // Личный диалог
                         val participantData = doc.get("participantData") as? Map<*, *>
                         val otherUserEntry = participantData?.entries?.firstOrNull {
                             it.key?.toString() != currentUserId
                         } ?: participantData?.entries?.firstOrNull()
 
                         val otherUserMap = otherUserEntry?.value as? Map<*, *>
+                        val otherUserUid = otherUserEntry?.key?.toString()
+
                         title = otherUserMap?.get("displayName") as? String
                             ?: otherUserMap?.get("username") as? String
-                        avatarUrl = otherUserMap?.get("avatarUrl") as? String
-                    }
 
-                    val finalTitle = title ?: doc.getString("name") ?: "Без названия"
-                    val finalAvatarUrl = avatarUrl ?: ""
+                        avatarUrl = otherUserMap?.get("avatarUrl") as? String
+
+                        // ЕСЛИ АВАТАРКИ В participantData НЕТ — грузим через await() прямо здесь!
+                        if (avatarUrl.isNullOrEmpty() && !otherUserUid.isNullOrEmpty()) {
+                            try {
+                                val userDoc = db.collection("users").document(otherUserUid).get().await()
+                                if (userDoc.exists()) {
+                                    avatarUrl = userDoc.getString("avatarUrl") ?: userDoc.getString("photoURL")
+                                    // Если вдруг и имени не было, можем и его подтянуть
+                                    if (title.isNullOrEmpty()) {
+                                        title = userDoc.getString("displayName") ?: userDoc.getString("username")
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Не удалось загрузить аватарку юзера $otherUserUid", e)
+                            }
+                        }
+                    }
 
                     ChatItem(
                         id = doc.id,
-                        title = finalTitle,
-                        avatarUrl = finalAvatarUrl,
+                        title = title ?: doc.getString("name") ?: "Без названия",
+                        avatarUrl = avatarUrl ?: "",
                         lastMessageAt = doc.getTimestamp("lastMessageAt"),
                         type = chatType
                     )

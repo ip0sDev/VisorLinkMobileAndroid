@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 import org.visorlink.app.ui.navigation.*
 import org.visorlink.app.ui.screens.auth.AuthScreen
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
@@ -25,13 +27,18 @@ class MainActivity : ComponentActivity() {
             VisorLinkTheme {
                 val navController = rememberNavController()
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                val currentUser = Firebase.auth.currentUser
+
+                val startDestination: Any = if (currentUser != null) {
+                    ChatListRoute
+                } else {
+                    AuthRoute
+                }
                     NavHost(
                         navController = navController,
-                        startDestination = AuthRoute,
+                        startDestination = startDestination,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
                     ) {
                         composable<AuthRoute> {
                             AuthScreen(
@@ -51,7 +58,6 @@ class MainActivity : ComponentActivity() {
                             ProfileScreen()
                         }
                     }
-                }
             }
         }
     }
