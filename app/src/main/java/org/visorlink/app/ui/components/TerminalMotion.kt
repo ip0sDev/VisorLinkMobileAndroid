@@ -226,3 +226,16 @@ fun TerminalSeqTag(seq: Long?, color: androidx.compose.ui.graphics.Color, modifi
         maxLines = 1,
     )
 }
+
+/**
+ * Стиль для данных (время, даты, счётчики) в терминале: моноширинный с табличными цифрами.
+ * В остальных темах стиль не меняется. Контраст «крупный дисплейный заголовок — мелкие моно-данные»
+ * и даёт ощущение терминала, без декоративных добавок.
+ */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+fun androidx.compose.ui.text.TextStyle.terminalData(): androidx.compose.ui.text.TextStyle {
+    val tokens = VlTheme.tokens
+    if (tokens.terminal == null) return this
+    return copy(fontFamily = tokens.data.dataSmall.fontFamily, letterSpacing = 0.4.sp, fontFeatureSettings = "tnum")
+}

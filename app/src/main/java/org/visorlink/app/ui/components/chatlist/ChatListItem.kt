@@ -44,6 +44,7 @@ import org.visorlink.app.data.model.isLastMessageRead
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.CachedImage
 import org.visorlink.app.ui.components.TerminalSeqTag
+import org.visorlink.app.ui.components.terminalData
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -248,10 +249,11 @@ fun ChatListItem(
                     }
                     chat.lastMessageAt?.let {
                         Spacer(Modifier.width(8.dp))
-                        TerminalSeqTag(chat.lastSeq, subColor.copy(alpha = 0.55f), Modifier.padding(end = 6.dp))
+                        // В компактном списке код съедал бы имя
+                        if (!isCompactList) TerminalSeqTag(chat.lastSeq, subColor.copy(alpha = 0.55f), Modifier.padding(end = 6.dp))
                         Text(
                             formatTime(it.toDate()),
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.terminalData(),
                             color = subColor,
                             fontSize = 11.sp
                         )
@@ -448,7 +450,7 @@ fun ChatListItemCompact(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         formatTime(it.toDate()),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.terminalData(),
                         color = subColor,
                         fontSize = 11.sp
                     )

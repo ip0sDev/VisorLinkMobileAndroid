@@ -111,11 +111,11 @@ fun Modifier.vlRaised(
 ): Modifier {
     if (!tokens.enabled) return this
 
-    // Forge v2, жёсткий блок: плотная плита без размытия и крепкий контур
+    // Forge v2, жёсткий блок: пассивная панель — только крепкий контур. Плита (vlHardShadow) —
+    // признак того, что нажимается или активно (кнопка, FAB, поле в фокусе, диалог): когда плита
+    // была у каждой карточки и раздела, экран терял иерархию и читался шаблоном
     if (tokens.outline != null && tokens.hardShadow != null) {
-        return this
-            .vlHardShadow(tokens.hardShadow, shape, tokens.hardOffset)
-            .vlHairline(tokens.outline, shape, width = 1.5.dp)
+        return this.vlHairline(tokens.outline, shape, width = 1.5.dp)
     }
 
     // Forge v2: плоская панель — контур поверх содержимого и короткая мягкая тень вниз

@@ -22,6 +22,7 @@ import androidx.compose.ui.window.DialogProperties
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlCornerBrackets
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlHardShadow
 import org.visorlink.app.ui.theme.vlTraceBorder
 import org.visorlink.app.ui.theme.vlRaised
 
@@ -95,6 +96,8 @@ fun VlAlertDialog(
                 modifier = modifier
                     .padding(end = plate, bottom = plate)
                     .liquidPopIn(popProgress)
+                    // Диалог — активный слой: у него плита, хотя пассивные панели её больше не носят
+                    .then(tokens.structure.hardShadow?.let { Modifier.vlHardShadow(it, shape, tokens.structure.hardOffset) } ?: Modifier)
                     .vlRaised(tokens.structure, shape)
                     .clip(shape)
                     .background(cs.surfaceContainerHigh, shape)
