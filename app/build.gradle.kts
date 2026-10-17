@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.google.services)
     alias(libs.plugins.sentry.android)
     alias(libs.plugins.roborazzi)
+    alias(libs.plugins.baselineprofile)
 }
 
 // Читаем CommitID из свойства, которое передаёт CI (./gradlew assembleDebug -PcommitId=abc1234)
@@ -135,6 +136,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.process)
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.androidx.profileinstaller) // ставит baseline-prof.txt на устройстве сразу после установки
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
