@@ -21,13 +21,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlDashedBorder
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlSignalBorder
 import org.visorlink.app.ui.theme.vlSignalGlow
@@ -62,6 +65,8 @@ fun VlTextField(
     prefix: String? = null,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
+    /** Свой источник взаимодействий: снаружи можно узнать/задать фокус (в скриншот-тестах). */
+    interactionSource: MutableInteractionSource? = null,
 ) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
@@ -99,8 +104,9 @@ fun VlTextField(
         return
     }
 
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
+    val source = interactionSource ?: remember { MutableInteractionSource() }
+    val isFocused by source.collectIsFocusedAsState()
+    val isTerminal = tokens.terminal != null
     val shape: Shape = fieldShape
     val signalColor = if (isError) cs.error else cs.primary
 
@@ -116,11 +122,13 @@ fun VlTextField(
                 visualTransformation = visualTransformation,
                 keyboardOptions = keyboardOptions,
                 keyboardActions = keyboardActions,
-                interactionSource = interactionSource,
+                interactionSource = source,
                 textStyle = (textStyle ?: LocalTextStyle.current).copy(color = cs.onSurface),
                 cursorBrush = SolidColor(signalColor),
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Недоступное поле гаснет, а не выглядит как обычное, в которое просто нельзя писать
+                    .alpha(if (enabled) 1f else 0.45f)
                     // Сигнал рисуется снаружи формы, поэтому идёт до clip.
                     .vlSignalGlow(
                         tokens = tokens.signal,
@@ -129,9 +137,14 @@ fun VlTextField(
                         active = isFocused || isError,
                     )
                     .clip(shape)
-                    .background(cs.surfaceContainer, shape)
+                    // Терминал: активное поле слегка заливается цветом сигнала
+                    .background(
+                        if (isTerminal && isFocused) cs.primary.copy(alpha = 0.08f).compositeOver(cs.surfaceContainer) else cs.surfaceContainer,
+                        shape,
+                    )
                     // Inset-тень остаётся и при фокусе (§4.2).
                     .vlInset(tokens.structure, shape)
+                    .vlDashedBorder(cs.outline, shape, active = isTerminal && !enabled)
                     .vlSignalBorder(
                         tokens = tokens.signal,
                         color = signalColor,

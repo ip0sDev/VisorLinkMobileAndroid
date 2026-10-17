@@ -272,7 +272,9 @@ fun VlButton(
                 color = tokens.terminal?.neon ?: container,
                 shape = shape,
                 active = tokens.terminal != null && enabled && (isPressed || isFocused),
-            ),
+            )
+            // Терминал: недоступная кнопка — пунктирный контур, как у погасшего поля
+            .vlDashedBorder(cs.outline, shape, active = tokens.terminal != null && !enabled),
         enabled = enabled,
         shape = shape,
         interactionSource = interactionSource,
@@ -438,6 +440,7 @@ fun VlSegmentedControl(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
     hapticEnabled: Boolean = true,
+    enabled: Boolean = true,
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
@@ -448,6 +451,8 @@ fun VlSegmentedControl(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.45f)
+            .vlDashedBorder(cs.outline, shape, active = !enabled && tokens.terminal != null)
             .background(cs.surfaceContainerLow, shape)
             .padding(4.dp)
     ) {
@@ -478,6 +483,7 @@ fun VlSegmentedControl(
                             }
                         )
                         .clickable(
+                            enabled = enabled,
                             interactionSource = remember { MutableInteractionSource() }, indication = null
                         ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onSelected(i) }
                         .padding(vertical = 12.dp),

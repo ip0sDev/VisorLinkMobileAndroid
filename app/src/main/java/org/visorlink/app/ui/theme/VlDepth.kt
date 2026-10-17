@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asAndroidPath
@@ -309,6 +310,32 @@ fun Modifier.vlHairline(
     val path = shape.toPath(size, layoutDirection, this)
     clipPath(path) {
         drawPath(path = path, color = color, style = Stroke(width = width.toPx() * 2f))
+    }
+}
+
+/**
+ * Пунктирный контур по форме — «погашенный» элемент терминала (disabled в Forge v2).
+ * Сплошной контур значит «живой», пунктир — «сейчас недоступен».
+ */
+fun Modifier.vlDashedBorder(
+    color: Color,
+    shape: Shape,
+    active: Boolean = true,
+    width: Dp = 1.dp,
+    dash: Dp = 4.dp,
+    gap: Dp = 3.dp,
+): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        drawPath(
+            path = shape.toPath(size, layoutDirection, this),
+            color = color,
+            style = Stroke(
+                width = width.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash.toPx(), gap.toPx())),
+            ),
+        )
     }
 }
 
