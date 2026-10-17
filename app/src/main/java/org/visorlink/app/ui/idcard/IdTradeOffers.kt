@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -76,7 +77,7 @@ internal fun IdTradeOffers(trade: IdTrade, wearer: IdSkinWearer, person: IdCardP
     val repo: IdCardRepository = koinInject()
     val haptics = rememberCardHaptics()
     val scope = rememberCoroutineScope()
-    val offers by remember(trade.id) { repo.pendingOffersFlow(trade.id) }.collectAsState(initial = null)
+    val offers by remember(trade.id) { repo.pendingOffersFlow(trade.id) }.collectAsStateWithLifecycle(initialValue = null)
     var confirmId by remember { mutableStateOf<String?>(null) }
     var busyId by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<Throwable?>(null) }

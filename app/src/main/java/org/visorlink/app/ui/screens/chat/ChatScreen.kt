@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.chat
 
 import org.visorlink.app.ui.components.VlDialogButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlAlertDialog
 import android.Manifest
 import android.net.Uri
@@ -91,7 +92,7 @@ fun ChatScreen(
     hapticEnabled: Boolean = true,
 ) {
     val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid, topicId) })
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
@@ -109,8 +110,8 @@ fun ChatScreen(
     var selectedStickerPack by remember { mutableStateOf<Triple<String, String?, String?>?>(null) }
 
     val aegisViewModel: AegisLifeViewModel = koinViewModel()
-    val aegisUiState by aegisViewModel.uiState.collectAsState()
-    val isAegisEnabled by aegisViewModel.isAegisEnabled.collectAsState()
+    val aegisUiState by aegisViewModel.uiState.collectAsStateWithLifecycle()
+    val isAegisEnabled by aegisViewModel.isAegisEnabled.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState.messages.lastOrNull()?.id, isAegisEnabled) {
         if (!isAegisEnabled) return@LaunchedEffect
@@ -663,7 +664,7 @@ fun ChatScreen(
     // MainScreen, и в чате openFullscreenAudio() ни к чему не приводил
     val musicPlayerManager: MusicPlayerManager = koinInject()
     val musicRepository: MusicRepository = koinInject()
-    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsState()
+    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsStateWithLifecycle()
     if (showFullscreenPlayer) {
         FullscreenPlayerDialog(
             playerManager = musicPlayerManager,

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.music
 
 import android.Manifest
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.pm.PackageManager
 import android.os.Build
 import java.io.File
@@ -60,7 +61,7 @@ fun MusicLibraryScreen(
     viewModel: MusicViewModel,
     onNavigateBack: (() -> Unit)? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)

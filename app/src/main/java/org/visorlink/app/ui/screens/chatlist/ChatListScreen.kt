@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.chatlist
 
 import androidx.compose.animation.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -66,20 +67,20 @@ fun ChatListScreen(
     viewModel: ChatListViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val chats by viewModel.chats.collectAsState()
-    val currentUser by viewModel.currentUser.collectAsState()
-    val profileCache by viewModel.profileCache.collectAsState()
+    val chats by viewModel.chats.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val profileCache by viewModel.profileCache.collectAsStateWithLifecycle()
     // Приглашения живут строкой в списке чатов (InvitesEntry.kt), а не кнопкой в топбаре
-    val invites by viewModel.invites.collectAsState()
-    val entries by viewModel.listEntries.collectAsState()
+    val invites by viewModel.invites.collectAsStateWithLifecycle()
+    val entries by viewModel.listEntries.collectAsStateWithLifecycle()
     val invitesPreview = invitesPreview(invites)
-    val drafts by viewModel.drafts.collectAsState()
-    val typingMap by viewModel.typingMap.collectAsState()
-    val syncState by viewModel.syncState.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val drafts by viewModel.drafts.collectAsStateWithLifecycle()
+    val typingMap by viewModel.typingMap.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
-    val compactList by themeViewModel.compactChatList.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
+    val compactList by themeViewModel.compactChatList.collectAsStateWithLifecycle()
 
     val haptic = rememberHaptic()
     val context = LocalContext.current

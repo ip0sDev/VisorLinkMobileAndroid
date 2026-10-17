@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -52,9 +53,9 @@ fun SignInMethodsItems(
     /** «Изменить пароль» — строкой сразу под паролем, только если пароль есть. */
     onChangePassword: () -> Unit,
 ) {
-    val methods by vm.methods.collectAsState()
-    val busy by vm.busy.collectAsState()
-    val error by vm.signInError.collectAsState()
+    val methods by vm.methods.collectAsStateWithLifecycle()
+    val busy by vm.busy.collectAsStateWithLifecycle()
+    val error by vm.signInError.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showSetPassword by remember { mutableStateOf(false) }
     var confirmUnlink by remember { mutableStateOf(false) }
@@ -183,8 +184,8 @@ fun SignInMethodsItems(
  */
 @Composable
 fun TwoFactorItems(profile: UserProfile?, vm: AccountSecurityViewModel) {
-    val tfa by vm.tfa.collectAsState()
-    val tgBusy by vm.telegramBusy.collectAsState()
+    val tfa by vm.tfa.collectAsStateWithLifecycle()
+    val tgBusy by vm.telegramBusy.collectAsStateWithLifecycle()
     val enabled = profile?.tfaEnabled == true
     val telegramLinked = profile?.hasTelegram == true
     val telegramOn = profile?.telegramCodesReady() == true

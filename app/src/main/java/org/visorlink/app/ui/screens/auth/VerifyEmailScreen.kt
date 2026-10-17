@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.auth
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
@@ -28,7 +29,7 @@ fun VerifyEmailScreen(
     onLogout: () -> Unit,             // "Use different account" escape hatch
     viewModel: AuthViewModel = koinViewModel()
 ) {
-    val state by viewModel.verifyState.collectAsState()
+    val state by viewModel.verifyState.collectAsStateWithLifecycle()
 
     // Start / stop polling tied to composition lifecycle
     DisposableEffect(Unit) {

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -105,8 +106,8 @@ fun IdCardGate() {
     if (!state.enabled || uid == null) return
     val repo: IdCardRepository = koinInject()
     val users: UserRepository = koinInject()
-    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsState(initial = IdCardState.Loading)
-    val me by remember(uid) { users.userProfileFlow(uid) }.collectAsState(initial = null)
+    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsStateWithLifecycle(initialValue = IdCardState.Loading)
+    val me by remember(uid) { users.userProfileFlow(uid) }.collectAsStateWithLifecycle(initialValue = null)
     var showingFor by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(cardState, uid) {

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import org.visorlink.app.ui.theme.VlCategoryTint
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -95,20 +96,20 @@ fun SettingsScreen(
     proViewModel: ProViewModel = koinViewModel(),
     authViewModel: org.visorlink.app.ui.screens.auth.AuthViewModel = koinViewModel()
 ) {
-    val currentTheme by themeViewModel.appTheme.collectAsState()
-    val currentMode by themeViewModel.themeMode.collectAsState()
-    val currentPreset by themeViewModel.colorPreset.collectAsState()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
-    val notifEnabled by themeViewModel.notificationsEnabled.collectAsState()
-    val currentLang by themeViewModel.language.collectAsState()
-    val dynamicInput by themeViewModel.dynamicChatInput.collectAsState()
-    val compactChatList by themeViewModel.compactChatList.collectAsState()
-    val showDebugIds by themeViewModel.showDebugIds.collectAsState()
+    val currentTheme by themeViewModel.appTheme.collectAsStateWithLifecycle()
+    val currentMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
+    val currentPreset by themeViewModel.colorPreset.collectAsStateWithLifecycle()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
+    val notifEnabled by themeViewModel.notificationsEnabled.collectAsStateWithLifecycle()
+    val currentLang by themeViewModel.language.collectAsStateWithLifecycle()
+    val dynamicInput by themeViewModel.dynamicChatInput.collectAsStateWithLifecycle()
+    val compactChatList by themeViewModel.compactChatList.collectAsStateWithLifecycle()
+    val showDebugIds by themeViewModel.showDebugIds.collectAsStateWithLifecycle()
 
     val profileFlow = remember(userRepository) { userRepository.currentUserFlow() }
-    val profile by profileFlow.collectAsState(initial = null)
-    val proState by proViewModel.uiState.collectAsState()
-    val flags by flagsRepository.flags.collectAsState()
+    val profile by profileFlow.collectAsStateWithLifecycle(initialValue = null)
+    val proState by proViewModel.uiState.collectAsStateWithLifecycle()
+    val flags by flagsRepository.flags.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val haptic = rememberHaptic()
@@ -148,9 +149,9 @@ fun SettingsScreen(
 
     // Способы входа, 2FA и коды в Telegram — AccountSecurity.kt
     val security: AccountSecurityViewModel = koinViewModel()
-    val securityBusy by security.busy.collectAsState()
-    val securityNotice by security.notice.collectAsState()
-    val securityError by security.signInError.collectAsState()
+    val securityBusy by security.busy.collectAsStateWithLifecycle()
+    val securityNotice by security.notice.collectAsStateWithLifecycle()
+    val securityError by security.signInError.collectAsStateWithLifecycle()
     LaunchedEffect(securityNotice) {
         securityNotice?.let { Toast.makeText(context, it.asString(context), Toast.LENGTH_LONG).show(); security.consumeNotice() }
     }
@@ -425,8 +426,8 @@ fun SettingsScreen(
                     VlSettingsItem(icon = Icons.Default.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
                     VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
                     VlSettingsItem(icon = Icons.Default.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
-                    VlSettingsItem(icon = Icons.Default.Explore, iconColor = VlCategoryTint.Emerald, title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsState().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
-                    val musicEnabled by themeViewModel.musicEnabled.collectAsState()
+                    VlSettingsItem(icon = Icons.Default.Explore, iconColor = VlCategoryTint.Emerald, title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsStateWithLifecycle().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
+                    val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
                     VlSettingsItem(
                         icon = Icons.Default.MusicNote,
                         iconColor = VlCategoryTint.Pink,
@@ -896,7 +897,7 @@ fun SettingsScreen(
 
     if (showLegalDialog) {
         val legalRepo: org.visorlink.app.data.repository.LegalRepository = koinInject()
-        val latestVer by legalRepo.observeLatestVersion().collectAsState(initial = legalRepo.loadBundledVersion())
+        val latestVer by legalRepo.observeLatestVersion().collectAsStateWithLifecycle(initialValue = legalRepo.loadBundledVersion())
         org.visorlink.app.ui.screens.legal.LegalConsentDialog(
             currentVersion = latestVer,
             legalRepository = legalRepo,

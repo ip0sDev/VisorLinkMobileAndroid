@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.profile
 
 import org.visorlink.app.data.model.ProfileAppearance
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.data.model.ProfileLayout
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -54,10 +55,10 @@ fun OtherProfileScreen(
     userRepository: UserRepository = koinInject()
 ) {
     val viewModel: OtherProfileViewModel = koinViewModel(parameters = { parametersOf(uid) })
-    val user by viewModel.user.collectAsState()
-    val currentUser by userRepository.currentUserFlow().collectAsState(initial = null)
+    val user by viewModel.user.collectAsStateWithLifecycle()
+    val currentUser by userRepository.currentUserFlow().collectAsStateWithLifecycle(initialValue = null)
     val flagsRepository: FlagsRepository = koinInject()
-    val flags by flagsRepository.flags.collectAsState()
+    val flags by flagsRepository.flags.collectAsStateWithLifecycle()
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
@@ -66,7 +67,7 @@ fun OtherProfileScreen(
 
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }

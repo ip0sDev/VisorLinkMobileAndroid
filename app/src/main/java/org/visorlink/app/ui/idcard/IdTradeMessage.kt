@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
@@ -96,9 +97,9 @@ fun IdTradeMessage(tradeId: String?, messageId: String, chatId: String, modifier
     val repo: IdCardRepository = koinInject()
     val users: UserRepository = koinInject()
     val uid = state.myUid
-    val tradeState by remember(tradeId) { repo.tradeFlow(tradeId) }.collectAsState(initial = IdTradeState.Loading)
-    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsState(initial = IdCardState.Loading)
-    val profile by remember(uid) { if (uid == null) flowOf(null) else users.userProfileFlow(uid) }.collectAsState(initial = null)
+    val tradeState by remember(tradeId) { repo.tradeFlow(tradeId) }.collectAsStateWithLifecycle(initialValue = IdTradeState.Loading)
+    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsStateWithLifecycle(initialValue = IdCardState.Loading)
+    val profile by remember(uid) { if (uid == null) flowOf(null) else users.userProfileFlow(uid) }.collectAsStateWithLifecycle(initialValue = null)
 
     if (tradeState is IdTradeState.Loading) {
         Skeleton(modifier)
@@ -124,7 +125,7 @@ private fun TradeCard(trade: IdTrade, uid: String?, wearer: IdSkinWearer, person
     val open = trade.status == IdTradeStatus.OPEN
     val myOffer by remember(trade.id, uid, open && !isOwner) {
         if (open && !isOwner && uid != null) repo.myOfferFlow(trade.id, uid) else flowOf(null)
-    }.collectAsState(initial = null)
+    }.collectAsStateWithLifecycle(initialValue = null)
     var modal by remember { mutableStateOf<TradeModal?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }

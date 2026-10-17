@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.profile
 
 import android.content.ClipData
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
@@ -99,7 +100,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showLogout by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
     val avatarPicker = rememberLauncherForActivityResult(
@@ -118,7 +119,7 @@ fun ProfileScreen(
     val appearance = ProfileAppearance.resolve(owner = user, viewer = user)
     val bgUrl = appearance.backgroundUrl
 
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
 
     LaunchedEffect(uiState.successMessage) {

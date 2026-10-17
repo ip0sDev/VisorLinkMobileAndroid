@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.topics
 
 import androidx.compose.animation.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -52,7 +53,7 @@ fun TaskTrackerScreen(
     onOpenChatSettings: (String) -> Unit = {},
     viewModel: TaskTrackerViewModel = koinViewModel { parametersOf(chatId, topicId) }
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val haptic = rememberHaptic()

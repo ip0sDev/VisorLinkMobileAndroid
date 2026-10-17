@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.auth
 
 import androidx.compose.foundation.background
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -36,8 +37,8 @@ import org.visorlink.app.ui.components.VlTextField
  */
 @Composable
 fun GoogleSignupScreen(viewModel: AuthViewModel) {
-    val state by viewModel.googleSignup.collectAsState()
-    val pendingInvite by viewModel.pendingInviteCode.collectAsState()
+    val state by viewModel.googleSignup.collectAsStateWithLifecycle()
+    val pendingInvite by viewModel.pendingInviteCode.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     val email = viewModel.currentEmail.orEmpty()
 

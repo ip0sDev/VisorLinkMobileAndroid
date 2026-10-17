@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components.chat
 
 import android.content.ClipData
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
@@ -114,7 +115,7 @@ fun MessageActionOverlay(
     }
 
     val usageRankManager: UsageRankManager = koinInject()
-    val rankedReactions by usageRankManager.rankedReactionsFlow.collectAsState()
+    val rankedReactions by usageRankManager.rankedReactionsFlow.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
     val context = LocalContext.current
     val density = LocalDensity.current

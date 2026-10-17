@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import org.visorlink.app.R
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlSettingsItem
 import org.visorlink.app.ui.components.VlSettingsSection
 import org.visorlink.app.ui.components.VlSwitch
@@ -26,7 +27,7 @@ fun FlagFlipperScreen(
     onBack: () -> Unit,
     viewModel: FlagFlipperViewModel = koinViewModel()
 ) {
-    val flagsState by viewModel.flags.collectAsState()
+    val flagsState by viewModel.flags.collectAsStateWithLifecycle()
 
     // Flipper открывает только test_flag с сервера: сняли флаг — экран закрывается
     if (!flagsState.testFlag && !org.visorlink.app.BuildConfig.DEBUG) {

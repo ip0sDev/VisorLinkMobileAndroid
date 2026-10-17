@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -92,12 +93,12 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
     val haptics = rememberCardHaptics()
     val scope = rememberCoroutineScope()
     val uid = LocalIdModeState.current.myUid
-    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsState(initial = IdCardState.Loading)
-    val profile by remember(uid) { if (uid == null) flowOf(null) else users.userProfileFlow(uid) }.collectAsState(initial = null)
+    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsStateWithLifecycle(initialValue = IdCardState.Loading)
+    val profile by remember(uid) { if (uid == null) flowOf(null) else users.userProfileFlow(uid) }.collectAsStateWithLifecycle(initialValue = null)
     val card = (cardState as? IdCardState.Ready)?.card
     val skinsState by remember(uid, card != null) {
         if (card == null) flowOf(IdSkinsState.Loading) else repo.skinsFlow(uid)
-    }.collectAsState(initial = IdSkinsState.Loading)
+    }.collectAsStateWithLifecycle(initialValue = IdSkinsState.Loading)
 
     var selected by remember { mutableStateOf<String?>(null) }
     var note by remember { mutableStateOf("") }

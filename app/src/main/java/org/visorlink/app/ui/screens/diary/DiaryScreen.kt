@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.diary
 
 import android.content.Intent
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -42,9 +43,9 @@ fun DiaryScreen(
     viewModel: DiaryViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)

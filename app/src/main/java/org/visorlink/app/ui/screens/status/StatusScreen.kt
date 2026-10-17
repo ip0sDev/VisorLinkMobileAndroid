@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.status
 
 import androidx.compose.foundation.background
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,7 +44,7 @@ fun StatusScreen(
     onNavigateBack: () -> Unit,
     viewModel: StatusViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
 

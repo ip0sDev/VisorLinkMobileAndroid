@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components.chat
 
 import android.net.Uri
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.Spring
@@ -216,7 +217,7 @@ fun LiquidMorphingChatBottomBar(
 
                 LiquidBottomBarMode.STICKERS -> {
                     val stickerVm: StickerPackViewModel = koinViewModel()
-                    val stickerUiState by stickerVm.uiState.collectAsState()
+                    val stickerUiState by stickerVm.uiState.collectAsStateWithLifecycle()
                     val stickerTargetHeight = remember(screenHeight) { minOf(520.dp, screenHeight * 0.65f) }
 
                     Box(

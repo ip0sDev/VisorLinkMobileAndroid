@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.auth
 
 import org.visorlink.app.ui.components.VlTopAppBar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -33,10 +34,10 @@ fun RegisterScreen(
     onRegistrationComplete: () -> Unit,
     viewModel: AuthViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
-    val pendingCode by viewModel.pendingInviteCode.collectAsState()
+    val pendingCode by viewModel.pendingInviteCode.collectAsStateWithLifecycle()
     var inviteCode by remember { mutableStateOf(pendingCode ?: "") }
     LaunchedEffect(pendingCode) {
         if (!pendingCode.isNullOrBlank() && inviteCode.isBlank()) {

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.StartOffset
@@ -101,7 +102,7 @@ private val TILE_MIN = 140.dp
 @Composable
 fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Modifier) {
     val repo: IdCardRepository = koinInject()
-    val skinsState by remember(profile.uid) { repo.skinsFlow(profile.uid) }.collectAsState(initial = IdSkinsState.Loading)
+    val skinsState by remember(profile.uid) { repo.skinsFlow(profile.uid) }.collectAsStateWithLifecycle(initialValue = IdSkinsState.Loading)
     val raw = (skinsState as? IdSkinsState.Ready)?.skins.orEmpty()
     val loading = skinsState is IdSkinsState.Loading
     val scope = rememberCoroutineScope()

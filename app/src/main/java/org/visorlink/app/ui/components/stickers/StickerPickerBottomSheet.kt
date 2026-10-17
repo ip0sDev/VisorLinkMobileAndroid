@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components.stickers
 
 import org.visorlink.app.ui.screens.stickers.StickerPackViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,8 +60,8 @@ fun StickerPickerBottomSheet(
     viewModel: StickerPackViewModel = koinViewModel(),
     themeVm: ThemeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val appTheme by themeVm.appTheme.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val appTheme by themeVm.appTheme.collectAsStateWithLifecycle()
 
     // При каждом открытии шторки втихую обновляем список стикеров с сервера
     LaunchedEffect(Unit) {

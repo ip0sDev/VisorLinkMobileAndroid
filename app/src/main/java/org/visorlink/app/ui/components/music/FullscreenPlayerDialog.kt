@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components.music
 
 import android.widget.Toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -98,7 +99,7 @@ fun FullscreenPlayerDialog(
     musicRepository: MusicRepository,
     onDismiss: () -> Unit
 ) {
-    val state by playerManager.state.collectAsState()
+    val state by playerManager.state.collectAsStateWithLifecycle()
     val track = state.currentTrack ?: run {
         onDismiss()
         return
@@ -119,13 +120,13 @@ fun FullscreenPlayerDialog(
     // Текущий визуальный режим (по умолчанию – 3D Обложка)
     var visualMode by remember { mutableStateOf(PlayerVisualMode.COVER) }
 
-    val playlists by musicRepository.getPlaylistsFlow().collectAsState(initial = emptyList())
-    val downloadProgressMap by musicRepository.downloadProgress.collectAsState()
+    val playlists by musicRepository.getPlaylistsFlow().collectAsStateWithLifecycle(initialValue = emptyList())
+    val downloadProgressMap by musicRepository.downloadProgress.collectAsStateWithLifecycle()
     val trackDownloadProgress = downloadProgressMap[track.id]
 
     // Таймер сна
-    val sleepMinutesLeft by playerManager.sleepTimerMinutesLeft.collectAsState()
-    val isSleepAtEnd by playerManager.isSleepAtEndOfTrackFlow.collectAsState()
+    val sleepMinutesLeft by playerManager.sleepTimerMinutesLeft.collectAsStateWithLifecycle()
+    val isSleepAtEnd by playerManager.isSleepAtEndOfTrackFlow.collectAsStateWithLifecycle()
 
     // Желейные тактильные пружины
     val collapseJelly = rememberLiquidJellyState(softness = 0.16f)
