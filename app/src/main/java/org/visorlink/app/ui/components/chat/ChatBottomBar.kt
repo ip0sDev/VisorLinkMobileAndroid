@@ -184,6 +184,9 @@ fun ChatBottomBar(
         ) {
             val panelShape = tokens.shapes.inputPanel
             val isDark = cs.surface.luminance() < 0.5f
+            // Forge v2: панель — единственный контейнер. Поле не рисует свою коробку, кнопки — блоки
+            // без колец и рельефа: раньше было «коробка в коробке в коробке»
+            val block = tokens.structure.hardShadow != null
             val panelBrush = remember(isDark, cs, tokens) {
                 if (tokens.isBiolume) {
                     val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
@@ -225,7 +228,7 @@ fun ChatBottomBar(
                     )
                     .clip(panelShape)
                     .background(panelBrush, panelShape)
-                    .border(panelBorder, panelShape)
+                    .then(if (block) Modifier else Modifier.border(panelBorder, panelShape))
                     .padding(4.dp)
             ) {
                 AnimatedVisibility(visible = uiState.replyingTo != null, enter = bannerEnter, exit = bannerExit) {
@@ -358,13 +361,26 @@ fun ChatBottomBar(
                                     .weight(1f)
                                     .clip(inputShape)
                                     .background(
-                                        if (tokens.structure.enabled) cs.surfaceContainer
-                                        else cs.surfaceContainerHighest
+                                        when {
+                                            block -> Color.Transparent
+                                            tokens.structure.enabled -> cs.surfaceContainer
+                                            else -> cs.surfaceContainerHighest
+                                        }
                                     )
-                                    .vlInset(tokens.structure, inputShape)
-                                    .padding(start = 16.dp, end = 4.dp)
+                                    .then(if (block) Modifier else Modifier.vlInset(tokens.structure, inputShape))
+                                    .padding(start = if (block) 4.dp else 16.dp, end = 4.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.Bottom) {
+                                    // Терминал: приглашение командной строки перед полем
+                                    if (block) {
+                                        Text(
+                                            ">",
+                                            style = tokens.data.dataMedium,
+                                            color = cs.primary,
+                                            // Приглашение — у первой строки, а не у последней при многострочном вводе
+                                            modifier = Modifier.align(Alignment.Top).padding(top = 14.dp, bottom = 14.dp, end = 8.dp),
+                                        )
+                                    }
                                     BasicTextField(
                                         value = inputText,
                                         onValueChange = { if (!isBot || it.length <= 600) onInputChange(it) else onInputChange(it.take(600)) },
@@ -411,6 +427,8 @@ fun ChatBottomBar(
 
                             Spacer(Modifier.width(8.dp))
                             val isSendMode = inputText.isNotBlank() || uiState.editingMessage != null
+                            // Кнопки справа: круг в мягких темах, блок со срезом в терминале
+                            val actionShape = if (block) tokens.shapes.button else tokens.shapes.indicator
                             val sendBtnJelly = rememberLiquidJellyState(softness = 0.09f, damping = 0.70f, stiffness = 300f)
 
                             LaunchedEffect(isSendMode) {
@@ -440,12 +458,12 @@ fun ChatBottomBar(
                                             .scale(sendScale)
                                             .liquidJelly(sendBtnJelly)
                                             .then(
-                                                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
+                                                if (tokens.structure.enabled && !block) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .background(if (sendEnabled) cs.primary else cs.surfaceVariant, tokens.shapes.indicator)
+                                            .background(if (sendEnabled) cs.primary else cs.surfaceVariant, actionShape)
                                             .then(
-                                                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
+                                                if (tokens.structure.enabled && !block) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
                                                 else Modifier
                                             )
                                             .clickable(
@@ -468,13 +486,17 @@ fun ChatBottomBar(
                                             .graphicsLayer { clip = false }
                                             .liquidJelly(sendBtnJelly)
                                             .then(
-                                                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
+                                                if (tokens.structure.enabled && !block) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .background(if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant, tokens.shapes.indicator)
+                                            .background(if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant, actionShape)
                                             .then(
-                                                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
-                                                else Modifier
+                                                when {
+                                                    // Микрофон в терминале — контурный блок: главное действие (отправка) остаётся сплошным
+                                                    block -> Modifier.border(1.5.dp, cs.primary.copy(alpha = 0.6f), actionShape)
+                                                    tokens.structure.enabled -> Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
+                                                    else -> Modifier
+                                                }
                                             )
                                             .clickable(
                                                 enabled = !uiState.isCooldown && !uiState.isBotGenerating,

@@ -353,6 +353,32 @@ class ThemeScreenshotTest(
         }
     }
 
+    @OptIn(com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
+    @Test
+    fun chatBar() = snap("chatbar") {
+        val perm = object : com.google.accompanist.permissions.PermissionState {
+            override val permission = "android.permission.RECORD_AUDIO"
+            override val status: com.google.accompanist.permissions.PermissionStatus = com.google.accompanist.permissions.PermissionStatus.Granted
+            override fun launchPermissionRequest() = Unit
+        }
+        val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+        @Composable
+        fun bar(text: String) = org.visorlink.app.ui.components.chat.ChatBottomBar(
+            uiState = org.visorlink.app.ui.screens.chat.ChatUiState(),
+            inputText = text, canSendMessage = true, canSendMedia = true, hapticEnabled = false,
+            showStickerSheet = false, audioPermission = perm, focusRequester = focus,
+            onInputChange = {}, onAttach = {}, onStickerClick = {}, onSend = {}, onStartRecord = {},
+            onRequestAudioPerm = {}, onCancelRecord = {}, onSendRecord = {}, onClearReply = {},
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            org.visorlink.app.ui.components.chat.CommentsButton(
+                post = Message(id = "p1", text = "пост", commentsCount = 12), channelAllowsComments = true, onClick = {},
+            )
+            bar("")
+            bar("Привет, как дела?")
+        }
+    }
+
     @Test
     fun navigationBar() = snap("navbar") {
         Column {

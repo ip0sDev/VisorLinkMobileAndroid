@@ -269,7 +269,7 @@ internal fun forgeV2Bubbles(f: ForgeV2.Flavor) = VlBubbleTokens(
     mineFg = f.onSurface,
     otherBg = f.container,
     otherFg = f.onSurface,
-    mineBorder = f.primary.copy(alpha = 0.7f),
+    mineBorder = f.primary.copy(alpha = 0.45f),
     otherBorder = f.primary.copy(alpha = 0.22f),
 )
 
