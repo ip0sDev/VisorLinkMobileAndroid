@@ -309,6 +309,9 @@ data class VlBubbleTokens(
     val mineFg: Color,
     val otherBg: Color,
     val otherFg: Color,
+    /** Контур пузыря (Forge v2: жёсткий блок), null — без контура. */
+    val mineBorder: Color? = null,
+    val otherBorder: Color? = null,
 )
 
 // ── Корневой контракт ────────────────────────────────────────────────────────

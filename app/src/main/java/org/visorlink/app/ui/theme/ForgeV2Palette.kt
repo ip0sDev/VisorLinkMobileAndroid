@@ -10,16 +10,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Forge v2 — киберпанк-терминал особых режимов ID-карты. Пользователь его не выбирает:
+ * Forge v2 — киберпанк особых режимов ID-карты, язык «жёсткого блока». Пользователь его не выбирает:
  * тему включает режим Protogen / Beast (см. ModeThemeRules), поэтому в селекторе её нет.
  *
- * Палитра, формы (скругления 2–8 dp, у Beast до 10) и контур панелей `primary` 16 % — из веба
- * (блок FORGE v2 в src/styles/variables.css). Поверх них Android-слой света, а не геометрии:
- *  - заголовки — Unbounded с мягким неоновым свечением (см. forgeV2Typography);
- *  - заголовки разделов с линией до края, неоновая линия под верхней панелью;
- *  - основная кнопка светится и в покое, тумблер — светящаяся «риска» ([ForgeV2Switch]);
- *  - неоновая дымка сверху экрана, у Protogen ещё сканлайны.
- * Только тёмная. Protogen — холодный неон, Beast — тёплый янтарь, спокойнее.
+ * Палитра — из веба (блок FORGE v2 в src/styles/variables.css); формы и структура уже свои, Android-овские:
+ *  - прямые углы 2–3 dp, плотные плиты без размытия вместо теней (панель — тусклая плита, кнопка и FAB — яркая
+ *    плита второго цвета, при нажатии вдавливаются), крепкий контур 1,5 dp;
+ *  - выбор — инвертированный блок (сплошной primary, тёмный текст), опасное — косая штриховка, выключенное — пунктир;
+ *  - заголовки — Unbounded без свечения, подписи кнопок — жирный моно; тумблер — «риска»;
+ *  - никаких сканлайнов, дымки и свечения в покое — они не давали характера.
+ * Только тёмная. Protogen — холодный неон + маджента, Beast — тёплый янтарь.
  */
 object ForgeV2 {
 
@@ -247,9 +247,9 @@ internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
  */
 internal val ForgeV2Switch = VlSwitchTokens(
     thumb = RoundedCornerShape(2.dp),
-    thumbWidth = 8.dp,
+    thumbWidth = 10.dp,
     thumbHeight = 22.dp,
-    thumbGlow = 0.6f,
+    thumbGlow = 0f,
     litTrack = true,
 )
 
@@ -261,10 +261,12 @@ internal fun forgeV2Status(f: ForgeV2.Flavor) = VlStatusTokens(
 )
 
 internal fun forgeV2Bubbles(f: ForgeV2.Flavor) = VlBubbleTokens(
-    mineBg = ForgeV2.mix(f.primary, 0.16f, f.container),
+    mineBg = ForgeV2.mix(f.primary, 0.22f, f.container),
     mineFg = f.onSurface,
     otherBg = f.container,
     otherFg = f.onSurface,
+    mineBorder = f.primary.copy(alpha = 0.7f),
+    otherBorder = f.primary.copy(alpha = 0.22f),
 )
 
 /** Терминал: короткие переходы без пружины, нажатие — лёгкое сжатие. */

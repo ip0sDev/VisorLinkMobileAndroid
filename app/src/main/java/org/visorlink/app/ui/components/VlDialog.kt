@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -72,7 +73,7 @@ fun VlAlertDialog(
                     Spacer(Modifier.height(24.dp))
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+                        horizontalArrangement = if (tokens.structure.hardShadow != null) Arrangement.spacedBy(10.dp, Alignment.End) else Arrangement.End,
                         content = actions,
                     )
                 }
@@ -85,8 +86,11 @@ fun VlAlertDialog(
             // Форма берётся из токенов напрямую: прибавка к cardRadius давала бы
             // в Forge скругление 8dp вместо прямого угла.
             val shape = tokens.shapes.card
+            // Жёсткая плита выходит за границы диалога вправо и вниз — окну нужен запас под неё
+            val plate = if (tokens.structure.hardShadow != null) tokens.structure.hardOffset else 0.dp
             Box(
                 modifier = modifier
+                    .padding(end = plate, bottom = plate)
                     .liquidPopIn(popProgress)
                     .vlRaised(tokens.structure, shape)
                     .clip(shape)
@@ -160,12 +164,23 @@ fun VlDialogButton(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
-    val color = if (isDestructive) cs.error else if (isPrimary) cs.primary else cs.onSurfaceVariant
+    val tokens = VlTheme.tokens
+    // Жёсткий блок: главное и опасное действие — сплошные блоки, отмена — контур
+    val block = tokens.structure.hardShadow != null
+    val filled = block && (isDestructive || isPrimary)
+    val blockShape = tokens.shapes.rounded(2.dp)
+    val color = if (filled) (if (isDestructive) cs.onError else cs.onPrimary)
+    else if (isDestructive) cs.error else if (isPrimary) cs.primary else cs.onSurfaceVariant
     val opacity = if (!active) 0.4f else if (isPressed) 0.55f else 1f
 
     Row(
         modifier
             .alpha(opacity)
+            .then(
+                if (filled) Modifier.background(if (isDestructive) cs.error else cs.primary, blockShape)
+                else if (block) Modifier.border(1.5.dp, tokens.structure.outline ?: cs.outline, blockShape)
+                else Modifier
+            )
             .then(
                 if (active) Modifier.clickable(
                     interactionSource = interactionSource,

@@ -686,10 +686,14 @@ internal fun TextBubble(
                 onLongPressEnd = onLongPressEnd
             )
 
+        val bubbleTokens = VlTheme.tokens.bubbles
+        val bubbleBorder = (if (isMine) bubbleTokens.mineBorder else bubbleTokens.otherBorder)
+            ?.let { androidx.compose.foundation.BorderStroke(1.5.dp, it) }
         Surface(
             modifier = bubbleModifier,
             shape = VlTheme.tokens.shapes.card,
-            color = bubbleColor
+            color = bubbleColor,
+            border = bubbleBorder,
         ) {
             Column(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp)) {
                 if (showSenderName && !isMine) {
