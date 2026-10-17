@@ -18,7 +18,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         isIgnoreExitValue = true
     }.standardOutput.asText.map { it.trim() }.getOrElse("")
 }
-val currentChannel = "RELEASE"
+val currentChannel = "NIGHTLY"
 
 android {
     namespace = "org.visorlink.app"
@@ -28,11 +28,11 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 183
-        versionName = "4.3.08"
+        versionCode = 184
+        versionName = "4.3.09"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"RELEASE\"")
+        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
