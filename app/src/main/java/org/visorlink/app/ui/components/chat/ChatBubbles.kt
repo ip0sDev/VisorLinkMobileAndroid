@@ -61,6 +61,7 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.*
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.components.CachedImage
+import org.visorlink.app.ui.components.SPOILER_DECODE_PX
 import org.visorlink.app.ui.components.VlAnimatedMedia
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.rememberLiquidJellyState
@@ -470,8 +471,9 @@ private fun AlbumImageItem(
         CachedImage(
             model = resolvedUrl,
             contentDescription = null,
-            modifier = Modifier.fillMaxSize().then(if (showBlur) Modifier.blur(20.dp) else Modifier),
-            contentScale = ContentScale.Crop
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            decodeSize = if (showBlur) SPOILER_DECODE_PX else null,
         )
         if (showBlur) {
             Icon(Icons.Default.VisibilityOff, null, tint = Color.White, modifier = Modifier.align(Alignment.Center).size(32.dp))
