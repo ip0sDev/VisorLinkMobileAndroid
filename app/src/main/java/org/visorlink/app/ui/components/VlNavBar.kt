@@ -53,6 +53,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.visorlink.app.R
+import org.visorlink.app.utils.HapticType
+import org.visorlink.app.utils.rememberHaptic
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
@@ -189,6 +191,7 @@ private fun NeumorphicLiquidNavBarContent(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val density = LocalDensity.current
+    val haptic = rememberHaptic()
 
     val chatsLabel = stringResource(R.string.nav_tab_chats)
     val feedLabel = stringResource(R.string.feed_title)
@@ -392,7 +395,10 @@ private fun NeumorphicLiquidNavBarContent(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         role = Role.Tab,
-                        onClick = tab.onClick
+                        onClick = {
+                            if (!isSelected) haptic.perform(HapticType.TAB_SWITCH)
+                            tab.onClick()
+                        }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -461,6 +467,7 @@ fun VlTabItem(
     val isDark = cs.surface.luminance() < 0.5f
 
     val interactionSource = remember { MutableInteractionSource() }
+    val haptic = rememberHaptic()
 
     // Selection pill color
     val pillColor by animateColorAsState(
@@ -534,7 +541,10 @@ fun VlTabItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    if (!selected) haptic.perform(HapticType.TAB_SWITCH)
+                    onClick()
+                }
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center

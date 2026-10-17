@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import org.koin.compose.getKoin
 import org.visorlink.app.data.repository.SettingsRepository
+import org.visorlink.app.ui.theme.VlTheme
 
 enum class HapticType {
     CLICK,          // обычный тап
@@ -25,6 +26,8 @@ enum class HapticType {
     MESSAGE_RECEIVED, // получение сообщения
     REACTION,       // реакция на сообщение
     SELECTION,      // выбор в списке
+    TAB_SWITCH,     // переключение вкладки навбара
+    THRESHOLD,      // жест дошёл до порога срабатывания (свайп-ответ)
 }
 
 /** Общий вход к вибромотору: один способ получить его и один способ запустить эффект. */
@@ -77,6 +80,8 @@ class HapticHelper internal constructor(
     context: Context,
     private val view: View,
     private val settings: SettingsRepository?,
+    /** Forge v2: сухие «механические» щелчки (чёткий клик/тик) вместо мягких системных. */
+    private val mechanical: Boolean = false,
 ) {
     private val vibrator: Vibrator? by lazy { HapticEngine.vibrator(context) }
     private var lastAt = 0L
@@ -88,7 +93,14 @@ class HapticHelper internal constructor(
         if (now - lastAt < MIN_GAP_MS) return
         lastAt = now
 
+        if (mechanical && performMechanical(type)) return
+
         when (type) {
+            HapticType.TAB_SWITCH -> view.tap(HapticFeedbackConstants.VIRTUAL_KEY)
+            HapticType.THRESHOLD -> rich(
+                HapticFeedbackConstants.GESTURE_END,
+                Triple(PRIMITIVE_CLICK, 0.7f, 0),
+            )
             HapticType.CLICK -> view.tap(HapticFeedbackConstants.VIRTUAL_KEY)
             HapticType.LONG_PRESS -> view.tap(HapticFeedbackConstants.LONG_PRESS)
             HapticType.SELECTION, HapticType.MESSAGE_SENT -> view.tap(
@@ -119,6 +131,25 @@ class HapticHelper internal constructor(
         }
     }
 
+    /** Терминальные щелчки: true — отыграно, false — тип без особого варианта или мотор не умеет примитивы. */
+    private fun performMechanical(type: HapticType): Boolean {
+        val v = vibrator?.takeIf { it.hasVibrator() } ?: return false
+        val thud = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) VibrationEffect.Composition.PRIMITIVE_THUD else PRIMITIVE_CLICK
+        val effect = when (type) {
+            HapticType.CLICK -> HapticEngine.composition(v, Triple(PRIMITIVE_CLICK, 0.55f, 0))
+            HapticType.SELECTION, HapticType.TAB_SWITCH -> HapticEngine.composition(v, Triple(PRIMITIVE_TICK, 0.7f, 0))
+            HapticType.THRESHOLD -> HapticEngine.composition(
+                v, Triple(PRIMITIVE_CLICK, 0.85f, 0), Triple(PRIMITIVE_TICK, 0.4f, 35),
+            )
+            HapticType.LONG_PRESS -> HapticEngine.composition(
+                v, Triple(thud, 0.8f, 0), Triple(PRIMITIVE_CLICK, 0.5f, 30),
+            )
+            else -> null
+        } ?: return false
+        HapticEngine.vibrate(v, effect)
+        return true
+    }
+
     private fun View.tap(constant: Int) {
         performHapticFeedback(constant)
     }
@@ -142,5 +173,8 @@ fun rememberHaptic(): HapticHelper {
     val context = LocalContext.current
     val view = LocalView.current
     val koin = getKoin()
-    return remember(context, view) { HapticHelper(context, view, koin.getOrNull<SettingsRepository>()) }
+    val mechanical = VlTheme.tokens.glitchMotion
+    return remember(context, view, mechanical) {
+        HapticHelper(context, view, koin.getOrNull<SettingsRepository>(), mechanical)
+    }
 }

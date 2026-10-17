@@ -429,7 +429,7 @@ fun SwipeableMessage(
 
                                 if (abs(offsetX.value) >= triggerThreshold && !didTrigger) {
                                     didTrigger = true
-                                    haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                    haptic.perform(HapticType.THRESHOLD, hapticEnabled)
                                     onReply()
                                     bubbleJelly.pulse(0.10f)
                                     dropJelly.pulse(0.24f)
