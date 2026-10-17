@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import org.visorlink.app.ui.components.rememberLoopFloat
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -204,10 +205,10 @@ internal fun EditionChip(edition: IdEdition, modifier: Modifier = Modifier, larg
     val fg = editionInk(edition)
     val shape = VlTheme.tokens.shapes.pill
     val legendary = edition == IdEdition.LEGENDARY
-    val shimmer = if (legendary && !VlTheme.tokens.reduceMotion) {
+    val shimmer by rememberLoopFloat(enabled = legendary && !VlTheme.tokens.reduceMotion) {
         rememberInfiniteTransition(label = "edShimmer")
-            .animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "edShimmerX").value
-    } else 0f
+            .animateFloat(0f, 1f, infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "edShimmerX")
+    }
     Row(
         modifier
             .height(if (large) 26.dp else 20.dp)

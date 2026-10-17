@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import org.visorlink.app.ui.components.rememberLoopFloat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
@@ -189,8 +190,8 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
 private fun VersusBlock(trade: IdTrade, pick: IdSkin?, wearer: IdSkinWearer, person: IdCardPerson) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val wobble = if (tokens.reduceMotion) 0f else {
-        rememberInfiniteTransition(label = "vs").animateFloat(0f, 180f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "vsR").value
+    val wobble by rememberLoopFloat(enabled = !(tokens.reduceMotion)) {
+        rememberInfiniteTransition(label = "vs").animateFloat(0f, 180f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "vsR")
     }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         VlSurface(Modifier.weight(1f)) {
@@ -383,8 +384,8 @@ private fun PickTile(
 private fun EmptyPicker(text: String) {
     val cs = MaterialTheme.colorScheme
     val reduce = VlTheme.tokens.reduceMotion
-    val fan = if (reduce) 0f else {
-        rememberInfiniteTransition(label = "fan").animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Reverse), label = "fanP").value
+    val fan by rememberLoopFloat(enabled = !(reduce)) {
+        rememberInfiniteTransition(label = "fan").animateFloat(0f, 1f, infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Reverse), label = "fanP")
     }
     Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(90.dp, 60.dp)) {

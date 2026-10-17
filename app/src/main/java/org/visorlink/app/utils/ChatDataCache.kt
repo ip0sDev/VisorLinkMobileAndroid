@@ -162,16 +162,19 @@ object ChatDataCache {
             id
         }
 
-    suspend fun loadOutbox(context: Context, filterChatId: String? = null): List<QueuedAction> =
+    /** Только ожидающие отправки (status = 0): цикл OutboxManager не разбирает JSON уже отправленных и упавших. */
+    suspend fun loadPendingOutbox(context: Context): List<QueuedAction> = loadOutbox(context, null, onlyPending = true)
+
+    suspend fun loadOutbox(context: Context, filterChatId: String? = null, onlyPending: Boolean = false): List<QueuedAction> =
         withContext(Dispatchers.IO) {
             val list = mutableListOf<QueuedAction>()
             try {
                 val db = getDb(context).readableDatabase
-                val sql = if (filterChatId != null) {
-                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox WHERE chat_id = ? ORDER BY ts ASC"
-                } else {
-                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC"
-                }
+                val where = listOfNotNull(
+                    if (filterChatId != null) "chat_id = ?" else null,
+                    if (onlyPending) "status = 0" else null,
+                ).joinToString(" AND ").let { if (it.isEmpty()) "" else " WHERE $it" }
+                val sql = "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox$where ORDER BY ts ASC"
                 val args = if (filterChatId != null) arrayOf(filterChatId) else null
                 db.rawQuery(sql, args).use { cursor ->
                     while (cursor.moveToNext()) {

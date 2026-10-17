@@ -28,6 +28,8 @@ private const val MEDIA_CONCURRENCY = 2
 
 interface OutboxDataSource {
     suspend fun loadOutbox(context: Context): List<ChatDataCache.QueuedAction>
+    /** Ожидающие отправки; по умолчанию фильтр поверх полной выборки (для фейков в тестах). */
+    suspend fun loadPending(context: Context): List<ChatDataCache.QueuedAction> = loadOutbox(context).filter { it.status == 0 }
     suspend fun updateStatus(context: Context, id: String, status: Int)
     suspend fun updateRetry(context: Context, id: String, retryCount: Int, error: String?)
     suspend fun updateProgress(context: Context, id: String, progress: Float)
@@ -36,6 +38,7 @@ interface OutboxDataSource {
 
 class ChatDataOutboxSource : OutboxDataSource {
     override suspend fun loadOutbox(context: Context) = ChatDataCache.loadOutbox(context)
+    override suspend fun loadPending(context: Context) = ChatDataCache.loadPendingOutbox(context)
     override suspend fun updateStatus(context: Context, id: String, status: Int) {
         ChatDataCache.updateOutboxStatus(context, id, status)
     }
@@ -128,7 +131,7 @@ class OutboxManager(
         processingJob = scope.launch {
             while (isActive) {
                 val now = System.currentTimeMillis()
-                val allQueued = outboxDataSource.loadOutbox(context)
+                val allQueued = outboxDataSource.loadPending(context)
                 
                 val toProcess = allQueued.filter { action ->
                     action.status == 0 &&
