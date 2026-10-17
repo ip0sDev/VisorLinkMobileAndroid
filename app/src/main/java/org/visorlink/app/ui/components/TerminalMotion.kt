@@ -20,7 +20,9 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -238,4 +240,22 @@ fun androidx.compose.ui.text.TextStyle.terminalData(): androidx.compose.ui.text.
     val tokens = VlTheme.tokens
     if (tokens.terminal == null) return this
     return copy(fontFamily = tokens.data.dataSmall.fontFamily, letterSpacing = 0.4.sp, fontFeatureSettings = "tnum")
+}
+
+/**
+ * Метка-тег терминала: контур и моно-капитель цвета [color] (статус, роль, PRO). Вне Forge v2 не
+ * используется — там свои значки.
+ */
+@Composable
+fun TerminalTag(text: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    val shape = VlTheme.tokens.shapes.rounded(4.dp)
+    androidx.compose.material3.Text(
+        text = text.uppercase(),
+        modifier = modifier
+            .border(1.5.dp, color.copy(alpha = 0.8f), shape)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        color = color,
+        style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        maxLines = 1,
+    )
 }

@@ -331,6 +331,27 @@ fun Modifier.vlHairline(
 }
 
 /**
+ * Строка таблицы терминала: без коробки. Снизу — тонкий разделитель от [dividerStart] до края,
+ * слева — полоса [accent] (непрочитанное), при нажатии — заливка [pressFill].
+ */
+fun Modifier.vlTableRow(
+    divider: Color,
+    accent: Color? = null,
+    pressed: Boolean = false,
+    pressFill: Color = Color.Transparent,
+    dividerStart: Dp = 0.dp,
+): Modifier = this.drawWithContent {
+    if (pressed) drawRect(pressFill)
+    drawContent()
+    val h = 1.dp.toPx()
+    drawRect(divider, Offset(dividerStart.toPx(), size.height - h), Size(size.width - dividerStart.toPx(), h))
+    if (accent != null) {
+        val inset = 10.dp.toPx()
+        drawRect(accent, Offset(0f, inset), Size(3.dp.toPx(), size.height - inset * 2))
+    }
+}
+
+/**
  * Линейка вдоль верхнего края: засечки внутрь, каждая пятая выше, к правому краю гаснут. Для
  * контейнеров терминала (навбар).
  */

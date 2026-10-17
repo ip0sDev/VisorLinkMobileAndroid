@@ -37,6 +37,7 @@ import org.visorlink.app.R
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlTableRow
 import org.visorlink.app.data.model.Chat
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.UserProfile
@@ -97,9 +98,12 @@ fun ChatListItem(
         label = "item_press"
     )
 
-    val shape = VlTheme.tokens.shapes.card
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
+    // Forge v2: список — таблица, а не стопка карточек: коробка у каждой строки превращала
+    // экран в шум из рамок. Разделитель снизу, непрочитанное — полоса слева
+    val tableRow = tokens.structure.hardShadow != null
+    val shape = if (tableRow) androidx.compose.ui.graphics.RectangleShape else tokens.shapes.card
     val isDark = cs.surface.luminance() < 0.5f
 
     val titleColor = cs.onSurface
@@ -136,13 +140,18 @@ fun ChatListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
-            .scale(itemScale)
+            .padding(horizontal = if (tableRow) 0.dp else 12.dp)
+            .padding(vertical = if (!isCompactList && !tableRow) 6.dp else 0.dp)
+            .scale(if (tableRow) 1f else itemScale)
             .then(
-                if (tokens.structure.hardShadow != null) {
-                    // Жёсткий блок: строки списка плоские, плита под каждой строкой превратила бы ленту в шум
-                    Modifier.vlHairline(tokens.structure.outline ?: cs.outlineVariant, shape, width = 1.5.dp)
+                if (tableRow) {
+                    Modifier.vlTableRow(
+                        divider = tokens.structure.outline?.copy(alpha = 0.18f) ?: cs.outlineVariant,
+                        accent = if (unreadCount > 0) cs.primary else null,
+                        pressed = isPressed,
+                        pressFill = cs.primary.copy(alpha = 0.08f),
+                        dividerStart = 82.dp,
+                    )
                 } else if (tokens.structure.enabled && !isCompactList) {
                     Modifier.vlRaised(tokens.structure, shape)
                 } else if (tokens.structure.enabled) {
@@ -153,8 +162,8 @@ fun ChatListItem(
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = shape,
-        color = cardColor,
-        border = if (tokens.structure.hardShadow != null) null else cardBorder
+        color = if (tableRow) Color.Transparent else cardColor,
+        border = if (tableRow) null else cardBorder
     ) {
         Row(
             modifier = Modifier
@@ -166,7 +175,7 @@ fun ChatListItem(
                         Modifier.background(Brush.verticalGradient(listOf(gTop, gBottom)))
                     } else Modifier
                 )
-                .padding(horizontal = 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
+                .padding(horizontal = if (tableRow) 16.dp else 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {

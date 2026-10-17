@@ -683,25 +683,32 @@ private fun StickerCell(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (isPressed) 0.88f else 1f, spring(dampingRatio = 0.5f, stiffness = 400f))
+    // Forge v2: сетка стикеров без коробок — шестнадцать рамок с бейджами были главным шумом листа.
+    // Ячейка проявляется только при нажатии: заливка и угловые скобки
+    val bare = tokens.structure.hardShadow != null
 
     Box(
         modifier = Modifier
             .aspectRatio(1f)
-            .scale(scale)
+            .scale(if (bare) 1f else scale)
             .then(
-                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, itemShape)
+                if (tokens.structure.enabled && !bare) Modifier.vlRaised(tokens.structure, itemShape)
                 else Modifier
             )
             .clip(itemShape)
             .background(
-                if (tokens.isBiolume) cs.surfaceContainer.copy(alpha = 0.65f)
-                else cs.surfaceVariant.copy(alpha = 0.4f),
+                when {
+                    bare -> if (isPressed) cs.primary.copy(alpha = 0.12f) else Color.Transparent
+                    tokens.isBiolume -> cs.surfaceContainer.copy(alpha = 0.65f)
+                    else -> cs.surfaceVariant.copy(alpha = 0.4f)
+                },
                 itemShape
             )
             .then(
-                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), itemShape)
+                if (tokens.structure.enabled && !bare) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), itemShape)
                 else Modifier
             )
+            .vlCornerBrackets(cs.primary, active = bare && isPressed, length = 10.dp, thickness = 2.dp)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -729,7 +736,7 @@ private fun StickerCell(
             )
             .padding(horizontal = 5.dp, vertical = 2.dp)
 
-        Text(sticker.emoji, fontSize = 11.sp, modifier = emojiMod)
+        if (!bare) Text(sticker.emoji, fontSize = 11.sp, modifier = emojiMod)
     }
 }
 

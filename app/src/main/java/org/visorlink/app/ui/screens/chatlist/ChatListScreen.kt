@@ -181,6 +181,8 @@ fun ChatListScreen(
                             hapticEnabled = hapticEnabled,
                             onClick = { onOpenProfile() }
                         )
+                        // Без отступа аватар упирался в край экрана (в шапке без рамки — Forge, M3E)
+                        Spacer(Modifier.width(8.dp))
                     }
                     Spacer(Modifier.width(8.dp))
                 }
