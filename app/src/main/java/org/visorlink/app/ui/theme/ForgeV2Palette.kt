@@ -219,7 +219,7 @@ internal fun forgeV2Signal(f: ForgeV2.Flavor) = VlSignalTokens(
     fabRestAlpha = if (f.beast) 0.14f else 0.2f,
     focusBorder = 1.dp,
     pulsePeriodMs = 2000,
-    buttonRestAlpha = 0.2f * f.neon,
+    buttonRestAlpha = 0.12f * f.neon,
 )
 
 /** Дисплей терминала: неоновая дымка основного цвета сверху, у Protogen ещё сканлайны. */

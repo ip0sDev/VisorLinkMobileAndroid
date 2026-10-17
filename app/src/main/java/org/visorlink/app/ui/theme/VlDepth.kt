@@ -20,6 +20,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
@@ -38,6 +44,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.BuildConfig
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.roundToInt
 
 /**
  * Два независимых слоя глубины из гайдлайна §4.
@@ -398,17 +405,23 @@ fun Modifier.vlTerminalBackdrop(tokens: VlTokens): Modifier {
         val haze = t.haze?.let {
             Brush.radialGradient(listOf(it, Color.Transparent), center = Offset(w * 0.5f, -h * 0.06f), radius = big * 0.7f)
         }
-        val scan = if (t.scanlines) Path().apply {
-            val line = 1.dp.toPx()
-            val gap = 3.dp.toPx()
-            var y = 0f
-            while (y < h) { addRect(Rect(0f, y, w, y + line)); y += gap }
+        // Сканлайны — один тайл 1×gap px в текстуре: GPU размножает его одним drawRect.
+        // Раньше это был путь из сотен прямоугольников, который растеризовался заново на каждый кадр.
+        val scan = if (t.scanlines) {
+            val line = 1.dp.toPx().coerceAtLeast(1f)
+            val gap = 3.dp.toPx().coerceAtLeast(line + 1f)
+            val tile = ImageBitmap(1, gap.roundToInt().coerceAtLeast(2))
+            Canvas(tile).drawRect(
+                Rect(0f, 0f, 1f, line.toInt().coerceAtLeast(1).toFloat()),
+                Paint().apply { color = Color.White.copy(alpha = t.scanlineAlpha) },
+            )
+            ShaderBrush(ImageShader(tile, TileMode.Repeated, TileMode.Repeated))
         } else null
 
         onDrawWithContent {
             drawContent()
             haze?.let { drawRect(it) }
-            scan?.let { drawPath(it, Color.White.copy(alpha = t.scanlineAlpha)) }
+            scan?.let { drawRect(it) }
         }
     }
 }

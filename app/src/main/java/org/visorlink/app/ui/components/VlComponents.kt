@@ -12,6 +12,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -236,11 +237,18 @@ fun VlButton(
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     val container = if (isDestructive) cs.error else cs.primary
     val onContainer = if (isDestructive) cs.onError else cs.onPrimary
 
     val shape: Shape = if (isPressed) tokens.shapes.buttonPressed else tokens.shapes.button
+
+    // Forge v2: неон при появлении вспыхивает втрое и за 0,9 с успокаивается до тихого свечения в покое
+    val restAlpha = tokens.signal.buttonRestAlpha
+    val intro = remember { Animatable(if (restAlpha > 0f && tokens.glitchMotion) 1f else 0f) }
+    LaunchedEffect(Unit) { if (intro.value > 0f) intro.animateTo(0f, TerminalMotion.tween(900)) }
+    val glowAlpha = restAlpha * (1f + 2f * intro.value)
 
     Button(
         onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
@@ -255,8 +263,15 @@ fun VlButton(
                 shape = shape,
                 // Опасное действие в покое не светится — неон не должен звать к «Удалить»
                 active = enabled && (isPressed || (!isDestructive && tokens.signal.buttonRestAlpha > 0f)),
-                alphaOverride = if (isPressed) null else tokens.signal.buttonRestAlpha,
+                alphaOverride = if (isPressed) null else glowAlpha,
                 counted = isPressed,
+            )
+            // Нажатие и фокус с клавиатуры/D-pad в терминале — неоновый контур по форме кнопки
+            .vlSignalBorder(
+                tokens = tokens.signal,
+                color = tokens.terminal?.neon ?: container,
+                shape = shape,
+                active = tokens.terminal != null && enabled && (isPressed || isFocused),
             ),
         enabled = enabled,
         shape = shape,
