@@ -186,6 +186,11 @@ data class VlShapeTokens(
      * ([adapt], [rounded]) зажимаются до него — иначе «жидкие» 32 dp в терминале.
      */
     val maxRadius: Dp? = null,
+    /**
+     * Срез углов (Forge v2): любая скруглённая форма через [adapt] / [rounded] становится
+     * [ChamferShape] с этим срезом — иначе рядом стояли бы срезанные токены и скруглённые экраны.
+     */
+    val chamfer: Dp? = null,
 ) {
     /** Шкала без скруглений. */
     val isSquare: Boolean get() = cardRadius == 0.dp
@@ -201,6 +206,7 @@ data class VlShapeTokens(
      */
     fun adapt(shape: Shape): Shape = when {
         isSquare -> RectangleShape
+        chamfer != null && shape is CornerBasedShape -> ChamferShape(chamfer)
         maxRadius != null && shape is CornerBasedShape -> ClampedCornerShape(shape, maxRadius)
         else -> shape
     }
@@ -326,6 +332,8 @@ data class VlBubbleTokens(
 @Immutable
 data class VlTerminalTokens(
     val labelPrefix: String,
+    /** Короткая метка режима для строки состояния (`VL//PROTOGEN`). */
+    val tag: String = "",
     /** Сканлайны: белый с этой непрозрачностью каждые 3 px, 0 — без них. */
     val scanlineAlpha: Float = 0f,
     /** Неоновые линии: основной цвет и второй (градиент вдоль линии). */

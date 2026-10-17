@@ -20,7 +20,11 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.theme.VlTheme
 
 /**
@@ -147,3 +151,59 @@ fun TerminalDecodeText(
 
 private const val BAND = 2
 private const val NOISE = "#/<>_=+*01░▒▓"
+
+/**
+ * Прогресс «трассировки» (0 → 1) для [org.visorlink.app.ui.theme.vlTraceBorder]: стартует при смене
+ * [key] (появление панели, фокус поля). Без терминальной анимации (другая тема, «убрать анимации»)
+ * сразу 1 — эффект не рисуется. Часы скриншот-тестов добегают до 1 за 1,5 с.
+ */
+@Composable
+fun rememberTrace(key: Any?, enabled: Boolean = true, durationMs: Int = 700): Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val on = enabled && VlTheme.tokens.glitchMotion
+    val anim = remember(key, on) { Animatable(if (on) 0f else 1f) }
+    LaunchedEffect(key, on) { if (on) anim.animateTo(1f, TerminalMotion.tween(durationMs)) }
+    return anim
+}
+
+/**
+ * Линейка: тонкая линия с засечками (каждая пятая выше), гаснущая вправо. Разделитель заголовков
+ * разделов Forge v2 вместо простой линии.
+ */
+@Composable
+fun TerminalRuler(color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .height(8.dp)
+            .drawBehind {
+                val step = 6.dp.toPx()
+                val base = size.height - 1.dp.toPx()
+                var i = 0
+                while (i * step < size.width) {
+                    val x = i * step
+                    val fade = 1f - x / size.width * 0.9f
+                    val tick = if (i % 5 == 0) 6.dp.toPx() else 3.dp.toPx()
+                    drawRect(color.copy(alpha = 0.5f * fade), Offset(x, base - tick), Size(1.dp.toPx(), tick))
+                    i++
+                }
+                drawRect(color.copy(alpha = 0.4f), Offset(0f, base), Size(size.width, 1.dp.toPx()))
+            }
+    )
+}
+
+/**
+ * Строка состояния терминала над заголовком верхней панели: метка режима и реальный статус сети.
+ * Время не показываем: оно меняло бы скриншоты каждую минуту.
+ */
+@Composable
+fun TerminalStatusStrip(modifier: Modifier = Modifier) {
+    val terminal = VlTheme.tokens.terminal ?: return
+    val monitor = org.koin.compose.getKoin().getOrNull<org.visorlink.app.utils.NetworkMonitor>()
+    val online = monitor?.isOnline?.collectAsStateWithLifecycle()?.value ?: true
+    androidx.compose.material3.Text(
+        text = "VL//${terminal.tag}  NET:${if (online) "OK" else "OFF"}",
+        modifier = modifier,
+        color = terminal.neon.copy(alpha = if (online) 0.55f else 0.9f),
+        style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 9.sp, letterSpacing = 1.2.sp),
+        maxLines = 1,
+    )
+}

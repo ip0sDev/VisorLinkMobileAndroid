@@ -96,7 +96,16 @@ fun VlTopAppBar(
 
         TopAppBar(
             // Forge v2: заголовок печатается за блочным курсором с RGB-расслоением; в M3E — как есть
-            title = { Box(Modifier.terminalTitleReveal()) { title() } },
+            title = {
+                if (tokens.terminal != null) {
+                    Column {
+                        TerminalStatusStrip()
+                        Box(Modifier.terminalTitleReveal()) { title() }
+                    }
+                } else {
+                    Box(Modifier.terminalTitleReveal()) { title() }
+                }
+            },
             // Forge v2: неоновая линия под панелью; в M3E — no-op
             modifier = modifier.vlNeonRule(tokens),
             navigationIcon = navigationIcon,

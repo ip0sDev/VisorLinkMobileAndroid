@@ -173,26 +173,28 @@ fun forgeV2ColorScheme(f: ForgeV2.Flavor): ColorScheme = darkColorScheme(
 
 /** Шкала скруглений: xs 2 · sm 3 · md 4 · lg 6/8 · 2xl 8/10 (ограничивает любую форму). */
 fun forgeV2Shapes(f: ForgeV2.Flavor): VlShapeTokens {
-    val lg = RoundedCornerShape(f.radiusLg)
+    // Силуэт: диагональная пара срезанных углов. Скругления нет вообще, потолок — для чужих форм
+    val cut = ChamferShape(8.dp)
+    val small = ChamferShape(5.dp)
     return VlShapeTokens(
-        button = lg,
-        buttonPressed = RoundedCornerShape(4.dp),
-        card = lg,
-        field = RoundedCornerShape(4.dp),
-        chip = lg,
-        fab = lg,
-        bar = RoundedCornerShape(f.radius2xl),
-        inputPanel = lg,
-        pill = lg,
-        // Точки статуса и бегунок остаются круглыми: на 8–10 dp это и есть --radius-full
+        button = cut,
+        buttonPressed = cut,
+        card = cut,
+        field = ChamferShape(6.dp),
+        chip = small,
+        fab = cut,
+        bar = cut,
+        inputPanel = cut,
+        pill = small,
+        // Точки статуса остаются мелкими блоками: у 8 dp срез и круг неразличимы
         indicator = CircleShape,
-        avatar = lg,
+        avatar = ChamferShape(6.dp),
         cardRadius = f.radiusLg,
         buttonRadius = f.radiusLg,
-        section = lg,
-        // Строка отступает от края секции на 8 dp — концентрично это почти прямой угол
-        row = RoundedCornerShape(3.dp),
+        section = cut,
+        row = small,
         maxRadius = f.radius2xl,
+        chamfer = 6.dp,
     )
 }
 
@@ -230,12 +232,14 @@ internal fun forgeV2Signal(f: ForgeV2.Flavor) = VlSignalTokens(
 internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
     VlTerminalTokens(
         labelPrefix = "",
+        tag = "BEAST",
         neon = f.primary,
         neonAlt = f.secondary,
     )
 } else {
     VlTerminalTokens(
         labelPrefix = "> ",
+        tag = "PROTOGEN",
         neon = f.primary,
         neonAlt = f.secondary,
     )

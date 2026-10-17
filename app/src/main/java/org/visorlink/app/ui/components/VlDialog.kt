@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlCornerBrackets
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlTraceBorder
 import org.visorlink.app.ui.theme.vlRaised
 
 @Composable
@@ -88,6 +90,7 @@ fun VlAlertDialog(
             val shape = tokens.shapes.card
             // Жёсткая плита выходит за границы диалога вправо и вниз — окну нужен запас под неё
             val plate = if (tokens.structure.hardShadow != null) tokens.structure.hardOffset else 0.dp
+            val trace = rememberTrace(Unit, enabled = tokens.structure.hardShadow != null)
             Box(
                 modifier = modifier
                     .padding(end = plate, bottom = plate)
@@ -96,6 +99,8 @@ fun VlAlertDialog(
                     .clip(shape)
                     .background(cs.surfaceContainerHigh, shape)
                     .vlHairline(cs.outlineVariant, shape)
+                    .vlTraceBorder(cs.primary, shape, { trace.value })
+                    .vlCornerBrackets(cs.primary, active = tokens.structure.hardShadow != null, progress = { trace.value })
             ) { body() }
         } else {
             VlSurface(

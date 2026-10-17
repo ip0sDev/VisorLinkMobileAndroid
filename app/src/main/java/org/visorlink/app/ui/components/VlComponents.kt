@@ -610,16 +610,10 @@ fun VlSettingsSection(
                     color = titleColor.copy(alpha = 0.9f),
                     style = org.visorlink.app.ui.theme.ForgeV2SectionLabel,
                 )
-                Box(
-                    Modifier
-                        .padding(start = 10.dp)
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(titleColor.copy(alpha = 0.45f), terminal.neonAlt.copy(alpha = 0.18f), Color.Transparent)
-                            )
-                        )
+                // Линейка с засечками вместо простой линии
+                TerminalRuler(
+                    color = titleColor,
+                    modifier = Modifier.padding(start = 10.dp).weight(1f),
                 )
             } else {
                 Text(
@@ -657,6 +651,8 @@ fun VlSettingsSection(
             BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
         }
 
+        // Терминал: при появлении раздела по контуру пробегает яркий отрезок
+        val trace = rememberTrace(Unit, enabled = tokens.structure.hardShadow != null)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -668,6 +664,10 @@ fun VlSettingsSection(
                 .clip(sectionShape)
                 .background(cardBrush, sectionShape)
                 .border(cardBorder, sectionShape)
+                .then(
+                    if (tokens.structure.hardShadow != null) Modifier.vlTraceBorder(cs.primary, sectionShape, { trace.value })
+                    else Modifier
+                )
         ) {
             Column(
                 modifier = Modifier

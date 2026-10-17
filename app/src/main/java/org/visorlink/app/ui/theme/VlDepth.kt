@@ -331,6 +331,63 @@ fun Modifier.vlHairline(
 }
 
 /**
+ * Угловые скобки на двух НЕсрезанных углах (верхний-конечный и нижний-начальный): вместе со
+ * срезом [ChamferShape] они замыкают силуэт. [progress] — рост скобок от 0 до полной длины.
+ */
+fun Modifier.vlCornerBrackets(
+    color: Color,
+    active: Boolean = true,
+    length: Dp = 16.dp,
+    thickness: Dp = 4.dp,
+    progress: () -> Float = { 1f },
+): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        val p = progress().coerceIn(0f, 1f)
+        if (p <= 0f) return@drawWithContent
+        val len = length.toPx() * p
+        val t = thickness.toPx()
+        val w = size.width
+        val h = size.height
+        // верхний правый
+        drawLine(color, Offset(w - len, t / 2), Offset(w, t / 2), strokeWidth = t)
+        drawLine(color, Offset(w - t / 2, 0f), Offset(w - t / 2, len), strokeWidth = t)
+        // нижний левый
+        drawLine(color, Offset(0f, h - t / 2), Offset(len, h - t / 2), strokeWidth = t)
+        drawLine(color, Offset(t / 2, h - len), Offset(t / 2, h), strokeWidth = t)
+    }
+}
+
+/**
+ * «Трассировка» контура: яркий отрезок пробегает по периметру формы и гаснет. Играет один раз
+ * при появлении панели или фокусе поля; [progress] 0..1, при 0 и 1 ничего не рисуется.
+ */
+fun Modifier.vlTraceBorder(
+    color: Color,
+    shape: Shape,
+    progress: () -> Float,
+    width: Dp = 2.dp,
+    tail: Float = 0.3f,
+): Modifier = this.drawWithCache {
+    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+    val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+    val total = measure.length
+    val segment = Path()
+    onDrawWithContent {
+        drawContent()
+        val p = progress()
+        if (p > 0.001f && p < 0.999f && total > 0f) {
+            segment.reset()
+            val end = total * p
+            val start = (end - total * tail).coerceAtLeast(0f)
+            measure.getSegment(start, end, segment, true)
+            drawPath(segment, color.copy(alpha = color.alpha * (1f - p * 0.7f)), style = Stroke(width = width.toPx()))
+        }
+    }
+}
+
+/**
  * Жёсткая тень: плотная копия формы, сдвинутая вправо-вниз без размытия. Рисуется под элементом,
  * поэтому элементу нужен запас [offset] справа и снизу.
  */
@@ -526,6 +583,17 @@ fun Modifier.vlNeonRule(tokens: VlTokens, width: Dp = 1.dp): Modifier {
         val h = width.toPx()
         // Тонкая линия по всей ширине и жирный блок слева — как метка раздела на плите
         drawRect(t.neon.copy(alpha = 0.28f), Offset(0f, size.height - h), Size(size.width, h))
+        // Засечки линейки: каждая пятая выше, к правому краю гаснут
+        val step = 8.dp.toPx()
+        var i = 0
+        while (i * step < size.width) {
+            val x = i * step
+            val major = i % 5 == 0
+            val a = 0.32f * (1f - x / size.width * 0.85f)
+            val tick = if (major) 5.dp.toPx() else 3.dp.toPx()
+            drawRect(t.neon.copy(alpha = a), Offset(x, size.height - h - tick), Size(1.dp.toPx(), tick))
+            i++
+        }
         drawRect(t.neon, Offset(0f, size.height - h * 3f), Size(size.width * 0.28f, h * 3f))
     }
 }

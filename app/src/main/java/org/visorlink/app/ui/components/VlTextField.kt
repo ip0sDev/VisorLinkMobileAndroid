@@ -30,7 +30,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.ForgeV2SectionLabel
+import org.visorlink.app.ui.theme.vlCornerBrackets
 import org.visorlink.app.ui.theme.vlDashedBorder
+import org.visorlink.app.ui.theme.vlTraceBorder
 import org.visorlink.app.ui.theme.vlHardShadow
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlSignalBorder
@@ -112,7 +115,19 @@ fun VlTextField(
     val shape: Shape = fieldShape
     val signalColor = if (isError) cs.error else cs.primary
 
+    // Терминал: при фокусе по контуру пробегает отрезок, углы замыкаются скобками
+    val trace = rememberTrace(isFocused, enabled = hardBlock && isFocused)
+
     Column(modifier = modifier.fillMaxWidth()) {
+        // Терминал: подпись поля — моно-капитель над полем, а не плейсхолдер внутри
+        if (isTerminal && label != null) {
+            Text(
+                text = "> " + label.uppercase(),
+                style = ForgeV2SectionLabel,
+                color = if (isFocused) cs.primary else cs.onSurfaceVariant,
+                modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
+            )
+        }
         Box(modifier = Modifier.fillMaxWidth()) {
             BasicTextField(
                 value = value,
@@ -154,6 +169,13 @@ fun VlTextField(
                     // Inset-тень остаётся и при фокусе (§4.2).
                     .vlInset(tokens.structure, shape)
                     .vlDashedBorder(cs.outline, shape, active = isTerminal && !enabled)
+                    .vlTraceBorder(cs.primary, shape, { if (hardBlock && isFocused) trace.value else 0f })
+                    .vlCornerBrackets(
+                        color = signalColor,
+                        active = hardBlock && enabled && isFocused,
+                        length = 14.dp,
+                        progress = { trace.value },
+                    )
                     .vlSignalBorder(
                         tokens = tokens.signal,
                         color = signalColor,
