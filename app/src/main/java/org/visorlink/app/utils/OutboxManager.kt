@@ -175,6 +175,9 @@ class OutboxManager(
                                     }
                                     outboxDataSource.updateStatus(context, action.id, 1)
                                 } catch (e: Exception) {
+                                    // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
+                                    // Таймаут — тоже CancellationException, но он считается обычной неудачей.
+                                    if (e is CancellationException && e !is TimeoutCancellationException) throw e
                                     val nextRetry = action.retryCount + 1
                                     outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
                                     // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера

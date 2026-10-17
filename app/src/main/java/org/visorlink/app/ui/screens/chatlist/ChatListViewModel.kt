@@ -37,7 +37,8 @@ class ChatListViewModel(
     val typingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
         ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
 
-    val currentUid: String get() = auth.currentUser!!.uid
+    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
+    val currentUid: String = auth.currentUser?.uid.orEmpty()
 
     val currentUser: StateFlow<UserProfile?> = userRepository.currentUserFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)

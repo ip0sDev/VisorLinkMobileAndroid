@@ -98,7 +98,8 @@ class ChatSettingsViewModel(
     val chatId: String
 ) : ViewModel() {
 
-    val currentUid: String get() = auth.currentUser!!.uid
+    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
+    val currentUid: String = auth.currentUser?.uid.orEmpty()
 
     private val _uiState = MutableStateFlow(ChatSettingsUiState(currentUid = currentUid))
     val uiState: StateFlow<ChatSettingsUiState> = _uiState.asStateFlow()

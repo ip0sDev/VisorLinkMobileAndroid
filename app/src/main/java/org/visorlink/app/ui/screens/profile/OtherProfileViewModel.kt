@@ -36,7 +36,8 @@ class OtherProfileViewModel(
     }
 
     suspend fun openOrCreateChat(): String {
-        val me = userRepository.getUserProfile(auth.currentUser!!.uid)
+        val myUid = auth.currentUser?.uid ?: throw Exception("Not logged in")
+        val me = userRepository.getUserProfile(myUid)
             ?: throw Exception("Not logged in")
         return chatRepository.findOrCreateChat(me, targetUid)
     }

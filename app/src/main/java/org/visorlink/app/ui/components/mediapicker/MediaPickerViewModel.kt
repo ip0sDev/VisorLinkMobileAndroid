@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.mediapicker
 
+import io.sentry.Sentry
 import android.app.Application
 import android.content.ContentUris
 import android.net.Uri
@@ -148,7 +149,8 @@ class MediaPickerViewModel(application: Application) : AndroidViewModel(applicat
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Sentry.captureException(e)
             }
         }
 
@@ -197,7 +199,8 @@ class MediaPickerViewModel(application: Application) : AndroidViewModel(applicat
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                Sentry.captureException(e)
             }
         }
 

@@ -1,5 +1,6 @@
 package org.visorlink.app.data.repository
 
+import io.sentry.Sentry
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
@@ -252,7 +253,7 @@ class FlagsRepository(
             true
         } catch (e: Exception) {
             if (BuildConfig.DEBUG) Log.e("FlagsRepo", "Error parsing flags JWT", e)
-            e.printStackTrace()
+            Sentry.captureException(e)
             false
         }
     }

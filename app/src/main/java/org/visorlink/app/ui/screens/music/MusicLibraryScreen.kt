@@ -155,10 +155,11 @@ fun MusicLibraryScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (uiState.selectedPlaylist != null) {
+                val selectedPlaylist = uiState.selectedPlaylist
+                if (selectedPlaylist != null) {
                     // Просмотр треков конкретного плейлиста
                     PlaylistTracksView(
-                        playlist = uiState.selectedPlaylist!!,
+                        playlist = selectedPlaylist,
                         tracks = uiState.selectedPlaylistTracks,
                         currentTrackId = uiState.playerState.currentTrack?.id,
                         isPlaying = uiState.playerState.isPlaying,
@@ -167,7 +168,7 @@ fun MusicLibraryScreen(
                             viewModel.playTrack(track, uiState.selectedPlaylistTracks)
                         },
                         onRemoveTrack = { trackId ->
-                            viewModel.removeTrackFromPlaylist(uiState.selectedPlaylist!!.id, trackId)
+                            viewModel.removeTrackFromPlaylist(selectedPlaylist.id, trackId)
                         },
                         onDownloadTrack = { viewModel.downloadTrack(it) }
                     )

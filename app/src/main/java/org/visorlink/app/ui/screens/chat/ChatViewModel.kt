@@ -117,7 +117,8 @@ class ChatViewModel(
     private val driveAuth: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
 ) : AndroidViewModel(context) {
 
-    val currentUid: String get() = auth.currentUser!!.uid
+    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
+    val currentUid: String = auth.currentUser?.uid.orEmpty()
     private var currentUsername = ""
 
     private val _uiState = MutableStateFlow(ChatUiState())
