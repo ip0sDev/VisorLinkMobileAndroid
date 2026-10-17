@@ -111,6 +111,13 @@ fun Modifier.vlRaised(
 ): Modifier {
     if (!tokens.enabled) return this
 
+    // Forge v2, жёсткий блок: плотная плита без размытия и крепкий контур
+    if (tokens.outline != null && tokens.hardShadow != null) {
+        return this
+            .vlHardShadow(tokens.hardShadow, shape, tokens.hardOffset)
+            .vlHairline(tokens.outline, shape, width = 1.5.dp)
+    }
+
     // Forge v2: плоская панель — контур поверх содержимого и короткая мягкая тень вниз
     tokens.outline?.let { outline ->
         return this
@@ -158,6 +165,16 @@ fun Modifier.vlInset(
     shape: Shape,
 ): Modifier {
     if (!tokens.enabled) return this
+
+    // Forge v2, жёсткий блок: принимающая поверхность плоская, только контур
+    if (tokens.outline != null && tokens.hardShadow != null) {
+        val outline = tokens.outline
+        return this.drawWithContent {
+            drawContent()
+            val path = shape.toPath(size, layoutDirection, this)
+            clipPath(path) { drawPath(path = path, color = outline, style = Stroke(width = 1.5.dp.toPx() * 2f)) }
+        }
+    }
 
     // Forge v2: контур и внутренняя тень сверху (--neo-shadow-in)
     tokens.outline?.let { outline ->
@@ -314,6 +331,51 @@ fun Modifier.vlHairline(
 }
 
 /**
+ * Жёсткая тень: плотная копия формы, сдвинутая вправо-вниз без размытия. Рисуется под элементом,
+ * поэтому элементу нужен запас [offset] справа и снизу.
+ */
+fun Modifier.vlHardShadow(
+    color: Color,
+    shape: Shape,
+    offset: Dp = 4.dp,
+    active: Boolean = true,
+): Modifier {
+    if (!active) return this
+    return this.drawBehind {
+        val d = offset.toPx()
+        translate(d, d) {
+            drawPath(shape.toPath(size, layoutDirection, this), color)
+        }
+    }
+}
+
+/**
+ * Косая «предупреждающая» штриховка по форме: у опасных действий в Forge v2. Узор рисуется
+ * поверх содержимого, поэтому цвет берут полупрозрачным.
+ */
+fun Modifier.vlHazardStripes(
+    color: Color,
+    shape: Shape,
+    active: Boolean = true,
+    stripe: Dp = 5.dp,
+    period: Dp = 14.dp,
+): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        clipPath(shape.toPath(size, layoutDirection, this)) {
+            val step = period.toPx()
+            val w = stripe.toPx()
+            var x = -size.height
+            while (x < size.width) {
+                drawLine(color, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = w)
+                x += step
+            }
+        }
+    }
+}
+
+/**
  * Пунктирный контур по форме — «погашенный» элемент терминала (disabled в Forge v2).
  * Сплошной контур значит «живой», пунктир — «сейчас недоступен».
  */
@@ -461,16 +523,9 @@ fun Modifier.vlNeonRule(tokens: VlTokens, width: Dp = 1.dp): Modifier {
     val t = tokens.terminal ?: return this
     return this.drawWithContent {
         drawContent()
-        val y = size.height - width.toPx() / 2f
-        drawLine(
-            brush = Brush.horizontalGradient(
-                0f to t.neon.copy(alpha = 0.9f),
-                0.55f to t.neonAlt.copy(alpha = 0.45f),
-                1f to Color.Transparent,
-            ),
-            start = Offset(0f, y),
-            end = Offset(size.width, y),
-            strokeWidth = width.toPx(),
-        )
+        val h = width.toPx()
+        // Тонкая линия по всей ширине и жирный блок слева — как метка раздела на плите
+        drawRect(t.neon.copy(alpha = 0.28f), Offset(0f, size.height - h), Size(size.width, h))
+        drawRect(t.neon, Offset(0f, size.height - h * 3f), Size(size.width * 0.28f, h * 3f))
     }
 }

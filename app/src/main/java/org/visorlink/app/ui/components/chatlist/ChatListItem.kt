@@ -138,7 +138,10 @@ fun ChatListItem(
             .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
             .scale(itemScale)
             .then(
-                if (tokens.structure.enabled && !isCompactList) {
+                if (tokens.structure.hardShadow != null) {
+                    // Жёсткий блок: строки списка плоские, плита под каждой строкой превратила бы ленту в шум
+                    Modifier.vlHairline(tokens.structure.outline ?: cs.outlineVariant, shape, width = 1.5.dp)
+                } else if (tokens.structure.enabled && !isCompactList) {
                     Modifier.vlRaised(tokens.structure, shape)
                 } else if (tokens.structure.enabled) {
                     Modifier.vlHairline(cs.outlineVariant, shape)
@@ -149,7 +152,7 @@ fun ChatListItem(
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = shape,
         color = cardColor,
-        border = cardBorder
+        border = if (tokens.structure.hardShadow != null) null else cardBorder
     ) {
         Row(
             modifier = Modifier

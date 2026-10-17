@@ -192,6 +192,7 @@ private fun NeumorphicLiquidNavBarContent(
     val tokens = VlTheme.tokens
     val density = LocalDensity.current
     val haptic = rememberHaptic()
+    val invertedPill = tokens.structure.hardShadow != null
 
     val chatsLabel = stringResource(R.string.nav_tab_chats)
     val feedLabel = stringResource(R.string.feed_title)
@@ -355,10 +356,11 @@ private fun NeumorphicLiquidNavBarContent(
                         this.scaleY = 1f - stretch * 0.12f
                         this.clip = false
                     }
-                    .vlRaised(tokens.structure, pillShape)
+                    .then(if (invertedPill) Modifier else Modifier.vlRaised(tokens.structure, pillShape))
                     .clip(pillShape)
-                    .background(cs.surfaceContainerHighest)
-                    .vlHairline(cs.outlineVariant, pillShape)
+                    // Жёсткий блок: выбранная вкладка — сплошной инвертированный блок
+                    .background(if (invertedPill) cs.primary else cs.surfaceContainerHighest)
+                    .then(if (invertedPill) Modifier else Modifier.vlHairline(cs.outlineVariant, pillShape))
             )
         }
 
@@ -379,7 +381,7 @@ private fun NeumorphicLiquidNavBarContent(
             )
 
             val contentColor by animateColorAsState(
-                targetValue = if (isSelected) cs.primary else cs.onSurfaceVariant,
+                targetValue = if (isSelected) (if (invertedPill) cs.onPrimary else cs.primary) else cs.onSurfaceVariant,
                 animationSpec = navBouncy(glitch),
                 label = "liquid_tab_content_color_$index"
             )

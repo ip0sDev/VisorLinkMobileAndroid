@@ -89,6 +89,14 @@ data class VlStructureTokens(
      * внутренняя тень сверху.
      */
     val outline: Color? = null,
+    /**
+     * Не null — «жёсткая» тень Forge v2: плотная копия формы, сдвинутая на [hardOffset] без
+     * размытия. Панель стоит на собственной плите, а не парит. Цвет непрозрачный (смесь с фоном).
+     */
+    val hardShadow: Color? = null,
+    /** Цвет жёсткой тени у кнопок и акцентных элементов (второй цвет темы). */
+    val hardShadowAlt: Color? = null,
+    val hardOffset: Dp = 4.dp,
 ) {
     companion object {
         /** M3E рельефом не пользуется — elevation остаётся за Material. */

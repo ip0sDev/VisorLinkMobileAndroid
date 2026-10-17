@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -243,6 +244,8 @@ fun VlButton(
     val onContainer = if (isDestructive) cs.onError else cs.onPrimary
 
     val shape: Shape = if (isPressed) tokens.shapes.buttonPressed else tokens.shapes.button
+    val hardAlt = tokens.structure.hardShadowAlt
+    val hardPx = with(androidx.compose.ui.platform.LocalDensity.current) { tokens.structure.hardOffset.roundToPx() }
 
     // Forge v2: неон при появлении вспыхивает втрое и за 0,9 с успокаивается до тихого свечения в покое
     val restAlpha = tokens.signal.buttonRestAlpha
@@ -255,6 +258,9 @@ fun VlButton(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
+            // Жёсткий блок: кнопка стоит на плите второго цвета, при нажатии «вдавливается» в неё
+            .then(if (hardAlt != null) Modifier.vlHardShadow(hardAlt, shape, tokens.structure.hardOffset, active = enabled && !isDestructive) else Modifier)
+            .offset { if (hardAlt != null && isPressed && enabled) IntOffset(hardPx, hardPx) else IntOffset.Zero }
             // Свечение — ответ на действие, а не константа (§4.2). Forge v2 держит неон
             // и в покое (buttonRestAlpha): это свойство темы, а не сигнал, поэтому не в счёт §10.
             .vlSignalGlow(
@@ -262,7 +268,7 @@ fun VlButton(
                 color = container,
                 shape = shape,
                 // Опасное действие в покое не светится — неон не должен звать к «Удалить»
-                active = enabled && (isPressed || (!isDestructive && tokens.signal.buttonRestAlpha > 0f)),
+                active = enabled && hardAlt == null && (isPressed || (!isDestructive && tokens.signal.buttonRestAlpha > 0f)),
                 alphaOverride = if (isPressed) null else glowAlpha,
                 counted = isPressed,
             )
@@ -274,12 +280,15 @@ fun VlButton(
                 active = tokens.terminal != null && enabled && (isPressed || isFocused),
             )
             // Терминал: недоступная кнопка — пунктирный контур, как у погасшего поля
-            .vlDashedBorder(cs.outline, shape, active = tokens.terminal != null && !enabled),
+            .vlDashedBorder(cs.outline, shape, active = tokens.terminal != null && !enabled)
+            // Опасное действие в терминале — косая штриховка (и никакой яркой плиты)
+            .vlHazardStripes(cs.onError.copy(alpha = 0.22f), shape, active = tokens.terminal != null && isDestructive && enabled),
         enabled = enabled,
         shape = shape,
         interactionSource = interactionSource,
         elevation = when {
             tokens.isBiolume -> ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
+            hardAlt != null -> ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp)
             else -> ButtonDefaults.buttonElevation()
         },
         colors = ButtonDefaults.buttonColors(
@@ -447,11 +456,14 @@ fun VlSegmentedControl(
     val tokens = VlTheme.tokens
     val shape = tokens.shapes.pill
     val itemShape: Shape = tokens.shapes.pill
+    // Forge v2: выбор — инвертированный блок (сплошной цвет, тёмный текст), как выделение в терминале
+    val inverted = tokens.structure.hardShadow != null
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.45f)
+            .then(if (inverted) Modifier.border(1.5.dp, tokens.structure.outline ?: cs.outline, shape) else Modifier)
             .vlDashedBorder(cs.outline, shape, active = !enabled && tokens.terminal != null)
             .background(cs.surfaceContainerLow, shape)
             .padding(4.dp)
@@ -463,11 +475,12 @@ fun VlSegmentedControl(
                     !isSelected -> Color.Transparent
                     // Плотная заливка: primaryContainer с alpha .12 на контейнере
                     // не читался, выбор выглядел как его отсутствие.
+                    inverted -> cs.primary
                     else -> tokens.selectionFill
                 }
                 val bgColor by animateColorAsState(targetBg, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_bg")
                 val textColor by animateColorAsState(
-                    if (isSelected) cs.primary else cs.onSurfaceVariant, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_txt"
+                    if (isSelected) (if (inverted) cs.onPrimary else cs.primary) else cs.onSurfaceVariant, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_txt"
                 )
 
                 Box(
@@ -476,7 +489,7 @@ fun VlSegmentedControl(
                         .clip(itemShape)
                         .background(bgColor, itemShape)
                         .then(
-                            if (tokens.structure.enabled && isSelected) {
+                            if (tokens.structure.enabled && isSelected && !inverted) {
                                 Modifier.vlInset(tokens.structure, itemShape)
                             } else {
                                 Modifier
@@ -517,7 +530,8 @@ fun VlIconTray(
     val tokens = VlTheme.tokens
     val color = iconColor ?: if (isError) cs.error else if (selected) cs.primary else cs.onSurfaceVariant
     val size = 40.dp
-    val shape = tokens.shapes.indicator
+    // Жёсткий блок: кнопка-иконка — квадратная плита, а не круг
+    val shape = if (tokens.structure.hardShadow != null) tokens.shapes.rounded(2.dp) else tokens.shapes.indicator
 
     Box(
         modifier = modifier

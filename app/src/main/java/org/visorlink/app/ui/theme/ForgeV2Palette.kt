@@ -71,8 +71,8 @@ object ForgeV2 {
         warning = Color(0xFFFFD23D),
         error = Color(0xFFFF4F6B),
         onError = Color(0xFF2A0008),
-        radiusLg = 6.dp,
-        radius2xl = 8.dp,
+        radiusLg = 2.dp,
+        radius2xl = 3.dp,
         neon = 1f,
     )
 
@@ -95,8 +95,8 @@ object ForgeV2 {
         warning = Color(0xFFFFD36B),
         error = Color(0xFFFF6B5E),
         onError = Color(0xFF2A0705),
-        radiusLg = 8.dp,
-        radius2xl = 10.dp,
+        radiusLg = 2.dp,
+        radius2xl = 3.dp,
         neon = 0.7f,
         beast = true,
     )
@@ -204,7 +204,11 @@ internal fun forgeV2Structure(f: ForgeV2.Flavor) = VlStructureTokens(
     enabled = true,
     shadowDark = Color.Black.copy(alpha = 0.55f),
     shadowLight = Color.Transparent,
-    outline = f.primary.copy(alpha = 0.16f),
+    outline = f.primary.copy(alpha = 0.30f),
+    // Жёсткие плиты: панель — тусклая плита под цвет основного, кнопка — яркая второго цвета
+    hardShadow = ForgeV2.mix(f.primary, 0.26f, f.background),
+    hardShadowAlt = ForgeV2.mix(f.secondary, 0.85f, f.background),
+    hardOffset = 4.dp,
     raisedOffset = 6.dp,
     raisedBlur = 18.dp,
     insetOffset = 2.dp,
@@ -216,10 +220,10 @@ internal fun forgeV2Signal(f: ForgeV2.Flavor) = VlSignalTokens(
     enabled = true,
     glowBlur = if (f.beast) 12.dp else 14.dp,
     glowAlpha = if (f.beast) 0.22f else 0.35f,
-    fabRestAlpha = if (f.beast) 0.14f else 0.2f,
-    focusBorder = 1.dp,
+    fabRestAlpha = 0f,
+    focusBorder = 2.dp,
     pulsePeriodMs = 2000,
-    buttonRestAlpha = 0.12f * f.neon,
+    buttonRestAlpha = 0f,
 )
 
 /** Дисплей терминала: неоновая дымка основного цвета сверху, у Protogen ещё сканлайны. */
@@ -228,15 +232,12 @@ internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
         labelPrefix = "",
         neon = f.primary,
         neonAlt = f.secondary,
-        haze = f.primary.copy(alpha = 0.05f),
     )
 } else {
     VlTerminalTokens(
         labelPrefix = "> ",
-        scanlineAlpha = 0.018f,
         neon = f.primary,
         neonAlt = f.secondary,
-        haze = f.primary.copy(alpha = 0.06f),
     )
 }
 

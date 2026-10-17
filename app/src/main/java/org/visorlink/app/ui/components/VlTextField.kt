@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlDashedBorder
+import org.visorlink.app.ui.theme.vlHardShadow
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlSignalBorder
 import org.visorlink.app.ui.theme.vlSignalGlow
@@ -107,6 +108,7 @@ fun VlTextField(
     val source = interactionSource ?: remember { MutableInteractionSource() }
     val isFocused by source.collectIsFocusedAsState()
     val isTerminal = tokens.terminal != null
+    val hardBlock = tokens.structure.hardShadow != null
     val shape: Shape = fieldShape
     val signalColor = if (isError) cs.error else cs.primary
 
@@ -134,7 +136,14 @@ fun VlTextField(
                         tokens = tokens.signal,
                         color = signalColor,
                         shape = shape,
-                        active = isFocused || isError,
+                        active = !hardBlock && (isFocused || isError),
+                    )
+                    // Жёсткий блок: активное поле стоит на плите цвета сигнала вместо свечения
+                    .vlHardShadow(
+                        color = signalColor.copy(alpha = 0.55f).compositeOver(cs.background),
+                        shape = shape,
+                        offset = tokens.structure.hardOffset,
+                        active = hardBlock && enabled && (isFocused || isError),
                     )
                     .clip(shape)
                     // Терминал: активное поле слегка заливается цветом сигнала
