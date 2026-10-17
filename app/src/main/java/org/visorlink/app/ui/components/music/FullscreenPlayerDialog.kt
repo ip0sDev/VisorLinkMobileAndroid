@@ -1574,7 +1574,7 @@ private fun FluidAudioScrubber(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         isDragging = true
-                        jellyState.press()
+                        jellyState.hold()
                         val initialProgress = ((down.position.x - thumbRadiusPx) / scrubWidth).coerceIn(0f, 1f)
                         onValueChange(initialProgress)
 

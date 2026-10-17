@@ -64,7 +64,21 @@ class LiquidJellyState(
     val scaleY: Float
         get() = if (glitch) 1f else calculateJellyScale(animatable.value).second
 
+    /**
+     * Нажатие-тап: короткое сжатие и упругий возврат. Раньше элемент только сжимался и ждал
+     * [release], которого почти никто не вызывал: шапки экранов оставались сплющенными после
+     * нажатия «⋮» или «назад».
+     */
     fun press(customSoftness: Float = softness) {
+        scope.launch {
+            if (glitch) return@launch
+            animatable.animateTo(-customSoftness, tween(80))
+            animatable.animateTo(0f, spring(dampingRatio = damping, stiffness = stiffness))
+        }
+    }
+
+    /** Удержание: сжаться и остаться так до [release] (палец лежит на элементе). */
+    fun hold(customSoftness: Float = softness) {
         scope.launch {
             if (glitch) return@launch
             animatable.animateTo(-customSoftness, tween(80))

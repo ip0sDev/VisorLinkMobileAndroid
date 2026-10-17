@@ -97,7 +97,7 @@ fun ChatListFab(
 
         LaunchedEffectAfterFirst(isPressed) {
             if (isPressed) {
-                fabJelly.press(0.09f)
+                fabJelly.hold(0.09f)
             } else {
                 fabJelly.release(0.06f)
             }
