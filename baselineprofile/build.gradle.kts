@@ -33,6 +33,14 @@ baselineProfile {
     useConnectedDevices = true
 }
 
+// Генерации профиля (вариант nonMinifiedRelease) нужен только генератор: бенчмарки в этом режиме
+// пропускают себя через assumption, и AGP засчитывал их как упавшие тесты
+androidComponents {
+    onVariants(selector().withBuildType("nonMinifiedRelease")) { variant ->
+        variant.instrumentationRunnerArguments.put("class", "org.visorlink.app.baselineprofile.BaselineProfileGenerator")
+    }
+}
+
 dependencies {
     implementation(libs.androidx.junit)
     implementation(libs.androidx.espresso.core)

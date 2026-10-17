@@ -2,9 +2,6 @@ package org.visorlink.app.baselineprofile
 
 import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.uiautomator.By
-import androidx.test.uiautomator.Direction
-import androidx.test.uiautomator.Until
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -35,15 +32,6 @@ class BaselineProfileGenerator {
         device.waitForIdle()
 
         // Список чатов, если пользователь вошёл: листаем вниз и обратно
-        if (device.wait(Until.hasObject(By.scrollable(true)), 8_000)) {
-            val list = device.findObject(By.scrollable(true))
-            list.setGestureMargin(device.displayWidth / 5)
-            repeat(2) {
-                list.fling(Direction.DOWN)
-                device.waitForIdle()
-                list.fling(Direction.UP)
-                device.waitForIdle()
-            }
-        }
+        device.flingFirstList(rounds = 2)
     }
 }
