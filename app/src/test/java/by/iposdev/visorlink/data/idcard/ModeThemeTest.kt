@@ -24,20 +24,29 @@ class ModeThemeTest {
     }
 
     @Test
+    fun `Чат с особым собеседником — оттенок собеседника, а не зрителя`() {
+        assertEquals(ModeTheme(ModeStyle.FORGE, IdMode.BEAST, true), ModeThemeRules.resolve(true, "protogen", chatTheme = ChatThemeContext.PARTNER_BEAST))
+        assertEquals(ModeTheme(ModeStyle.FORGE, IdMode.PROTOGEN, true), ModeThemeRules.resolve(true, "beast", chatTheme = ChatThemeContext.PARTNER_PROTOGEN))
+        // у зрителя без особого режима Forge не включается ни при каком собеседнике
+        assertEquals(biolume, ModeThemeRules.resolve(true, "standard", chatTheme = ChatThemeContext.PARTNER_BEAST))
+    }
+
+    @Test
     fun `Нейтральный чат — Biolume, но тёмная остаётся`() {
         assertEquals(ModeTheme(ModeStyle.BIOLUME, null, true), ModeThemeRules.resolve(true, "beast", chatTheme = ChatThemeContext.NEUTRAL))
     }
 
     @Test
     fun `Маска — Biolume и свободный выбор темы, в любом контексте`() {
-        for (chatTheme in listOf(null, ChatThemeContext.MODE, ChatThemeContext.NEUTRAL)) {
+        for (chatTheme in listOf(null, ChatThemeContext.MODE, ChatThemeContext.NEUTRAL, ChatThemeContext.PARTNER_BEAST)) {
             assertEquals(biolume, ModeThemeRules.resolve(true, "protogen", masked = true, chatTheme = chatTheme))
         }
     }
 
     @Test
     fun `Контекст чата — ЛС по режиму собеседника, Standard нейтрально, бот тему не трогает, загрузка без изменений`() {
-        assertEquals(ChatThemeContext.MODE, ModeThemeRules.chatThemeFor(true, true, false, "beast", null))
+        assertEquals(ChatThemeContext.PARTNER_BEAST, ModeThemeRules.chatThemeFor(true, true, false, "beast", null))
+        assertEquals(ChatThemeContext.PARTNER_PROTOGEN, ModeThemeRules.chatThemeFor(true, true, false, "protogen", null))
         assertEquals(ChatThemeContext.NEUTRAL, ModeThemeRules.chatThemeFor(true, true, false, "standard", null))
         assertEquals(ChatThemeContext.MODE, ModeThemeRules.chatThemeFor(true, true, true, null, null))
         assertEquals(ChatThemeContext.MODE, ModeThemeRules.chatThemeFor(true, true, true, "standard", null))

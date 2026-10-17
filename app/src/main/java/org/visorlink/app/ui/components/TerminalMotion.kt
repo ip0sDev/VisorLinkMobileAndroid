@@ -99,11 +99,14 @@ fun Modifier.terminalTitleReveal(key: Any? = Unit): Modifier {
         // Блочный курсор на краю: во время печати горит, после — плавно гаснет
         val cursorAlpha = if (p < 1f) 0.85f else 0.85f * (1f - blink.value)
         if (cursorAlpha > 0f) {
-            val h = size.height * 0.62f
-            val w = 0.55f * h
+            // Курсор — высота одной строки: под заголовком может стоять подзаголовок («36 чатов»),
+            // и курсор высотой в весь слот закрывал обе строки
+            val line = minOf(size.height, 30.dp.toPx())
+            val h = minOf(line * 0.62f, 20.dp.toPx())
+            val w = 0.5f * h
             drawRect(
                 color = cursorColor.copy(alpha = cursorAlpha),
-                topLeft = Offset((edge + 2.dp.toPx()).coerceAtMost(size.width - w), (size.height - h) / 2),
+                topLeft = Offset((edge + 2.dp.toPx()).coerceAtMost(size.width - w), (line - h) / 2),
                 size = Size(w, h),
             )
         }
@@ -204,6 +207,22 @@ fun TerminalStatusStrip(modifier: Modifier = Modifier) {
         modifier = modifier,
         color = terminal.neon.copy(alpha = if (online) 0.55f else 0.9f),
         style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 9.sp, letterSpacing = 1.2.sp),
+        maxLines = 1,
+    )
+}
+
+/**
+ * Служебный код терминала: порядковый номер сообщения (seq) в шестнадцатеричном виде, `0x002F`.
+ * Только в Forge v2 и только для настоящего seq (> 0) — выдуманных кодов нет.
+ */
+@Composable
+fun TerminalSeqTag(seq: Long?, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    if (VlTheme.tokens.terminal == null || seq == null || seq <= 0L) return
+    androidx.compose.material3.Text(
+        text = "0x%04X".format(seq),
+        modifier = modifier,
+        color = color,
+        style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 9.sp, letterSpacing = 0.6.sp),
         maxLines = 1,
     )
 }

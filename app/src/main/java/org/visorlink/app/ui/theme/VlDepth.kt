@@ -331,6 +331,25 @@ fun Modifier.vlHairline(
 }
 
 /**
+ * Линейка вдоль верхнего края: засечки внутрь, каждая пятая выше, к правому краю гаснут. Для
+ * контейнеров терминала (навбар).
+ */
+fun Modifier.vlTopTicks(color: Color, active: Boolean = true, step: Dp = 8.dp): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        val s = step.toPx()
+        var i = 0
+        while (i * s < size.width) {
+            val x = i * s
+            val tick = if (i % 5 == 0) 6.dp.toPx() else 3.dp.toPx()
+            drawRect(color.copy(alpha = 0.34f * (1f - x / size.width * 0.8f)), Offset(x, 0f), Size(1.dp.toPx(), tick))
+            i++
+        }
+    }
+}
+
+/**
  * Угловые скобки на двух НЕсрезанных углах (верхний-конечный и нижний-начальный): вместе со
  * срезом [ChamferShape] они замыкают силуэт. [progress] — рост скобок от 0 до полной длины.
  */

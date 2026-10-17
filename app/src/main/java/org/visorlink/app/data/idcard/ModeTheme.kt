@@ -12,6 +12,12 @@ enum class ChatThemeContext {
 
     /** Тема своего режима. */
     MODE,
+
+    /** ЛС с собеседником Protogen: Forge в его оттенке (если у меня особый режим). */
+    PARTNER_PROTOGEN,
+
+    /** ЛС с собеседником Beast: Forge в его оттенке (если у меня особый режим). */
+    PARTNER_BEAST,
 }
 
 enum class ModeStyle { BIOLUME, FORGE }
@@ -38,7 +44,12 @@ object ModeThemeRules {
         val forge = special && chatTheme != ChatThemeContext.NEUTRAL
         return ModeTheme(
             style = if (forge) ModeStyle.FORGE else ModeStyle.BIOLUME,
-            flavor = if (forge) mode else null,
+            flavor = if (!forge) null else when (chatTheme) {
+                // Чат с особым собеседником — в его оттенке, а не в оттенке зрителя
+                ChatThemeContext.PARTNER_BEAST -> IdMode.BEAST
+                ChatThemeContext.PARTNER_PROTOGEN -> IdMode.PROTOGEN
+                else -> mode
+            },
             forceDark = special,
         )
     }
@@ -47,14 +58,16 @@ object ModeThemeRules {
      * Контекст темы открытого чата. `null` — ещё неизвестно (профиль собеседника грузится):
      * тема не меняется, чтобы не мигать.
      *
-     * ЛС: собеседник с особым режимом или бот → MODE (боты тему не трогают), Standard → NEUTRAL;
+     * ЛС: собеседник с особым режимом → его оттенок (PARTNER_*), бот → MODE (тема зрителя,
+     * чужое оформление бота не применяется), Standard → NEUTRAL;
      * группа/канал: включён «ID группы» → MODE, иначе NEUTRAL.
      */
     fun chatThemeFor(isDirect: Boolean, partnerLoaded: Boolean, partnerIsBot: Boolean, partnerIdMode: Any?, groupIdEnabled: Boolean?): ChatThemeContext? {
         if (isDirect) {
             if (!partnerLoaded) return null
             if (partnerIsBot) return ChatThemeContext.MODE
-            return if (IdMode.isSpecial(partnerIdMode)) ChatThemeContext.MODE else ChatThemeContext.NEUTRAL
+            if (!IdMode.isSpecial(partnerIdMode)) return ChatThemeContext.NEUTRAL
+            return if (IdMode.of(partnerIdMode) == IdMode.BEAST) ChatThemeContext.PARTNER_BEAST else ChatThemeContext.PARTNER_PROTOGEN
         }
         return if (groupIdEnabled == true) ChatThemeContext.MODE else ChatThemeContext.NEUTRAL
     }

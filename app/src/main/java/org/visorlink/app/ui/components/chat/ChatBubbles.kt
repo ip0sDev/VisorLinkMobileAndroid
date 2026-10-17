@@ -75,6 +75,7 @@ import org.visorlink.app.utils.VoicePlaybackState
 import org.visorlink.app.utils.rememberHaptic
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import org.visorlink.app.ui.components.TerminalSeqTag
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlRaised
@@ -784,6 +785,7 @@ internal fun TextBubble(
                                     fontSize = 10.sp,
                                 )
                             }
+                            TerminalSeqTag(message.seq, textColor.copy(alpha = 0.4f))
                             Text(
                                 message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
                                 style = MaterialTheme.typography.labelSmall, color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,

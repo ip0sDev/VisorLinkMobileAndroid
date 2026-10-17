@@ -59,6 +59,7 @@ import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlTopTicks
 import kotlin.math.abs
 
 /**
@@ -328,6 +329,7 @@ private fun NeumorphicLiquidNavBarContent(
             .fillMaxWidth()
             .height(64.dp)
             .vlInset(tokens.structure, barShape)
+            .vlTopTicks(cs.primary, active = tokens.structure.hardShadow != null)
             .clip(barShape)
             .background(cs.surfaceContainerLow)
             .vlHairline(cs.outlineVariant.copy(alpha = 0.5f), barShape)

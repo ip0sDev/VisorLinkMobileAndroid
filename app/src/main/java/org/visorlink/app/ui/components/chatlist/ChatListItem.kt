@@ -43,6 +43,7 @@ import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.data.model.isLastMessageRead
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.CachedImage
+import org.visorlink.app.ui.components.TerminalSeqTag
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -247,6 +248,7 @@ fun ChatListItem(
                     }
                     chat.lastMessageAt?.let {
                         Spacer(Modifier.width(8.dp))
+                        TerminalSeqTag(chat.lastSeq, subColor.copy(alpha = 0.55f), Modifier.padding(end = 6.dp))
                         Text(
                             formatTime(it.toDate()),
                             style = MaterialTheme.typography.labelSmall,

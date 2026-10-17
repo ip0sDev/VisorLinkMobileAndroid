@@ -306,7 +306,9 @@ fun ChatScreen(
     val myBg = ProfileAppearance.resolve(owner = currentUser, viewer = currentUser).backgroundUrl
     // Обои собеседника — по тем же правилам, что и остальное его оформление:
     // раньше они показывались без PRO и вопреки ignoreCustomizations
-    val otherBg = ProfileAppearance.resolve(owner = otherUser, viewer = currentUser).backgroundUrl
+    // Оформление бота (обои, акцент, шрифт) не применяется: в чате с ботом остаётся тема пользователя
+    val appearanceOwner = otherUser?.takeUnless { it.isBot }
+    val otherBg = ProfileAppearance.resolve(owner = appearanceOwner, viewer = currentUser).backgroundUrl
 
     val chatBgUrl = when (uiState.wallpaperMode) {
         "none" -> null
@@ -348,7 +350,7 @@ fun ChatScreen(
     }
 
     SecureScreen(enabled = isSecureChat) {
-        UserProfileTheme(profile = otherUser, currentUser = currentUser) {
+        UserProfileTheme(profile = appearanceOwner, currentUser = currentUser) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (chatBgUrl != null) {
                 AsyncImage(

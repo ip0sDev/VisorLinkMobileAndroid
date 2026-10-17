@@ -103,7 +103,7 @@ class ChatThemeController(private val memory: Memory = Memory.None) {
     }
 }
 
-/** Прогноз темы чатов в SharedPreferences: «n» — нейтральная (Biolume), «m» — тема режима. */
+/** Прогноз темы чатов в SharedPreferences: «n» — нейтральная (Biolume), «m» — тема своего режима, «p» / «b» — оттенок собеседника. */
 class PrefsChatThemeMemory(context: android.content.Context) : ChatThemeController.Memory {
     private val prefs = context.getSharedPreferences("visorlink_chat_theme", android.content.Context.MODE_PRIVATE)
     private val cache = java.util.concurrent.ConcurrentHashMap<String, ChatThemeContext>()
@@ -111,13 +111,23 @@ class PrefsChatThemeMemory(context: android.content.Context) : ChatThemeControll
     override fun get(chatId: String): ChatThemeContext? = cache[chatId] ?: when (prefs.getString(chatId, null)) {
         "n" -> ChatThemeContext.NEUTRAL
         "m" -> ChatThemeContext.MODE
+        "p" -> ChatThemeContext.PARTNER_PROTOGEN
+        "b" -> ChatThemeContext.PARTNER_BEAST
         else -> null
     }?.also { cache[chatId] = it }
 
     override fun put(chatId: String, value: ChatThemeContext) {
         if (cache[chatId] == value) return
         cache[chatId] = value
-        prefs.edit().putString(chatId, if (value == ChatThemeContext.NEUTRAL) "n" else "m").apply()
+        prefs.edit().putString(
+            chatId,
+            when (value) {
+                ChatThemeContext.NEUTRAL -> "n"
+                ChatThemeContext.MODE -> "m"
+                ChatThemeContext.PARTNER_PROTOGEN -> "p"
+                ChatThemeContext.PARTNER_BEAST -> "b"
+            },
+        ).apply()
     }
 }
 

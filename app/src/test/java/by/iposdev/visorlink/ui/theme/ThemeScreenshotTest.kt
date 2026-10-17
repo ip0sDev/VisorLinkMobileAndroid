@@ -267,6 +267,7 @@ class ThemeScreenshotTest(
             lastMessageSenderId = sender,
             lastMessageAt = now,
             unreadCount = mapOf(me to unread),
+            lastSeq = 40L + id.filter { it.isDigit() }.toLong() * 7 + unread,
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ChatListItem(
@@ -325,7 +326,7 @@ class ThemeScreenshotTest(
         val now = Timestamp(1_790_000_000L, 0)
         @Composable
         fun bubble(id: String, text: String, mine: Boolean) = MessageBubble(
-            message = Message(id = id, senderId = if (mine) "me" else "u1", senderUsername = "ivan", text = text, createdAt = now),
+            message = Message(id = id, senderId = if (mine) "me" else "u1", senderUsername = "ivan", text = text, createdAt = now, seq = 40L + id.filter { it.isDigit() }.toLong()),
             isMine = mine,
             otherUid = "u1",
             currentUid = "me",
