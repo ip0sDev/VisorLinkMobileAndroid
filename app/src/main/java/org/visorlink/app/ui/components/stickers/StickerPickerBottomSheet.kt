@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.stickers
 
+import org.visorlink.app.ui.components.VlSticker
 import org.visorlink.app.ui.screens.stickers.StickerPackViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.net.Uri
@@ -40,7 +41,6 @@ import org.visorlink.app.ui.components.VlAlertDialog
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.VlDialogButton
 import org.visorlink.app.ui.components.VlTextField
-import org.visorlink.app.ui.components.VlAnimatedMedia
 import org.visorlink.app.ui.theme.*
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
@@ -717,11 +717,11 @@ private fun StickerCell(
             ),
         contentAlignment = Alignment.Center
     ) {
-        VlAnimatedMedia(
+        VlSticker(
             url = sticker.url,
+            format = sticker.effectiveFormat,
+            previewUrl = sticker.previewUrl,
             contentDescription = sticker.emoji,
-            isLottie = sticker.isLottie,
-            contentScale = ContentScale.Fit,
             modifier = Modifier.fillMaxSize().padding(4.dp)
         )
 

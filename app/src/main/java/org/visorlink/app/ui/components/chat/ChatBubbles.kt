@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.chat
 
+import org.visorlink.app.ui.components.VlSticker
 import android.net.Uri
 import android.util.Log
 import android.util.Patterns
@@ -62,7 +63,6 @@ import org.visorlink.app.data.model.*
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.components.CachedImage
 import org.visorlink.app.ui.components.SPOILER_DECODE_PX
-import org.visorlink.app.ui.components.VlAnimatedMedia
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import androidx.compose.foundation.Canvas
@@ -358,7 +358,7 @@ private fun AlbumGrid(
     val count = images.size
     if (count == 0) return
 
-    val maxBubbleWidth = 280.dp
+    val maxBubbleWidth = MEDIA_BUBBLE_MAX_WIDTH
     val spacing = 2.dp
 
     if (count == 1) {
@@ -367,7 +367,6 @@ private fun AlbumGrid(
             Modifier
                 .widthIn(max = maxBubbleWidth)
                 .heightIn(max = 450.dp)
-                .clip(VlTheme.tokens.shapes.card)
         ) {
             AlbumImageItem(
                 image = images[0],
@@ -384,7 +383,6 @@ private fun AlbumGrid(
         Box(
             Modifier
                 .width(maxBubbleWidth)
-                .clip(VlTheme.tokens.shapes.card)
         ) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(spacing)) {
                 images.forEachIndexed { index, image ->
@@ -409,7 +407,7 @@ private fun AlbumGrid(
         val rows = (minOf(count, 10) + columns - 1) / columns
         val gridHeight = (itemSize * rows) + (spacing * (rows - 1))
 
-        Box(Modifier.width(maxBubbleWidth).height(gridHeight).clip(VlTheme.tokens.shapes.card)) {
+        Box(Modifier.width(maxBubbleWidth).height(gridHeight)) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 modifier = Modifier.fillMaxSize(),
@@ -580,6 +578,7 @@ fun MessageBubble(
                 }
                 (message.type == MessageType.VIDEO || message.type == MessageType.GIF) && !message.deleted -> {
                     VideoBubble(
+                        showSenderName = showSenderName, onMentionClick = onMentionClick,
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
                         onLongPressStart = { haptic.perform(HapticType.LONG_PRESS, hapticEnabled); onLongPressStart(it) },
@@ -592,6 +591,7 @@ fun MessageBubble(
                 }
                 message.type.equals(MessageType.ALBUM, ignoreCase = true) && !message.deleted -> {
                     AlbumBubble(
+                        showSenderName = showSenderName, onMentionClick = onMentionClick,
                         message = message, isMine = isMine, currentUid = currentUid,
                         chatType = chatType, hapticEnabled = hapticEnabled,
                         onAlbumTap = onAlbumTap,
@@ -604,6 +604,7 @@ fun MessageBubble(
                 }
                 message.type == MessageType.IMAGE && !message.deleted -> {
                     ImageBubble(
+                        showSenderName = showSenderName, onMentionClick = onMentionClick,
                         message = message, isMine = isMine, isReadByOther = isReadByOther,
                         chatType = chatType, currentUid = currentUid, hapticEnabled = hapticEnabled,
                         onTap = { url -> onMediaTap(url, MessageType.IMAGE) },
@@ -828,16 +829,17 @@ internal fun TextBubble(
 
 @Composable
 internal fun VideoBubble(
-    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, 
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean,
+    showSenderName: Boolean = false,
     onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
     onMediaTap: (String, String) -> Unit,
-    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit = {},
+    onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
     onDoubleTap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
-    val interactionSource = remember { MutableInteractionSource() }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
     val streamableUrl = remember(resolvedUrl, message.driveFileId) {
         resolvedUrl?.let { VideoCache.getStreamableVideoUrl(it, message.driveFileId) }
@@ -853,58 +855,21 @@ internal fun VideoBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        Surface(
-            modifier = Modifier.widthIn(max = 280.dp).messageGestures(
-                messageId = message.id, interactionSource = interactionSource,
-                onTap = { playTargetUrl?.let { onMediaTap(it, message.type) } },
-                onDoubleTap = currentDoubleTap,
-                hapticEnabled = hapticEnabled,
-                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
-            ),
-            shape = VlTheme.tokens.shapes.card,
-            color = MaterialTheme.colorScheme.surfaceVariant
+        MediaBubbleFrame(
+            message = message, isMine = isMine, isReadByOther = isReadByOther, chatType = chatType,
+            showSenderName = showSenderName, hapticEnabled = hapticEnabled,
+            onTap = { if (message.uploadProgress == null) playTargetUrl?.let { onMediaTap(it, message.type) } },
+            onDoubleTap = currentDoubleTap,
+            onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+            onReplyClick = onReplyClick, onMentionClick = onMentionClick, onCancelUpload = onCancelUpload,
         ) {
-            Box {
-                ChatVideoViewer(
-                    url = streamableUrl ?: resolvedUrl,
-                    thumbUrl = effectiveThumbUrl,
-                    localFile = effectiveLocalFile,
-                    modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                    onClick = null
-                )
-
-                Column(modifier = Modifier.matchParentSize()) {
-                    message.replyData?.let { reply ->
-                        ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Box(
-                        modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            DebugMessageBadge(message = message, textColor = Color.White)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                                    )
-                                }
-                                if (isMine) ReadReceipt(isRead = isReadByOther)
-                            }
-                        }
-                    }
-                }
-
-                if (message.uploadProgress != null) {
-                    Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
-                    UploadProgressOverlay(
-                        progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize(),
-                        onCancel = onCancelUpload?.let { { it(message.id) } }
-                    )
-                }
-            }
+            ChatVideoViewer(
+                url = streamableUrl ?: resolvedUrl,
+                thumbUrl = effectiveThumbUrl,
+                localFile = effectiveLocalFile,
+                modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = MEDIA_BUBBLE_MAX_WIDTH, maxHeight = 500.dp),
+                onClick = null
+            )
         }
 
         InlinedReactionRow(
@@ -917,71 +882,40 @@ internal fun VideoBubble(
 
 @Composable
 internal fun ImageBubble(
-    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean, 
+    message: Message, isMine: Boolean, isReadByOther: Boolean, chatType: ChatType, currentUid: String, hapticEnabled: Boolean,
+    showSenderName: Boolean = false,
     onTap: (String) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
-    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit = {},
+    onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
     onDoubleTap: (() -> Unit)? = null,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
     val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
     val resolvedUrl = resolveCdnUrl(message.cdnMediaId, message.url)
-    val modelSource = message.localFile ?: resolvedUrl
+    val mediaModifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = MEDIA_BUBBLE_MAX_WIDTH, maxHeight = 500.dp)
 
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        Surface(
-            modifier = Modifier.widthIn(max = 280.dp).messageGestures(
-                messageId = message.id, interactionSource = interactionSource,
-                onTap = { (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onTap(it) } },
-                onDoubleTap = currentDoubleTap,
-                hapticEnabled = hapticEnabled,
-                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
-            ),
-            shape = VlTheme.tokens.shapes.card,
-            color = MaterialTheme.colorScheme.surfaceVariant
+        MediaBubbleFrame(
+            message = message, isMine = isMine, isReadByOther = isReadByOther, chatType = chatType,
+            showSenderName = showSenderName, hapticEnabled = hapticEnabled,
+            // Пока фото грузится, лайтбокс не открывается
+            onTap = {
+                if (message.uploadProgress == null) {
+                    (resolvedUrl ?: message.localFile?.let { Uri.fromFile(it).toString() })?.let { onTap(it) }
+                }
+            },
+            onDoubleTap = currentDoubleTap,
+            onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+            onReplyClick = onReplyClick, onMentionClick = onMentionClick, onCancelUpload = onCancelUpload,
         ) {
-            Box {
-                CachedImage(
-                    model = modelSource,
-                    contentDescription = null,
-                    modifier = Modifier.sizeIn(minWidth = 120.dp, minHeight = 120.dp, maxWidth = 280.dp, maxHeight = 500.dp),
-                    contentScale = ContentScale.Crop
-                )
-
-                Column(modifier = Modifier.matchParentSize()) {
-                    message.replyData?.let { reply ->
-                        ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Box(
-                        modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            DebugMessageBadge(message = message, textColor = Color.White)
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(
-                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                                    )
-                                }
-                                if (isMine) ReadReceipt(isRead = isReadByOther)
-                            }
-                        }
-                    }
-                }
-
-                if (message.uploadProgress != null) {
-                    Log.d("VlUI", "Bubble ${message.id} (type=${message.type}) progress: ${message.uploadProgress}")
-                    UploadProgressOverlay(
-                        progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize(),
-                        onCancel = onCancelUpload?.let { { it(message.id) } }
-                    )
-                }
+            val local = message.localFile
+            if (local != null) {
+                CachedImage(model = local, contentDescription = null, modifier = mediaModifier, contentScale = ContentScale.Crop)
+            } else {
+                DriveImage(url = resolvedUrl, driveFileId = message.driveFileId, modifier = mediaModifier)
             }
         }
 
@@ -996,12 +930,13 @@ internal fun ImageBubble(
 @Composable
 internal fun AlbumBubble(
     message: Message, isMine: Boolean, currentUid: String, chatType: ChatType, hapticEnabled: Boolean,
+    showSenderName: Boolean = false,
     onAlbumTap: (List<AlbumImage>, Int) -> Unit, onLongPressStart: (Offset) -> Unit, onLongPressDrag: (Offset) -> Unit, onLongPressEnd: () -> Unit,
-    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onOpenComments: () -> Unit = {}, chat: Chat? = null,
+    onReact: (String) -> Unit, onReplyClick: (String) -> Unit, onMentionClick: (String) -> Unit = {},
+    onOpenComments: () -> Unit = {}, chat: Chat? = null,
     onCancelUpload: ((String) -> Unit)? = null,
     onDoubleTap: (() -> Unit)? = null,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
     val currentDoubleTap = onDoubleTap ?: { onReact("❤️") }
     val revealedIndices = remember { mutableStateOf(setOf<Int>()) }
     val isReadByOther = (chat?.participants?.find { it != currentUid } ?: "") in message.readBy
@@ -1010,63 +945,20 @@ internal fun AlbumBubble(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalAlignment = if (isMine) Alignment.End else Alignment.Start,
     ) {
-        Surface(
-            modifier = Modifier.widthIn(max = 280.dp).messageGestures(
-                messageId = message.id, interactionSource = interactionSource,
-                onTap = null,
-                onDoubleTap = currentDoubleTap,
-                hapticEnabled = hapticEnabled,
-                onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd
-            ),
-            shape = VlTheme.tokens.shapes.card,
-            color = Color.Transparent // Прозрачный, так как AlbumGrid сам рисует фон/рамку если нужно
+        MediaBubbleFrame(
+            message = message, isMine = isMine, isReadByOther = isReadByOther, chatType = chatType,
+            showSenderName = showSenderName, hapticEnabled = hapticEnabled,
+            onTap = null,
+            onDoubleTap = currentDoubleTap,
+            onLongPressStart = onLongPressStart, onLongPressDrag = onLongPressDrag, onLongPressEnd = onLongPressEnd,
+            onReplyClick = onReplyClick, onMentionClick = onMentionClick, onCancelUpload = onCancelUpload,
         ) {
-            Box {
-                AlbumGrid(
-                    images = message.images, revealedIndices = revealedIndices.value,
-                    onReveal = { idx -> revealedIndices.value = revealedIndices.value + idx },
-                    onClick = { idx -> onAlbumTap(message.images, idx) },
-                    onDoubleTap = currentDoubleTap,
-                )
-
-                Column(modifier = Modifier.matchParentSize()) {
-                    message.replyData?.let { reply ->
-                        ReplyPreview(reply = reply, isMine = isMine, onMedia = true, onClick = { reply.id?.let { id -> onReplyClick(id) } })
-                    }
-                    Spacer(Modifier.weight(1f))
-                    Box(
-                        modifier = Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.6f)))).padding(horizontal = 10.dp, vertical = 6.dp),
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            DebugMessageBadge(message = message, textColor = Color.White)
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
-                                        style = MaterialTheme.typography.labelSmall, color = Color.White, fontSize = 10.sp,
-                                    )
-                                    if (isMine) {
-                                        Spacer(Modifier.width(3.dp))
-                                        ReadReceipt(isRead = isReadByOther)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (message.uploadProgress != null) {
-                    UploadProgressOverlay(
-                        progress = message.uploadProgress!!,
-                        modifier = Modifier.matchParentSize(),
-                        onCancel = onCancelUpload?.let { { it(message.id) } }
-                    )
-                }
-            }
+            AlbumGrid(
+                images = message.images, revealedIndices = revealedIndices.value,
+                onReveal = { idx -> revealedIndices.value = revealedIndices.value + idx },
+                onClick = { idx -> if (message.uploadProgress == null) onAlbumTap(message.images, idx) },
+                onDoubleTap = currentDoubleTap,
+            )
         }
 
         InlinedReactionRow(
@@ -1131,12 +1023,12 @@ internal fun StickerBubble(
                     }
                 }
             } else {
-                VlAnimatedMedia(
+                VlSticker(
                     url = message.url,
+                    format = message.stickerFormatResolved,
+                    previewUrl = message.stickerPreviewUrl,
                     contentDescription = message.packName ?: message.text,
-                    isLottie = message.isLottieMedia,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

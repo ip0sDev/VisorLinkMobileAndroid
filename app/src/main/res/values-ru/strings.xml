@@ -121,6 +121,10 @@
     <string name="media_photo_icon">📷 Изображение</string>
     <string name="media_voice">🎤 Голосовое сообщение</string>
     <string name="media_sticker">🎭 Стикер</string>
+    <string name="editor_caption_placeholder">Добавить подпись (необязательно)…</string>
+    <string name="media_album_count">📷 %1$d фото</string>
+    <string name="sticker_load_failed">Не удалось загрузить стикер</string>
+    <string name="media_tap_to_retry">Нажмите, чтобы загрузить снова</string>
 
     <!-- Chat Screen — Toasts -->
     <string name="toast_saved_gallery">Сохранено в галерею</string>

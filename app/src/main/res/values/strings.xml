@@ -119,6 +119,10 @@
     <string name="media_photo_icon">📷 Image</string>
     <string name="media_voice">🎤 Voice message</string>
     <string name="media_sticker">🎭 Sticker</string>
+    <string name="editor_caption_placeholder">Add a caption (optional)…</string>
+    <string name="media_album_count">📷 %1$d photos</string>
+    <string name="sticker_load_failed">Failed to load sticker</string>
+    <string name="media_tap_to_retry">Tap to load again</string>
 
     <!-- Chat Screen — Toasts -->
     <string name="toast_saved_gallery">Saved to gallery</string>

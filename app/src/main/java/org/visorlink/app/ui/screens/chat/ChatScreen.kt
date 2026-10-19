@@ -451,7 +451,8 @@ fun ChatScreen(
                                     if (item.type == MediaType.VIDEO) {
                                         viewModel.sendVideo(item.uri)
                                     } else {
-                                        viewModel.sendImage(item.uri)
+                                        // Одно фото — через редактор с подписью (спека §1.3)
+                                        viewModel.onImagesPicked(listOf(item.uri))
                                     }
                                 } else {
                                     val photosOnly = items.filter { it.type == MediaType.IMAGE }.map { it.uri }
@@ -692,9 +693,10 @@ fun ChatScreen(
         ImageEditorScreen(
             uri = uri,
             onNavigateBack = { editorUri = null },
-            onSend = { editedUri, isSpoiler ->
+            captionEnabled = true,
+            onSend = { editedUri, isSpoiler, caption ->
                 editorUri = null
-                viewModel.sendImage(editedUri, isSpoiler = isSpoiler)
+                viewModel.sendImage(editedUri, isSpoiler = isSpoiler, caption = caption)
             }
         )
     }
@@ -704,9 +706,10 @@ fun ChatScreen(
         ImageEditorScreen(
             uri = uri,
             onNavigateBack = { viewModel.clearSinglePickedUri() },
-            onSend = { editedUri, isSpoiler ->
+            captionEnabled = true,
+            onSend = { editedUri, isSpoiler, caption ->
                 viewModel.clearSinglePickedUri()
-                viewModel.sendImage(editedUri, isSpoiler = isSpoiler)
+                viewModel.sendImage(editedUri, isSpoiler = isSpoiler, caption = caption)
             }
         )
     }

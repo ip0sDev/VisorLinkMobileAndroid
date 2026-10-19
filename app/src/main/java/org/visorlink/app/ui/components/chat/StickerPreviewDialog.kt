@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.chat
 
+import org.visorlink.app.ui.components.VlSticker
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -25,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.visorlink.app.data.model.StickerItem
-import org.visorlink.app.ui.components.VlAnimatedMedia
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
@@ -147,11 +147,11 @@ fun StickerPreviewDialog(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        VlAnimatedMedia(
+                        VlSticker(
                             url = sticker.url,
+                            format = sticker.effectiveFormat,
+                            previewUrl = sticker.previewUrl,
                             contentDescription = sticker.emoji,
-                            isLottie = sticker.isLottie,
-                            contentScale = ContentScale.Fit,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

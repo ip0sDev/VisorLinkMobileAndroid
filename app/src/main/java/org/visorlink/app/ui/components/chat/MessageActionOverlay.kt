@@ -613,7 +613,9 @@ private fun ActionGlassCard(
 
     val canEdit = isMine && !message.deleted && !isSending &&
             (message.createdAt?.toDate()?.time ?: 0L) > System.currentTimeMillis() - 30 * 60 * 1000 &&
-            (message.type == MessageType.TEXT || message.caption != null)
+            // Редактируемые типы — text, image, album: подпись можно добавить и там, где её не было
+            (message.type == MessageType.TEXT || message.type == MessageType.IMAGE ||
+                message.type == MessageType.ALBUM || message.caption != null)
 
     // Формируем полный структурированный список всех доступных действий
     val actionList = buildList {

@@ -617,6 +617,8 @@ object ChatDataCache {
         put("packId", packId ?: JSONObject.NULL)
         put("packName", packName ?: JSONObject.NULL)
         put("packEmoji", packEmoji ?: JSONObject.NULL)
+        put("stickerFormat", stickerFormat ?: JSONObject.NULL)
+        put("stickerPreviewUrl", stickerPreviewUrl ?: JSONObject.NULL)
         put("deleted", deleted)
         put("createdAt", createdAt?.seconds ?: JSONObject.NULL)
         put("spoiler", spoiler)
@@ -706,7 +708,7 @@ object ChatDataCache {
         val knownKeys = setOf(
             "id", "seq", "senderId", "senderUsername", "type", "text", "url", "fileName",
             "duration", "thumbUrl", "width", "height", "stickerId", "packId", "packName",
-            "packEmoji", "deleted", "createdAt", "spoiler", "commentsEnabled", "commentsCount",
+            "packEmoji", "stickerFormat", "stickerPreviewUrl", "deleted", "createdAt", "spoiler", "commentsEnabled", "commentsCount",
             "caption", "readBy", "images", "replyTo", "forwardFrom", "reactions", "status",
             "mimeType", "uploadProgress", "cdnMediaId", "driveFileId", "driveUrl", "previewUrl",
             "thumbnailUrl", "title", "performer", "fileSize", "coverCdnMediaId", "coverUrl", "tradeId",
@@ -743,6 +745,8 @@ object ChatDataCache {
             packId = if (isNull("packId")) null else optString("packId"),
             packName = if (isNull("packName")) null else optString("packName"),
             packEmoji = if (isNull("packEmoji")) null else optString("packEmoji"),
+            stickerFormat = if (has("stickerFormat") && !isNull("stickerFormat")) optString("stickerFormat") else null,
+            stickerPreviewUrl = if (has("stickerPreviewUrl") && !isNull("stickerPreviewUrl")) optString("stickerPreviewUrl") else null,
             deleted = optBoolean("deleted", false),
             createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0),
             spoiler = optBoolean("spoiler", false),
@@ -774,6 +778,8 @@ object ChatDataCache {
                 put("emoji", s.emoji)
                 put("storagePath", s.storagePath)
                 put("sortOrder", s.sortOrder)
+                put("format", s.format ?: JSONObject.NULL)
+                put("previewUrl", s.previewUrl ?: JSONObject.NULL)
             })
         }
         put("stickers", sArr)
@@ -788,7 +794,9 @@ object ChatDataCache {
                 url = sObj.getString("url"),
                 emoji = sObj.getString("emoji"),
                 storagePath = sObj.optString("storagePath", ""),
-                sortOrder = sObj.optInt("sortOrder", 0)
+                sortOrder = sObj.optInt("sortOrder", 0),
+                format = if (sObj.has("format") && !sObj.isNull("format")) sObj.optString("format") else null,
+                previewUrl = if (sObj.has("previewUrl") && !sObj.isNull("previewUrl")) sObj.optString("previewUrl") else null
             )
         }
         return StickerPack(

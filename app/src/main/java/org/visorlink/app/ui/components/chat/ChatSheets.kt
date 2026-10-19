@@ -51,6 +51,7 @@ import androidx.compose.ui.window.DialogProperties
 import org.visorlink.app.R
 import org.visorlink.app.data.model.AlbumImage
 import org.visorlink.app.data.model.AlbumImageLocal
+import org.visorlink.app.data.model.MAX_CAPTION_LENGTH
 import org.visorlink.app.ui.components.VlTextField
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.liquidDragStretch
@@ -231,10 +232,10 @@ fun AlbumPreviewSheet(
                 value = caption,
                 onValueChange = { onCaptionChange(it) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                placeholder = "Добавить подпись…",
+                placeholder = stringResource(R.string.editor_caption_placeholder),
                 maxLines = 3,
                 singleLine = false,
-                supportingText = "${caption.length}/500"
+                supportingText = "${caption.length}/$MAX_CAPTION_LENGTH"
             )
 
             Spacer(Modifier.height(12.dp))

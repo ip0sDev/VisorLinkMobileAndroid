@@ -566,7 +566,7 @@ class ChatViewModel(
     }
 
     fun onAlbumCaptionChange(text: String) {
-        if (text.length <= 500) _uiState.update { it.copy(albumCaption = text) }
+        if (text.length <= MAX_CAPTION_LENGTH) _uiState.update { it.copy(albumCaption = text) }
     }
 
     fun dismissAlbumPreview() {
@@ -579,7 +579,8 @@ class ChatViewModel(
 
     fun sendAlbum() {
         val draft = _uiState.value.albumDraft
-        val caption = _uiState.value.albumCaption.trim().ifEmpty { null }
+        // У альбома без подписи хранится "" (спека §1.1)
+        val caption = _uiState.value.albumCaption.trim().take(MAX_CAPTION_LENGTH)
         val reply = _uiState.value.replyingTo?.toReplyData()
         if (draft.isEmpty() || !_uiState.value.canSendMedia) return
         if (needsDrive { sendAlbum() }) return
@@ -594,7 +595,7 @@ class ChatViewModel(
             senderUsername = currentUsername,
             type = MessageType.ALBUM,
             topicId = activeTopicId,
-            caption = caption,
+            caption = caption.ifEmpty { null },
             images = draft.map { AlbumImage(url = it.uri.toString(), spoiler = it.spoiler) },
             uploadProgress = 0.01f,
             createdAt = com.google.firebase.Timestamp.now(),
@@ -912,9 +913,9 @@ class ChatViewModel(
         }
     }
 
-    fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
+    fun sendImage(uri: Uri, isSpoiler: Boolean = false, caption: String = "") {
         if (!_uiState.value.canSendMedia) return
-        if (needsDrive { sendImage(uri, isSpoiler) }) return
+        if (needsDrive { sendImage(uri, isSpoiler, caption) }) return
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
@@ -930,6 +931,8 @@ class ChatViewModel(
                     senderUsername = currentUsername,
                     replyTo = reply,
                     isSpoiler = isSpoiler,
+                    // Пустая после trim подпись у image не пишется вовсе
+                    caption = caption.trim().take(MAX_CAPTION_LENGTH).ifEmpty { null },
                     topicId = activeTopicId,
                     nextSeq = nextSeq,
                     isDirect = isDirect,
@@ -1294,7 +1297,7 @@ class ChatViewModel(
     fun clearReply() = _uiState.update { it.copy(replyingTo = null) }
 
     fun startEditing(message: Message) {
-        val text = if (message.type != MessageType.TEXT) message.caption ?: "" else message.text ?: ""
+        val text = message.text ?: message.caption ?: ""
         _uiState.update { it.copy(editingMessage = message, replyingTo = null, initialDraft = text) }
     }
 
@@ -1305,8 +1308,9 @@ class ChatViewModel(
 
     fun saveEdit(newText: String) {
         val msg = _uiState.value.editingMessage ?: return
-        val isCaption = msg.type != MessageType.TEXT
-        val oldText = if (isCaption) msg.caption ?: "" else msg.text ?: ""
+        // Спека §1.5: подпись правится в caption, даже если её не было (поле создаётся)
+        val isCaption = msg.caption != null || msg.type != MessageType.TEXT
+        val oldText = msg.text ?: msg.caption ?: ""
         
         draftManager.clearDraft(chatId)
         if (newText.trim() == oldText.trim()) {

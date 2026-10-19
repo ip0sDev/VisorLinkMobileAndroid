@@ -332,7 +332,7 @@ fun SavedMessagesScreen(
         ImageEditorScreen(
             uri            = uri,
             onNavigateBack = { editorUri = null },
-            onSend         = { editedUri, isSpoiler ->
+            onSend         = { editedUri, isSpoiler, _ ->
                 editorUri = null
                 viewModel.saveImage(editedUri, isSpoiler = isSpoiler)
             }

@@ -279,7 +279,7 @@ fun CommentsScreen(
         ImageEditorScreen(
             uri = uri,
             onNavigateBack = { editorUri = null },
-            onSend = { editedUri, isSpoiler ->
+            onSend = { editedUri, isSpoiler, _ ->
                 editorUri = null
                 viewModel.sendImage(editedUri, isSpoiler)
             }

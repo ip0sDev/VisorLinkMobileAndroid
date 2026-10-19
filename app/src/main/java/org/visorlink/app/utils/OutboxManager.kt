@@ -301,6 +301,7 @@ class OutboxManager(
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
                             isSpoiler = isSpoiler,
+                            caption = data.optString("caption").ifBlank { null },
                             topicId = topicId,
                             nextSeq = nextSeq,
                             isDirect = isDirect,
@@ -521,6 +522,8 @@ class OutboxManager(
                                 packId = data.getString("packId"),
                                 packName = data.getString("packName"),
                                 packEmoji = data.getString("packEmoji"),
+                                stickerFormat = data.optString("stickerFormat").ifBlank { null },
+                                stickerPreviewUrl = data.optString("stickerPreviewUrl").ifBlank { null },
                                 senderUsername = data.getString("senderUsername"),
                                 replyTo = replyTo,
                                 topicId = topicId,
@@ -608,6 +611,8 @@ class OutboxManager(
             put("packId", data.getString("packId"))
             put("packName", data.getString("packName"))
             put("packEmoji", emoji)
+            put("stickerFormat", data.optString("stickerFormat").ifBlank { null } ?: JSONObject.NULL)
+            put("stickerPreviewUrl", data.optString("stickerPreviewUrl").ifBlank { null } ?: JSONObject.NULL)
             put("createdAt", nowSec)
             put("deleted", false)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
