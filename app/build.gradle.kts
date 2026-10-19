@@ -207,10 +207,13 @@ dependencies {
 }
 
 // Автоматическое создание app/google-services.json из шаблона при клонировании репозитория
+// Файлы вычисляются при конфигурации: doFirst не должен трогать объект скрипта
+// (file()/logger скрипта), иначе configuration cache не может сериализовать задачу
 tasks.register("ensureGoogleServices") {
+    val target = file("google-services.json")
+    val example = file("google-services.json.example")
+    outputs.upToDateWhen { target.exists() }
     doFirst {
-        val target = file("google-services.json")
-        val example = file("google-services.json.example")
         if (!target.exists() && example.exists()) {
             example.copyTo(target)
             logger.lifecycle("Автоматически создан app/google-services.json из шаблона.")
