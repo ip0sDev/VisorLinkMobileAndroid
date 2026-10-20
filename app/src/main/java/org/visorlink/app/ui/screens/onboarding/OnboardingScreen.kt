@@ -30,7 +30,6 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.ColorPreset
 import org.visorlink.app.ui.components.*
-import org.visorlink.app.ui.components.settings.VlThemeSelector
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.AppLanguage
 import org.visorlink.app.utils.HapticType
@@ -183,8 +182,6 @@ fun WelcomePage(themeViewModel: ThemeViewModel) {
 
 @Composable
 fun AppearancePage(themeViewModel: ThemeViewModel) {
-    val appTheme by themeViewModel.appTheme.collectAsStateWithLifecycle()
-    val currentMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
     val currentPreset by themeViewModel.colorPreset.collectAsStateWithLifecycle()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
@@ -205,21 +202,6 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(32.dp))
-
-        // При ID-картах тему решает режим карты, а не выбор (спека §7)
-        if (!org.visorlink.app.ui.idcard.LocalIdModeState.current.enabled) {
-            VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                VlThemeSelector(
-                    selected = appTheme,
-                    onSelect = { themeViewModel.setTheme(it) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    themeMode = currentMode,
-                    colorPreset = currentPreset,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-        }
 
         VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {
             Row(
