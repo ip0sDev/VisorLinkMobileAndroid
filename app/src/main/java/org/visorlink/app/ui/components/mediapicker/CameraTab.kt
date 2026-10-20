@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.mediapicker
 
+import io.sentry.Sentry
 import org.visorlink.app.ui.theme.VlTheme
 import android.Manifest
 import android.content.Context
@@ -169,7 +170,7 @@ fun CameraTab(
             imageCapture = capture
             videoCapture = video
         } catch (e: Exception) {
-            e.printStackTrace()
+            Sentry.captureException(e)
         }
     }
 
@@ -368,7 +369,7 @@ fun CameraTab(
 
                                         override fun onError(exception: ImageCaptureException) {
                                             isCapturingPhoto = false
-                                            exception.printStackTrace()
+                                            Sentry.captureException(exception)
                                         }
                                     }
                                 )

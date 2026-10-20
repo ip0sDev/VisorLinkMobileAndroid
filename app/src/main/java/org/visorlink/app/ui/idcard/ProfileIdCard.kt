@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.foundation.layout.Box
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -42,7 +43,7 @@ fun ProfileIdCard(profile: UserProfile, isMe: Boolean, slot: IdCardPosition, vie
     val canSee = state.cardsVisible && (isMe || state.myMode.isSpecial)
     if (!canSee) return
     val repo: IdCardRepository = koinInject()
-    val cardState by remember(profile.uid) { repo.cardFlow(profile.uid) }.collectAsState(initial = IdCardState.Loading)
+    val cardState by remember(profile.uid) { repo.cardFlow(profile.uid) }.collectAsStateWithLifecycle(initialValue = IdCardState.Loading)
     val card = (cardState as? IdCardState.Ready)?.card ?: return
 
     // Лёгкие признаки из кастомизации (акцент — линия, эмодзи — наклейка) — по правилам PRO
@@ -75,7 +76,7 @@ fun ProfileIdCardHeader(profile: UserProfile, fallback: @Composable () -> Unit) 
         return
     }
     val repo: IdCardRepository = koinInject()
-    val cardState by remember(profile.uid) { repo.cardFlow(profile.uid) }.collectAsState(initial = IdCardState.Loading)
+    val cardState by remember(profile.uid) { repo.cardFlow(profile.uid) }.collectAsStateWithLifecycle(initialValue = IdCardState.Loading)
     when (val s = cardState) {
         IdCardState.Loading -> IdCardHeaderSpace()
         is IdCardState.Ready -> s.card?.let { IdCardHeader(it, profile) } ?: fallback()

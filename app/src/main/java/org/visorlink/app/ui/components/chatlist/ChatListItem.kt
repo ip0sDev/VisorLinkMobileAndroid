@@ -37,12 +37,15 @@ import org.visorlink.app.R
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlTableRow
 import org.visorlink.app.data.model.Chat
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.data.model.isLastMessageRead
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.CachedImage
+import org.visorlink.app.ui.components.TerminalSeqTag
+import org.visorlink.app.ui.components.terminalData
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -95,9 +98,12 @@ fun ChatListItem(
         label = "item_press"
     )
 
-    val shape = VlTheme.tokens.shapes.card
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
+    // Forge v2: список — таблица, а не стопка карточек: коробка у каждой строки превращала
+    // экран в шум из рамок. Разделитель снизу, непрочитанное — полоса слева
+    val tableRow = tokens.structure.hardShadow != null
+    val shape = if (tableRow) androidx.compose.ui.graphics.RectangleShape else tokens.shapes.card
     val isDark = cs.surface.luminance() < 0.5f
 
     val titleColor = cs.onSurface
@@ -134,11 +140,19 @@ fun ChatListItem(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
-            .scale(itemScale)
+            .padding(horizontal = if (tableRow) 0.dp else 12.dp)
+            .padding(vertical = if (!isCompactList && !tableRow) 6.dp else 0.dp)
+            .scale(if (tableRow) 1f else itemScale)
             .then(
-                if (tokens.structure.enabled && !isCompactList) {
+                if (tableRow) {
+                    Modifier.vlTableRow(
+                        divider = tokens.structure.outline?.copy(alpha = 0.18f) ?: cs.outlineVariant,
+                        accent = if (unreadCount > 0) cs.primary else null,
+                        pressed = isPressed,
+                        pressFill = cs.primary.copy(alpha = 0.08f),
+                        dividerStart = 82.dp,
+                    )
+                } else if (tokens.structure.enabled && !isCompactList) {
                     Modifier.vlRaised(tokens.structure, shape)
                 } else if (tokens.structure.enabled) {
                     Modifier.vlHairline(cs.outlineVariant, shape)
@@ -148,8 +162,8 @@ fun ChatListItem(
             )
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = shape,
-        color = cardColor,
-        border = cardBorder
+        color = if (tableRow) Color.Transparent else cardColor,
+        border = if (tableRow) null else cardBorder
     ) {
         Row(
             modifier = Modifier
@@ -161,7 +175,7 @@ fun ChatListItem(
                         Modifier.background(Brush.verticalGradient(listOf(gTop, gBottom)))
                     } else Modifier
                 )
-                .padding(horizontal = 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
+                .padding(horizontal = if (tableRow) 16.dp else 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {
@@ -244,9 +258,11 @@ fun ChatListItem(
                     }
                     chat.lastMessageAt?.let {
                         Spacer(Modifier.width(8.dp))
+                        // В компактном списке код съедал бы имя
+                        if (!isCompactList) TerminalSeqTag(chat.lastSeq, subColor.copy(alpha = 0.55f), Modifier.padding(end = 6.dp))
                         Text(
                             formatTime(it.toDate()),
-                            style = MaterialTheme.typography.labelSmall,
+                            style = MaterialTheme.typography.labelSmall.terminalData(),
                             color = subColor,
                             fontSize = 11.sp
                         )
@@ -443,7 +459,7 @@ fun ChatListItemCompact(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         formatTime(it.toDate()),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.terminalData(),
                         color = subColor,
                         fontSize = 11.sp
                     )

@@ -212,6 +212,11 @@ internal fun ProfileDetails(user: UserProfile, isMe: Boolean, viewer: UserProfil
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         DebugUidBadge(uid = user.uid)
+        if (VlTheme.tokens.terminal != null) {
+            TerminalProfileDetails(user)
+            if (idCardSlot) ProfileIdCard(user, isMe = isMe, slot = IdCardPosition.BOTTOM, viewer = viewer)
+            return@Column
+        }
         if (user.online) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 VlPresenceDot(online = true)
@@ -259,5 +264,46 @@ internal fun ProfileDetails(user: UserProfile, isMe: Boolean, viewer: UserProfil
             }
         }
         if (idCardSlot) ProfileIdCard(user, isMe = isMe, slot = IdCardPosition.BOTTOM, viewer = viewer)
+    }
+}
+
+/**
+ * Forge v2: тело профиля как лист данных — статус и роли одной строкой тегов, «О себе» —
+ * раздел с моно-подписью и текстом по левому краю. Раньше в терминале стояла вертикальная
+ * стопка градиентных значков по центру с неровными отступами.
+ */
+@Composable
+private fun TerminalProfileDetails(user: UserProfile) {
+    val cs = MaterialTheme.colorScheme
+    val status = VlTheme.tokens.status
+    val hasTags = user.online || user.isAdmin || user.isProActive()
+    if (hasTags) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (user.online) org.visorlink.app.ui.components.TerminalTag("● " + stringResource(R.string.chat_status_online), status.success)
+            if (user.isAdmin) org.visorlink.app.ui.components.TerminalTag("Admin", cs.error)
+            if (user.isProActive()) org.visorlink.app.ui.components.TerminalTag("Pro", status.warning)
+        }
+    }
+    if (user.bio.isNotEmpty()) {
+        Spacer(Modifier.height(if (hasTags) 20.dp else 4.dp))
+        Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+            Text(
+                "> " + stringResource(R.string.profile_field_bio).uppercase(),
+                style = org.visorlink.app.ui.theme.ForgeV2SectionLabel,
+                color = cs.primary,
+                modifier = Modifier.padding(start = 2.dp, bottom = 6.dp),
+            )
+            VlCard(modifier = Modifier.fillMaxWidth(), shape = VlTheme.tokens.shapes.card) {
+                Box(Modifier.fillMaxWidth().padding(16.dp)) {
+                    LinkifiedText(
+                        text = user.bio,
+                        color = cs.onSurface,
+                        linkColor = cs.primary,
+                        style = MaterialTheme.typography.bodyLarge,
+                        textAlign = TextAlign.Start,
+                    )
+                }
+            }
+        }
     }
 }

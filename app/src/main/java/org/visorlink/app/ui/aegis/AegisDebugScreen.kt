@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.aegis
 
 import androidx.compose.animation.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,8 +32,8 @@ fun AegisDebugScreen(
     viewModel: LinkDebugViewModel = koinViewModel(),
     onBack: () -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val isAegisDebugMode by viewModel.isAegisDebugMode.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isAegisDebugMode by viewModel.isAegisDebugMode.collectAsStateWithLifecycle()
 
     if (!isAegisDebugMode) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -70,7 +71,7 @@ fun AegisDebugScreen(
 
             // Block 2: Input Simulator
             item {
-                val currentEngineName by viewModel.currentEngineName.collectAsState()
+                val currentEngineName by viewModel.currentEngineName.collectAsStateWithLifecycle()
                 var useLlm by remember { mutableStateOf(false) }
 
                 InputSimulator(

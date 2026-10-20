@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.search
 
 import org.visorlink.app.ui.components.VlTopAppBar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -43,10 +44,10 @@ fun SearchScreen(
     viewModel: SearchViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
 
     LaunchedEffect(initialQuery) {
@@ -127,28 +128,28 @@ fun SearchScreen(
                     contentPadding = PaddingValues(bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    if (uiState.userResult != null) {
+                    uiState.userResult?.let { userResult ->
                         item {
                             UserResultCard(
-                                user = uiState.userResult!!,
+                                user = userResult,
                                 onChatClick = {
                                     scope.launch {
-                                        val chatId = viewModel.openOrCreateChat(uiState.userResult!!)
-                                        onOpenChat(chatId, uiState.userResult!!.uid)
+                                        val chatId = viewModel.openOrCreateChat(userResult)
+                                        onOpenChat(chatId, userResult.uid)
                                     }
                                 }
                             )
                         }
                     }
 
-                    if (uiState.chatResult != null) {
+                    uiState.chatResult?.let { chatResult ->
                         item {
                             GroupResultCard(
-                                result = uiState.chatResult!!,
+                                result = chatResult,
                                 isJoining = uiState.isJoining,
                                 onJoinClick = {
                                     scope.launch {
-                                        val chatId = viewModel.joinChatByTag(uiState.chatResult!!.tag)
+                                        val chatId = viewModel.joinChatByTag(chatResult.tag)
                                         onJoinedGroup(chatId)
                                     }
                                 }

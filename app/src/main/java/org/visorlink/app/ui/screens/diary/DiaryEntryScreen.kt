@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.diary
 
 import org.visorlink.app.ui.components.VlTopAppBar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -68,7 +69,7 @@ fun DiaryEntryScreen(
     viewModel: DiaryViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f

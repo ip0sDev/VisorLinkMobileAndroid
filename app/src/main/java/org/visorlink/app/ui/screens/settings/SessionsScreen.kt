@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -31,7 +32,7 @@ fun SessionsScreen(
     onNavigateBack: () -> Unit,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     var toTerminate by remember { mutableStateOf<SessionInfo?>(null) }
     var confirmAll by remember { mutableStateOf(false) }

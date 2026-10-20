@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.google.services)
     alias(libs.plugins.sentry.android)
     alias(libs.plugins.roborazzi)
+    alias(libs.plugins.baselineprofile)
 }
 
 // Читаем CommitID из свойства, которое передаёт CI (./gradlew assembleDebug -PcommitId=abc1234)
@@ -17,7 +18,7 @@ val commitId: String = if (project.hasProperty("commitId")) {
         isIgnoreExitValue = true
     }.standardOutput.asText.map { it.trim() }.getOrElse("")
 }
-val currentChannel = "RELEASE"
+val currentChannel = "NIGHTLY"
 
 android {
     namespace = "org.visorlink.app"
@@ -27,11 +28,11 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 183
-        versionName = "4.3.08"
+        versionCode = 185
+        versionName = "4.3.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
-        buildConfigField("String", "CHANNEL", "\"RELEASE\"")
+        buildConfigField("String", "CHANNEL", "\"NIGHTLY\"")
         buildConfigField("boolean", "InternalBuild", "false")
         buildConfigField("String", "CommitID", "\"$commitId\"")
     }
@@ -135,6 +136,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.process)
+    baselineProfile(project(":baselineprofile"))
+    implementation(libs.androidx.profileinstaller) // ставит baseline-prof.txt на устройстве сразу после установки
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
@@ -204,10 +207,13 @@ dependencies {
 }
 
 // Автоматическое создание app/google-services.json из шаблона при клонировании репозитория
+// Файлы вычисляются при конфигурации: doFirst не должен трогать объект скрипта
+// (file()/logger скрипта), иначе configuration cache не может сериализовать задачу
 tasks.register("ensureGoogleServices") {
+    val target = file("google-services.json")
+    val example = file("google-services.json.example")
+    outputs.upToDateWhen { target.exists() }
     doFirst {
-        val target = file("google-services.json")
-        val example = file("google-services.json.example")
         if (!target.exists() && example.exists()) {
             example.copyTo(target)
             logger.lifecycle("Автоматически создан app/google-services.json из шаблона.")

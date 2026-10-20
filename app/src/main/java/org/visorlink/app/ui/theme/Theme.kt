@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.theme
 
 import android.app.Activity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ContextWrapper
 import android.os.Build
 import android.provider.Settings
@@ -203,10 +204,10 @@ fun ProfileAppearanceTheme(
     content: @Composable () -> Unit,
 ) {
     val themeVm: ThemeViewModel = koinViewModel()
-    val settingsTheme by themeVm.appTheme.collectAsState()
-    val settingsMode by themeVm.themeMode.collectAsState()
-    val settingsPreset by themeVm.colorPreset.collectAsState()
-    val showDebugIds by themeVm.showDebugIds.collectAsState()
+    val settingsTheme by themeVm.appTheme.collectAsStateWithLifecycle()
+    val settingsMode by themeVm.themeMode.collectAsStateWithLifecycle()
+    val settingsPreset by themeVm.colorPreset.collectAsStateWithLifecycle()
+    val showDebugIds by themeVm.showDebugIds.collectAsStateWithLifecycle()
     val viewer = LocalViewerTheme.current ?: ViewerTheme(settingsTheme, settingsMode, settingsPreset)
 
     ProfileAppearanceTheme(

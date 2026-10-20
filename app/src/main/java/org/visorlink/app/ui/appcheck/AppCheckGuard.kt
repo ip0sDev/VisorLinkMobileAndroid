@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.appcheck
 
 import androidx.compose.foundation.layout.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -31,8 +32,8 @@ fun AppCheckGuard(
     themeViewModel: ThemeViewModel = koinViewModel(),
     content: @Composable () -> Unit
 ) {
-    val state by viewModel.state.collectAsState()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
 
     var isDismissed by rememberSaveable { mutableStateOf(false) }
 

@@ -26,8 +26,27 @@ private const val TAG = "OutboxManager"
 private const val MAX_RETRIES = 5
 private const val MEDIA_CONCURRENCY = 2
 
+/** Отказ правил Firestore или функции: `PERMISSION_DENIED` не лечится повтором. */
+internal fun isPermissionDenied(e: Throwable): Boolean {
+    var cur: Throwable? = e
+    var depth = 0
+    while (cur != null && depth < 5) {
+        if (cur is com.google.firebase.firestore.FirebaseFirestoreException &&
+            cur.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+        ) return true
+        if (cur is com.google.firebase.functions.FirebaseFunctionsException &&
+            cur.code == com.google.firebase.functions.FirebaseFunctionsException.Code.PERMISSION_DENIED
+        ) return true
+        cur = cur.cause
+        depth++
+    }
+    return false
+}
+
 interface OutboxDataSource {
     suspend fun loadOutbox(context: Context): List<ChatDataCache.QueuedAction>
+    /** Ожидающие отправки; по умолчанию фильтр поверх полной выборки (для фейков в тестах). */
+    suspend fun loadPending(context: Context): List<ChatDataCache.QueuedAction> = loadOutbox(context).filter { it.status == 0 }
     suspend fun updateStatus(context: Context, id: String, status: Int)
     suspend fun updateRetry(context: Context, id: String, retryCount: Int, error: String?)
     suspend fun updateProgress(context: Context, id: String, progress: Float)
@@ -36,6 +55,7 @@ interface OutboxDataSource {
 
 class ChatDataOutboxSource : OutboxDataSource {
     override suspend fun loadOutbox(context: Context) = ChatDataCache.loadOutbox(context)
+    override suspend fun loadPending(context: Context) = ChatDataCache.loadPendingOutbox(context)
     override suspend fun updateStatus(context: Context, id: String, status: Int) {
         ChatDataCache.updateOutboxStatus(context, id, status)
     }
@@ -128,7 +148,7 @@ class OutboxManager(
         processingJob = scope.launch {
             while (isActive) {
                 val now = System.currentTimeMillis()
-                val allQueued = outboxDataSource.loadOutbox(context)
+                val allQueued = outboxDataSource.loadPending(context)
                 
                 val toProcess = allQueued.filter { action ->
                     action.status == 0 &&
@@ -175,10 +195,14 @@ class OutboxManager(
                                     }
                                     outboxDataSource.updateStatus(context, action.id, 1)
                                 } catch (e: Exception) {
+                                    // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
+                                    // Таймаут — тоже CancellationException, но он считается обычной неудачей.
+                                    if (e is CancellationException && e !is TimeoutCancellationException) throw e
                                     val nextRetry = action.retryCount + 1
                                     outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
                                     // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
-                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException) {
+                                    // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут
+                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || isPermissionDenied(e)) {
                                         outboxDataSource.updateStatus(context, action.id, 2)
                                     }
                                     // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
@@ -295,6 +319,7 @@ class OutboxManager(
                             senderUsername = data.getString("senderUsername"),
                             replyTo = replyTo,
                             isSpoiler = isSpoiler,
+                            caption = data.optString("caption").ifBlank { null },
                             topicId = topicId,
                             nextSeq = nextSeq,
                             isDirect = isDirect,
@@ -515,6 +540,8 @@ class OutboxManager(
                                 packId = data.getString("packId"),
                                 packName = data.getString("packName"),
                                 packEmoji = data.getString("packEmoji"),
+                                stickerFormat = data.optString("stickerFormat").ifBlank { null },
+                                stickerPreviewUrl = data.optString("stickerPreviewUrl").ifBlank { null },
                                 senderUsername = data.getString("senderUsername"),
                                 replyTo = replyTo,
                                 topicId = topicId,
@@ -602,6 +629,8 @@ class OutboxManager(
             put("packId", data.getString("packId"))
             put("packName", data.getString("packName"))
             put("packEmoji", emoji)
+            put("stickerFormat", data.optString("stickerFormat").ifBlank { null } ?: JSONObject.NULL)
+            put("stickerPreviewUrl", data.optString("stickerPreviewUrl").ifBlank { null } ?: JSONObject.NULL)
             put("createdAt", nowSec)
             put("deleted", false)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }

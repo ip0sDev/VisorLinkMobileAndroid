@@ -24,7 +24,8 @@ class ChatListViewModel(
     private val draftManager: DraftManager,
     private val context: Context? = null,
     private val sidebarTypingManager: org.visorlink.app.utils.SidebarTypingManager? = null,
-    private val networkMonitor: NetworkMonitor? = null
+    private val networkMonitor: NetworkMonitor? = null,
+    private val blockRepository: org.visorlink.app.data.repository.BlockRepository? = null,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = networkMonitor?.isOnline
@@ -34,10 +35,11 @@ class ChatListViewModel(
         if (!online) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED
     }.stateIn(viewModelScope, SharingStarted.Eagerly, if (networkMonitor?.isOnline?.value == false) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED)
 
-    val typingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
-        ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
+    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
+    val currentUid: String = auth.currentUser?.uid.orEmpty()
 
-    val currentUid: String get() = auth.currentUser!!.uid
+    private val rawTypingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
+        ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
 
     val currentUser: StateFlow<UserProfile?> = userRepository.currentUserFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
@@ -56,10 +58,38 @@ class ChatListViewModel(
 
     fun isInvitesEntry(chat: Chat): Boolean = chat.id == invitesEntryId(currentUid)
 
+    /**
+     * «Печатает» в списке чатов. Личные чаты с блокировкой (в любую сторону) не показываем:
+     * заблокировавший меня не светит активность, а чужое «печатает» от заблокированного мной не нужно.
+     */
+    val typingMap: StateFlow<Map<String, Boolean>> = combine(
+        rawTypingMap,
+        chats,
+        blockRepository?.blocks ?: flowOf(emptySet<String>()),
+        blockRepository?.blockedBy ?: flowOf(emptySet<String>()),
+    ) { typing, list, blocks, blockedBy ->
+        if (typing.isEmpty() || (blocks.isEmpty() && blockedBy.isEmpty())) typing
+        else {
+            val byId = list.associateBy { it.id }
+            typing.filterKeys { chatId ->
+                val chat = byId[chatId]
+                if (chat == null || chat.chatType() != ChatType.DIRECT) true
+                else chat.otherParticipantId(currentUid).let { it !in blocks && it !in blockedBy }
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     val drafts: StateFlow<Map<String, String>> = draftManager.draftsFlow
 
     private val _profileCache = MutableStateFlow<Map<String, UserProfile>>(emptyMap())
-    val profileCache: StateFlow<Map<String, UserProfile>> = _profileCache.asStateFlow()
+    /** Профили собеседников. Заблокировавшим меня аватарка и «в сети» скрыты (кэш мог их помнить). */
+    val profileCache: StateFlow<Map<String, UserProfile>> = combine(
+        _profileCache,
+        blockRepository?.blockedBy ?: flowOf(emptySet<String>()),
+    ) { cache, blockedBy ->
+        if (blockedBy.isEmpty()) cache
+        else cache.mapValues { (uid, p) -> if (uid in blockedBy) p.copy(avatarUrl = null, online = false) else p }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
     val savedMessagesEntry: Chat = Chat(
         id   = "saved_${currentUid}",
         type = "direct",

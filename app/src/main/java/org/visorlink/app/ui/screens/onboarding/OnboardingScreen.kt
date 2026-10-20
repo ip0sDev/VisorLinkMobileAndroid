@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.onboarding
 
 import org.visorlink.app.ui.theme.VlTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -29,7 +30,6 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.ColorPreset
 import org.visorlink.app.ui.components.*
-import org.visorlink.app.ui.components.settings.VlThemeSelector
 import org.visorlink.app.ui.theme.ThemeViewModel
 import org.visorlink.app.utils.AppLanguage
 import org.visorlink.app.utils.HapticType
@@ -53,10 +53,10 @@ fun OnboardingScreen(
 ) {
     val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
-    val appTheme by themeViewModel.appTheme.collectAsState()
+    val appTheme by themeViewModel.appTheme.collectAsStateWithLifecycle()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
     val haptic = rememberHaptic()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
 
     val scaffoldBg = MaterialTheme.colorScheme.surface
 
@@ -144,8 +144,8 @@ fun OnboardingScreen(
 
 @Composable
 fun WelcomePage(themeViewModel: ThemeViewModel) {
-    val currentLang by themeViewModel.language.collectAsState()
-    val appTheme by themeViewModel.appTheme.collectAsState()
+    val currentLang by themeViewModel.language.collectAsStateWithLifecycle()
+    val appTheme by themeViewModel.appTheme.collectAsStateWithLifecycle()
 
     Column(
         Modifier
@@ -182,9 +182,7 @@ fun WelcomePage(themeViewModel: ThemeViewModel) {
 
 @Composable
 fun AppearancePage(themeViewModel: ThemeViewModel) {
-    val appTheme by themeViewModel.appTheme.collectAsState()
-    val currentMode by themeViewModel.themeMode.collectAsState()
-    val currentPreset by themeViewModel.colorPreset.collectAsState()
+    val currentPreset by themeViewModel.colorPreset.collectAsStateWithLifecycle()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     Column(
@@ -204,21 +202,6 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(32.dp))
-
-        // При ID-картах тему решает режим карты, а не выбор (спека §7)
-        if (!org.visorlink.app.ui.idcard.LocalIdModeState.current.enabled) {
-            VlSettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                VlThemeSelector(
-                    selected = appTheme,
-                    onSelect = { themeViewModel.setTheme(it) },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    themeMode = currentMode,
-                    colorPreset = currentPreset,
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-        }
 
         VlSettingsSection(title = stringResource(R.string.settings_section_accent)) {
             Row(
@@ -240,8 +223,8 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
 
 @Composable
 fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: FirebaseFirestore) {
-    val appTheme by themeViewModel.appTheme.collectAsState()
-    val discoverEnabled by themeViewModel.discoverEnabled.collectAsState()
+    val appTheme by themeViewModel.appTheme.collectAsStateWithLifecycle()
+    val discoverEnabled by themeViewModel.discoverEnabled.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val uid = auth.currentUser?.uid
 

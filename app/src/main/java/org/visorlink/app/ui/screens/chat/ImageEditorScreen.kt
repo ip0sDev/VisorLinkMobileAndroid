@@ -38,7 +38,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.visorlink.app.R
+import org.visorlink.app.data.model.MAX_CAPTION_LENGTH
+import org.visorlink.app.ui.components.VlTextField
 import org.visorlink.app.ui.theme.VlTheme
+import androidx.compose.ui.res.stringResource
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import coil.compose.AsyncImage
@@ -68,7 +72,9 @@ data class DrawPath(
 fun ImageEditorScreen(
     uri: Uri,
     onNavigateBack: () -> Unit,
-    onSend: (uri: Uri, isSpoiler: Boolean) -> Unit
+    /** Поле подписи под превью (спека подписей §1.3); комментарии подпись не поддерживают. */
+    captionEnabled: Boolean = false,
+    onSend: (uri: Uri, isSpoiler: Boolean, caption: String) -> Unit
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -86,6 +92,7 @@ fun ImageEditorScreen(
     var flipH by remember { mutableStateOf(false) }
     var flipV by remember { mutableStateOf(false) }
     var isSpoiler by remember { mutableStateOf(false) }
+    var caption by remember { mutableStateOf("") }
     var activeTool by remember { mutableStateOf(EditorTool.NONE) }
 
     // ── Рисование ────────────────────────────────────────────────────────────
@@ -217,6 +224,18 @@ fun ImageEditorScreen(
                     }
                 }
 
+                // ── Подпись ───────────────────────────────────────────────────
+                if (captionEnabled) {
+                    VlTextField(
+                        value = caption,
+                        onValueChange = { if (it.length <= MAX_CAPTION_LENGTH) caption = it },
+                        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 10.dp),
+                        placeholder = stringResource(R.string.editor_caption_placeholder),
+                        maxLines = 5,
+                        singleLine = false
+                    )
+                }
+
                 // ── Отправка ──────────────────────────────────────────────────
                 Row(
                     modifier = Modifier
@@ -254,7 +273,7 @@ fun ImageEditorScreen(
                                     blurRects = blurRects.toList()
                                 )
                                 isProcessing = false
-                                onSend(result, isSpoiler)
+                                onSend(result, isSpoiler, caption)
                             }
                         },
                         modifier = Modifier

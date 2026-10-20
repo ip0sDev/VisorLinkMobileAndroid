@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.feed
 
+import org.visorlink.app.ui.components.terminalData
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -101,7 +102,7 @@ fun FeedPostCard(
                         val time = message.createdAt?.toDate()?.let(::formatPostTime) ?: stringResource(R.string.feed_just_now)
                         Text(
                             if (message.isPublished == false) "$time · ${stringResource(R.string.feed_unpublished)}" else time,
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.bodySmall.terminalData(),
                             color = cs.onSurfaceVariant,
                             maxLines = 1,
                         )
@@ -162,7 +163,7 @@ fun FeedPostCard(
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(Modifier.width(4.dp))
-                    Text(formatCount(message.viewsCount), style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                    Text(formatCount(message.viewsCount), style = MaterialTheme.typography.labelMedium.terminalData(), color = cs.onSurfaceVariant)
                 }
             }
         }
@@ -396,7 +397,7 @@ fun CuratedChannelCard(
                 if (channel.memberCount > 0) {
                     Text(
                         pluralStringResource(R.plurals.feed_subscribers, channel.memberCount, formatCount(channel.memberCount)),
-                        style = MaterialTheme.typography.labelSmall,
+                        style = MaterialTheme.typography.labelSmall.terminalData(),
                         color = cs.onSurfaceVariant,
                         modifier = Modifier.padding(top = 4.dp),
                     )

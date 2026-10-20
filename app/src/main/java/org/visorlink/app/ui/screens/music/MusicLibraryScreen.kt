@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.music
 
 import android.Manifest
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.pm.PackageManager
 import android.os.Build
 import java.io.File
@@ -60,7 +61,7 @@ fun MusicLibraryScreen(
     viewModel: MusicViewModel,
     onNavigateBack: (() -> Unit)? = null
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
@@ -155,10 +156,11 @@ fun MusicLibraryScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                if (uiState.selectedPlaylist != null) {
+                val selectedPlaylist = uiState.selectedPlaylist
+                if (selectedPlaylist != null) {
                     // Просмотр треков конкретного плейлиста
                     PlaylistTracksView(
-                        playlist = uiState.selectedPlaylist!!,
+                        playlist = selectedPlaylist,
                         tracks = uiState.selectedPlaylistTracks,
                         currentTrackId = uiState.playerState.currentTrack?.id,
                         isPlaying = uiState.playerState.isPlaying,
@@ -167,7 +169,7 @@ fun MusicLibraryScreen(
                             viewModel.playTrack(track, uiState.selectedPlaylistTracks)
                         },
                         onRemoveTrack = { trackId ->
-                            viewModel.removeTrackFromPlaylist(uiState.selectedPlaylist!!.id, trackId)
+                            viewModel.removeTrackFromPlaylist(selectedPlaylist.id, trackId)
                         },
                         onDownloadTrack = { viewModel.downloadTrack(it) }
                     )

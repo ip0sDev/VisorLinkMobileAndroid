@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import androidx.compose.animation.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -41,9 +42,9 @@ fun CacheSettingsScreen(
     viewModel: CacheViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 

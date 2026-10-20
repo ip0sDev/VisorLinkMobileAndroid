@@ -121,6 +121,10 @@
     <string name="media_photo_icon">📷 Изображение</string>
     <string name="media_voice">🎤 Голосовое сообщение</string>
     <string name="media_sticker">🎭 Стикер</string>
+    <string name="editor_caption_placeholder">Добавить подпись (необязательно)…</string>
+    <string name="media_album_count">📷 %1$d фото</string>
+    <string name="sticker_load_failed">Не удалось загрузить стикер</string>
+    <string name="media_tap_to_retry">Нажмите, чтобы загрузить снова</string>
 
     <!-- Chat Screen — Toasts -->
     <string name="toast_saved_gallery">Сохранено в галерею</string>
@@ -920,7 +924,7 @@
     <string name="legal_consent_checkbox_privacy">Ознакомлен(а) и согласен(сна) с Политикой конфиденциальности</string>
     <string name="legal_consent_checkbox_personal_data">Даю информированное согласие на обработку персональных данных (ст. 5 Закона № 99-З)</string>
     <string name="legal_consent_checkbox_cross_border">Подтверждаю согласие на трансграничную передачу данных в Google Cloud (ст. 9 Закона № 99-З)</string>
-    <string name="legal_consent_checkbox_age14">Мне исполнилось 14 лет (или получено согласие законных представителей в порядке ст. 25 ГК РБ)</string>
+    <string name="legal_consent_checkbox_age16">Мне исполнилось 16 лет.</string>
     <string name="legal_load_error_title">Не удалось загрузить документы</string>
     <string name="legal_load_error_desc">Для использования VisorLink необходимо загрузить актуальные юридические документы с сервера. Проверьте подключение к сети.</string>
     <string name="legal_retry_button">Повторить попытку</string>
@@ -1359,4 +1363,37 @@
     <string name="drive_required_body">Фото, видео и голосовые сообщения хранятся на вашем Google Диске. Подключите его, чтобы отправить медиа — отправка продолжится сама.</string>
     <string name="drive_required_connect">Подключить</string>
     <string name="drive_required_failed">Не удалось подключить Google Диск. Попробуйте ещё раз или подключите его в Настройки → Хранилище.</string>
+
+    <!-- Блокировка аккаунта сервисом (баны) -->
+    <string name="ban_title">Аккаунт заблокирован</string>
+    <string name="ban_body">Доступ к VisorLink закрыт. Вы можете один раз отправить апелляцию.</string>
+    <string name="ban_reason_label">Причина</string>
+    <string name="ban_reason_default">Нарушение правил сервиса</string>
+    <string name="ban_appeal_label">Апелляция</string>
+    <string name="ban_appeal_hint">Апелляцию можно отправить только один раз, до 300 символов</string>
+    <string name="ban_appeal_counter">%1$d / %2$d</string>
+    <string name="ban_appeal_submit">Отправить апелляцию</string>
+    <string name="ban_appeal_sending">Отправляем…</string>
+    <string name="ban_appeal_pending_title">Апелляция отправлена</string>
+    <string name="ban_appeal_pending_body">Мы рассмотрим её и сообщим о решении. Повторно подать апелляцию нельзя.</string>
+    <string name="ban_appeal_rejected_title">Апелляция отклонена</string>
+    <string name="ban_appeal_your_text">Ваш текст</string>
+    <string name="ban_err_empty">Напишите текст апелляции</string>
+    <string name="ban_err_too_long">Не больше 300 символов</string>
+    <string name="ban_err_already_sent">Апелляция уже была отправлена — повторно её подать нельзя</string>
+    <string name="ban_err_not_banned">Аккаунт уже не заблокирован — обновите</string>
+    <string name="ban_err_other">Не удалось отправить. Попробуйте позже</string>
+    <string name="ban_sign_out">Выйти</string>
+    <string name="ban_terms">Условия использования</string>
+    <string name="ban_delete_account">Удалить аккаунт</string>
+
+    <!-- Блокировка пользователя пользователем -->
+    <string name="chat_blocked_by_peer">Вы не можете писать этому пользователю</string>
+    <string name="chat_blocked_by_me">Вы заблокировали этого пользователя</string>
+    <string name="chat_last_seen_long_ago">был(а) давно</string>
+    <string name="profile_unavailable">Профиль недоступен</string>
+    <string name="block_action_failed">Не удалось выполнить. Попробуйте позже</string>
+    <string name="chat_open_failed">Не удалось открыть чат</string>
+    <string name="chat_blocked_unblock">Разблокировать</string>
+
 </resources>

@@ -20,7 +20,13 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.theme.VlTheme
 
 /**
@@ -95,11 +101,14 @@ fun Modifier.terminalTitleReveal(key: Any? = Unit): Modifier {
         // Блочный курсор на краю: во время печати горит, после — плавно гаснет
         val cursorAlpha = if (p < 1f) 0.85f else 0.85f * (1f - blink.value)
         if (cursorAlpha > 0f) {
-            val h = size.height * 0.62f
-            val w = 0.55f * h
+            // Курсор — высота одной строки: под заголовком может стоять подзаголовок («36 чатов»),
+            // и курсор высотой в весь слот закрывал обе строки
+            val line = minOf(size.height, 30.dp.toPx())
+            val h = minOf(line * 0.62f, 20.dp.toPx())
+            val w = 0.5f * h
             drawRect(
                 color = cursorColor.copy(alpha = cursorAlpha),
-                topLeft = Offset((edge + 2.dp.toPx()).coerceAtMost(size.width - w), (size.height - h) / 2),
+                topLeft = Offset((edge + 2.dp.toPx()).coerceAtMost(size.width - w), (line - h) / 2),
                 size = Size(w, h),
             )
         }
@@ -147,3 +156,106 @@ fun TerminalDecodeText(
 
 private const val BAND = 2
 private const val NOISE = "#/<>_=+*01░▒▓"
+
+/**
+ * Прогресс «трассировки» (0 → 1) для [org.visorlink.app.ui.theme.vlTraceBorder]: стартует при смене
+ * [key] (появление панели, фокус поля). Без терминальной анимации (другая тема, «убрать анимации»)
+ * сразу 1 — эффект не рисуется. Часы скриншот-тестов добегают до 1 за 1,5 с.
+ */
+@Composable
+fun rememberTrace(key: Any?, enabled: Boolean = true, durationMs: Int = 700): Animatable<Float, androidx.compose.animation.core.AnimationVector1D> {
+    val on = enabled && VlTheme.tokens.glitchMotion
+    val anim = remember(key, on) { Animatable(if (on) 0f else 1f) }
+    LaunchedEffect(key, on) { if (on) anim.animateTo(1f, TerminalMotion.tween(durationMs)) }
+    return anim
+}
+
+/**
+ * Линейка: тонкая линия с засечками (каждая пятая выше), гаснущая вправо. Разделитель заголовков
+ * разделов Forge v2 вместо простой линии.
+ */
+@Composable
+fun TerminalRuler(color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    androidx.compose.foundation.layout.Box(
+        modifier
+            .height(8.dp)
+            .drawBehind {
+                val step = 6.dp.toPx()
+                val base = size.height - 1.dp.toPx()
+                var i = 0
+                while (i * step < size.width) {
+                    val x = i * step
+                    val fade = 1f - x / size.width * 0.9f
+                    val tick = if (i % 5 == 0) 6.dp.toPx() else 3.dp.toPx()
+                    drawRect(color.copy(alpha = 0.5f * fade), Offset(x, base - tick), Size(1.dp.toPx(), tick))
+                    i++
+                }
+                drawRect(color.copy(alpha = 0.4f), Offset(0f, base), Size(size.width, 1.dp.toPx()))
+            }
+    )
+}
+
+/**
+ * Строка состояния терминала над заголовком верхней панели: метка режима и реальный статус сети.
+ * Время не показываем: оно меняло бы скриншоты каждую минуту.
+ */
+@Composable
+fun TerminalStatusStrip(modifier: Modifier = Modifier) {
+    val terminal = VlTheme.tokens.terminal ?: return
+    val monitor = org.koin.compose.getKoin().getOrNull<org.visorlink.app.utils.NetworkMonitor>()
+    val online = monitor?.isOnline?.collectAsStateWithLifecycle()?.value ?: true
+    androidx.compose.material3.Text(
+        text = "VL//${terminal.tag}  NET:${if (online) "OK" else "OFF"}",
+        modifier = modifier,
+        color = terminal.neon.copy(alpha = if (online) 0.55f else 0.9f),
+        style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 9.sp, letterSpacing = 1.2.sp),
+        maxLines = 1,
+    )
+}
+
+/**
+ * Служебный код терминала: порядковый номер сообщения (seq) в шестнадцатеричном виде, `0x002F`.
+ * Только в Forge v2 и только для настоящего seq (> 0) — выдуманных кодов нет.
+ */
+@Composable
+fun TerminalSeqTag(seq: Long?, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    if (VlTheme.tokens.terminal == null || seq == null || seq <= 0L) return
+    androidx.compose.material3.Text(
+        text = "0x%04X".format(seq),
+        modifier = modifier,
+        color = color,
+        style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 9.sp, letterSpacing = 0.6.sp),
+        maxLines = 1,
+    )
+}
+
+/**
+ * Стиль для данных (время, даты, счётчики) в терминале: моноширинный с табличными цифрами.
+ * В остальных темах стиль не меняется. Контраст «крупный дисплейный заголовок — мелкие моно-данные»
+ * и даёт ощущение терминала, без декоративных добавок.
+ */
+@Composable
+@androidx.compose.runtime.ReadOnlyComposable
+fun androidx.compose.ui.text.TextStyle.terminalData(): androidx.compose.ui.text.TextStyle {
+    val tokens = VlTheme.tokens
+    if (tokens.terminal == null) return this
+    return copy(fontFamily = tokens.data.dataSmall.fontFamily, letterSpacing = 0.4.sp, fontFeatureSettings = "tnum")
+}
+
+/**
+ * Метка-тег терминала: контур и моно-капитель цвета [color] (статус, роль, PRO). Вне Forge v2 не
+ * используется — там свои значки.
+ */
+@Composable
+fun TerminalTag(text: String, color: androidx.compose.ui.graphics.Color, modifier: Modifier = Modifier) {
+    val shape = VlTheme.tokens.shapes.rounded(4.dp)
+    androidx.compose.material3.Text(
+        text = text.uppercase(),
+        modifier = modifier
+            .border(1.5.dp, color.copy(alpha = 0.8f), shape)
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        color = color,
+        style = org.visorlink.app.ui.theme.ForgeV2SectionLabel.copy(fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+        maxLines = 1,
+    )
+}

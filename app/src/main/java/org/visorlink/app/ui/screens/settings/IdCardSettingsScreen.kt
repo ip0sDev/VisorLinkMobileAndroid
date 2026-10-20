@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -64,9 +65,9 @@ fun IdCardSettingsScreen(
     onNavigateBack: () -> Unit,
     viewModel: IdCardSettingsViewModel = koinViewModel(),
 ) {
-    val profile by viewModel.profile.collectAsState()
-    val cardState by viewModel.card.collectAsState()
-    val ui by viewModel.ui.collectAsState()
+    val profile by viewModel.profile.collectAsStateWithLifecycle()
+    val cardState by viewModel.card.collectAsStateWithLifecycle()
+    val ui by viewModel.ui.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
 
     Scaffold(
@@ -208,7 +209,7 @@ fun IdCardSettingsScreen(
 /** «Моя визитка» (спека ANDROID_AUTH_2FA_ACCENT_SPEC.md, часть 6): публикация, снятие, ссылка. */
 @Composable
 private fun PublicCardSection(card: org.visorlink.app.data.idcard.IdCard, viewModel: IdCardSettingsViewModel) {
-    val state by viewModel.publicCard.collectAsState()
+    val state by viewModel.publicCard.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     val published = card.publicCard

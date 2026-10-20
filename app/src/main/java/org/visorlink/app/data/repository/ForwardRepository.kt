@@ -52,6 +52,12 @@ class ForwardRepository(
             originalMsg.voiceUrl?.let       { put("url",           it) }
             originalMsg.caption?.let        { put("caption",       it) }
             originalMsg.stickerId?.let      { put("stickerId",     it) }
+            originalMsg.stickerUrl?.let        { put("url",               it) }
+            originalMsg.packId?.let            { put("packId",            it) }
+            originalMsg.packName?.let          { put("packName",          it) }
+            originalMsg.packEmoji?.let         { put("packEmoji",         it) }
+            originalMsg.stickerFormat?.let     { put("stickerFormat",     it) }
+            originalMsg.stickerPreviewUrl?.let { put("stickerPreviewUrl", it) }
             originalMsg.albumItems?.let     { put("images",        it.map { img -> img.toMap() }) }
         }
 
@@ -128,6 +134,12 @@ class ForwardRepository(
             originalMsg.voiceUrl?.let   { put("url",       it) }
             originalMsg.caption?.let    { put("caption",   it) }
             originalMsg.stickerId?.let  { put("stickerId", it) }
+            originalMsg.stickerUrl?.let        { put("url",               it) }
+            originalMsg.packId?.let            { put("packId",            it) }
+            originalMsg.packName?.let          { put("packName",          it) }
+            originalMsg.packEmoji?.let         { put("packEmoji",         it) }
+            originalMsg.stickerFormat?.let     { put("stickerFormat",     it) }
+            originalMsg.stickerPreviewUrl?.let { put("stickerPreviewUrl", it) }
             originalMsg.albumItems?.let { put("images",    it.map { img -> img.toMap() }) }
         }
 

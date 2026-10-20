@@ -10,16 +10,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Forge v2 — киберпанк-терминал особых режимов ID-карты. Пользователь его не выбирает:
+ * Forge v2 — киберпанк особых режимов ID-карты, язык «жёсткого блока». Пользователь его не выбирает:
  * тему включает режим Protogen / Beast (см. ModeThemeRules), поэтому в селекторе её нет.
  *
- * Палитра, формы (скругления 2–8 dp, у Beast до 10) и контур панелей `primary` 16 % — из веба
- * (блок FORGE v2 в src/styles/variables.css). Поверх них Android-слой света, а не геометрии:
- *  - заголовки — Unbounded с мягким неоновым свечением (см. forgeV2Typography);
- *  - заголовки разделов с линией до края, неоновая линия под верхней панелью;
- *  - основная кнопка светится и в покое, тумблер — светящаяся «риска» ([ForgeV2Switch]);
- *  - неоновая дымка сверху экрана, у Protogen ещё сканлайны.
- * Только тёмная. Protogen — холодный неон, Beast — тёплый янтарь, спокойнее.
+ * Палитра — из веба (блок FORGE v2 в src/styles/variables.css); формы и структура уже свои, Android-овские:
+ *  - прямые углы 2–3 dp, плотные плиты без размытия вместо теней (панель — тусклая плита, кнопка и FAB — яркая
+ *    плита второго цвета, при нажатии вдавливаются), крепкий контур 1,5 dp;
+ *  - выбор — инвертированный блок (сплошной primary, тёмный текст), опасное — косая штриховка, выключенное — пунктир;
+ *  - заголовки — Unbounded без свечения, подписи кнопок — жирный моно; тумблер — «риска»;
+ *  - никаких сканлайнов, дымки и свечения в покое — они не давали характера.
+ * Только тёмная. Protogen — холодный неон + маджента, Beast — тёплый янтарь.
  */
 object ForgeV2 {
 
@@ -71,8 +71,8 @@ object ForgeV2 {
         warning = Color(0xFFFFD23D),
         error = Color(0xFFFF4F6B),
         onError = Color(0xFF2A0008),
-        radiusLg = 6.dp,
-        radius2xl = 8.dp,
+        radiusLg = 2.dp,
+        radius2xl = 3.dp,
         neon = 1f,
     )
 
@@ -95,8 +95,8 @@ object ForgeV2 {
         warning = Color(0xFFFFD36B),
         error = Color(0xFFFF6B5E),
         onError = Color(0xFF2A0705),
-        radiusLg = 8.dp,
-        radius2xl = 10.dp,
+        radiusLg = 2.dp,
+        radius2xl = 3.dp,
         neon = 0.7f,
         beast = true,
     )
@@ -173,26 +173,28 @@ fun forgeV2ColorScheme(f: ForgeV2.Flavor): ColorScheme = darkColorScheme(
 
 /** Шкала скруглений: xs 2 · sm 3 · md 4 · lg 6/8 · 2xl 8/10 (ограничивает любую форму). */
 fun forgeV2Shapes(f: ForgeV2.Flavor): VlShapeTokens {
-    val lg = RoundedCornerShape(f.radiusLg)
+    // Силуэт: диагональная пара срезанных углов. Скругления нет вообще, потолок — для чужих форм
+    val cut = ChamferShape(8.dp)
+    val small = ChamferShape(5.dp)
     return VlShapeTokens(
-        button = lg,
-        buttonPressed = RoundedCornerShape(4.dp),
-        card = lg,
-        field = RoundedCornerShape(4.dp),
-        chip = lg,
-        fab = lg,
-        bar = RoundedCornerShape(f.radius2xl),
-        inputPanel = lg,
-        pill = lg,
-        // Точки статуса и бегунок остаются круглыми: на 8–10 dp это и есть --radius-full
+        button = cut,
+        buttonPressed = cut,
+        card = cut,
+        field = ChamferShape(6.dp),
+        chip = small,
+        fab = cut,
+        bar = cut,
+        inputPanel = cut,
+        pill = small,
+        // Точки статуса остаются мелкими блоками: у 8 dp срез и круг неразличимы
         indicator = CircleShape,
-        avatar = lg,
+        avatar = ChamferShape(6.dp),
         cardRadius = f.radiusLg,
         buttonRadius = f.radiusLg,
-        section = lg,
-        // Строка отступает от края секции на 8 dp — концентрично это почти прямой угол
-        row = RoundedCornerShape(3.dp),
+        section = cut,
+        row = small,
         maxRadius = f.radius2xl,
+        chamfer = 6.dp,
     )
 }
 
@@ -204,7 +206,11 @@ internal fun forgeV2Structure(f: ForgeV2.Flavor) = VlStructureTokens(
     enabled = true,
     shadowDark = Color.Black.copy(alpha = 0.55f),
     shadowLight = Color.Transparent,
-    outline = f.primary.copy(alpha = 0.16f),
+    outline = f.primary.copy(alpha = 0.30f),
+    // Жёсткие плиты: панель — тусклая плита под цвет основного, кнопка — яркая второго цвета
+    hardShadow = ForgeV2.mix(f.primary, 0.26f, f.background),
+    hardShadowAlt = ForgeV2.mix(f.secondary, 0.85f, f.background),
+    hardOffset = 4.dp,
     raisedOffset = 6.dp,
     raisedBlur = 18.dp,
     insetOffset = 2.dp,
@@ -216,27 +222,26 @@ internal fun forgeV2Signal(f: ForgeV2.Flavor) = VlSignalTokens(
     enabled = true,
     glowBlur = if (f.beast) 12.dp else 14.dp,
     glowAlpha = if (f.beast) 0.22f else 0.35f,
-    fabRestAlpha = if (f.beast) 0.14f else 0.2f,
-    focusBorder = 1.dp,
+    fabRestAlpha = 0f,
+    focusBorder = 2.dp,
     pulsePeriodMs = 2000,
-    buttonRestAlpha = 0.2f * f.neon,
+    buttonRestAlpha = 0f,
 )
 
 /** Дисплей терминала: неоновая дымка основного цвета сверху, у Protogen ещё сканлайны. */
 internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
     VlTerminalTokens(
         labelPrefix = "",
+        tag = "BEAST",
         neon = f.primary,
         neonAlt = f.secondary,
-        haze = f.primary.copy(alpha = 0.05f),
     )
 } else {
     VlTerminalTokens(
         labelPrefix = "> ",
-        scanlineAlpha = 0.018f,
+        tag = "PROTOGEN",
         neon = f.primary,
         neonAlt = f.secondary,
-        haze = f.primary.copy(alpha = 0.06f),
     )
 }
 
@@ -246,9 +251,9 @@ internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
  */
 internal val ForgeV2Switch = VlSwitchTokens(
     thumb = RoundedCornerShape(2.dp),
-    thumbWidth = 8.dp,
+    thumbWidth = 10.dp,
     thumbHeight = 22.dp,
-    thumbGlow = 0.6f,
+    thumbGlow = 0f,
     litTrack = true,
 )
 
@@ -260,10 +265,12 @@ internal fun forgeV2Status(f: ForgeV2.Flavor) = VlStatusTokens(
 )
 
 internal fun forgeV2Bubbles(f: ForgeV2.Flavor) = VlBubbleTokens(
-    mineBg = ForgeV2.mix(f.primary, 0.16f, f.container),
+    mineBg = ForgeV2.mix(f.primary, 0.22f, f.container),
     mineFg = f.onSurface,
     otherBg = f.container,
     otherFg = f.onSurface,
+    mineBorder = f.primary.copy(alpha = 0.45f),
+    otherBorder = f.primary.copy(alpha = 0.22f),
 )
 
 /** Терминал: короткие переходы без пружины, нажатие — лёгкое сжатие. */

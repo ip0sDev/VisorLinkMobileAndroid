@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.group
 
 import org.visorlink.app.ui.components.VlSwitch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.VlDialogButton
 import org.visorlink.app.ui.components.VlAlertDialog
@@ -98,7 +99,8 @@ class ChatSettingsViewModel(
     val chatId: String
 ) : ViewModel() {
 
-    val currentUid: String get() = auth.currentUser!!.uid
+    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
+    val currentUid: String = auth.currentUser?.uid.orEmpty()
 
     private val _uiState = MutableStateFlow(ChatSettingsUiState(currentUid = currentUid))
     val uiState: StateFlow<ChatSettingsUiState> = _uiState.asStateFlow()
@@ -279,7 +281,7 @@ fun ChatSettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val viewModel: ChatSettingsViewModel = koinViewModel(parameters = { parametersOf(chatId) })
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current

@@ -66,11 +66,13 @@ data class UserProfile(
     val acceptedAt: Timestamp? = null,
     val acceptedVersion: String? = null,
 
-    // UGC Compliance: Blocked Users
-    val blockedUserIds: List<String> = emptyList(),
-
     /** Режим ID-карты (standard | protogen | beast). Пишет только сервер; нет — Standard. */
     val idMode: String? = null,
+
+    /** Аккаунт заблокирован сервисом. Пишет только сервер; клиентам запрещено. */
+    val banned: Boolean = false,
+    /** Причина блокировки (запасной вариант, если `bans/{uid}` недоступен). */
+    val banReason: String? = null,
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false
@@ -483,14 +485,52 @@ data class StickerItem(
     val emoji: String = "🎭",
     val storagePath: String = "",
     val sortOrder: Int = 0,
-    val createdAt: Timestamp? = null
+    val createdAt: Timestamp? = null,
+    /** `static | webp | gif | webm | lottie`; неизвестное или отсутствующее — static (спека §3.1). */
+    val format: String? = null,
+    /** Постер (статичный WebP): обязателен для lottie, рекомендуется для webm. */
+    val previewUrl: String? = null
 ) {
+    /** Формат с учётом старых стикеров без поля `format` (угадываем по расширению). */
+    val effectiveFormat: String
+        get() = StickerFormat.resolve(format, url)
+
     val isLottie: Boolean
-        get() = url.substringBefore("?").endsWith(".json", ignoreCase = true) ||
-                url.substringBefore("?").endsWith(".lottie", ignoreCase = true)
+        get() = effectiveFormat == StickerFormat.LOTTIE
 
     val isGif: Boolean
-        get() = url.substringBefore("?").endsWith(".gif", ignoreCase = true)
+        get() = effectiveFormat == StickerFormat.GIF
+}
+
+/** Лимит подписи к медиа: firestore.rules isValidCaption и callable sendAlbum. */
+const val MAX_CAPTION_LENGTH = 500
+
+/** Форматы стикеров (ANDROID_CAPTIONS_AND_ANIMATED_STICKERS_SPEC.md §3.1). */
+object StickerFormat {
+    const val STATIC = "static"
+    const val WEBP = "webp"
+    const val GIF = "gif"
+    const val WEBM = "webm"
+    const val LOTTIE = "lottie"
+
+    private val KNOWN = setOf(STATIC, WEBP, GIF, WEBM, LOTTIE)
+
+    /** Явный `format` важнее расширения; без него старые .json/.gif по-прежнему распознаются. */
+    fun resolve(format: String?, url: String?): String {
+        val f = format?.lowercase()
+        if (f != null && f in KNOWN) return f
+        if (f != null) return STATIC
+        val path = url?.substringBefore("?")?.lowercase() ?: return STATIC
+        return when {
+            path.endsWith(".json") || path.endsWith(".lottie") -> LOTTIE
+            path.endsWith(".gif") -> GIF
+            path.endsWith(".webm") -> WEBM
+            else -> STATIC
+        }
+    }
+
+    /** Значение для `stickerFormat` в сообщении: null для статики. */
+    fun forMessage(format: String): String? = format.takeIf { it != STATIC }
 }
 
 data class UserStickerData(
@@ -516,6 +556,9 @@ data class Message(
     val packId: String? = null,
     val packName: String? = null,
     val packEmoji: String? = null,
+    /** `webp | gif | webm | lottie`, null — статика; копируется из стикера, получатель не читает stickerPacks. */
+    val stickerFormat: String? = null,
+    val stickerPreviewUrl: String? = null,
     val createdAt: Timestamp? = null,
     val deleted: Boolean = false,
     val deletedAt: Timestamp? = null,
@@ -587,8 +630,13 @@ data class Message(
                 fileName?.endsWith(".gif", ignoreCase = true) == true ||
                 mimeType.equals("image/gif", ignoreCase = true)
 
+    /** Формат стикера: `stickerFormat`, а у старых сообщений — по расширению `url`. */
+    val stickerFormatResolved: String
+        get() = StickerFormat.resolve(stickerFormat, url)
+
     val isLottieMedia: Boolean
         get() = type.equals(MessageType.LOTTIE, ignoreCase = true) ||
+                stickerFormat.equals(StickerFormat.LOTTIE, ignoreCase = true) ||
                 url?.substringBefore("?")?.endsWith(".json", ignoreCase = true) == true ||
                 url?.substringBefore("?")?.endsWith(".lottie", ignoreCase = true) == true ||
                 fileName?.endsWith(".json", ignoreCase = true) == true ||
@@ -880,6 +928,8 @@ sealed class TopbarStatus {
     object WaitingForNetwork : TopbarStatus()
     object Updating : TopbarStatus()
     data class LastSeen(val ts: Long?) : TopbarStatus()
+    /** Собеседник заблокировал меня: «в сети» и точное время скрыты. */
+    object LastSeenLongAgo : TopbarStatus()
     data class MemberCount(val total: Int, val online: Int) : TopbarStatus()
 }
 

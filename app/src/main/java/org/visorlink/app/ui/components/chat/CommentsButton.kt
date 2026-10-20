@@ -32,6 +32,34 @@ fun CommentsButton(
     val contentAlpha = if (allowed) 1f else 0.4f
 
     val haptic = rememberHaptic()
+    val label = when {
+        !allowed -> "Comments off"
+        post.commentsCount == 0 -> "Leave a comment"
+        post.commentsCount == 1 -> "1 comment"
+        else -> "${post.commentsCount} comments"
+    }
+
+    // Forge v2: не отдельная плашка под постом, а строка-ссылка терминала. Коробка под каждым
+    // постом спорила с контуром самого пузыря
+    if (VlTheme.tokens.structure.hardShadow != null) {
+        val color = MaterialTheme.colorScheme.primary.copy(alpha = contentAlpha)
+        Row(
+            modifier = modifier
+                .padding(top = 6.dp, start = 4.dp)
+                .clickable(enabled = allowed) {
+                    haptic.perform(HapticType.CLICK, true)
+                    onClick()
+                }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("> " + label.uppercase(), style = org.visorlink.app.ui.theme.ForgeV2SectionLabel, color = color)
+            if (allowed) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(14.dp), tint = color)
+            }
+        }
+        return
+    }
 
     Surface(
         onClick = {
@@ -63,12 +91,7 @@ fun CommentsButton(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = when {
-                        !allowed -> "Comments off"
-                        post.commentsCount == 0 -> "Leave a comment"
-                        post.commentsCount == 1 -> "1 comment"
-                        else -> "${post.commentsCount} comments"
-                    },
+                    text = label,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha),
                     fontWeight = FontWeight.Bold

@@ -28,7 +28,7 @@ class StickerPackRepository(
 ) {
     companion object {
         private const val TAG = "StickerPackRepository"
-        const val PREF_STICKER_CACHE_VERSION = "official_curated_v5"
+        const val PREF_STICKER_CACHE_VERSION = "official_curated_v6"
         private const val PREFS_NAME = "sticker_prefs"
         private const val KEY_CACHE_VERSION = "sticker_cache_version"
     }
@@ -72,7 +72,23 @@ class StickerPackRepository(
         }
     }
 
-    private suspend fun processSnapshot(snapshot: com.google.firebase.firestore.QuerySnapshot) = withContext(Dispatchers.IO) {
+    private fun parseSticker(sDoc: com.google.firebase.firestore.DocumentSnapshot): StickerItem? {
+        val url = sDoc.getString("url") ?: return null
+        if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage"))) {
+            return null
+        }
+        return StickerItem(
+            id = sDoc.id,
+            url = url,
+            emoji = sDoc.getString("emoji") ?: "🎭",
+            storagePath = sDoc.getString("storagePath") ?: "",
+            sortOrder = sDoc.getLong("sortOrder")?.toInt() ?: 0,
+            format = sDoc.getString("format"),
+            previewUrl = sDoc.getString("previewUrl")?.takeIf { it.isNotBlank() }
+        )
+    }
+
+        private suspend fun processSnapshot(snapshot: com.google.firebase.firestore.QuerySnapshot) = withContext(Dispatchers.IO) {
         val uid = currentUid.ifBlank { "global" }
         try {
             val packs = snapshot.documents.map { doc ->
@@ -92,19 +108,7 @@ class StickerPackRepository(
                             firestore.collection("stickerPacks").document(id).collection("stickers").get().await()
                         }
 
-                        val stickers = stickersSnapshot.documents.mapNotNull { sDoc ->
-                            val url = sDoc.getString("url") ?: return@mapNotNull null
-                            if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage"))) {
-                                return@mapNotNull null
-                            }
-                            StickerItem(
-                                id = sDoc.id,
-                                url = url,
-                                emoji = sDoc.getString("emoji") ?: "🎭",
-                                storagePath = sDoc.getString("storagePath") ?: "",
-                                sortOrder = sDoc.getLong("sortOrder")?.toInt() ?: 0
-                            )
-                        }.sortedBy { it.sortOrder }
+                        val stickers = stickersSnapshot.documents.mapNotNull(::parseSticker).sortedBy { it.sortOrder }
 
                         if (stickers.isEmpty()) return@async null
 
@@ -231,19 +235,7 @@ class StickerPackRepository(
                 firestore.collection("stickerPacks").document(packId).collection("stickers").get().await()
             }
 
-            val stickers = stickersSnapshot.documents.mapNotNull { sDoc ->
-                val url = sDoc.getString("url") ?: return@mapNotNull null
-                if (url.contains("api.visorlink.org") || (url.contains("/f/") && !url.contains("firebasestorage"))) {
-                    return@mapNotNull null
-                }
-                StickerItem(
-                    id = sDoc.id,
-                    url = url,
-                    emoji = sDoc.getString("emoji") ?: "🎭",
-                    storagePath = sDoc.getString("storagePath") ?: "",
-                    sortOrder = sDoc.getLong("sortOrder")?.toInt() ?: 0
-                )
-            }.sortedBy { it.sortOrder }
+            val stickers = stickersSnapshot.documents.mapNotNull(::parseSticker).sortedBy { it.sortOrder }
 
             if (stickers.isEmpty()) return@withContext null
 

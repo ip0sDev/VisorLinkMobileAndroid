@@ -50,7 +50,7 @@ class OutboxManagerTest {
         val action1 = createQueuedAction("1", "text", chatId = "chat1")
         val action2 = createQueuedAction("2", "text", chatId = "chat2")
         
-        whenever(outboxDataSource.loadOutbox(any()))
+        whenever(outboxDataSource.loadPending(any()))
             .thenReturn(listOf(action1, action2))
             .thenReturn(emptyList())
 
@@ -88,7 +88,7 @@ class OutboxManagerTest {
         val media2 = createQueuedAction("m2", "image", file2.absolutePath, chatId = "chat2")
         val media3 = createQueuedAction("m3", "image", file3.absolutePath, chatId = "chat3")
         
-        whenever(outboxDataSource.loadOutbox(any()))
+        whenever(outboxDataSource.loadPending(any()))
             .thenReturn(listOf(media1, media2, media3))
             .thenReturn(emptyList())
         

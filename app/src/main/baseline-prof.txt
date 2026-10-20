@@ -1,0 +1,25 @@
+# Ручной baseline-профиль: компилирует заранее код приложения, который нужен на холодном старте
+# и первом экране (Application, Koin, тема, навигация, список чатов, чат).
+# Это грубое приближение без замеров. Точный профиль даёт Macrobenchmark-модуль на устройстве.
+HSPLorg/visorlink/app/VisorLinkApp;->**(**)**
+HSPLorg/visorlink/app/MainActivity**;->**(**)**
+HSPLorg/visorlink/app/di/**;->**(**)**
+HSPLorg/visorlink/app/ui/theme/**;->**(**)**
+HSPLorg/visorlink/app/ui/NavGraph**;->**(**)**
+HSPLorg/visorlink/app/ui/components/Vl**;->**(**)**
+HSPLorg/visorlink/app/ui/components/chat/**;->**(**)**
+HSPLorg/visorlink/app/ui/components/chatlist/**;->**(**)**
+HSPLorg/visorlink/app/ui/screens/chatlist/**;->**(**)**
+HSPLorg/visorlink/app/ui/screens/chat/Chat**;->**(**)**
+HSPLorg/visorlink/app/data/repository/ChatRepository**;->**(**)**
+HSPLorg/visorlink/app/data/repository/AuthRepository**;->**(**)**
+HSPLorg/visorlink/app/data/repository/FlagsRepository**;->**(**)**
+HSPLorg/visorlink/app/utils/ChatDataCache**;->**(**)**
+HSPLorg/visorlink/app/utils/OutboxManager**;->**(**)**
+Lorg/visorlink/app/VisorLinkApp;
+Lorg/visorlink/app/MainActivity;
+Lorg/visorlink/app/ui/theme/**;
+Lorg/visorlink/app/ui/components/**;
+Lorg/visorlink/app/ui/screens/chatlist/**;
+Lorg/visorlink/app/ui/screens/chat/**;
+Lorg/visorlink/app/data/model/**;

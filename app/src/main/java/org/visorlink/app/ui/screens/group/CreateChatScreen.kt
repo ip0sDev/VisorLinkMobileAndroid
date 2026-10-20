@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.group
 
 import org.visorlink.app.ui.components.VlTopAppBar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -52,7 +53,7 @@ fun CreateChatScreen(
     var isLoading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
 
     val titleRes = if (type == "group") R.string.create_title_group else R.string.create_title_channel

@@ -180,6 +180,8 @@ class MainActivity : AppCompatActivity() {
               ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {
+                      // Блокировка аккаунта сервисом закрывает всё приложение, включая согласие
+                      org.visorlink.app.ui.screens.banned.BanGuard(profile = myProfile, authViewModel = authViewModel) {
                         LegalConsentGuard(authViewModel = authViewModel) {
                             Column(
                                 modifier = Modifier
@@ -220,6 +222,7 @@ class MainActivity : AppCompatActivity() {
                                 }
                             }
                         }
+                      }
                     }
                 }
               }

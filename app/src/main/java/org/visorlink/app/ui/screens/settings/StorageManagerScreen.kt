@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import org.visorlink.app.ui.components.VlDialogButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlAlertDialog
 import android.app.Activity
 import android.content.Intent
@@ -52,9 +53,9 @@ fun StorageManagerScreen(
     viewModel: StorageViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 

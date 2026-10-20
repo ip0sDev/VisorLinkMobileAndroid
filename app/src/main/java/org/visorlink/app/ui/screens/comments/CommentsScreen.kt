@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.comments
 
 import org.visorlink.app.ui.components.VlTopAppBar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.Manifest
 import android.net.Uri
 import android.widget.Toast
@@ -69,7 +70,7 @@ fun CommentsScreen(
     hapticEnabled: Boolean = true
 ) {
     val viewModel: CommentsViewModel = koinViewModel(parameters = { parametersOf(chatId, messageId) })
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
@@ -278,7 +279,7 @@ fun CommentsScreen(
         ImageEditorScreen(
             uri = uri,
             onNavigateBack = { editorUri = null },
-            onSend = { editedUri, isSpoiler ->
+            onSend = { editedUri, isSpoiler, _ ->
                 editorUri = null
                 viewModel.sendImage(editedUri, isSpoiler)
             }

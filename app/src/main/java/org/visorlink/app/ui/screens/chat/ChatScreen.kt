@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.chat
 
 import org.visorlink.app.ui.components.VlDialogButton
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlAlertDialog
 import android.Manifest
 import android.net.Uri
@@ -91,7 +92,7 @@ fun ChatScreen(
     hapticEnabled: Boolean = true,
 ) {
     val viewModel: ChatViewModel = koinViewModel(parameters = { parametersOf(chatId, otherUid, topicId) })
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
@@ -109,8 +110,8 @@ fun ChatScreen(
     var selectedStickerPack by remember { mutableStateOf<Triple<String, String?, String?>?>(null) }
 
     val aegisViewModel: AegisLifeViewModel = koinViewModel()
-    val aegisUiState by aegisViewModel.uiState.collectAsState()
-    val isAegisEnabled by aegisViewModel.isAegisEnabled.collectAsState()
+    val aegisUiState by aegisViewModel.uiState.collectAsStateWithLifecycle()
+    val isAegisEnabled by aegisViewModel.isAegisEnabled.collectAsStateWithLifecycle()
 
     LaunchedEffect(uiState.messages.lastOrNull()?.id, isAegisEnabled) {
         if (!isAegisEnabled) return@LaunchedEffect
@@ -233,7 +234,8 @@ fun ChatScreen(
     val isAdmin  = uiState.myMember?.isAdmin() == true
     val isOwner  = uiState.myMember?.isOwner() == true
     val canSetWallpaper = uiState.chatType == ChatType.DIRECT || isAdmin
-    val canReact = uiState.chat?.settings?.allowReactions != false
+    // Блокировка в личном чате: реакции и «Ответить» сервер отклонит — в меню их нет
+    val canReact = uiState.chat?.settings?.allowReactions != false && !uiState.isBlockedDirect
     val canSendMessage = uiState.canSendMessage
     val canSendMedia = uiState.canSendMedia
     // Обмен скинами ID-карт (спека 2.1): только ЛС и группы, не с ботом
@@ -305,7 +307,9 @@ fun ChatScreen(
     val myBg = ProfileAppearance.resolve(owner = currentUser, viewer = currentUser).backgroundUrl
     // Обои собеседника — по тем же правилам, что и остальное его оформление:
     // раньше они показывались без PRO и вопреки ignoreCustomizations
-    val otherBg = ProfileAppearance.resolve(owner = otherUser, viewer = currentUser).backgroundUrl
+    // Оформление бота (обои, акцент, шрифт) не применяется: в чате с ботом остаётся тема пользователя
+    val appearanceOwner = otherUser?.takeUnless { it.isBot }
+    val otherBg = ProfileAppearance.resolve(owner = appearanceOwner, viewer = currentUser).backgroundUrl
 
     val chatBgUrl = when (uiState.wallpaperMode) {
         "none" -> null
@@ -347,7 +351,7 @@ fun ChatScreen(
     }
 
     SecureScreen(enabled = isSecureChat) {
-        UserProfileTheme(profile = otherUser, currentUser = currentUser) {
+        UserProfileTheme(profile = appearanceOwner, currentUser = currentUser) {
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (chatBgUrl != null) {
                 AsyncImage(
@@ -448,7 +452,8 @@ fun ChatScreen(
                                     if (item.type == MediaType.VIDEO) {
                                         viewModel.sendVideo(item.uri)
                                     } else {
-                                        viewModel.sendImage(item.uri)
+                                        // Одно фото — через редактор с подписью (спека §1.3)
+                                        viewModel.onImagesPicked(listOf(item.uri))
                                     }
                                 } else {
                                     val photosOnly = items.filter { it.type == MediaType.IMAGE }.map { it.uri }
@@ -608,6 +613,8 @@ fun ChatScreen(
                     isDragging = isDraggingMenu,
                     isGestureMode = isDraggingMenu,
                     canReact = canReact,
+                    canCopy = uiState.chat?.settings?.noForwards != true,
+                    canReply = !uiState.isBlockedDirect,
                     currentUid = viewModel.currentUid,
                     onDismiss = {
                         contextMenuData = null
@@ -663,7 +670,7 @@ fun ChatScreen(
     // MainScreen, и в чате openFullscreenAudio() ни к чему не приводил
     val musicPlayerManager: MusicPlayerManager = koinInject()
     val musicRepository: MusicRepository = koinInject()
-    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsState()
+    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsStateWithLifecycle()
     if (showFullscreenPlayer) {
         FullscreenPlayerDialog(
             playerManager = musicPlayerManager,
@@ -689,9 +696,10 @@ fun ChatScreen(
         ImageEditorScreen(
             uri = uri,
             onNavigateBack = { editorUri = null },
-            onSend = { editedUri, isSpoiler ->
+            captionEnabled = true,
+            onSend = { editedUri, isSpoiler, caption ->
                 editorUri = null
-                viewModel.sendImage(editedUri, isSpoiler = isSpoiler)
+                viewModel.sendImage(editedUri, isSpoiler = isSpoiler, caption = caption)
             }
         )
     }
@@ -701,9 +709,10 @@ fun ChatScreen(
         ImageEditorScreen(
             uri = uri,
             onNavigateBack = { viewModel.clearSinglePickedUri() },
-            onSend = { editedUri, isSpoiler ->
+            captionEnabled = true,
+            onSend = { editedUri, isSpoiler, caption ->
                 viewModel.clearSinglePickedUri()
-                viewModel.sendImage(editedUri, isSpoiler = isSpoiler)
+                viewModel.sendImage(editedUri, isSpoiler = isSpoiler, caption = caption)
             }
         )
     }

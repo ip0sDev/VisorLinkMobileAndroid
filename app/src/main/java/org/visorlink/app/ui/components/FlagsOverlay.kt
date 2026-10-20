@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,7 +24,7 @@ import org.koin.compose.koinInject
 fun FlagsOverlay(
     flagsRepository: FlagsRepository = koinInject()
 ) {
-    val flagsState by flagsRepository.flags.collectAsState()
+    val flagsState by flagsRepository.flags.collectAsStateWithLifecycle()
     var showDetails by remember { mutableStateOf(false) }
 
     if (flagsState.isEnabled("test_flag")) {

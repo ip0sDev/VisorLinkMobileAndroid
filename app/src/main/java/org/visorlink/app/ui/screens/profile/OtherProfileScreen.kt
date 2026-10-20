@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.profile
 
 import org.visorlink.app.data.model.ProfileAppearance
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.data.model.ProfileLayout
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -54,10 +55,10 @@ fun OtherProfileScreen(
     userRepository: UserRepository = koinInject()
 ) {
     val viewModel: OtherProfileViewModel = koinViewModel(parameters = { parametersOf(uid) })
-    val user by viewModel.user.collectAsState()
-    val currentUser by userRepository.currentUserFlow().collectAsState(initial = null)
+    val user by viewModel.user.collectAsStateWithLifecycle()
+    val currentUser by userRepository.currentUserFlow().collectAsStateWithLifecycle(initialValue = null)
     val flagsRepository: FlagsRepository = koinInject()
-    val flags by flagsRepository.flags.collectAsState()
+    val flags by flagsRepository.flags.collectAsStateWithLifecycle()
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     LaunchedEffect(Unit) {
@@ -66,12 +67,14 @@ fun OtherProfileScreen(
 
     val scope = rememberCoroutineScope()
     val haptic = rememberHaptic()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
     var showReportDialog by remember { mutableStateOf(false) }
     var showBlockConfirm by remember { mutableStateOf(false) }
-    val isBlocked = currentUser?.blockedUserIds?.contains(uid) == true
+    val blocks by viewModel.blocks.collectAsStateWithLifecycle()
+    val unavailable by viewModel.unavailable.collectAsStateWithLifecycle()
+    val isBlocked = uid in blocks
 
     val targetUser = user
     // PRO-проверка и ignoreCustomizations — внутри resolve, для всех полей сразу
@@ -154,8 +157,12 @@ fun OtherProfileScreen(
                                         onClick = {
                                             showMenu = false
                                             scope.launch {
-                                                userRepository.unblockUser(uid)
-                                                Toast.makeText(context, context.getString(R.string.user_unblocked_toast), Toast.LENGTH_SHORT).show()
+                                                try {
+                                                    viewModel.setBlocked(false)
+                                                    Toast.makeText(context, context.getString(R.string.user_unblocked_toast), Toast.LENGTH_SHORT).show()
+                                                } catch (_: Exception) {
+                                                    Toast.makeText(context, context.getString(R.string.block_action_failed), Toast.LENGTH_SHORT).show()
+                                                }
                                             }
                                         }
                                     )
@@ -174,14 +181,19 @@ fun OtherProfileScreen(
                     )
                 },
                 floatingActionButton = {
-                    if (user != null) {
+                    if (user != null && !unavailable) {
                         VlFab(
                             text = stringResource(R.string.other_profile_message),
                             icon = Icons.Default.Chat,
                             onClick = {
                                 scope.launch {
-                                    val chatId = viewModel.openOrCreateChat()
-                                    onOpenChat(chatId, viewModel.targetUid)
+                                    try {
+                                        val chatId = viewModel.openOrCreateChat()
+                                        onOpenChat(chatId, viewModel.targetUid)
+                                    } catch (e: Exception) {
+                                        // blocked-by-peer и прочие отказы: чат не создан
+                                        Toast.makeText(context, context.getString(R.string.chat_open_failed), Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             hapticEnabled = hapticEnabled
@@ -189,7 +201,15 @@ fun OtherProfileScreen(
                     }
                 }
             ) { padding ->
-                if (targetUser == null) {
+                if (unavailable) {
+                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        Text(
+                            stringResource(R.string.profile_unavailable),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else if (targetUser == null) {
                     Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
@@ -235,8 +255,12 @@ fun OtherProfileScreen(
                     VlDialogButton(onClick = {
                         showBlockConfirm = false
                         scope.launch {
-                            userRepository.blockUser(uid)
-                            Toast.makeText(context, context.getString(R.string.user_blocked_toast), Toast.LENGTH_SHORT).show()
+                            try {
+                                viewModel.setBlocked(true)
+                                Toast.makeText(context, context.getString(R.string.user_blocked_toast), Toast.LENGTH_SHORT).show()
+                            } catch (_: Exception) {
+                                Toast.makeText(context, context.getString(R.string.block_action_failed), Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }, isDestructive = true) {
                         Text(stringResource(R.string.action_block_user))

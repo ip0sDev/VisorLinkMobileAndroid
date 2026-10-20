@@ -29,7 +29,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.requestFocus
 import com.github.takahirom.roborazzi.captureRoboImage
 import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.google.firebase.Timestamp
@@ -132,7 +134,7 @@ class ThemeScreenshotTest(
      * свечение FAB), и с автопрокруткой тест вечно ждал бы idle. Кадр снимается
      * через фиксированное время — так скриншот детерминирован.
      */
-    private fun snap(scene: String, wholeScreen: Boolean = false, content: @Composable () -> Unit) {
+    private fun snap(scene: String, wholeScreen: Boolean = false, focusText: String? = null, content: @Composable () -> Unit) {
         compose.mainClock.autoAdvance = false
         compose.setContent {
             VisorLinkTheme(
@@ -148,10 +150,30 @@ class ThemeScreenshotTest(
                 }
             }
         }
+        // Реальный фокус на поле с этим текстом: так сцена показывает состояние focused, а не его имитацию
+        if (focusText != null) {
+            compose.mainClock.advanceTimeBy(100)
+            compose.onNodeWithText(focusText).requestFocus()
+        }
         compose.mainClock.advanceTimeBy(1_500)
         val path = "src/test/screenshots/${scene}_${appTheme.id}_$modeName.png"
         // Диалог живёт в отдельном окне, onRoot() его не видит — снимаем весь экран
         if (wholeScreen) captureScreenRoboImage(path) else compose.onRoot().captureRoboImage(path)
+    }
+
+    /** Состояния полей, сегментов и кнопок: покой, фокус, ошибка, выключено. */
+    @Test
+    fun states() = snap("states", focusText = "ivan@visorlink.org") {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            VlTextField(value = "ivan", onValueChange = {}, label = "Покой")
+            VlTextField(value = "ivan@visorlink.org", onValueChange = {}, label = "Фокус")
+            VlTextField(value = "123", onValueChange = {}, label = "Ошибка", isError = true, supportingText = "Слишком короткий")
+            VlTextField(value = "ivan", onValueChange = {}, label = "Выключено", enabled = false)
+            VlSegmentedControl(listOf("Система", "Светлая", "Тёмная"), selectedIndex = 1, onSelected = {}, hapticEnabled = false)
+            VlSegmentedControl(listOf("Система", "Светлая", "Тёмная"), selectedIndex = 1, onSelected = {}, hapticEnabled = false, enabled = false)
+            VlButton(onClick = {}, hapticEnabled = false) { Text("Активна") }
+            VlButton(onClick = {}, enabled = false, hapticEnabled = false) { Text("Выключена") }
+        }
     }
 
     @Test
@@ -245,6 +267,7 @@ class ThemeScreenshotTest(
             lastMessageSenderId = sender,
             lastMessageAt = now,
             unreadCount = mapOf(me to unread),
+            lastSeq = 40L + id.filter { it.isDigit() }.toLong() * 7 + unread,
         )
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             ChatListItem(
@@ -303,7 +326,7 @@ class ThemeScreenshotTest(
         val now = Timestamp(1_790_000_000L, 0)
         @Composable
         fun bubble(id: String, text: String, mine: Boolean) = MessageBubble(
-            message = Message(id = id, senderId = if (mine) "me" else "u1", senderUsername = "ivan", text = text, createdAt = now),
+            message = Message(id = id, senderId = if (mine) "me" else "u1", senderUsername = "ivan", text = text, createdAt = now, seq = 40L + id.filter { it.isDigit() }.toLong()),
             isMine = mine,
             otherUid = "u1",
             currentUid = "me",
@@ -327,6 +350,32 @@ class ThemeScreenshotTest(
             bubble("m2", "Почти готово, осталось починить темы", mine = true)
             bubble("m3", "Длинное сообщение, чтобы проверить перенос строк и ширину пузыря на всю доступную ширину экрана телефона.", mine = false)
             bubble("m4", "👍", mine = true)
+        }
+    }
+
+    @OptIn(com.google.accompanist.permissions.ExperimentalPermissionsApi::class)
+    @Test
+    fun chatBar() = snap("chatbar") {
+        val perm = object : com.google.accompanist.permissions.PermissionState {
+            override val permission = "android.permission.RECORD_AUDIO"
+            override val status: com.google.accompanist.permissions.PermissionStatus = com.google.accompanist.permissions.PermissionStatus.Granted
+            override fun launchPermissionRequest() = Unit
+        }
+        val focus = androidx.compose.runtime.remember { androidx.compose.ui.focus.FocusRequester() }
+        @Composable
+        fun bar(text: String) = org.visorlink.app.ui.components.chat.ChatBottomBar(
+            uiState = org.visorlink.app.ui.screens.chat.ChatUiState(),
+            inputText = text, canSendMessage = true, canSendMedia = true, hapticEnabled = false,
+            showStickerSheet = false, audioPermission = perm, focusRequester = focus,
+            onInputChange = {}, onAttach = {}, onStickerClick = {}, onSend = {}, onStartRecord = {},
+            onRequestAudioPerm = {}, onCancelRecord = {}, onSendRecord = {}, onClearReply = {},
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            org.visorlink.app.ui.components.chat.CommentsButton(
+                post = Message(id = "p1", text = "пост", commentsCount = 12), channelAllowsComments = true, onClick = {},
+            )
+            bar("")
+            bar("Привет, как дела?")
         }
     }
 

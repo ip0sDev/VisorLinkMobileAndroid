@@ -106,6 +106,8 @@ val appModule = module {
         )
     }
     single { UserRepository(get(), get(), get(), androidContext()) }
+    // Блокировки пользователь→пользователь: blocks / blockedBy + setUserBlock
+    single { BlockRepository(get(), get(), androidContext()) }
     // ID-карты: карта и callables, Mask Mode (только на устройстве), контекст темы открытого чата
     single { org.visorlink.app.data.repository.IdCardRepository(get(), get()) }
     single { org.visorlink.app.utils.MaskModeManager(androidContext()) }
@@ -165,7 +167,8 @@ val appModule = module {
             draftManager = get(),
             context = androidApplication(),
             sidebarTypingManager = get(),
-            networkMonitor = get()
+            networkMonitor = get(),
+            blockRepository = get()
         )
     }
     viewModel { MusicViewModel(get(), get()) }
@@ -186,7 +189,8 @@ val appModule = module {
             musicRepository = get(),
             networkMonitor = get(),
             usageRankManager = get(),
-            driveAuth = get()
+            driveAuth = get(),
+            blockRepository = get()
         )
     }
 
@@ -227,7 +231,7 @@ val appModule = module {
 
     viewModel { SearchViewModel(get(), get(), get()) }
     viewModel { ProfileViewModel(get(), get(), get()) }
-    viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), parameters.get()) }
+    viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), get(), parameters.get()) }
 
     viewModel { StickerPackViewModel(get(), get(), get()) }
 

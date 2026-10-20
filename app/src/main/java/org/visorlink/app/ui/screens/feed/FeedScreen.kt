@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.feed
 
 import android.content.ClipData
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -68,8 +69,8 @@ fun FeedScreen(
     viewModel: FeedViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -189,7 +190,7 @@ fun FeedScreen(
 
     forwarding?.let { post ->
         val chatListViewModel: ChatListViewModel = koinViewModel()
-        val chats by chatListViewModel.chats.collectAsState()
+        val chats by chatListViewModel.chats.collectAsStateWithLifecycle()
         ForwardPickerDialog(
             message = ForwardableMessage.fromMessage(post.message, post.channel.id, post.channel.name),
             chats = chats,

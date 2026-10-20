@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.saved
 
 import org.visorlink.app.ui.components.VlTopAppBar
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -88,7 +89,7 @@ fun SavedMessagesScreen(
     hapticEnabled: Boolean = true
 ) {
     val viewModel: SavedMessagesViewModel = koinViewModel()
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context  = LocalContext.current
     val haptic   = rememberHaptic()
 
@@ -331,7 +332,7 @@ fun SavedMessagesScreen(
         ImageEditorScreen(
             uri            = uri,
             onNavigateBack = { editorUri = null },
-            onSend         = { editedUri, isSpoiler ->
+            onSend         = { editedUri, isSpoiler, _ ->
                 editorUri = null
                 viewModel.saveImage(editedUri, isSpoiler = isSpoiler)
             }

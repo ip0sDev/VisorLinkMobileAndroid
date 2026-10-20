@@ -1,6 +1,7 @@
 package org.visorlink.app.ui
 
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -58,7 +59,7 @@ fun VisorLinkNavGraph(
     onPendingChatOpened: () -> Unit = {}
 ) {
     val navController = rememberNavController()
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
     val stealthManager: StealthManager = org.koin.compose.koinInject()
@@ -89,16 +90,16 @@ fun VisorLinkNavGraph(
     // Тема чата — по верхнему экрану чата в стеке: меняется в момент навигации, до анимации
     // перехода (а не когда экран чата появился или, при выходе, уже исчез)
     val chatThemeController: org.visorlink.app.ui.idcard.ChatThemeController = org.koin.compose.koinInject()
-    val backStack by navController.currentBackStack.collectAsState()
+    val backStack by navController.currentBackStack.collectAsStateWithLifecycle()
     val topChat = backStack.lastOrNull { it.destination.route == Screen.Chat.route }
     val topChatId = topChat?.arguments?.getString("chatId")
     androidx.compose.runtime.SideEffect { chatThemeController.setActive(topChat?.id, topChatId) }
 
-    val authState by authViewModel.authState.collectAsState()
-    val showOnboarding by themeViewModel.showOnboarding.collectAsState()
-    val isTfaRequired by authViewModel.isTfaRequired.collectAsState()
-    val isSessionReady by authViewModel.isSessionReady.collectAsState()
-    val needsGoogleSignup by authViewModel.needsGoogleSignup.collectAsState()
+    val authState by authViewModel.authState.collectAsStateWithLifecycle()
+    val showOnboarding by themeViewModel.showOnboarding.collectAsStateWithLifecycle()
+    val isTfaRequired by authViewModel.isTfaRequired.collectAsStateWithLifecycle()
+    val isSessionReady by authViewModel.isSessionReady.collectAsStateWithLifecycle()
+    val needsGoogleSignup by authViewModel.needsGoogleSignup.collectAsStateWithLifecycle()
 
     // ── Three-state auth guard + Onboarding + Google-регистрация + 2FA ─────────
     // Переход только если экран действительно другой: иначе любой пересчёт ворот (например,
@@ -529,7 +530,7 @@ fun VisorLinkNavGraph(
                 try { navController.getBackStackEntry(Screen.ChatList.route) } catch (_: Exception) { null }
             }
             val chatListVm: ChatListViewModel? = chatListEntry?.let { koinViewModel(viewModelStoreOwner = it) }
-            val channel = chatListVm?.chats?.collectAsState()?.value?.firstOrNull { it.id == chatId }
+            val channel = chatListVm?.chats?.collectAsStateWithLifecycle()?.value?.firstOrNull { it.id == chatId }
 
             CommentsScreen(
                 chatId            = chatId,

@@ -116,10 +116,7 @@ class FcmService : FirebaseMessagingService() {
         // Игнорируем уведомления от заблокированных пользователей (UGC Модерация)
         val currentUid = FirebaseAuth.getInstance().currentUser?.uid
         if (!senderUid.isNullOrEmpty() && !currentUid.isNullOrEmpty()) {
-            val cachedProfile = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-                ChatDataCache.loadProfile(applicationContext, currentUid)
-            }
-            if (cachedProfile?.blockedUserIds?.contains(senderUid) == true) {
+            if (org.visorlink.app.data.repository.BlockRepository.cachedBlocks(applicationContext, currentUid).contains(senderUid)) {
                 Log.d("FCM", "Suppressed notification: sender $senderUid is blocked by user")
                 return
             }

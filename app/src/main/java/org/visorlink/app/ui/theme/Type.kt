@@ -232,7 +232,7 @@ val ForgeV2Typography = BiolumeTypography.copy(
     headlineMedium = BiolumeTypography.headlineMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
     headlineSmall = BiolumeTypography.headlineSmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
     titleLarge = BiolumeTypography.titleLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-    labelLarge = BiolumeTypography.labelLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Medium, letterSpacing = 0.6.sp),
+    labelLarge = BiolumeTypography.labelLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.0.sp),
 )
 
 /**
@@ -240,8 +240,7 @@ val ForgeV2Typography = BiolumeTypography.copy(
  * верхней панели) светятся неоном своего основного цвета, у Beast мягче.
  */
 fun forgeV2Typography(f: ForgeV2.Flavor): Typography {
-    val glow = Shadow(color = f.primary.copy(alpha = 0.4f * f.neon), offset = Offset.Zero, blurRadius = 14f * f.neon)
-    fun TextStyle.neon() = copy(shadow = glow)
+    fun TextStyle.neon() = this
     return with(ForgeV2Typography) {
         copy(
             displayLarge = displayLarge.neon(), displayMedium = displayMedium.neon(), displaySmall = displaySmall.neon(),

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.main
 
 import android.app.Activity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -95,23 +96,23 @@ fun MainScreen(
         }
     }
     
-    val userProfile by mainViewModel.userProfile.collectAsState()
+    val userProfile by mainViewModel.userProfile.collectAsStateWithLifecycle()
     val diaryEnabled = userProfile?.diaryEnabled ?: false
-    val discoverEnabled by themeViewModel.discoverEnabled.collectAsState()
-    val musicEnabled by themeViewModel.musicEnabled.collectAsState()
-    val showMusicOnboarding by themeViewModel.showMusicOnboarding.collectAsState()
+    val discoverEnabled by themeViewModel.discoverEnabled.collectAsStateWithLifecycle()
+    val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
+    val showMusicOnboarding by themeViewModel.showMusicOnboarding.collectAsStateWithLifecycle()
 
     val musicPlayerManager: MusicPlayerManager = koinInject()
     val musicRepository: MusicRepository = koinInject()
-    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsState()
+    val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsStateWithLifecycle()
 
     // Профиль — вкладкой навбара вместо кнопки-аватара в шапке чатов (флаг enable_profile_navbar)
     val flagsRepository: FlagsRepository = koinInject()
-    val flags by flagsRepository.flags.collectAsState()
+    val flags by flagsRepository.flags.collectAsStateWithLifecycle()
     val profileTabEnabled = flags.profileNavbar
 
     val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled
-    val isOnline by mainViewModel.isOnline.collectAsState()
+    val isOnline by mainViewModel.isOnline.collectAsStateWithLifecycle()
 
     if (showMusicOnboarding) {
         MusicOnboardingDialog(
@@ -245,7 +246,7 @@ fun MainScreen(
                 }
 
                 if (showNavbar) {
-                    val musicPlayback by musicPlayerManager.state.collectAsState()
+                    val musicPlayback by musicPlayerManager.state.collectAsStateWithLifecycle()
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)

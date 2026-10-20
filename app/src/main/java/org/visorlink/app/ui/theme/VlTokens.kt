@@ -89,6 +89,14 @@ data class VlStructureTokens(
      * внутренняя тень сверху.
      */
     val outline: Color? = null,
+    /**
+     * Не null — «жёсткая» тень Forge v2: плотная копия формы, сдвинутая на [hardOffset] без
+     * размытия. Панель стоит на собственной плите, а не парит. Цвет непрозрачный (смесь с фоном).
+     */
+    val hardShadow: Color? = null,
+    /** Цвет жёсткой тени у кнопок и акцентных элементов (второй цвет темы). */
+    val hardShadowAlt: Color? = null,
+    val hardOffset: Dp = 4.dp,
 ) {
     companion object {
         /** M3E рельефом не пользуется — elevation остаётся за Material. */
@@ -178,6 +186,11 @@ data class VlShapeTokens(
      * ([adapt], [rounded]) зажимаются до него — иначе «жидкие» 32 dp в терминале.
      */
     val maxRadius: Dp? = null,
+    /**
+     * Срез углов (Forge v2): любая скруглённая форма через [adapt] / [rounded] становится
+     * [ChamferShape] с этим срезом — иначе рядом стояли бы срезанные токены и скруглённые экраны.
+     */
+    val chamfer: Dp? = null,
 ) {
     /** Шкала без скруглений. */
     val isSquare: Boolean get() = cardRadius == 0.dp
@@ -193,6 +206,7 @@ data class VlShapeTokens(
      */
     fun adapt(shape: Shape): Shape = when {
         isSquare -> RectangleShape
+        chamfer != null && shape is CornerBasedShape -> ChamferShape(chamfer)
         maxRadius != null && shape is CornerBasedShape -> ClampedCornerShape(shape, maxRadius)
         else -> shape
     }
@@ -301,6 +315,9 @@ data class VlBubbleTokens(
     val mineFg: Color,
     val otherBg: Color,
     val otherFg: Color,
+    /** Контур пузыря (Forge v2: жёсткий блок), null — без контура. */
+    val mineBorder: Color? = null,
+    val otherBorder: Color? = null,
 )
 
 // ── Корневой контракт ────────────────────────────────────────────────────────
@@ -315,6 +332,8 @@ data class VlBubbleTokens(
 @Immutable
 data class VlTerminalTokens(
     val labelPrefix: String,
+    /** Короткая метка режима для строки состояния (`VL//PROTOGEN`). */
+    val tag: String = "",
     /** Сканлайны: белый с этой непрозрачностью каждые 3 px, 0 — без них. */
     val scanlineAlpha: Float = 0f,
     /** Неоновые линии: основной цвет и второй (градиент вдоль линии). */

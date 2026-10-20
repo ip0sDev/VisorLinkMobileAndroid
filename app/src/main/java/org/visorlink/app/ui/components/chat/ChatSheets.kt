@@ -51,6 +51,7 @@ import androidx.compose.ui.window.DialogProperties
 import org.visorlink.app.R
 import org.visorlink.app.data.model.AlbumImage
 import org.visorlink.app.data.model.AlbumImageLocal
+import org.visorlink.app.data.model.MAX_CAPTION_LENGTH
 import org.visorlink.app.ui.components.VlTextField
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.liquidDragStretch
@@ -62,6 +63,9 @@ import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.rememberHaptic
 import org.visorlink.app.ui.theme.VlTheme
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.graphics.FilterQuality
+import org.visorlink.app.ui.components.SPOILER_DECODE_PX
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -228,10 +232,10 @@ fun AlbumPreviewSheet(
                 value = caption,
                 onValueChange = { onCaptionChange(it) },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                placeholder = "Добавить подпись…",
+                placeholder = stringResource(R.string.editor_caption_placeholder),
                 maxLines = 3,
                 singleLine = false,
-                supportingText = "${caption.length}/500"
+                supportingText = "${caption.length}/$MAX_CAPTION_LENGTH"
             )
 
             Spacer(Modifier.height(12.dp))
@@ -253,11 +257,15 @@ fun AlbumPreviewSheet(
 
 @Composable
 fun AlbumThumbnailCell(uri: Uri, spoiler: Boolean, onToggleSpoiler: () -> Unit) {
-    val blurRadius by animateDpAsState(targetValue = if (spoiler) 12.dp else 0.dp, animationSpec = tween(200), label = "thumb_blur")
+    val context = LocalContext.current
+    val request = remember(uri, spoiler) {
+        ImageRequest.Builder(context).data(uri).crossfade(true).apply { if (spoiler) size(SPOILER_DECODE_PX) }.build()
+    }
     Box(modifier = Modifier.size(140.dp).clip(VlTheme.tokens.shapes.card)) {
         AsyncImage(
-            model = uri, contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
+            model = request, contentDescription = null, contentScale = ContentScale.Crop,
+            filterQuality = if (spoiler) FilterQuality.Low else FilterQuality.Medium,
+            modifier = Modifier.fillMaxSize()
         )
         if (spoiler) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f)), contentAlignment = Alignment.Center) {

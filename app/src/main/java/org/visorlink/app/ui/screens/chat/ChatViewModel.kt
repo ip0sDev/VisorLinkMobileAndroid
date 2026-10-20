@@ -87,8 +87,14 @@ data class ChatUiState(
     val topicId: String? = null,
     val isBotGenerating: Boolean = false,
     val isJoiningChannel: Boolean = false,
-    val availableChats: List<Chat> = emptyList()
+    val availableChats: List<Chat> = emptyList(),
+    /** Собеседник личного чата заблокировал меня (`blockedBy`): писать нельзя, профиль и «в сети» скрыты. */
+    val blockedByPeer: Boolean = false,
+    /** Я заблокировал собеседника (`blocks`): писать нельзя, пока не разблокирую. */
+    val blockedByMe: Boolean = false,
 ) {
+    /** Блокировка в любую сторону закрывает отправку в личном чате (сервер откажет правилами). */
+    val isBlockedDirect get() = blockedByPeer || blockedByMe
     val isChannelMember get() = chat?.let { isChannelMember(it, myMember?.role, currentUser?.uid ?: "") } ?: true
     val canPostToChannel get() = chat?.let { canPostToChannel(it, myMember?.role, currentUser?.uid ?: "") } ?: true
     val canSendMessage get() = if (chatType == ChatType.CHANNEL) canPostToChannel else canSendMessage(myMember, chatType)
@@ -115,9 +121,11 @@ class ChatViewModel(
     private val usageRankManager: org.visorlink.app.utils.UsageRankManager? = null,
     /** Google Диск: медиа загружаются на Диск отправителя. `null` — проверка выключена (тесты). */
     private val driveAuth: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
+    private val blockRepository: org.visorlink.app.data.repository.BlockRepository? = null,
 ) : AndroidViewModel(context) {
 
-    val currentUid: String get() = auth.currentUser!!.uid
+    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
+    val currentUid: String = auth.currentUser?.uid.orEmpty()
     private var currentUsername = ""
 
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -129,7 +137,8 @@ class ChatViewModel(
     private var recordingFile: File? = null
     private var recordingStart = 0L
     private var typingManager: TypingManager? = null
-    private var onlineCountListener: ValueEventListener? = null
+    private val presenceListeners = LinkedHashMap<String, ValueEventListener>()
+    private val onlineMembers = HashSet<String>()
     private var wallpaperListener: ListenerRegistration? = null
     private var chatDocListener: ListenerRegistration? = null
     private var topicListener: ListenerRegistration? = null
@@ -217,10 +226,25 @@ class ChatViewModel(
                     TypingManager.observeTyping(chatId, currentUid).onStart { emit(false) },
                     lastOtherActiveTimeFlow,
                     tickerFlow,
-                    isOnlineFlow
-                ) { presence, typing, activeTime, now, isDeviceOnline ->
+                    isOnlineFlow,
+                    blockRepository?.blockedBy ?: flowOf(emptySet<String>()),
+                    blockRepository?.blocks ?: flowOf(emptySet<String>()),
+                ) { values ->
+                    val presence = values[0] as PresenceData?
+                    val typingRaw = values[1] as Boolean
+                    val activeTime = values[2] as Long
+                    val now = values[3] as Long
+                    val isDeviceOnline = values[4] as Boolean
+                    @Suppress("UNCHECKED_CAST")
+                    val byPeer = targetUid in (values[5] as Set<String>)
+                    @Suppress("UNCHECKED_CAST")
+                    val byMe = targetUid in (values[6] as Set<String>)
+                    // Заблокировавший меня не показывает «в сети»/«печатает»; свой блок — чужого «печатает» не видно
+                    val typing = typingRaw && !byPeer && !byMe
                     if (!isDeviceOnline) {
                         TopbarStatus.WaitingForNetwork
+                    } else if (byPeer) {
+                        TopbarStatus.LastSeenLongAgo
                     } else if (typing) {
                         lastOtherActiveTimeFlow.update { maxOf(it, now) }
                         TopbarStatus.Typing
@@ -270,6 +294,32 @@ class ChatViewModel(
     init {
         val initialMode = wallpaperPrefs.getString("mode_$chatId", "mine") ?: "mine"
         _uiState.update { it.copy(wallpaperMode = initialMode) }
+
+        blockRepository?.let { repo ->
+            viewModelScope.launch {
+                // Скрытые сообщения заблокированных пересобираем при каждом изменении списка
+                repo.blocks.drop(1).collect {
+                    _uiState.update { state ->
+                        val topicId = state.topicId ?: initialTopicId
+                        val all = filterByTopic(rawMessages, state.currentTopic, topicId) +
+                            filterByTopic(state.tempMessages, state.currentTopic, topicId)
+                        state.copy(messageListItems = buildMessageList(all))
+                    }
+                }
+            }
+            viewModelScope.launch {
+                combine(
+                    repo.blocks,
+                    repo.blockedBy,
+                    _uiState.map { s -> if (s.chatType == ChatType.DIRECT) effectiveOtherUid else "" }.distinctUntilChanged(),
+                ) { blocks, blockedBy, peer ->
+                    val valid = peer.isNotBlank() && peer != chatId && peer != currentUid
+                    (valid && peer in blockedBy) to (valid && peer in blocks)
+                }.distinctUntilChanged().collect { (byPeer, byMe) ->
+                    _uiState.update { it.copy(blockedByPeer = byPeer, blockedByMe = byMe) }
+                }
+            }
+        }
 
         viewModelScope.launch {
             voicePlayer.state.collect { playbackState ->
@@ -565,7 +615,7 @@ class ChatViewModel(
     }
 
     fun onAlbumCaptionChange(text: String) {
-        if (text.length <= 500) _uiState.update { it.copy(albumCaption = text) }
+        if (text.length <= MAX_CAPTION_LENGTH) _uiState.update { it.copy(albumCaption = text) }
     }
 
     fun dismissAlbumPreview() {
@@ -578,7 +628,8 @@ class ChatViewModel(
 
     fun sendAlbum() {
         val draft = _uiState.value.albumDraft
-        val caption = _uiState.value.albumCaption.trim().ifEmpty { null }
+        // У альбома без подписи хранится "" (спека §1.1)
+        val caption = _uiState.value.albumCaption.trim().take(MAX_CAPTION_LENGTH)
         val reply = _uiState.value.replyingTo?.toReplyData()
         if (draft.isEmpty() || !_uiState.value.canSendMedia) return
         if (needsDrive { sendAlbum() }) return
@@ -593,7 +644,7 @@ class ChatViewModel(
             senderUsername = currentUsername,
             type = MessageType.ALBUM,
             topicId = activeTopicId,
-            caption = caption,
+            caption = caption.ifEmpty { null },
             images = draft.map { AlbumImage(url = it.uri.toString(), spoiler = it.spoiler) },
             uploadProgress = 0.01f,
             createdAt = com.google.firebase.Timestamp.now(),
@@ -738,22 +789,48 @@ class ChatViewModel(
         voicePlayer.stop()
     }
 
+    /**
+     * «N в сети» в группе: слушатель на каждого участника `presence/{uid}`, не на весь узел
+     * (правила закрыли чтение корня). Больше [GROUP_ONLINE_LIMIT] участников — счётчик не считаем.
+     * `PERMISSION_DENIED` одного слушателя = этот участник офлайн.
+     */
     private fun startGroupOnlineCount(memberIds: List<String>) {
-        onlineCountListener?.let {
-            FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
+        val wanted = memberIds.filter { it != currentUid && it.isNotBlank() }.toSet()
+        if (wanted == presenceListeners.keys) return
+        stopGroupOnlineCount()
+        if (wanted.isEmpty() || wanted.size > GROUP_ONLINE_LIMIT) {
+            _uiState.update { it.copy(onlineCount = 0) }
+            return
         }
-        val presenceRef = FirebaseDatabase.getInstance().getReference("presence")
-        onlineCountListener = object : ValueEventListener {
-            override fun onDataChange(snap: DataSnapshot) {
-                val count = memberIds.count { uid ->
-                    uid != currentUid &&
-                            snap.child(uid).child("online").getValue(Boolean::class.java) == true
+        val rtdb = FirebaseDatabase.getInstance()
+        wanted.forEach { uid ->
+            val ref = rtdb.getReference("presence/$uid")
+            val listener = object : ValueEventListener {
+                override fun onDataChange(snap: DataSnapshot) {
+                    setMemberOnline(uid, snap.child("online").getValue(Boolean::class.java) == true)
                 }
-                _uiState.update { it.copy(onlineCount = count) }
+                override fun onCancelled(e: DatabaseError) {
+                    setMemberOnline(uid, false)
+                }
             }
-            override fun onCancelled(e: DatabaseError) {}
+            presenceListeners[uid] = listener
+            ref.addValueEventListener(listener)
         }
-        presenceRef.addValueEventListener(onlineCountListener!!)
+    }
+
+    private fun setMemberOnline(uid: String, online: Boolean) {
+        val count = synchronized(onlineMembers) {
+            if (online) onlineMembers.add(uid) else onlineMembers.remove(uid)
+            onlineMembers.size
+        }
+        _uiState.update { if (it.onlineCount == count) it else it.copy(onlineCount = count) }
+    }
+
+    private fun stopGroupOnlineCount() {
+        val rtdb = FirebaseDatabase.getInstance()
+        presenceListeners.forEach { (uid, l) -> rtdb.getReference("presence/$uid").removeEventListener(l) }
+        presenceListeners.clear()
+        synchronized(onlineMembers) { onlineMembers.clear() }
     }
 
     fun loadMore() {
@@ -812,7 +889,7 @@ class ChatViewModel(
         isAlreadySorted: Boolean = false,
         currentUserProfile: UserProfile? = _uiState.value.currentUser
     ): List<MessageListItem> {
-        val blockedUids = currentUserProfile?.blockedUserIds ?: emptyList()
+        val blockedUids = blockRepository?.blocks?.value ?: emptySet()
         val visibleMessages = if (blockedUids.isEmpty()) {
             allMessages
         } else {
@@ -848,7 +925,7 @@ class ChatViewModel(
     fun blockUser(targetUid: String) {
         viewModelScope.launch {
             try {
-                userRepository.blockUser(targetUid)
+                blockRepository?.setBlocked(targetUid, true)
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "Failed to block user $targetUid", e)
             }
@@ -858,7 +935,7 @@ class ChatViewModel(
     fun unblockUser(targetUid: String) {
         viewModelScope.launch {
             try {
-                userRepository.unblockUser(targetUid)
+                blockRepository?.setBlocked(targetUid, false)
             } catch (e: Exception) {
                 Log.e("ChatViewModel", "Failed to unblock user $targetUid", e)
             }
@@ -911,9 +988,9 @@ class ChatViewModel(
         }
     }
 
-    fun sendImage(uri: Uri, isSpoiler: Boolean = false) {
+    fun sendImage(uri: Uri, isSpoiler: Boolean = false, caption: String = "") {
         if (!_uiState.value.canSendMedia) return
-        if (needsDrive { sendImage(uri, isSpoiler) }) return
+        if (needsDrive { sendImage(uri, isSpoiler, caption) }) return
         if (!startCooldown()) return
 
         val reply = _uiState.value.replyingTo?.toReplyData()
@@ -929,6 +1006,8 @@ class ChatViewModel(
                     senderUsername = currentUsername,
                     replyTo = reply,
                     isSpoiler = isSpoiler,
+                    // Пустая после trim подпись у image не пишется вовсе
+                    caption = caption.trim().take(MAX_CAPTION_LENGTH).ifEmpty { null },
                     topicId = activeTopicId,
                     nextSeq = nextSeq,
                     isDirect = isDirect,
@@ -1293,7 +1372,7 @@ class ChatViewModel(
     fun clearReply() = _uiState.update { it.copy(replyingTo = null) }
 
     fun startEditing(message: Message) {
-        val text = if (message.type != MessageType.TEXT) message.caption ?: "" else message.text ?: ""
+        val text = message.text ?: message.caption ?: ""
         _uiState.update { it.copy(editingMessage = message, replyingTo = null, initialDraft = text) }
     }
 
@@ -1304,8 +1383,9 @@ class ChatViewModel(
 
     fun saveEdit(newText: String) {
         val msg = _uiState.value.editingMessage ?: return
-        val isCaption = msg.type != MessageType.TEXT
-        val oldText = if (isCaption) msg.caption ?: "" else msg.text ?: ""
+        // Спека §1.5: подпись правится в caption, даже если её не было (поле создаётся)
+        val isCaption = msg.caption != null || msg.type != MessageType.TEXT
+        val oldText = msg.text ?: msg.caption ?: ""
         
         draftManager.clearDraft(chatId)
         if (newText.trim() == oldText.trim()) {
@@ -1341,10 +1421,7 @@ class ChatViewModel(
     override fun onCleared() {
         otherUserObservationJob?.cancel()
         typingManager?.cleanup()
-        onlineCountListener?.let {
-            FirebaseDatabase.getInstance().getReference("presence").removeEventListener(it)
-        }
-        onlineCountListener = null
+        stopGroupOnlineCount()
         wallpaperListener?.remove()
         wallpaperListener = null
         topicListener?.remove()
@@ -1439,5 +1516,10 @@ class ChatViewModel(
         viewModelScope.launch {
             musicRepository.saveTrack(track)
         }
+    }
+
+    private companion object {
+        /** Как в вебе: больше участников — счётчик «в сети» не считается. */
+        const val GROUP_ONLINE_LIMIT = 100
     }
 }

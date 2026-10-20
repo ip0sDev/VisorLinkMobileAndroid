@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.auth
 
 import android.widget.Toast
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -62,7 +63,7 @@ fun AuthCard(
     onRegistrationComplete: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val tokens = VlTheme.tokens
@@ -82,7 +83,7 @@ fun AuthCard(
     var regConfirmPassword by remember { mutableStateOf("") }
     var regPasswordVisible by remember { mutableStateOf(false) }
     var regConfirmVisible by remember { mutableStateOf(false) }
-    val pendingInvite by viewModel.pendingInviteCode.collectAsState()
+    val pendingInvite by viewModel.pendingInviteCode.collectAsStateWithLifecycle()
     var regInvite by remember { mutableStateOf(pendingInvite.orEmpty()) }
     LaunchedEffect(pendingInvite) { if (regInvite.isBlank() && !pendingInvite.isNullOrBlank()) regInvite = pendingInvite!! }
 

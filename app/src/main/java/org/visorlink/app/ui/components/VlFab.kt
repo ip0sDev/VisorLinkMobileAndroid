@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlHardShadow
 import org.visorlink.app.ui.theme.vlRaised
 import org.visorlink.app.ui.theme.vlSignalGlow
 import org.visorlink.app.utils.HapticType
@@ -110,19 +111,24 @@ fun VlFab(
 
     // Постоянное слабое свечение в покое, усиленное на время нажатия.
     val glowAlpha = if (isPressed) tokens.signal.glowAlpha else tokens.signal.fabRestAlpha
+    // Жёсткий блок: FAB стоит на плите второго цвета и вдавливается при нажатии, свечения нет
+    val hardAlt = tokens.structure.hardShadowAlt
+    val hardPx = with(androidx.compose.ui.platform.LocalDensity.current) { tokens.structure.hardOffset.roundToPx() }
 
     Box(
         modifier = modifier
             .height(size)
             .widthIn(min = size)
+            .then(if (hardAlt != null) Modifier.vlHardShadow(hardAlt, fabShape, tokens.structure.hardOffset) else Modifier)
+            .offset { if (hardAlt != null && isPressed) androidx.compose.ui.unit.IntOffset(hardPx, hardPx) else androidx.compose.ui.unit.IntOffset.Zero }
             .vlSignalGlow(
                 tokens = tokens.signal,
                 color = containerColor,
                 shape = fabShape,
-                active = glowActive,
+                active = glowActive && hardAlt == null,
                 alphaOverride = glowAlpha,
             )
-            .then(if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, fabShape) else Modifier)
+            .then(if (tokens.structure.enabled && hardAlt == null) Modifier.vlRaised(tokens.structure, fabShape) else Modifier)
             .clip(fabShape)
             .background(containerColor, fabShape)
             .clickable(

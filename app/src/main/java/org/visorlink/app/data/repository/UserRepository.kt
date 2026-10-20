@@ -42,6 +42,13 @@ class UserRepository(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val memoryProfiles = java.util.concurrent.ConcurrentHashMap<String, MutableStateFlow<UserProfile?>>()
+    private val _deniedUids = MutableStateFlow<Set<String>>(emptySet())
+    /**
+     * Профили, которые сервер закрыл правилами (`PERMISSION_DENIED`: этот пользователь заблокировал
+     * меня). Это не сбой — слушатель завершается, запрос не повторяется.
+     */
+    val deniedUids: StateFlow<Set<String>> = _deniedUids.asStateFlow()
+
     private val lastFetchTimes = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     fun updateCachedProfile(uid: String, update: (UserProfile) -> UserProfile) {
@@ -92,7 +99,14 @@ class UserRepository(
         }
 
         val reg = db.collection("users").document(uid)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, err ->
+                if (err != null &&
+                    err.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+                ) {
+                    _deniedUids.update { it + uid }
+                } else if (snap != null) {
+                    _deniedUids.update { if (uid in it) it - uid else it }
+                }
                 val net = snap?.toObject(UserProfile::class.java)
                 trySend(net)
                 if (net != null) {
@@ -353,40 +367,5 @@ class UserRepository(
 
     suspend fun unbindTelegram() {
         functions.getHttpsCallable("unbindTelegram").call().await()
-    }
-
-    // ── UGC Compliance: Block & Unblock Users ────────────────────────────────
-    suspend fun blockUser(targetUid: String) {
-        val uid = currentUid.ifEmpty { return }
-        try {
-            db.collection("users").document(uid)
-                .update("blockedUserIds", FieldValue.arrayUnion(targetUid))
-                .await()
-        } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Failed to block user in Firestore", e)
-        }
-
-        updateCachedProfile(uid) { current ->
-            if (!current.blockedUserIds.contains(targetUid)) {
-                current.copy(blockedUserIds = current.blockedUserIds + targetUid)
-            } else {
-                current
-            }
-        }
-    }
-
-    suspend fun unblockUser(targetUid: String) {
-        val uid = currentUid.ifEmpty { return }
-        try {
-            db.collection("users").document(uid)
-                .update("blockedUserIds", FieldValue.arrayRemove(targetUid))
-                .await()
-        } catch (e: Exception) {
-            android.util.Log.e("UserRepository", "Failed to unblock user in Firestore", e)
-        }
-
-        updateCachedProfile(uid) { current ->
-            current.copy(blockedUserIds = current.blockedUserIds - targetUid)
-        }
     }
 }

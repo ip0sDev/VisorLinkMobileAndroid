@@ -20,9 +20,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asAndroidPath
@@ -38,6 +45,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.BuildConfig
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.roundToInt
 
 /**
  * Два независимых слоя глубины из гайдлайна §4.
@@ -103,6 +111,13 @@ fun Modifier.vlRaised(
 ): Modifier {
     if (!tokens.enabled) return this
 
+    // Forge v2, жёсткий блок: пассивная панель — только крепкий контур. Плита (vlHardShadow) —
+    // признак того, что нажимается или активно (кнопка, FAB, поле в фокусе, диалог): когда плита
+    // была у каждой карточки и раздела, экран терял иерархию и читался шаблоном
+    if (tokens.outline != null && tokens.hardShadow != null) {
+        return this.vlHairline(tokens.outline, shape, width = 1.5.dp)
+    }
+
     // Forge v2: плоская панель — контур поверх содержимого и короткая мягкая тень вниз
     tokens.outline?.let { outline ->
         return this
@@ -150,6 +165,16 @@ fun Modifier.vlInset(
     shape: Shape,
 ): Modifier {
     if (!tokens.enabled) return this
+
+    // Forge v2, жёсткий блок: принимающая поверхность плоская, только контур
+    if (tokens.outline != null && tokens.hardShadow != null) {
+        val outline = tokens.outline
+        return this.drawWithContent {
+            drawContent()
+            val path = shape.toPath(size, layoutDirection, this)
+            clipPath(path) { drawPath(path = path, color = outline, style = Stroke(width = 1.5.dp.toPx() * 2f)) }
+        }
+    }
 
     // Forge v2: контур и внутренняя тень сверху (--neo-shadow-in)
     tokens.outline?.let { outline ->
@@ -305,6 +330,174 @@ fun Modifier.vlHairline(
     }
 }
 
+/**
+ * Строка таблицы терминала: без коробки. Снизу — тонкий разделитель от [dividerStart] до края,
+ * слева — полоса [accent] (непрочитанное), при нажатии — заливка [pressFill].
+ */
+fun Modifier.vlTableRow(
+    divider: Color,
+    accent: Color? = null,
+    pressed: Boolean = false,
+    pressFill: Color = Color.Transparent,
+    dividerStart: Dp = 0.dp,
+): Modifier = this.drawWithContent {
+    if (pressed) drawRect(pressFill)
+    drawContent()
+    val h = 1.dp.toPx()
+    drawRect(divider, Offset(dividerStart.toPx(), size.height - h), Size(size.width - dividerStart.toPx(), h))
+    if (accent != null) {
+        val inset = 10.dp.toPx()
+        drawRect(accent, Offset(0f, inset), Size(3.dp.toPx(), size.height - inset * 2))
+    }
+}
+
+/**
+ * Линейка вдоль верхнего края: засечки внутрь, каждая пятая выше, к правому краю гаснут. Для
+ * контейнеров терминала (навбар).
+ */
+fun Modifier.vlTopTicks(color: Color, active: Boolean = true, step: Dp = 8.dp): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        val s = step.toPx()
+        var i = 0
+        while (i * s < size.width) {
+            val x = i * s
+            val tick = if (i % 5 == 0) 6.dp.toPx() else 3.dp.toPx()
+            drawRect(color.copy(alpha = 0.34f * (1f - x / size.width * 0.8f)), Offset(x, 0f), Size(1.dp.toPx(), tick))
+            i++
+        }
+    }
+}
+
+/**
+ * Угловые скобки на двух НЕсрезанных углах (верхний-конечный и нижний-начальный): вместе со
+ * срезом [ChamferShape] они замыкают силуэт. [progress] — рост скобок от 0 до полной длины.
+ */
+fun Modifier.vlCornerBrackets(
+    color: Color,
+    active: Boolean = true,
+    length: Dp = 16.dp,
+    thickness: Dp = 4.dp,
+    progress: () -> Float = { 1f },
+): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        val p = progress().coerceIn(0f, 1f)
+        if (p <= 0f) return@drawWithContent
+        val len = length.toPx() * p
+        val t = thickness.toPx()
+        val w = size.width
+        val h = size.height
+        // верхний правый
+        drawLine(color, Offset(w - len, t / 2), Offset(w, t / 2), strokeWidth = t)
+        drawLine(color, Offset(w - t / 2, 0f), Offset(w - t / 2, len), strokeWidth = t)
+        // нижний левый
+        drawLine(color, Offset(0f, h - t / 2), Offset(len, h - t / 2), strokeWidth = t)
+        drawLine(color, Offset(t / 2, h - len), Offset(t / 2, h), strokeWidth = t)
+    }
+}
+
+/**
+ * «Трассировка» контура: яркий отрезок пробегает по периметру формы и гаснет. Играет один раз
+ * при появлении панели или фокусе поля; [progress] 0..1, при 0 и 1 ничего не рисуется.
+ */
+fun Modifier.vlTraceBorder(
+    color: Color,
+    shape: Shape,
+    progress: () -> Float,
+    width: Dp = 2.dp,
+    tail: Float = 0.3f,
+): Modifier = this.drawWithCache {
+    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+    val measure = androidx.compose.ui.graphics.PathMeasure().apply { setPath(path, false) }
+    val total = measure.length
+    val segment = Path()
+    onDrawWithContent {
+        drawContent()
+        val p = progress()
+        if (p > 0.001f && p < 0.999f && total > 0f) {
+            segment.reset()
+            val end = total * p
+            val start = (end - total * tail).coerceAtLeast(0f)
+            measure.getSegment(start, end, segment, true)
+            drawPath(segment, color.copy(alpha = color.alpha * (1f - p * 0.7f)), style = Stroke(width = width.toPx()))
+        }
+    }
+}
+
+/**
+ * Жёсткая тень: плотная копия формы, сдвинутая вправо-вниз без размытия. Рисуется под элементом,
+ * поэтому элементу нужен запас [offset] справа и снизу.
+ */
+fun Modifier.vlHardShadow(
+    color: Color,
+    shape: Shape,
+    offset: Dp = 4.dp,
+    active: Boolean = true,
+): Modifier {
+    if (!active) return this
+    return this.drawBehind {
+        val d = offset.toPx()
+        translate(d, d) {
+            drawPath(shape.toPath(size, layoutDirection, this), color)
+        }
+    }
+}
+
+/**
+ * Косая «предупреждающая» штриховка по форме: у опасных действий в Forge v2. Узор рисуется
+ * поверх содержимого, поэтому цвет берут полупрозрачным.
+ */
+fun Modifier.vlHazardStripes(
+    color: Color,
+    shape: Shape,
+    active: Boolean = true,
+    stripe: Dp = 5.dp,
+    period: Dp = 14.dp,
+): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        clipPath(shape.toPath(size, layoutDirection, this)) {
+            val step = period.toPx()
+            val w = stripe.toPx()
+            var x = -size.height
+            while (x < size.width) {
+                drawLine(color, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = w)
+                x += step
+            }
+        }
+    }
+}
+
+/**
+ * Пунктирный контур по форме — «погашенный» элемент терминала (disabled в Forge v2).
+ * Сплошной контур значит «живой», пунктир — «сейчас недоступен».
+ */
+fun Modifier.vlDashedBorder(
+    color: Color,
+    shape: Shape,
+    active: Boolean = true,
+    width: Dp = 1.dp,
+    dash: Dp = 4.dp,
+    gap: Dp = 3.dp,
+): Modifier {
+    if (!active) return this
+    return this.drawWithContent {
+        drawContent()
+        drawPath(
+            path = shape.toPath(size, layoutDirection, this),
+            color = color,
+            style = Stroke(
+                width = width.toPx(),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(dash.toPx(), gap.toPx())),
+            ),
+        )
+    }
+}
+
 // ── §6 Движение: «Биопульс» ──────────────────────────────────────────────────
 
 /**
@@ -398,17 +591,23 @@ fun Modifier.vlTerminalBackdrop(tokens: VlTokens): Modifier {
         val haze = t.haze?.let {
             Brush.radialGradient(listOf(it, Color.Transparent), center = Offset(w * 0.5f, -h * 0.06f), radius = big * 0.7f)
         }
-        val scan = if (t.scanlines) Path().apply {
-            val line = 1.dp.toPx()
-            val gap = 3.dp.toPx()
-            var y = 0f
-            while (y < h) { addRect(Rect(0f, y, w, y + line)); y += gap }
+        // Сканлайны — один тайл 1×gap px в текстуре: GPU размножает его одним drawRect.
+        // Раньше это был путь из сотен прямоугольников, который растеризовался заново на каждый кадр.
+        val scan = if (t.scanlines) {
+            val line = 1.dp.toPx().coerceAtLeast(1f)
+            val gap = 3.dp.toPx().coerceAtLeast(line + 1f)
+            val tile = ImageBitmap(1, gap.roundToInt().coerceAtLeast(2))
+            Canvas(tile).drawRect(
+                Rect(0f, 0f, 1f, line.toInt().coerceAtLeast(1).toFloat()),
+                Paint().apply { color = Color.White.copy(alpha = t.scanlineAlpha) },
+            )
+            ShaderBrush(ImageShader(tile, TileMode.Repeated, TileMode.Repeated))
         } else null
 
         onDrawWithContent {
             drawContent()
             haze?.let { drawRect(it) }
-            scan?.let { drawPath(it, Color.White.copy(alpha = t.scanlineAlpha)) }
+            scan?.let { drawRect(it) }
         }
     }
 }
@@ -421,16 +620,20 @@ fun Modifier.vlNeonRule(tokens: VlTokens, width: Dp = 1.dp): Modifier {
     val t = tokens.terminal ?: return this
     return this.drawWithContent {
         drawContent()
-        val y = size.height - width.toPx() / 2f
-        drawLine(
-            brush = Brush.horizontalGradient(
-                0f to t.neon.copy(alpha = 0.9f),
-                0.55f to t.neonAlt.copy(alpha = 0.45f),
-                1f to Color.Transparent,
-            ),
-            start = Offset(0f, y),
-            end = Offset(size.width, y),
-            strokeWidth = width.toPx(),
-        )
+        val h = width.toPx()
+        // Тонкая линия по всей ширине и жирный блок слева — как метка раздела на плите
+        drawRect(t.neon.copy(alpha = 0.28f), Offset(0f, size.height - h), Size(size.width, h))
+        // Засечки линейки: каждая пятая выше, к правому краю гаснут
+        val step = 8.dp.toPx()
+        var i = 0
+        while (i * step < size.width) {
+            val x = i * step
+            val major = i % 5 == 0
+            val a = 0.32f * (1f - x / size.width * 0.85f)
+            val tick = if (major) 5.dp.toPx() else 3.dp.toPx()
+            drawRect(t.neon.copy(alpha = a), Offset(x, size.height - h - tick), Size(1.dp.toPx(), tick))
+            i++
+        }
+        drawRect(t.neon, Offset(0f, size.height - h * 3f), Size(size.width * 0.28f, h * 3f))
     }
 }

@@ -119,6 +119,10 @@
     <string name="media_photo_icon">📷 Image</string>
     <string name="media_voice">🎤 Voice message</string>
     <string name="media_sticker">🎭 Sticker</string>
+    <string name="editor_caption_placeholder">Add a caption (optional)…</string>
+    <string name="media_album_count">📷 %1$d photos</string>
+    <string name="sticker_load_failed">Failed to load sticker</string>
+    <string name="media_tap_to_retry">Tap to load again</string>
 
     <!-- Chat Screen — Toasts -->
     <string name="toast_saved_gallery">Saved to gallery</string>
@@ -918,7 +922,7 @@
     <string name="legal_consent_checkbox_privacy">I have read and agree to the Privacy Policy</string>
     <string name="legal_consent_checkbox_personal_data">I give informed consent to the processing of personal data (Art. 5 Law No. 99-Z)</string>
     <string name="legal_consent_checkbox_cross_border">I consent to the cross-border data transfer to Google Cloud (Art. 9 Law No. 99-Z)</string>
-    <string name="legal_consent_checkbox_age14">I confirm that I am at least 14 years old (or have parental consent under Art. 25 Civil Code of the Republic of Belarus)</string>
+    <string name="legal_consent_checkbox_age16">I am 16 or older.</string>
     <string name="legal_load_error_title">Failed to load legal documents</string>
     <string name="legal_load_error_desc">To use VisorLink, current legal policies must be loaded from the server. Please check your network connection.</string>
     <string name="legal_retry_button">Retry</string>
@@ -1353,4 +1357,37 @@
     <string name="drive_required_body">Photos, videos and voice messages are stored on your Google Drive. Connect it to send media — sending will continue by itself.</string>
     <string name="drive_required_connect">Connect</string>
     <string name="drive_required_failed">Couldn\'t connect Google Drive. Try again or connect it in Settings → Storage.</string>
+
+    <!-- Account ban by the service -->
+    <string name="ban_title">Account blocked</string>
+    <string name="ban_body">Access to VisorLink is closed. You can submit one appeal.</string>
+    <string name="ban_reason_label">Reason</string>
+    <string name="ban_reason_default">Violation of the Terms of Service</string>
+    <string name="ban_appeal_label">Appeal</string>
+    <string name="ban_appeal_hint">An appeal can be sent only once, up to 300 characters</string>
+    <string name="ban_appeal_counter">%1$d / %2$d</string>
+    <string name="ban_appeal_submit">Submit appeal</string>
+    <string name="ban_appeal_sending">Sending…</string>
+    <string name="ban_appeal_pending_title">Appeal submitted</string>
+    <string name="ban_appeal_pending_body">We will review it and let you know. A second appeal cannot be submitted.</string>
+    <string name="ban_appeal_rejected_title">Appeal rejected</string>
+    <string name="ban_appeal_your_text">Your text</string>
+    <string name="ban_err_empty">Write the appeal text</string>
+    <string name="ban_err_too_long">No more than 300 characters</string>
+    <string name="ban_err_already_sent">An appeal has already been sent — it cannot be submitted again</string>
+    <string name="ban_err_not_banned">The account is no longer blocked — refresh</string>
+    <string name="ban_err_other">Could not send. Try again later</string>
+    <string name="ban_sign_out">Sign out</string>
+    <string name="ban_terms">Terms of Service</string>
+    <string name="ban_delete_account">Delete account</string>
+
+    <!-- User-to-user blocks -->
+    <string name="chat_blocked_by_peer">You can’t write to this user</string>
+    <string name="chat_blocked_by_me">You blocked this user</string>
+    <string name="chat_last_seen_long_ago">last seen a long time ago</string>
+    <string name="profile_unavailable">Profile unavailable</string>
+    <string name="block_action_failed">Could not complete. Try again later</string>
+    <string name="chat_open_failed">Could not open the chat</string>
+    <string name="chat_blocked_unblock">Unblock</string>
+
 </resources>

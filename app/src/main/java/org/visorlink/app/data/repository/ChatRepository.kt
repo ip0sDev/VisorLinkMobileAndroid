@@ -133,6 +133,8 @@ class ChatRepository(
                     senderUsername = action.data.optString("senderUsername"),
                     type = type,
                     text = action.data.optString("text"),
+                    // Подпись видна с момента нажатия «Отправить»
+                    caption = action.data.optString("caption").ifEmpty { null },
                     localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
                     uploadProgress = if (action.status == 0) action.progress else null,
                     createdAt = Timestamp(Date(action.ts)),
@@ -500,14 +502,17 @@ class ChatRepository(
         senderUsername: String,
         nextSeq: Long?,
         isDirect: Boolean,
-        otherUserId: String?
+        otherUserId: String?,
+        // lastMessage.type: по нему клиенты строят локализованное превью (спека подписей §1.2)
+        type: String? = null
     ): Map<String, Any> {
-        val lastMessageMap = hashMapOf(
+        val lastMessageMap = hashMapOf<String, Any>(
             "text" to previewText,
             "senderId" to currentUid,
             "senderUsername" to senderUsername,
             "readBy" to listOf(currentUid)
         )
+        if (type != null) lastMessageMap["type"] = type
         val updates = hashMapOf<String, Any>(
             "lastMessage" to lastMessageMap,
             "lastMessageSenderId" to currentUid,
@@ -572,7 +577,7 @@ class ChatRepository(
         batch.commit().await()
     }
 
-    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO) {
+    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, caption: String? = null, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO) {
         val rawName = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "image"
         val safeName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}_${rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}.jpg"
         val tempFile = File(context.cacheDir, safeName)
@@ -587,6 +592,7 @@ class ChatRepository(
             put("localPath", tempFile.absolutePath)
             put("senderUsername", senderUsername)
             put("isSpoiler", isSpoiler)
+            if (caption != null) put("caption", caption)
             if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
             if (nextSeq != null) put("nextSeq", nextSeq)
@@ -604,6 +610,7 @@ class ChatRepository(
         senderUsername: String,
         replyTo: ReplyData?,
         isSpoiler: Boolean,
+        caption: String? = null,
         topicId: String? = null,
         nextSeq: Long? = null,
         isDirect: Boolean = false,
@@ -627,6 +634,7 @@ class ChatRepository(
         }
         if (!previewUrl.isNullOrEmpty()) extra["previewUrl"] = previewUrl
         if (isSpoiler) extra["spoiler"] = true
+        if (!caption.isNullOrBlank()) extra["caption"] = caption
 
         val msg = mutableMapOf<String, Any?>(
             "senderId"       to currentUid,
@@ -643,11 +651,12 @@ class ChatRepository(
 
         val batch = db.batch()
         batch.set(msgRef, msg)
-        batch.update(db.collection("chats").document(chatId), buildChatUpdates("📷 Image", currentUid, senderUsername, nextSeq, isDirect, otherUserId))
+        val preview = caption?.takeIf { it.isNotBlank() } ?: "📷 Фото"
+        batch.update(db.collection("chats").document(chatId), buildChatUpdates(preview, currentUid, senderUsername, nextSeq, isDirect, otherUserId, MessageType.IMAGE))
         if (topicId != null) {
             val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
             batch.update(topicRef, mapOf(
-                "lastMessage" to mapOf("text" to "📷 Image", "senderUsername" to senderUsername),
+                "lastMessage" to mapOf("text" to preview, "senderUsername" to senderUsername),
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
@@ -944,6 +953,8 @@ class ChatRepository(
             put("packId", packId)
             put("packName", packName)
             put("packEmoji", packEmoji)
+            StickerFormat.forMessage(sticker.effectiveFormat)?.let { put("stickerFormat", it) }
+            sticker.previewUrl?.let { put("stickerPreviewUrl", it) }
             put("senderUsername", senderUsername)
             if (topicId != null) put("topicId", topicId)
             replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
@@ -962,6 +973,8 @@ class ChatRepository(
         packId: String,
         packName: String,
         packEmoji: String,
+        stickerFormat: String?,
+        stickerPreviewUrl: String?,
         senderUsername: String,
         replyTo: ReplyData?,
         topicId: String? = null,
@@ -978,7 +991,9 @@ class ChatRepository(
             "stickerId" to stickerId,
             "packId"    to packId,
             "packName"  to packName,
-            "packEmoji" to packEmoji
+            "packEmoji" to packEmoji,
+            "stickerFormat" to stickerFormat,
+            "stickerPreviewUrl" to stickerPreviewUrl
         )
 
         val msg = mutableMapOf<String, Any?>(
@@ -1081,7 +1096,14 @@ class ChatRepository(
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf(
-            "lastMessage" to (caption?.ifBlank { null } ?: "🖼️ Альбом"),
+            "lastMessage" to mapOf(
+                "type" to MessageType.ALBUM,
+                "text" to (caption?.ifBlank { null } ?: "📷 ${images.size} фото"),
+                "senderId" to currentUid,
+                "senderUsername" to (auth.currentUser?.displayName ?: ""),
+                "readBy" to listOf(currentUid)
+            ),
+            "lastMessageSenderId" to currentUid,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
         batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
@@ -1153,14 +1175,14 @@ class ChatRepository(
 
     suspend fun editMessage(chatId: String, messageId: String, newText: String, oldText: String, isCaption: Boolean = false) {
         val field = if (isCaption) "caption" else "text"
-        val historyField = if (isCaption) "caption" else "text" // Prompt uses "text" in history for both? "text" to oldText.
-        
+
         val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
             timeZone = TimeZone.getTimeZone("UTC")
         }
         
         val historyItem = mapOf(
-            historyField to oldText,
+            // Как в вебе: прошлое значение всегда под ключом text, и для подписи тоже
+            "text" to oldText,
             "editedAt" to isoFormat.format(Date())
         )
 

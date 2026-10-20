@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.saved
 
 import org.visorlink.app.ui.theme.VlTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -39,9 +40,9 @@ fun SavedMessagesSettingsScreen(
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
     val viewModel: SavedMessagesViewModel = koinViewModel()
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val hapticEnabled by themeViewModel.hapticEnabled.collectAsState()
+    val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
     val haptic = rememberHaptic()
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)

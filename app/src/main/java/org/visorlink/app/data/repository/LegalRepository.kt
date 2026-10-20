@@ -33,6 +33,25 @@ class LegalRepository(
         private const val PRIVACY_ASSET = "legal_privacy_policy.json"
     }
 
+    private fun isEnglish(): Boolean = runCatching {
+        context.resources.configuration.locales.get(0)?.language == "en"
+    }.getOrDefault(false)
+
+    /**
+     * Текст оператора для маркера `{{OPERATOR}}`: `internal/legal_operator` читается при каждой
+     * загрузке документа (не живёт дольше самих документов). Нет документа или ошибка — фолбэк без имени.
+     */
+    private suspend fun operatorText(): String {
+        val data = try {
+            val snap = firestore.collection("internal").document("legal_operator").get().await()
+            if (snap.exists()) snap.data else null
+        } catch (e: Exception) {
+            Log.w(TAG, "legal_operator unavailable, using fallback: ${e.message}")
+            null
+        }
+        return LegalOperator.format(data, isEnglish())
+    }
+
     /**
      * Получение актуальной версии ToS (асинхронно).
      * Пытается прочитать из Firestore, при ошибке/оффлайне берет из встроенного asset-файла.
@@ -114,7 +133,7 @@ class LegalRepository(
                 .await()
 
             if (subSnap.exists() && subSnap.data != null) {
-                val json = JSONObject(subSnap.data!!)
+                val json = LegalOperator.apply(JSONObject(subSnap.data!!), operatorText())
                 val container = parseLegalContainer(json)
                 if (container.tos != null) return@withContext container.tos
             }
@@ -125,7 +144,7 @@ class LegalRepository(
                 .await()
 
             if (parentSnap.exists() && parentSnap.data != null) {
-                val json = JSONObject(parentSnap.data!!)
+                val json = LegalOperator.apply(JSONObject(parentSnap.data!!), operatorText())
                 val container = parseLegalContainer(json)
                 if (container.tos != null) return@withContext container.tos
             }
@@ -148,7 +167,7 @@ class LegalRepository(
                 .await()
 
             if (ppSnap.exists() && ppSnap.data != null) {
-                val json = JSONObject(ppSnap.data!!)
+                val json = LegalOperator.apply(JSONObject(ppSnap.data!!), operatorText())
                 val container = parseLegalContainer(json)
                 if (container.privacyPolicy != null) return@withContext container.privacyPolicy!!
             }
@@ -174,7 +193,7 @@ class LegalRepository(
                 "agreePrivacy" to true,
                 "agreePersonalData" to true,
                 "agreeCrossBorder" to true,
-                "agreeAge14" to true,
+                "agreeAge16" to true,
                 "userAgent" to "VisorLink Android/${org.visorlink.app.BuildConfig.VERSION_NAME} (SDK ${android.os.Build.VERSION.SDK_INT}; ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL})",
                 "clientTimestamp" to timestamp
             )
@@ -206,7 +225,7 @@ class LegalRepository(
                 .putBoolean("agree_privacy", true)
                 .putBoolean("agree_personal_data", true)
                 .putBoolean("agree_cross_border", true)
-                .putBoolean("agree_age14", true)
+                .putBoolean("agree_age16", true)
                 .apply()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save consent into EncryptedSharedPreferences: ${e.message}")
@@ -235,7 +254,7 @@ class LegalRepository(
     fun loadBundledTosDocument(): LegalDocument {
         return try {
             val jsonStr = context.assets.open(TOS_ASSET).bufferedReader().use { it.readText() }
-            val json = JSONObject(jsonStr)
+            val json = LegalOperator.apply(JSONObject(jsonStr), LegalOperator.format(null, isEnglish()))
             val container = parseLegalContainer(json)
             container.tos ?: LegalDocument(id = "terms_of_service", title = "Правила сервиса", version = DEFAULT_FALLBACK_VERSION)
         } catch (e: Exception) {
@@ -246,7 +265,7 @@ class LegalRepository(
     fun loadBundledPrivacyDocument(): LegalDocument {
         return try {
             val jsonStr = context.assets.open(PRIVACY_ASSET).bufferedReader().use { it.readText() }
-            val json = JSONObject(jsonStr)
+            val json = LegalOperator.apply(JSONObject(jsonStr), LegalOperator.format(null, isEnglish()))
             val container = parseLegalContainer(json)
             container.privacyPolicy ?: LegalDocument(id = "privacy_policy", title = "Политика конфиденциальности", version = DEFAULT_FALLBACK_VERSION)
         } catch (e: Exception) {

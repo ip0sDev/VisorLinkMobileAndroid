@@ -53,10 +53,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.visorlink.app.R
+import org.visorlink.app.utils.HapticType
+import org.visorlink.app.utils.rememberHaptic
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlTopTicks
 import kotlin.math.abs
 
 /**
@@ -189,6 +192,8 @@ private fun NeumorphicLiquidNavBarContent(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val density = LocalDensity.current
+    val haptic = rememberHaptic()
+    val invertedPill = tokens.structure.hardShadow != null
 
     val chatsLabel = stringResource(R.string.nav_tab_chats)
     val feedLabel = stringResource(R.string.feed_title)
@@ -324,6 +329,7 @@ private fun NeumorphicLiquidNavBarContent(
             .fillMaxWidth()
             .height(64.dp)
             .vlInset(tokens.structure, barShape)
+            .vlTopTicks(cs.primary, active = tokens.structure.hardShadow != null)
             .clip(barShape)
             .background(cs.surfaceContainerLow)
             .vlHairline(cs.outlineVariant.copy(alpha = 0.5f), barShape)
@@ -352,10 +358,11 @@ private fun NeumorphicLiquidNavBarContent(
                         this.scaleY = 1f - stretch * 0.12f
                         this.clip = false
                     }
-                    .vlRaised(tokens.structure, pillShape)
+                    .then(if (invertedPill) Modifier else Modifier.vlRaised(tokens.structure, pillShape))
                     .clip(pillShape)
-                    .background(cs.surfaceContainerHighest)
-                    .vlHairline(cs.outlineVariant, pillShape)
+                    // Жёсткий блок: выбранная вкладка — сплошной инвертированный блок
+                    .background(if (invertedPill) cs.primary else cs.surfaceContainerHighest)
+                    .then(if (invertedPill) Modifier else Modifier.vlHairline(cs.outlineVariant, pillShape))
             )
         }
 
@@ -376,7 +383,7 @@ private fun NeumorphicLiquidNavBarContent(
             )
 
             val contentColor by animateColorAsState(
-                targetValue = if (isSelected) cs.primary else cs.onSurfaceVariant,
+                targetValue = if (isSelected) (if (invertedPill) cs.onPrimary else cs.primary) else cs.onSurfaceVariant,
                 animationSpec = navBouncy(glitch),
                 label = "liquid_tab_content_color_$index"
             )
@@ -392,7 +399,10 @@ private fun NeumorphicLiquidNavBarContent(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         role = Role.Tab,
-                        onClick = tab.onClick
+                        onClick = {
+                            if (!isSelected) haptic.perform(HapticType.TAB_SWITCH)
+                            tab.onClick()
+                        }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -461,6 +471,7 @@ fun VlTabItem(
     val isDark = cs.surface.luminance() < 0.5f
 
     val interactionSource = remember { MutableInteractionSource() }
+    val haptic = rememberHaptic()
 
     // Selection pill color
     val pillColor by animateColorAsState(
@@ -534,7 +545,10 @@ fun VlTabItem(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = onClick
+                onClick = {
+                    if (!selected) haptic.perform(HapticType.TAB_SWITCH)
+                    onClick()
+                }
             )
             .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center

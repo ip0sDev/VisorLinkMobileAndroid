@@ -5,12 +5,12 @@ import android.os.Build
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import org.koin.compose.getKoin
 import org.visorlink.app.data.repository.SettingsRepository
+import org.visorlink.app.utils.HapticEngine
 
 /**
  * Тактильная отдача ID-карты: композиции примитивов (VibrationEffect.Composition) — короткие
@@ -20,16 +20,8 @@ import org.visorlink.app.data.repository.SettingsRepository
  */
 internal class CardHaptics(context: Context, private val enabled: () -> Boolean) {
 
-    private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
-    } else {
-        @Suppress("DEPRECATION")
-        context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-    }
+    private val vibrator: Vibrator? = HapticEngine.vibrator(context)
     private var lastAt = 0L
-
-    private fun supported(vararg ids: Int) =
-        vibrator?.areAllPrimitivesSupported(*ids) == true
 
     /** Примитивы API 31+ (LOW_TICK, THUD, SPIN) — с проверкой. */
     private val lowTick = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) VibrationEffect.Composition.PRIMITIVE_LOW_TICK else VibrationEffect.Composition.PRIMITIVE_TICK
@@ -42,13 +34,8 @@ internal class CardHaptics(context: Context, private val enabled: () -> Boolean)
         val now = SystemClock.uptimeMillis()
         if (now - lastAt < minGapMs) return
         lastAt = now
-        val ids = steps.map { it.first }.toIntArray()
-        val effect = if (supported(*ids)) {
-            VibrationEffect.startComposition().apply { steps.forEach { (id, scale, delay) -> addPrimitive(id, scale.coerceIn(0f, 1f), delay) } }.compose()
-        } else {
-            VibrationEffect.createPredefined(fallback)
-        }
-        v.vibrate(effect)
+        val effect = HapticEngine.composition(v, *steps) ?: VibrationEffect.createPredefined(fallback)
+        HapticEngine.vibrate(v, effect)
     }
 
     /** Деление «трещотки» при вращении (каждые 30°). Сила — от скорости. */

@@ -162,16 +162,19 @@ object ChatDataCache {
             id
         }
 
-    suspend fun loadOutbox(context: Context, filterChatId: String? = null): List<QueuedAction> =
+    /** Только ожидающие отправки (status = 0): цикл OutboxManager не разбирает JSON уже отправленных и упавших. */
+    suspend fun loadPendingOutbox(context: Context): List<QueuedAction> = loadOutbox(context, null, onlyPending = true)
+
+    suspend fun loadOutbox(context: Context, filterChatId: String? = null, onlyPending: Boolean = false): List<QueuedAction> =
         withContext(Dispatchers.IO) {
             val list = mutableListOf<QueuedAction>()
             try {
                 val db = getDb(context).readableDatabase
-                val sql = if (filterChatId != null) {
-                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox WHERE chat_id = ? ORDER BY ts ASC"
-                } else {
-                    "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox ORDER BY ts ASC"
-                }
+                val where = listOfNotNull(
+                    if (filterChatId != null) "chat_id = ?" else null,
+                    if (onlyPending) "status = 0" else null,
+                ).joinToString(" AND ").let { if (it.isEmpty()) "" else " WHERE $it" }
+                val sql = "SELECT id, chat_id, type, data, ts, status, retry_count, last_attempt, last_error, progress FROM outbox$where ORDER BY ts ASC"
                 val args = if (filterChatId != null) arrayOf(filterChatId) else null
                 db.rawQuery(sql, args).use { cursor ->
                     while (cursor.moveToNext()) {
@@ -614,6 +617,8 @@ object ChatDataCache {
         put("packId", packId ?: JSONObject.NULL)
         put("packName", packName ?: JSONObject.NULL)
         put("packEmoji", packEmoji ?: JSONObject.NULL)
+        put("stickerFormat", stickerFormat ?: JSONObject.NULL)
+        put("stickerPreviewUrl", stickerPreviewUrl ?: JSONObject.NULL)
         put("deleted", deleted)
         put("createdAt", createdAt?.seconds ?: JSONObject.NULL)
         put("spoiler", spoiler)
@@ -703,7 +708,7 @@ object ChatDataCache {
         val knownKeys = setOf(
             "id", "seq", "senderId", "senderUsername", "type", "text", "url", "fileName",
             "duration", "thumbUrl", "width", "height", "stickerId", "packId", "packName",
-            "packEmoji", "deleted", "createdAt", "spoiler", "commentsEnabled", "commentsCount",
+            "packEmoji", "stickerFormat", "stickerPreviewUrl", "deleted", "createdAt", "spoiler", "commentsEnabled", "commentsCount",
             "caption", "readBy", "images", "replyTo", "forwardFrom", "reactions", "status",
             "mimeType", "uploadProgress", "cdnMediaId", "driveFileId", "driveUrl", "previewUrl",
             "thumbnailUrl", "title", "performer", "fileSize", "coverCdnMediaId", "coverUrl", "tradeId",
@@ -740,6 +745,8 @@ object ChatDataCache {
             packId = if (isNull("packId")) null else optString("packId"),
             packName = if (isNull("packName")) null else optString("packName"),
             packEmoji = if (isNull("packEmoji")) null else optString("packEmoji"),
+            stickerFormat = if (has("stickerFormat") && !isNull("stickerFormat")) optString("stickerFormat") else null,
+            stickerPreviewUrl = if (has("stickerPreviewUrl") && !isNull("stickerPreviewUrl")) optString("stickerPreviewUrl") else null,
             deleted = optBoolean("deleted", false),
             createdAt = if (isNull("createdAt")) null else com.google.firebase.Timestamp(getLong("createdAt"), 0),
             spoiler = optBoolean("spoiler", false),
@@ -771,6 +778,8 @@ object ChatDataCache {
                 put("emoji", s.emoji)
                 put("storagePath", s.storagePath)
                 put("sortOrder", s.sortOrder)
+                put("format", s.format ?: JSONObject.NULL)
+                put("previewUrl", s.previewUrl ?: JSONObject.NULL)
             })
         }
         put("stickers", sArr)
@@ -785,7 +794,9 @@ object ChatDataCache {
                 url = sObj.getString("url"),
                 emoji = sObj.getString("emoji"),
                 storagePath = sObj.optString("storagePath", ""),
-                sortOrder = sObj.optInt("sortOrder", 0)
+                sortOrder = sObj.optInt("sortOrder", 0),
+                format = if (sObj.has("format") && !sObj.isNull("format")) sObj.optString("format") else null,
+                previewUrl = if (sObj.has("previewUrl") && !sObj.isNull("previewUrl")) sObj.optString("previewUrl") else null
             )
         }
         return StickerPack(

@@ -49,8 +49,10 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -429,7 +431,7 @@ fun SwipeableMessage(
 
                                 if (abs(offsetX.value) >= triggerThreshold && !didTrigger) {
                                     didTrigger = true
-                                    haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                    haptic.perform(HapticType.THRESHOLD, hapticEnabled)
                                     onReply()
                                     bubbleJelly.pulse(0.10f)
                                     dropJelly.pulse(0.24f)
@@ -472,6 +474,8 @@ fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
     )
     Box(modifier, contentAlignment = Alignment.Center) {
         val cs = MaterialTheme.colorScheme
+        // Forge v2 (Protogen / Beast): радар вокруг значка — только на пустом экране чата
+        if (org.visorlink.app.ui.theme.VlTheme.tokens.structure.hardShadow != null) ForgeRadar()
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(Icons.Default.ChatBubbleOutline, null, modifier = Modifier.size(64.dp).scale(emptyScale), tint = cs.onSurfaceVariant.copy(0.25f))
             Spacer(Modifier.height(16.dp))
@@ -479,6 +483,65 @@ fun EmptyChatPlaceholder(modifier: Modifier = Modifier) {
             Spacer(Modifier.height(4.dp))
             Text(stringResource(R.string.chat_empty_subtitle), style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant.copy(0.35f))
         }
+    }
+}
+
+/**
+ * Радар Forge v2 за значком пустого чата: тонкие кольца каждые 54 dp, перекрестие и луч с шлейфом
+ * внутри круга 160 dp (оборот 8 с), края плавно гаснут. `primary` с прозрачностью 14–16 %.
+ * При «уменьшить анимацию» луч не вращается. Поверх контента ничего не рисует — это фон.
+ */
+@Composable
+private fun ForgeRadar() {
+    val primary = MaterialTheme.colorScheme.primary
+    val reduceMotion = org.visorlink.app.ui.theme.VlTheme.tokens.reduceMotion
+    val angle by org.visorlink.app.ui.components.rememberLoopFloat(enabled = !reduceMotion) {
+        rememberInfiniteTransition(label = "radar").animateFloat(
+            initialValue = 0f, targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(8000, easing = LinearEasing)),
+            label = "radar_angle",
+        )
+    }
+    Canvas(
+        Modifier
+            .size(320.dp)
+            .graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }
+    ) {
+        val c = center
+        val radius = 160.dp.toPx()
+        val hair = 1.dp.toPx()
+        val line = primary.copy(alpha = 0.14f)
+        var r = 54.dp.toPx()
+        while (r <= radius) {
+            drawCircle(line, r, c, style = androidx.compose.ui.graphics.drawscope.Stroke(hair))
+            r += 54.dp.toPx()
+        }
+        drawLine(line, Offset(c.x - radius, c.y), Offset(c.x + radius, c.y), hair)
+        drawLine(line, Offset(c.x, c.y - radius), Offset(c.x, c.y + radius), hair)
+        // Луч: шлейф позади ведущей кромки (кромка на 0°, вращение по часовой)
+        rotate(angle, c) {
+            drawCircle(
+                brush = androidx.compose.ui.graphics.Brush.sweepGradient(
+                    0f to Color.Transparent,
+                    0.78f to Color.Transparent,
+                    1f to primary.copy(alpha = 0.16f),
+                    center = c,
+                ),
+                radius = radius,
+                center = c,
+            )
+            drawLine(primary.copy(alpha = 0.16f), c, Offset(c.x + radius, c.y), hair * 1.5f)
+        }
+        // Края гаснут: маска от непрозрачного центра к прозрачной кромке круга
+        drawCircle(
+            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                0f to Color.Black, 0.6f to Color.Black, 1f to Color.Transparent,
+                center = c, radius = radius,
+            ),
+            radius = radius,
+            center = c,
+            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+        )
     }
 }
 

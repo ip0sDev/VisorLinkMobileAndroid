@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.stickers
 
 import org.visorlink.app.ui.theme.VlTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -38,7 +39,7 @@ fun AddStickerPackBanner(
     viewModel: StickerPackViewModel = koinViewModel(),
     themeVm: ThemeViewModel = koinViewModel()
 ) {
-    val appTheme by themeVm.appTheme.collectAsState()
+    val appTheme by themeVm.appTheme.collectAsStateWithLifecycle()
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.1f
 
     var bannerState by remember(packId) { mutableStateOf<AddPackBannerState>(AddPackBannerState.Idle) }

@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.auth
 
 import androidx.compose.animation.core.Animatable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.keyframes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -68,9 +69,9 @@ fun TfaScreen(
     viewModel: AuthViewModel,
     lock: TfaLockViewModel = koinViewModel(),
 ) {
-    val state by lock.state.collectAsState()
-    val profile by lock.profile.collectAsState()
-    val gate by viewModel.tfaGate.collectAsState()
+    val state by lock.state.collectAsStateWithLifecycle()
+    val profile by lock.profile.collectAsStateWithLifecycle()
+    val gate by viewModel.tfaGate.collectAsStateWithLifecycle()
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
 

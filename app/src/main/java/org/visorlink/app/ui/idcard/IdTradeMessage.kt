@@ -1,6 +1,8 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.animation.core.Animatable
+import org.visorlink.app.ui.components.rememberLoopFloat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.StartOffset
@@ -96,9 +98,9 @@ fun IdTradeMessage(tradeId: String?, messageId: String, chatId: String, modifier
     val repo: IdCardRepository = koinInject()
     val users: UserRepository = koinInject()
     val uid = state.myUid
-    val tradeState by remember(tradeId) { repo.tradeFlow(tradeId) }.collectAsState(initial = IdTradeState.Loading)
-    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsState(initial = IdCardState.Loading)
-    val profile by remember(uid) { if (uid == null) flowOf(null) else users.userProfileFlow(uid) }.collectAsState(initial = null)
+    val tradeState by remember(tradeId) { repo.tradeFlow(tradeId) }.collectAsStateWithLifecycle(initialValue = IdTradeState.Loading)
+    val cardState by remember(uid) { repo.cardFlow(uid) }.collectAsStateWithLifecycle(initialValue = IdCardState.Loading)
+    val profile by remember(uid) { if (uid == null) flowOf(null) else users.userProfileFlow(uid) }.collectAsStateWithLifecycle(initialValue = null)
 
     if (tradeState is IdTradeState.Loading) {
         Skeleton(modifier)
@@ -124,7 +126,7 @@ private fun TradeCard(trade: IdTrade, uid: String?, wearer: IdSkinWearer, person
     val open = trade.status == IdTradeStatus.OPEN
     val myOffer by remember(trade.id, uid, open && !isOwner) {
         if (open && !isOwner && uid != null) repo.myOfferFlow(trade.id, uid) else flowOf(null)
-    }.collectAsState(initial = null)
+    }.collectAsStateWithLifecycle(initialValue = null)
     var modal by remember { mutableStateOf<TradeModal?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
@@ -227,8 +229,8 @@ private enum class TradeModal { OFFER, OFFERS }
 @Composable
 private fun TradeSkin(look: IdSkinLook, wearer: IdSkinWearer, person: IdCardPerson, closed: Boolean) {
     val ed = IdCardMaterials.edition(look.edition)
-    val float = if (closed || VlTheme.tokens.reduceMotion) 0f else {
-        rememberInfiniteTransition(label = "tradeFloat").animateFloat(0f, 1f, infiniteRepeatable(tween(2500), RepeatMode.Reverse), label = "f").value
+    val float by rememberLoopFloat(enabled = !(closed || VlTheme.tokens.reduceMotion)) {
+        rememberInfiniteTransition(label = "tradeFloat").animateFloat(0f, 1f, infiniteRepeatable(tween(2500), RepeatMode.Reverse), label = "f")
     }
     Box(Modifier.fillMaxWidth()) {
         Box(
@@ -325,12 +327,12 @@ private fun MyPendingOffer(offer: IdTradeOffer, wearer: IdSkinWearer, person: Id
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val shape = tokens.shapes.rounded(12.dp)
-    val flip = if (tokens.reduceMotion) 0f else {
+    val flip by rememberLoopFloat(enabled = !(tokens.reduceMotion)) {
         rememberInfiniteTransition(label = "hourglass").animateFloat(
             0f, 360f,
             infiniteRepeatable(keyframes { durationMillis = 2000; 0f at 0; 0f at 800; 180f at 1000; 180f at 1800; 360f at 2000 }),
             label = "hg",
-        ).value
+        )
     }
     Row(
         Modifier
@@ -359,12 +361,12 @@ private fun OfferButton(onClick: () -> Unit) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val shape = tokens.shapes.button
-    val sweep = if (tokens.reduceMotion) 0f else {
+    val sweep by rememberLoopFloat(enabled = !(tokens.reduceMotion)) {
         rememberInfiniteTransition(label = "offerSweep").animateFloat(
             0f, 1f,
             infiniteRepeatable(keyframes { durationMillis = 3400; 0f at 0; 1f at 1360; 1f at 3400 }, initialStartOffset = StartOffset(1000)),
             label = "s",
-        ).value
+        )
     }
     Row(
         Modifier
@@ -477,8 +479,8 @@ private fun Unavailable(modifier: Modifier) {
 @Composable
 private fun Skeleton(modifier: Modifier) {
     val cs = MaterialTheme.colorScheme
-    val x = if (VlTheme.tokens.reduceMotion) 0.5f else {
-        rememberInfiniteTransition(label = "skeleton").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "x").value
+    val x by rememberLoopFloat(enabled = !VlTheme.tokens.reduceMotion, rest = 0.5f) {
+        rememberInfiniteTransition(label = "skeleton").animateFloat(0f, 1f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "x")
     }
     Box(
         modifier

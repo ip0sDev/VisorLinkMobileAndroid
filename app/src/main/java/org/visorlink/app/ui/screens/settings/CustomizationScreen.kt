@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.screens.settings
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -44,7 +45,7 @@ fun CustomizationScreen(
     onNavigateBack: () -> Unit,
     viewModel: CustomizationViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val errorPrefix = stringResource(R.string.custom_save_error)
 
