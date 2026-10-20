@@ -212,6 +212,8 @@ class MainActivity : AppCompatActivity() {
                                             pendingOpenSenderUid.value = null
                                         }
                                     )
+                                    // Личный сюрприз (surprises/{uid}) — под выдачей карты: сначала карта
+                                    org.visorlink.app.ui.surprise.SurpriseGate()
                                     // Выдача ID-карты: без карты в приложение не пускаем (спека §5)
                                     org.visorlink.app.ui.idcard.IdCardGate()
                                     FlagsOverlay()

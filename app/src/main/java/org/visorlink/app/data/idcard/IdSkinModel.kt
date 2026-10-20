@@ -91,7 +91,7 @@ data class IdSkinLook(
             val traits = IdCardTraits.parse(m["traits"], m["seed"])
             val custom = IdCustomLook.parse(m["custom"])
             // Кастомный скин — всегда эпический (у старых записей тиража может не быть)
-            val edition = IdEdition.of(m["edition"]) ?: if (custom != null) IdEdition.EPIC else traits.edition
+            val edition = IdEdition.of(m["edition"]) ?: custom?.edition ?: traits.edition
             return IdSkinLook(serial, traits, edition, custom)
         }
     }

@@ -1396,4 +1396,43 @@
     <string name="chat_open_failed">Не удалось открыть чат</string>
     <string name="chat_blocked_unblock">Разблокировать</string>
 
+    <!-- Личный сюрприз (ui/surprise/SurpriseGate.kt) -->
+    <string name="surprise_delivery_kicker">VisorLink · доставка</string>
+    <string name="surprise_envelope_title">Тебе посылка</string>
+    <string name="surprise_envelope_from">от @%1$s</string>
+    <string name="surprise_open">Открыть</string>
+    <string name="surprise_next">Дальше</string>
+    <string name="surprise_tap_hint">Нажми, чтобы листать</string>
+    <string name="surprise_title_named">С днём рождения, %1$s!</string>
+    <string name="surprise_title_default">С днём рождения!</string>
+    <string name="surprise_signature">— @%1$s</string>
+    <string name="surprise_wishes_kicker">Послания</string>
+    <string name="surprise_wishes_title">Тебе ещё кое-что хотели сказать</string>
+    <string name="surprise_final_default">С днём рождения!</string>
+    <string name="surprise_thanks">Спасибо!</string>
+    <string name="surprise_gift_kicker">И это ещё не всё</string>
+    <string name="surprise_gift_title">Для тебя кое-что есть</string>
+    <string name="surprise_gift_lead">Открой, когда будешь готов</string>
+    <string name="surprise_gift_open">Открыть подарок</string>
+    <string name="surprise_gift_opening">Открываем…</string>
+    <string name="surprise_gift_card_kicker">Легендарная ID-карта</string>
+    <string name="surprise_gift_edition">1 ИЗ 1 · %1$s</string>
+    <string name="surprise_gift_card_title">Такой больше нет ни у кого в VisorLink</string>
+    <string name="surprise_gift_card_equipped">Уже на тебе. Наклони её — там кто-то прячется</string>
+    <string name="surprise_gift_card_inventory">Уже в инвентаре. Наклони её — там кто-то прячется</string>
+    <string name="surprise_gift_rewards_kicker">А ещё</string>
+    <string name="surprise_gift_bits">Bits на счёт</string>
+    <string name="surprise_gift_pro">PRO</string>
+    <string name="surprise_gift_pro_year">PRO на год</string>
+    <string name="surprise_gift_pro_until">до %1$s</string>
+    <string name="surprise_gift_err_not_yet">Подарок откроется чуть позже</string>
+    <string name="surprise_gift_err_no_slot">Инвентарь карт заполнен. Освободи слот и открой снова</string>
+    <string name="surprise_gift_err_generic">Не получилось открыть подарок. Проверь сеть и попробуй ещё раз</string>
+    <string name="surprise_retry">Попробовать ещё раз</string>
+    <string name="surprise_later">Позже</string>
+    <string name="surprise_demo_badge">ДЕМО</string>
+    <string name="surprise_demo_close">Закрыть демо</string>
+    <string name="settings_surprise_demo_title">Демо сюрприза</string>
+    <string name="settings_surprise_demo_subtitle">Весь показ на встроенных данных, подарок не выдаётся</string>
+
 </resources>

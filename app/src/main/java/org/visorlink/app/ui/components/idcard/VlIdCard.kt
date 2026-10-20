@@ -108,6 +108,7 @@ import org.visorlink.app.data.idcard.IdEdition
 import org.visorlink.app.data.idcard.IdFinish
 import org.visorlink.app.data.idcard.IdFoil
 import org.visorlink.app.data.idcard.IdMode
+import org.visorlink.app.data.idcard.IdPattern
 import org.visorlink.app.ui.theme.IdCardMaterials
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.BaseLayer
@@ -186,10 +187,18 @@ fun VlIdCard(
      * из seed везде, где он рисуется; невалидная строка — росчерк. У Protogen не видна (ключ).
      */
     signature: String? = null,
+    /**
+     * Застывший наклон для превью и скриншотов: x — поворот вокруг вертикали, y — вокруг
+     * горизонтали (градусы). Блики, фольга и «скрытое изображение» рисуются как под этим углом.
+     */
+    previewTilt: Offset? = null,
 ) {
     val reduceMotion = VlTheme.tokens.reduceMotion
     val tilt = remember {
-        CardTiltState().apply { if (initialFace == 1) { face = 1; ry = 180f; ty = 180f } }
+        CardTiltState().apply {
+            if (initialFace == 1) { face = 1; ry = 180f; ty = 180f }
+            previewTilt?.let { t -> ry += t.x; ty = ry; rx = t.y; tx = t.y; preview = true }
+        }
     }
     val active = interactive && issueTime == null
     val name = person.displayName?.takeIf { it.isNotBlank() } ?: person.username?.takeIf { it.isNotBlank() } ?: "—"
@@ -258,6 +267,8 @@ internal class CardTiltState {
     var haptics: CardHaptics? = null
     /** Карта реагирует на наклон; у неинтерактивной «скрытое изображение» — постоянные 0.2. */
     var interactive = true
+    /** Застывший наклон превью: слои рисуются по нему, как у интерактивной карты. */
+    var preview = false
     private var lastDetent = 0
     private var lastShowBack = false
     private var lastVySign = 0
@@ -353,7 +364,7 @@ private fun IdCardScene(
     val strokes = remember(signature, traits.seed) {
         IdCardGenerator.parseSignature(signature) ?: listOf(IdCardGenerator.signaturePoints(traits.seed))
     }
-    tilt.interactive = active
+    tilt.interactive = active || tilt.preview
     val p = IssueProgress(issueTime)
 
     val haptics = rememberCardHaptics()
@@ -636,11 +647,15 @@ private fun Face(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val traits = card.traits
+    val pattern = card.pattern
     Box(
         Modifier
             .fillMaxSize()
             .clip(shape)
-            .drawBehind { drawBase(palette.base) }
+            .drawBehind {
+                drawBase(palette.base)
+                if (pattern == IdPattern.NEKO) drawNekoLattice(tilt, palette.tone == CardTone.LIGHT)
+            }
             .drawWithContent {
                 drawContent()
                 // Край: inset 0 0 0 1px edge + блик сверху
@@ -665,14 +680,15 @@ private fun Face(
             },
     ) {
         content()
-        Overlays(traits, details, palette, em, tilt, p, protogen = card.mode == IdMode.PROTOGEN)
+        Overlays(traits, details, palette, em, tilt, p, protogen = card.mode == IdMode.PROTOGEN, pattern = pattern)
     }
 }
 
 /** Слои поверх содержимого стороны: отделка, «скрытое изображение», потёртость, плёнка, блик. */
 @Composable
-private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Details, palette: CardPalette, em: Dp, tilt: CardTiltState, p: IssueProgress, protogen: Boolean) {
-    val reveal = traits.foil == IdFoil.AURORA || traits.foil == IdFoil.GALAXY
+private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Details, palette: CardPalette, em: Dp, tilt: CardTiltState, p: IssueProgress, protogen: Boolean, pattern: IdPattern?) {
+    // Авторский узор заменяет «скрытое изображение» фольги своим
+    val reveal = pattern == null && (traits.foil == IdFoil.AURORA || traits.foil == IdFoil.GALAXY)
     val revealArt = remember(traits.foil, traits.seed) { if (reveal) RevealArt(traits.foil == IdFoil.GALAXY, traits.seed) else null }
     val scratches = remember(traits.seed, traits.wear) { IdCardGenerator.scratches(traits.seed, traits.wear * 5) }
     val light = palette.tone == CardTone.LIGHT
@@ -721,6 +737,10 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
                 drawPath(art.fill, brush, alpha = opacity * fillAlpha)
                 drawPath(art.strokes, brush, alpha = opacity * fillAlpha, style = Stroke(2.2f))
             }
+        }
+        if (pattern == IdPattern.NEKO) {
+            val opacity = p.revealFlash ?: if (tilt.interactive) clamp(mag * 1.4f - 0.05f, 0f, 1f) else 0.2f
+            drawNekoReveal(fx, fy, opacity, light)
         }
         if (traits.wear > 0) {
             // Зерно: статичная текстура плиткой 6em
@@ -956,7 +976,7 @@ private fun BoxScope.FrontContent(
                     val s = 1.35f + (1f - 1.35f) * p.holo
                     scaleX = s; scaleY = s
                 },
-            em, p,
+            em, p, pattern = card.pattern,
         )
     }
 
@@ -1401,9 +1421,10 @@ private fun Stamp(
 
 /** Голограмма: форма-маска, радужная фольга (сдвигается при наклоне), блик и тиснёная эмблема. */
 @Composable
-private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.HoloShape, sizeEm: Float, modifier: Modifier, em: Dp, p: IssueProgress, tilt: CardTiltState? = null) {
+private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.HoloShape, sizeEm: Float, modifier: Modifier, em: Dp, p: IssueProgress, tilt: CardTiltState? = null, pattern: IdPattern? = null) {
     val context = LocalContext.current
-    val mask = remember(shape) { holoShapePath(shape) }
+    val neko = pattern == IdPattern.NEKO
+    val mask = remember(shape, neko) { if (neko) NekoArt.holoMask else holoShapePath(shape) }
     val brand = remember(context) { ResourcesCompat.getFont(context, R.font.space_grotesk_semibold) }
     val tiltState = tilt ?: LocalCardTilt.current
     Canvas(modifier.size(em * sizeEm)) {
@@ -1413,6 +1434,7 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             val box = Size(size.width * 3f, size.height * 3f)
             // Золото — всегда золотой фон, даже у галактики (правило золота в CSS идёт позже)
             when {
+                neko -> drawRect(cssLinear(135f, IdCardMaterials.NekoHolo, size))
                 traits.finish == IdFinish.GOLD -> drawRect(cssLinear(135f, IdCardMaterials.HoloGold, size))
                 traits.foil == IdFoil.GALAXY -> drawRect(Brush.radialGradient(colorStops = IdCardMaterials.HoloGalaxy.toTypedArray(), center = Offset(size.width * 0.32f, size.height * 0.3f), radius = size.width * 0.75f))
                 else -> drawRect(cssLinear(135f, IdCardMaterials.HoloSilver, size))
@@ -1421,13 +1443,13 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             val fy = tiltState?.fy ?: 0f
             val sweep = 1f - p.holoSweep
             val rainbowOrigin = Offset(-size.width + (-fx * 0.16f + 0.3f * sweep) * box.width, -size.height + (-fy * 0.13f + 0.22f * sweep) * box.height)
-            val (stops, alpha) = when (traits.foil) {
+            val (stops, alpha) = if (neko) IdCardMaterials.NekoRainbow to 0.7f else when (traits.foil) {
                 IdFoil.AURORA -> IdCardMaterials.RainbowAurora to 0.85f
                 IdFoil.GALAXY -> IdCardMaterials.RainbowGalaxy to 0.5f
                 else -> IdCardMaterials.RainbowClassic to (if (traits.foil == IdFoil.PRISM) 0.85f else 0.32f)
             }
             drawRect(cssRepeating(118f, stops, box, rainbowOrigin), alpha = alpha)
-            if (traits.foil == IdFoil.GALAXY) {
+            if (traits.foil == IdFoil.GALAXY && !neko) {
                 // Звёзды — две сетки, 1.1em и 1.4em
                 for ((stepEm, r, a) in listOf(Triple(1.1f, 0.05f, 1f), Triple(1.4f, 0.04f, 0.7f))) {
                     val step = (em * stepEm).toPx()
@@ -1441,7 +1463,9 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             }
             val glintOrigin = Offset(-size.width - fx * 0.34f * box.width, -size.height + fy * 0.26f * box.height)
             drawRect(cssLinear(115f, listOf(0f to Color.Transparent, 0.44f to Color.Transparent, 0.5f to Color.White.copy(alpha = 0.8f), 0.56f to Color.Transparent, 1f to Color.Transparent), box, glintOrigin))
-            scale(s, s, pivot = Offset.Zero) { drawHoloEmblem(mode, brand) }
+            scale(s, s, pivot = Offset.Zero) {
+                if (neko) with(NekoArt) { drawHoloEmblem() } else drawHoloEmblem(mode, brand)
+            }
         }
     }
 }
@@ -1559,7 +1583,7 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
             )
         }
         if (traits.foil != IdFoil.NONE) {
-            Holo(mode, traits, card.custom?.holo ?: d.holoShape, 2.4f, Modifier.align(Alignment.BottomEnd).offset(x = -em * 0.6f, y = -em * 0.6f), em, p)
+            Holo(mode, traits, card.custom?.holo ?: d.holoShape, 2.4f, Modifier.align(Alignment.BottomEnd).offset(x = -em * 0.6f, y = -em * 0.6f), em, p, pattern = card.pattern)
         }
     }
 

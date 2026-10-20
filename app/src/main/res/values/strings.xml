@@ -1390,4 +1390,43 @@
     <string name="chat_open_failed">Could not open the chat</string>
     <string name="chat_blocked_unblock">Unblock</string>
 
+    <!-- Личный сюрприз (ui/surprise/SurpriseGate.kt) -->
+    <string name="surprise_delivery_kicker">VisorLink · delivery</string>
+    <string name="surprise_envelope_title">A package for you</string>
+    <string name="surprise_envelope_from">from @%1$s</string>
+    <string name="surprise_open">Open</string>
+    <string name="surprise_next">Next</string>
+    <string name="surprise_tap_hint">Tap to continue</string>
+    <string name="surprise_title_named">Happy birthday, %1$s!</string>
+    <string name="surprise_title_default">Happy birthday!</string>
+    <string name="surprise_signature">— @%1$s</string>
+    <string name="surprise_wishes_kicker">Messages</string>
+    <string name="surprise_wishes_title">A few more people wanted to say something</string>
+    <string name="surprise_final_default">Happy birthday!</string>
+    <string name="surprise_thanks">Thank you!</string>
+    <string name="surprise_gift_kicker">And that is not all</string>
+    <string name="surprise_gift_title">There is something for you</string>
+    <string name="surprise_gift_lead">Open it when you are ready</string>
+    <string name="surprise_gift_open">Open the gift</string>
+    <string name="surprise_gift_opening">Opening…</string>
+    <string name="surprise_gift_card_kicker">Legendary ID card</string>
+    <string name="surprise_gift_edition">1 OF 1 · %1$s</string>
+    <string name="surprise_gift_card_title">The only one like it in VisorLink</string>
+    <string name="surprise_gift_card_equipped">Already on you. Tilt it, someone is hiding there</string>
+    <string name="surprise_gift_card_inventory">Already in your inventory. Tilt it, someone is hiding there</string>
+    <string name="surprise_gift_rewards_kicker">And on top of that</string>
+    <string name="surprise_gift_bits">Bits to your balance</string>
+    <string name="surprise_gift_pro">PRO</string>
+    <string name="surprise_gift_pro_year">PRO for a year</string>
+    <string name="surprise_gift_pro_until">until %1$s</string>
+    <string name="surprise_gift_err_not_yet">The gift opens a little later</string>
+    <string name="surprise_gift_err_no_slot">Your card inventory is full. Free a slot and open it again</string>
+    <string name="surprise_gift_err_generic">Could not open the gift. Check the connection and try again</string>
+    <string name="surprise_retry">Try again</string>
+    <string name="surprise_later">Later</string>
+    <string name="surprise_demo_badge">DEMO</string>
+    <string name="surprise_demo_close">Close the demo</string>
+    <string name="settings_surprise_demo_title">Surprise demo</string>
+    <string name="settings_surprise_demo_subtitle">The whole show on built-in data, no gift is granted</string>
+
 </resources>

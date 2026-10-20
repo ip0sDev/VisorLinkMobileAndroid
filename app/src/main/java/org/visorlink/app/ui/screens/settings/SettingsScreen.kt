@@ -1221,6 +1221,23 @@ private fun DevSettingsSection(
                 )
             }
 
+            // Демо сюрприза — только debug-сборка и админы: в нём сам подарок, получатель не должен наткнуться
+            val surpriseRepository: org.visorlink.app.data.repository.SurpriseRepository = org.koin.compose.koinInject()
+            val userRepository: org.visorlink.app.data.repository.UserRepository = org.koin.compose.koinInject()
+            val myUid = remember { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }
+            val me by remember(myUid) {
+                if (myUid == null) kotlinx.coroutines.flow.flowOf(null) else userRepository.userProfileFlow(myUid)
+            }.collectAsStateWithLifecycle(initialValue = null)
+            if (BuildConfig.DEBUG || me?.isAdmin == true) {
+                VlSettingsItem(
+                    icon = Icons.Default.CardGiftcard,
+                    iconColor = VlCategoryTint.Pink,
+                    title = stringResource(R.string.settings_surprise_demo_title),
+                    subtitle = stringResource(R.string.settings_surprise_demo_subtitle),
+                    onClick = { surpriseRepository.startDemo() },
+                )
+            }
+
             VlSettingsItem(
                 icon = Icons.Default.Fingerprint,
                 iconColor = MaterialTheme.colorScheme.secondary,

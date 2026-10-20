@@ -110,6 +110,7 @@ val appModule = module {
     single { BlockRepository(get(), get(), androidContext()) }
     // ID-карты: карта и callables, Mask Mode (только на устройстве), контекст темы открытого чата
     single { org.visorlink.app.data.repository.IdCardRepository(get(), get()) }
+    single { org.visorlink.app.data.repository.SurpriseRepository(get(), get(), androidContext()) }
     single { org.visorlink.app.utils.MaskModeManager(androidContext()) }
     single { org.visorlink.app.ui.idcard.ChatThemeController(org.visorlink.app.ui.idcard.PrefsChatThemeMemory(androidContext())) }
     single { TopicsRepository(get(), get()) }

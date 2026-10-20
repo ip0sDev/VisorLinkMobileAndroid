@@ -39,6 +39,19 @@ enum class IdFoil(val id: String) {
     }
 }
 
+/**
+ * Авторский узор кастомного скина (`custom.pattern`): своя форма и эмблема голограммы, защитная
+ * сетка под печатью и большое «скрытое изображение» поверх. Рисуется только с валидной палитрой.
+ */
+enum class IdPattern(val id: String) {
+    /** Коты: голограмма — кошачья голова, сетка из лапок и мордочек, кот под луной при наклоне. */
+    NEKO("neko");
+
+    companion object {
+        fun of(id: Any?): IdPattern? = entries.firstOrNull { it.id == id }
+    }
+}
+
 /** Тираж: у карты считается из признаков (`editionOf`), у скина хранится (у старых записей может не быть). */
 enum class IdEdition(val id: String) {
     COMMON("common"), UNCOMMON("uncommon"), RARE("rare"), EPIC("epic"), LEGENDARY("legendary");
@@ -118,8 +131,8 @@ data class IdCard(
     /** Кастомный скин (подарок админа) — от надетого скина; `null` — обычная палитра режима. */
     val custom: IdCustomLook? = null,
 ) {
-    /** Тираж карты: кастомный скин — всегда эпический (веб `cardEdition`), иначе — из признаков. */
-    val edition: IdEdition get() = if (custom != null) IdEdition.EPIC else traits.edition
+    /** Тираж карты: кастомный скин — эпический, с авторским узором — легендарный (веб `cardEdition`), иначе — из признаков. */
+    val edition: IdEdition get() = custom?.edition ?: traits.edition
 
     companion object {
         /** Разбор документа `idCards/{uid}` или ответа callable (`{ card }`). */
@@ -238,7 +251,12 @@ data class IdCustomLook(
     val holo: IdCardGenerator.HoloShape?,
     /** Подпись скина на обороте (не подпись владельца), до [LABEL_MAX] символов. */
     val label: String?,
+    /** Авторский голографический узор (подарок «один из одного»); неизвестное значение — без узора. */
+    val pattern: IdPattern? = null,
 ) {
+    /** Тираж кастомного скина: с авторским узором — легендарный, иначе — эпический. */
+    val edition: IdEdition get() = if (pattern != null && colors != null) IdEdition.LEGENDARY else IdEdition.EPIC
+
     /** Цвета палитры или `null`, если хоть один невалиден — тогда палитра режима. */
     val colors: Triple<String, String, String>?
         get() = if (base != null && primary != null && secondary != null && listOf(base, primary, secondary).all { HEX.matches(it) })
@@ -259,6 +277,7 @@ data class IdCustomLook(
                 secondary = m["secondary"] as? String,
                 holo = (m["holo"] as? String)?.let { h -> IdCardGenerator.HoloShape.entries.firstOrNull { it.name.equals(h, ignoreCase = true) } },
                 label = m["label"] as? String,
+                pattern = IdPattern.of(m["pattern"]),
             )
         }
     }

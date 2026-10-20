@@ -37,6 +37,25 @@ object IdCardMaterials {
         0.11f to Color(0xFF7BFFF0), 0.14f to Color.White,
     )
 
+    // ── Авторский узор NEKO «Лунный кот» (custom.pattern = "neko") ──
+    // Цвета подарка: лаванда #C9A0DC / #CDA4DE, лунный жёлтый #FFF555, коралл #E66761
+    val NekoLavender = Color(0xFFCDA4DE)
+    val NekoMoon = Color(0xFFFFF555)
+    val NekoCoral = Color(0xFFE66761)
+    /** Перелив сетки и голограммы: лаванда → луна → коралл → глициния (последний стоп — период). */
+    val NekoRainbow = listOf(
+        0f to Color(0xFFCDA4DE), 0.06f to Color(0xFFFFF555), 0.12f to Color(0xFFE66761),
+        0.18f to Color(0xFFC9A0DC), 0.24f to Color(0xFFCDA4DE),
+    )
+    /** Подложка голограммы-кошки: перламутр от лаванды к лунному. */
+    val NekoHolo = listOf(0f to Color(0xFFF3E6FA), 0.42f to Color(0xFFCDA4DE), 0.62f to Color(0xFFFFFBD0), 1f to Color(0xFFC9A0DC))
+    /** Кот: белый с переливом лаванды и луны. */
+    val NekoReveal = listOf(
+        0f to Color.White, 0.04f to Color(0xFFCDA4DE), 0.08f to Color(0xFFFFF555),
+        0.12f to Color(0xFFC9A0DC), 0.16f to Color.White,
+    )
+    val NekoSparkle = Color(0xFFFFFBC2)
+
     // ── Отделка ──
     val Pearl = listOf(
         0f to Color.Transparent, 0.22f to Color.Transparent, 0.33f to Color(0x66FFBEE6), 0.44f to Color(0x66BEE4FF),
