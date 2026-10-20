@@ -351,16 +351,21 @@ class AuthRepository(
 
     suspend fun checkRegistrationCode(code: String): Boolean {
         val res = functions
-            .getHttpsCallable("checkRegistrationCode")
+            .getHttpsCallable("validateInviteCode")
             .call(mapOf("code" to code.trim()))
             .await()
         val data = res.data as? Map<*, *> ?: return false
         return data["valid"] == true
     }
 
+    /**
+     * Заявка на доступ без кода (`requestAccessInvite`, требует App Check — Functions SDK прикладывает
+     * токен сам). Возвращает сообщение сервера («заявка отправлена» / «уже на рассмотрении»).
+     * Лимит (5 заявок в час на сервис, 1 в час с IP) — `resource-exhausted` с готовым текстом в message.
+     */
     suspend fun requestAccess(email: String, username: String, note: String): String {
         val res = functions
-            .getHttpsCallable("requestAccess")
+            .getHttpsCallable("requestAccessInvite")
             .call(mapOf(
                 "email" to email.trim(),
                 "username" to username.trim(),
@@ -368,7 +373,7 @@ class AuthRepository(
             ))
             .await()
         val data = res.data as? Map<*, *> ?: return ""
-        return (data["requestId"] as? String) ?: ""
+        return (data["message"] as? String) ?: ""
     }
 
     suspend fun adminListAccessRequests(status: String = "pending"): List<org.visorlink.app.data.model.AccessRequest> {

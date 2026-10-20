@@ -389,7 +389,8 @@ fun RegisterScreen(
                             ) { success, err ->
                                 isSubmittingRequest = false
                                 if (success) {
-                                    requestSuccessMessage = "Заявка успешно отправлена! Мы свяжемся с вами."
+                                    // Текст сервера: и «отправлена», и «уже на рассмотрении»
+                                    requestSuccessMessage = err ?: "Заявка успешно отправлена! Мы свяжемся с вами."
                                 } else {
                                     requestErrorMessage = err ?: "Ошибка отправки заявки"
                                 }

@@ -360,7 +360,7 @@ class AuthViewModel(
         }
         viewModelScope.launch {
             runCatching { authRepository.requestAccess(email, username, note) }
-                .onSuccess { onResult(true, null) }
+                .onSuccess { message -> onResult(true, message.ifBlank { null }) }
                 .onFailure { onResult(false, friendlyMessage(it)) }
         }
     }

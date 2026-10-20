@@ -188,6 +188,9 @@ fun buildAnnotatedStringFromHtml(
         .replace("&raquo;", "»")
         .replace("&quot;", "\"")
         .replace("&nbsp;", " ")
+        // Сведения об операторе приходят экранированными (LegalOperator.format). &lt;/&gt; не
+        // раскрываем: до разбора тегов это дало бы разметку из значения поля
+        .replace("&#39;", "'")
         .replace("&amp;", "&")
 
     // Регулярное выражение для поиска тегов
