@@ -160,6 +160,34 @@ fun ChatBottomBar(
         return
     }
 
+    // ── 3. Личный чат с блокировкой: писать нельзя ни заблокированному, ни блокирующему ──
+    if (uiState.isBlockedDirect) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding(),
+            color = cs.surfaceContainerLow
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(
+                        if (uiState.blockedByPeer) R.string.chat_blocked_by_peer else R.string.chat_blocked_by_me
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding()
     ) {

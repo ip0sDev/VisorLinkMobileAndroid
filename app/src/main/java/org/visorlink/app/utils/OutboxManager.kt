@@ -26,6 +26,23 @@ private const val TAG = "OutboxManager"
 private const val MAX_RETRIES = 5
 private const val MEDIA_CONCURRENCY = 2
 
+/** Отказ правил Firestore или функции: `PERMISSION_DENIED` не лечится повтором. */
+internal fun isPermissionDenied(e: Throwable): Boolean {
+    var cur: Throwable? = e
+    var depth = 0
+    while (cur != null && depth < 5) {
+        if (cur is com.google.firebase.firestore.FirebaseFirestoreException &&
+            cur.code == com.google.firebase.firestore.FirebaseFirestoreException.Code.PERMISSION_DENIED
+        ) return true
+        if (cur is com.google.firebase.functions.FirebaseFunctionsException &&
+            cur.code == com.google.firebase.functions.FirebaseFunctionsException.Code.PERMISSION_DENIED
+        ) return true
+        cur = cur.cause
+        depth++
+    }
+    return false
+}
+
 interface OutboxDataSource {
     suspend fun loadOutbox(context: Context): List<ChatDataCache.QueuedAction>
     /** Ожидающие отправки; по умолчанию фильтр поверх полной выборки (для фейков в тестах). */
@@ -184,7 +201,8 @@ class OutboxManager(
                                     val nextRetry = action.retryCount + 1
                                     outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
                                     // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
-                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException) {
+                                    // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут
+                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || isPermissionDenied(e)) {
                                         outboxDataSource.updateStatus(context, action.id, 2)
                                     }
                                     // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)

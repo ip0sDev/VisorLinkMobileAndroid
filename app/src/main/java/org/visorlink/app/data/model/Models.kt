@@ -66,11 +66,13 @@ data class UserProfile(
     val acceptedAt: Timestamp? = null,
     val acceptedVersion: String? = null,
 
-    // UGC Compliance: Blocked Users
-    val blockedUserIds: List<String> = emptyList(),
-
     /** Режим ID-карты (standard | protogen | beast). Пишет только сервер; нет — Standard. */
     val idMode: String? = null,
+
+    /** Аккаунт заблокирован сервисом. Пишет только сервер; клиентам запрещено. */
+    val banned: Boolean = false,
+    /** Причина блокировки (запасной вариант, если `bans/{uid}` недоступен). */
+    val banReason: String? = null,
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false
@@ -926,6 +928,8 @@ sealed class TopbarStatus {
     object WaitingForNetwork : TopbarStatus()
     object Updating : TopbarStatus()
     data class LastSeen(val ts: Long?) : TopbarStatus()
+    /** Собеседник заблокировал меня: «в сети» и точное время скрыты. */
+    object LastSeenLongAgo : TopbarStatus()
     data class MemberCount(val total: Int, val online: Int) : TopbarStatus()
 }
 

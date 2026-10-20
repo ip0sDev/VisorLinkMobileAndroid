@@ -87,8 +87,9 @@ fun ChatTopBar(
                     ?: uiState.chat?.displayName(currentUid)?.ifEmpty { null }
                     ?: uiState.chat?.name?.ifEmpty { null }
                     ?: ""
-                val directAvatarUrl = uiState.otherUser?.avatarUrl
-                    ?: uiState.chat?.avatarUrl
+                // Заблокировавший меня: аватарка скрыта, остаётся инициал
+                val directAvatarUrl = if (uiState.blockedByPeer) null
+                else uiState.otherUser?.avatarUrl ?: uiState.chat?.avatarUrl
 
                 when (uiState.chatType) {
                     ChatType.DIRECT, ChatType.EMERGENCY -> {
@@ -185,6 +186,10 @@ fun ChatTopBar(
                                 is TopbarStatus.Online  -> Text(stringResource(R.string.chat_status_online),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = VlTheme.tokens.status.success, fontSize = 11.sp)
+                                is TopbarStatus.LastSeenLongAgo -> Text(
+                                    stringResource(R.string.chat_last_seen_long_ago),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
                                 is TopbarStatus.LastSeen -> Text(
                                     status.ts?.let { ts ->
                                         stringResource(R.string.last_seen_topbar,

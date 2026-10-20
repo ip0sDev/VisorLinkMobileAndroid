@@ -234,7 +234,8 @@ fun ChatScreen(
     val isAdmin  = uiState.myMember?.isAdmin() == true
     val isOwner  = uiState.myMember?.isOwner() == true
     val canSetWallpaper = uiState.chatType == ChatType.DIRECT || isAdmin
-    val canReact = uiState.chat?.settings?.allowReactions != false
+    // Блокировка в личном чате: реакции и «Ответить» сервер отклонит — в меню их нет
+    val canReact = uiState.chat?.settings?.allowReactions != false && !uiState.isBlockedDirect
     val canSendMessage = uiState.canSendMessage
     val canSendMedia = uiState.canSendMedia
     // Обмен скинами ID-карт (спека 2.1): только ЛС и группы, не с ботом
@@ -612,6 +613,8 @@ fun ChatScreen(
                     isDragging = isDraggingMenu,
                     isGestureMode = isDraggingMenu,
                     canReact = canReact,
+                    canCopy = uiState.chat?.settings?.noForwards != true,
+                    canReply = !uiState.isBlockedDirect,
                     currentUid = viewModel.currentUid,
                     onDismiss = {
                         contextMenuData = null

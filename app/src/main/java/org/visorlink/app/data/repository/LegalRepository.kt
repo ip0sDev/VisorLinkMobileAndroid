@@ -174,7 +174,7 @@ class LegalRepository(
                 "agreePrivacy" to true,
                 "agreePersonalData" to true,
                 "agreeCrossBorder" to true,
-                "agreeAge14" to true,
+                "agreeAge16" to true,
                 "userAgent" to "VisorLink Android/${org.visorlink.app.BuildConfig.VERSION_NAME} (SDK ${android.os.Build.VERSION.SDK_INT}; ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL})",
                 "clientTimestamp" to timestamp
             )
@@ -206,7 +206,7 @@ class LegalRepository(
                 .putBoolean("agree_privacy", true)
                 .putBoolean("agree_personal_data", true)
                 .putBoolean("agree_cross_border", true)
-                .putBoolean("agree_age14", true)
+                .putBoolean("agree_age16", true)
                 .apply()
         } catch (e: Exception) {
             Log.w(TAG, "Failed to save consent into EncryptedSharedPreferences: ${e.message}")

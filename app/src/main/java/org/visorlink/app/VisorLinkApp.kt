@@ -177,6 +177,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                     }
                 }
                 if (auth.currentUser?.isEmailVerified == true) {
+                    runCatching { GlobalContext.get().get<org.visorlink.app.data.repository.BlockRepository>().start(uid) }
                     val sessions = GlobalContext.get().get<org.visorlink.app.data.repository.SessionRepository>()
                     sessions.watchRevocation(uid)
                     MainScope().launch { sessions.ensureRegistered() }
@@ -190,6 +191,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                 }
             } else {
                 GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.SessionRepository>()?.stopWatching()
+                GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.BlockRepository>()?.stop()
                 presenceManager?.detach()
                 presenceManager = null
             }

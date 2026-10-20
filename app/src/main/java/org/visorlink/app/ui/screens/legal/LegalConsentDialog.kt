@@ -61,9 +61,9 @@ fun LegalConsentDialog(
     var agreePrivacy by remember { mutableStateOf(false) }
     var agreePersonalData by remember { mutableStateOf(false) }
     var agreeCrossBorder by remember { mutableStateOf(false) }
-    var agreeAge14 by remember { mutableStateOf(false) }
+    var agreeAge16 by remember { mutableStateOf(false) }
 
-    val allAgreed = agreeTos && agreePrivacy && agreePersonalData && agreeCrossBorder && agreeAge14
+    val allAgreed = agreeTos && agreePrivacy && agreePersonalData && agreeCrossBorder && agreeAge16
     var isSubmitting by remember { mutableStateOf(false) }
 
     var tosDoc by remember { mutableStateOf<LegalDocument?>(null) }
@@ -435,26 +435,26 @@ fun LegalConsentDialog(
                                         )
                                     }
 
-                                    // 5. Возрастной ценз 14+
+                                    // 5. Возрастной ценз 16+
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)))
-                                            .clickable { agreeAge14 = !agreeAge14 }
+                                            .clickable { agreeAge16 = !agreeAge16 }
                                             .padding(vertical = 2.dp),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Checkbox(
-                                            checked = agreeAge14,
-                                            onCheckedChange = { agreeAge14 = it },
+                                            checked = agreeAge16,
+                                            onCheckedChange = { agreeAge16 = it },
                                             colors = CheckboxDefaults.colors(
                                                 checkedColor = cs.primary,
                                                 checkmarkColor = cs.onPrimary
                                             )
                                         )
                                         Text(
-                                            text = stringResource(R.string.legal_consent_checkbox_age14),
+                                            text = stringResource(R.string.legal_consent_checkbox_age16),
                                             style = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, color = cs.onSurface)
                                         )
                                     }

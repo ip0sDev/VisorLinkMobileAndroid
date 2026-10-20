@@ -103,6 +103,10 @@ fun MessageActionOverlay(
     onRetry: (() -> Unit)? = null,
     onReport: (() -> Unit)? = null,
     onBlockUser: (() -> Unit)? = null,
+    /** «Копировать текст»: скрыт в чатах с запретом пересылки (`noForwards`). */
+    canCopy: Boolean = true,
+    /** «Ответить»: недоступно в личном чате с блокировкой — сервер откажет в отправке. */
+    canReply: Boolean = true,
 ) {
     // Закрытие меню по системной кнопке "Назад"
     BackHandler(enabled = true) {
@@ -283,6 +287,8 @@ fun MessageActionOverlay(
                         onRetry = onRetry,
                         onReport = onReport,
                         onBlockUser = onBlockUser,
+                        canCopy = canCopy,
+                        canReply = canReply,
                         onDismiss = onDismiss
                     )
                 }
@@ -344,6 +350,8 @@ fun MessageActionOverlay(
                         onRetry = onRetry,
                         onReport = onReport,
                         onBlockUser = onBlockUser,
+                        canCopy = canCopy,
+                        canReply = canReply,
                         onDismiss = onDismiss
                     )
                 }
@@ -590,6 +598,8 @@ private fun ActionGlassCard(
     onRetry: (() -> Unit)?,
     onReport: (() -> Unit)?,
     onBlockUser: (() -> Unit)?,
+    canCopy: Boolean,
+    canReply: Boolean,
     onDismiss: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
@@ -617,6 +627,9 @@ private fun ActionGlassCard(
             (message.type == MessageType.TEXT || message.type == MessageType.IMAGE ||
                 message.type == MessageType.ALBUM || message.caption != null)
 
+    // Стикеры и подарки текста не несут: «Копировать» не показываем
+    val canCopyText = message.type != MessageType.STICKER && message.type != MessageType.GIFT
+
     // Формируем полный структурированный список всех доступных действий
     val actionList = buildList {
         if (isSending) {
@@ -628,16 +641,18 @@ private fun ActionGlassCard(
             add(MenuActionItem("cancel_sending", Icons.Default.Close, stringResource(R.string.action_cancel_send), destructive = true) {
                 onDismiss(); onCancelSending()
             })
-            if (message.type == MessageType.TEXT || !message.text.isNullOrEmpty()) {
+            if (canCopy && canCopyText && (message.type == MessageType.TEXT || !message.text.isNullOrEmpty())) {
                 add(MenuActionItem("copy", Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
                     onCopy()
                 })
             }
         } else {
             if (!message.deleted) {
-                add(MenuActionItem("reply", Icons.AutoMirrored.Filled.Reply, stringResource(R.string.action_reply)) {
-                    onDismiss(); onReply()
-                })
+                if (canReply) {
+                    add(MenuActionItem("reply", Icons.AutoMirrored.Filled.Reply, stringResource(R.string.action_reply)) {
+                        onDismiss(); onReply()
+                    })
+                }
 
                 if (canEdit) {
                     add(MenuActionItem("edit", Icons.Default.Edit, stringResource(R.string.action_edit)) {
@@ -645,7 +660,7 @@ private fun ActionGlassCard(
                     })
                 }
 
-                if (message.type == MessageType.TEXT || !message.text.isNullOrEmpty() || !message.caption.isNullOrEmpty()) {
+                if (canCopy && canCopyText && (message.type == MessageType.TEXT || !message.text.isNullOrEmpty() || !message.caption.isNullOrEmpty())) {
                     add(MenuActionItem("copy", Icons.Default.ContentCopy, stringResource(R.string.action_copy_text)) {
                         onCopy()
                     })
