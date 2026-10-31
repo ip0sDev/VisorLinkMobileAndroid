@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.chatlist
 
+import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -17,14 +19,19 @@ import org.visorlink.app.ui.components.ProfileAvatar
 import org.visorlink.app.ui.theme.VisorLinkTheme
 
 @Composable
-fun ChatItem(avatarUrl: String,title: String) {
+fun ChatItem(avatarUrl: String,title: String,chatId:String,onClick: (String) -> Unit,) {
     Card(
         modifier = Modifier.height(height = 64.dp),
         shape = CircleShape
     )
      {
         Row(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .padding(16.dp)
+                .clickable {
+                    Log.d("TAG","ChatClicked! $chatId")
+                    onClick(chatId)
+                }
         ) {
             ProfileAvatar(avatarUrl, size = 32.dp)
             Spacer(
@@ -44,6 +51,11 @@ fun ChatItem(avatarUrl: String,title: String) {
 @Composable
 private fun ChatItemPreview() {
     VisorLinkTheme {
-        ChatItem(avatarUrl = "", title = "Text")
+        ChatItem(
+            avatarUrl = "",
+            title = "Text",
+            chatId = "test",
+            onClick = TODO()
+        )
     }
 }

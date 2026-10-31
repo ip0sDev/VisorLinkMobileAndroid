@@ -27,7 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.focusModifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -40,7 +39,8 @@ import org.visorlink.app.ui.theme.VisorLinkTheme
 fun ChatListScreen(
     viewModel: ChatListViewModel = viewModel(),
     onNavigateToProfile: () -> Unit = {},
-    onNavigateToSettings:() -> Unit = {}
+    onNavigateToSettings:() -> Unit = {},
+    onNavigateToChat:(String) -> Unit = {}
 ){
     LaunchedEffect(Unit) {
         viewModel.loadChats()
@@ -124,7 +124,11 @@ fun ChatListScreen(
                         ) { chat ->
                             ChatItem(
                                 avatarUrl = chat.avatarUrl,
-                                title = chat.title
+                                title = chat.title,
+                                chatId = chat.id,
+                                onClick = {
+                                    onNavigateToChat(chat.id)
+                                }
                             )
                         }
                     }
