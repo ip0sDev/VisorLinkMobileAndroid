@@ -56,9 +56,8 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToSettings = {
                                     navController.navigate(SettingsRoute)
                                 },
-                                onNavigateToChat = { chatId ->
-                                    // Передаем объект с ID
-                                    navController.navigate(ChatRoute(chatId = chatId))
+                                onNavigateToChat = { chatId,title,avatarUrl ->
+                                    navController.navigate(ChatRoute(chatId = chatId,title=title, avatarUrl = avatarUrl))
                                 }
                             )
                         }
@@ -67,7 +66,9 @@ class MainActivity : ComponentActivity() {
                             // Достаем chatId из роута
                             val chatRoute = backStackEntry.toRoute<ChatRoute>()
                             ChatScreen(
-                                chatId = chatRoute.chatId
+                                chatId = chatRoute.chatId,
+                                title = chatRoute.title,
+                                avatarUrl = chatRoute.avatarUrl
                             )
                         }
                         composable<ProfileRoute> {

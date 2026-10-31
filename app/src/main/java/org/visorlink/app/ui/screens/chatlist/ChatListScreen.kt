@@ -40,7 +40,7 @@ fun ChatListScreen(
     viewModel: ChatListViewModel = viewModel(),
     onNavigateToProfile: () -> Unit = {},
     onNavigateToSettings:() -> Unit = {},
-    onNavigateToChat:(String) -> Unit = {}
+    onNavigateToChat:(chatId:String,title:String,avatarUrl:String) -> Unit = {_,_,_->}
 ){
     LaunchedEffect(Unit) {
         viewModel.loadChats()
@@ -127,7 +127,7 @@ fun ChatListScreen(
                                 title = chat.title,
                                 chatId = chat.id,
                                 onClick = {
-                                    onNavigateToChat(chat.id)
+                                    onNavigateToChat(chat.id,chat.title,chat.avatarUrl)
                                 }
                             )
                         }

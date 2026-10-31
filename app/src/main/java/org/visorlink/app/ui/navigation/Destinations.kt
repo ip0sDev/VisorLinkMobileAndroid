@@ -10,4 +10,4 @@ object ProfileRoute
 @Serializable
 object SettingsRoute
 @Serializable
-data class ChatRoute(val chatId: String)
+data class ChatRoute(val chatId: String,val title: String,val avatarUrl: String)

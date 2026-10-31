@@ -4,8 +4,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -31,15 +35,17 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import org.visorlink.app.ui.components.ChatMessage
+import org.visorlink.app.ui.components.ProfileAvatar
 import org.visorlink.app.ui.theme.VisorLinkTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel = viewModel(),
-    onNavigateToProfile: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     chatId: String,
+    title: String,
+    avatarUrl: String
 ){
     LaunchedEffect(Unit) {
         viewModel.loadChat(chatId=chatId)
@@ -50,12 +56,16 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "VisorLink",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    Row() {
+                        ProfileAvatar(avatarUrl, size = 32.dp)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 },
                 actions = {
                     Button(
@@ -128,7 +138,9 @@ fun ChatScreen(
 private fun ChatListScreenPreview() {
     VisorLinkTheme {
         ChatScreen(
-            chatId = "test"
+            chatId = "test",
+            title = "Test",
+            avatarUrl = "Test"
         )
     }
 }
