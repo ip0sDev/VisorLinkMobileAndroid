@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlin.reflect.typeOf
 
 class ChatViewModel : ViewModel() {
 
@@ -28,7 +29,9 @@ class ChatViewModel : ViewModel() {
         val createdAt: Timestamp? = null,
         val readBy: List<String> = emptyList(),
         val deleted: Boolean = false,
-        val replyTo: ReplyTo? = null
+        val replyTo: ReplyTo? = null,
+        val fromMe: Boolean = false,
+        val isSupported: Boolean = false
     )
     data class ReplyTo(
         val id: String = "",
@@ -42,6 +45,7 @@ class ChatViewModel : ViewModel() {
     )
 
     private val _uiState = MutableStateFlow(MessagesState())
+    private val SUPPORTED_TYPES = setOf("text")
     val uiState = _uiState.asStateFlow()
 
     private val auth = FirebaseAuth.getInstance()
@@ -69,13 +73,17 @@ class ChatViewModel : ViewModel() {
                         errorText = error.localizedMessage
                     )
                 }
-
                 if (snapshot != null) {
-                    val items = snapshot?.documents?.mapNotNull { doc ->
-                        doc.toObject(Message::class.java)?.copy(id = doc.id)
+                    val items = snapshot.documents.mapNotNull { doc ->
+                        val msg = doc.toObject(Message::class.java) ?: return@mapNotNull null
+                        msg.copy(
+                            id = doc.id,
+                            fromMe = msg.senderId == currentUserId,
+                            isSupported = msg.type in SUPPORTED_TYPES
+                        )
                     }
                     _uiState.value = _uiState.value.copy(
-                        chats = items?.reversed() ?: emptyList(),
+                        chats = items,
                         isLoading = false
                     )
                     return@addSnapshotListener

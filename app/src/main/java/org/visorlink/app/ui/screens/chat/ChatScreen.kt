@@ -104,7 +104,7 @@ fun ChatScreen(
                 }
                 if (uiState.chats.isEmpty()) {
                     Text(
-                        text = "У вас пока нет чатов!",
+                        text = "Чат пустой!",
                         style = MaterialTheme.typography.headlineLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
@@ -113,16 +113,19 @@ fun ChatScreen(
                     LazyColumn(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        reverseLayout = true
                     ) {
                         items(
                             items = uiState.chats,
                             key = { it.id }
                         ) { chat ->
                             ChatMessage(
-                                avatarUrl = "null",
-                                title = chat.text,
-                                chatId = chat.id
+                                text = chat.text,
+                                chatId = chat.id,
+                                type = chat.type,
+                                isSupported = chat.isSupported,
+                                fromMe = chat.fromMe
                             )
                         }
                     }
