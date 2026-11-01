@@ -40,6 +40,8 @@ fun ChatListScreen(
     viewModel: ChatListViewModel = viewModel(),
     onNavigateToProfile: () -> Unit = {},
     onNavigateToSettings:() -> Unit = {},
+    //моя любимая строка
+    //<--{^\____/^}-->
     onNavigateToChat:(chatId:String,title:String,avatarUrl:String) -> Unit = {_,_,_->}
 ){
     LaunchedEffect(Unit) {
