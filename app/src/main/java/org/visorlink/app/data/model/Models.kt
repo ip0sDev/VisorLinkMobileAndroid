@@ -576,6 +576,9 @@ data class StickerItem(
 
     val isGif: Boolean
         get() = effectiveFormat == StickerFormat.GIF
+
+    val isLed: Boolean
+        get() = effectiveFormat == StickerFormat.LED
 }
 
 /** Лимит подписи к медиа: firestore.rules isValidCaption и callable sendAlbum. */
@@ -588,14 +591,16 @@ object StickerFormat {
     const val GIF = "gif"
     const val WEBM = "webm"
     const val LOTTIE = "lottie"
+    const val LED = "led"
 
-    private val KNOWN = setOf(STATIC, WEBP, GIF, WEBM, LOTTIE)
+    private val KNOWN = setOf(STATIC, WEBP, GIF, WEBM, LOTTIE, LED)
 
     /** Явный `format` важнее расширения; без него старые .json/.gif по-прежнему распознаются. */
     fun resolve(format: String?, url: String?): String {
         val f = format?.lowercase()
         if (f != null && f in KNOWN) return f
         if (f != null) return STATIC
+        if (url?.startsWith("led:") == true || url?.startsWith("led_") == true) return LED
         val path = url?.substringBefore("?")?.lowercase() ?: return STATIC
         return when {
             path.endsWith(".json") || path.endsWith(".lottie") -> LOTTIE

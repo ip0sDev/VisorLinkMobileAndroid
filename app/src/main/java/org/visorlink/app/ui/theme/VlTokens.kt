@@ -346,6 +346,23 @@ data class VlTerminalTokens(
 }
 
 /**
+ * LED-слой Forge: всё, что «экран», — светящиеся точки на тёмном/светлом стекле (индикаторы, тумблеры,
+ * мордочки, счётчики). Кнопки и клавиши при этом остаются цвета primary.
+ */
+@Immutable
+data class VlLedTokens(
+    /** Цвет горящего светодиода (Protogen — голубой 0xFF3DF2FF, Beast — янтарный 0xFFFFB04D, в светлой теме — оранжевый). */
+    val color: Color,
+    /** Стекло «экрана», на котором горят точки. */
+    val screen: Color,
+    /** Непрозрачность погашенной точки. */
+    val offAlpha: Float = 0.08f,
+    val glowBlur: Dp = 6.dp,
+) {
+    val off: Color get() = color.copy(alpha = offAlpha)
+}
+
+/**
  * Тумблер ([org.visorlink.app.ui.components.VlSwitch]): формы и размер бегунка. По умолчанию —
  * трек [VlShapeTokens.pill] и круглый бегунок 24 dp, как было всегда; Forge v2 вписывает
  * бегунок в свой трек со скруглением 6–8 dp.
@@ -362,6 +379,7 @@ data class VlSwitchTokens(
     val thumbGlow: Float = 0f,
     /** Во включённом состоянии трек подсвечен: контур `primary` и более яркая заливка. */
     val litTrack: Boolean = false,
+    val ledDots: Boolean = false,
 )
 
 @Immutable
@@ -385,8 +403,10 @@ data class VlTokens(
     val reduceMotion: Boolean,
     val terminal: VlTerminalTokens? = null,
     val switch: VlSwitchTokens = VlSwitchTokens(),
+    val led: VlLedTokens? = null,
 ) {
     val isBiolume: Boolean get() = style == VlStyle.BIOLUME
+    val isForge: Boolean get() = style == VlStyle.FORGE_V2
 
     /** Терминальная анимация вместо жидкой (Forge v2), если система не просит убрать анимации. */
     val glitchMotion: Boolean get() = motion.glitch && !reduceMotion

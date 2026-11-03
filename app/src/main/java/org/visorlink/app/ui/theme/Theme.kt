@@ -293,8 +293,8 @@ fun VisorLinkTheme(
     // Biolume: явно выбранный пресет (или акцент чата / профиля) важнее цвета профиля
     val biolumePro = appTheme == AppTheme.BIOLUME && proAccent != null &&
         colorPreset == ColorPreset.DEFAULT && accentOverride == null
-    // Forge v2 — только тёмная, светлой версии нет
-    val darkTheme = forgeV2 != null || when (themeMode) {
+    // Forge v2: Clean Room (светлая) и Blackout LED (тёмная)
+    val darkTheme = when (themeMode) {
         ThemeMode.DARK   -> true
         ThemeMode.LIGHT  -> false
         ThemeMode.SYSTEM -> systemDark
@@ -326,7 +326,7 @@ fun VisorLinkTheme(
         }
 
         // Пресеты акцента — только в Biolume: палитра режима фиксирована
-        AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!)
+        AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!, darkTheme)
     }
     // Цвета перетекают только внутри одного стиля (акцент и т. п.). При смене самой темы
     // (Biolume ↔ Forge, светлая ↔ тёмная) — сразу целевые: переход делает растворение снимка
@@ -351,18 +351,19 @@ fun VisorLinkTheme(
 
             AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> VlTokens(
                 style = VlStyle.FORGE_V2,
-                isDark = true,
-                structure = forgeV2Structure(forgeV2!!),
-                signal = forgeV2Signal(forgeV2),
+                isDark = darkTheme,
+                structure = forgeV2Structure(forgeV2!!, darkTheme),
+                signal = forgeV2Signal(forgeV2, darkTheme),
                 shapes = forgeV2Shapes(forgeV2),
                 motion = ForgeV2Motion,
-                status = forgeV2Status(forgeV2),
-                selectionFill = ForgeV2.mix(colorScheme.primary, 0.16f, colorScheme.surfaceContainer),
-                bubbles = forgeV2Bubbles(forgeV2),
+                status = forgeV2Status(forgeV2, darkTheme),
+                selectionFill = if (darkTheme) ForgeV2.mix(colorScheme.primary, 0.16f, colorScheme.surfaceContainer) else ForgeV2.mix(colorScheme.primary, 0.14f, colorScheme.surfaceContainer),
+                bubbles = forgeV2Bubbles(forgeV2, darkTheme),
                 data = ForgeDataTypography,
                 reduceMotion = reduceMotion,
-                terminal = forgeV2Terminal(forgeV2),
-                switch = ForgeV2Switch,
+                terminal = forgeV2Terminal(forgeV2, darkTheme),
+                switch = forgeV2Switch(forgeV2, darkTheme),
+                led = forgeV2Led(forgeV2, darkTheme),
             )
 
             AppTheme.MATERIAL3_EXPRESSIVE -> VlTokens(

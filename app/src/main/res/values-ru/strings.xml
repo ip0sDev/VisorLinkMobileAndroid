@@ -1074,7 +1074,11 @@
     <string name="idcard_position_after_header">Под именем</string>
     <string name="idcard_position_bottom">Внизу</string>
     <string name="idcard_theme_by_mode">Тему задаёт режим ID-карты</string>
-    <string name="idcard_dark_locked">У Forge нет светлой версии — в особом режиме тёмная тема включена всегда.</string>
+    <string name="idcard_dark_locked">Для светлой темы используется Forge Clean Room, для тёмной — Blackout LED.</string>
+    <string name="theme_forge_clean_room">Forge Clean Room</string>
+    <string name="theme_forge_blackout">Forge Blackout LED</string>
+    <string name="led_sticker_boop">LED-стикер, буп</string>
+    <string name="led_face_desc">LED-мордочка</string>
     <string name="idcard_group_title">ID группы</string>
     <string name="idcard_group_toggle">Включить ID группы</string>
     <string name="idcard_group_desc">У группы появится своя карта, а участникам с особым ID включится тема Forge.</string>

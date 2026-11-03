@@ -1072,7 +1072,11 @@
     <string name="idcard_position_after_header">Below the name</string>
     <string name="idcard_position_bottom">At the bottom</string>
     <string name="idcard_theme_by_mode">The theme is set by your ID card mode</string>
-    <string name="idcard_dark_locked">Forge has no light version — the dark theme stays on in a special mode.</string>
+    <string name="idcard_dark_locked">Forge Clean Room is used for light theme, Blackout LED for dark theme.</string>
+    <string name="theme_forge_clean_room">Forge Clean Room</string>
+    <string name="theme_forge_blackout">Forge Blackout LED</string>
+    <string name="led_sticker_boop">LED sticker, boop</string>
+    <string name="led_face_desc">LED face</string>
     <string name="idcard_group_title">Group ID</string>
     <string name="idcard_group_toggle">Enable Group ID</string>
     <string name="idcard_group_desc">The group gets its own card, and members with a special ID get the Forge theme.</string>

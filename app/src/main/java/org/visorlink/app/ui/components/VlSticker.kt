@@ -63,6 +63,16 @@ fun VlSticker(
         (if (failed) failedText else contentDescription)?.let { this.contentDescription = it }
     }
 
+    if (format == StickerFormat.LED || url.startsWith("led:") || url.startsWith("led_")) {
+        val expr = org.visorlink.app.ui.components.led.VlLedExpression.fromUrl(url)
+        org.visorlink.app.ui.components.chat.InteractiveLedSticker(
+            expression = expr,
+            modifier = semanticsModifier,
+            interactive = false,
+        )
+        return
+    }
+
     if (format == StickerFormat.STATIC) {
         CachedImage(model = url, contentDescription = null, modifier = semanticsModifier, contentScale = ContentScale.Fit)
         return

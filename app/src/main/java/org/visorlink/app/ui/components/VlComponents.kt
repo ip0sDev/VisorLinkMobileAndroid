@@ -411,6 +411,19 @@ fun VlSwitch(
             },
         contentAlignment = Alignment.CenterStart,
     ) {
+        if (sw.ledDots && checked) {
+            Row(
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .align(Alignment.CenterStart),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                repeat(3) {
+                    org.visorlink.app.ui.components.led.VlLedDot(size = 3.dp, color = cs.primary)
+                }
+            }
+        }
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)

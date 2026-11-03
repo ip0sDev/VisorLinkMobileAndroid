@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components
 
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -94,24 +95,64 @@ fun VlTopAppBar(
             scrolledContainerColor = cs.surface.copy(alpha = 0.85f)
         )
 
-        TopAppBar(
-            // Forge v2: заголовок печатается за блочным курсором с RGB-расслоением; в M3E — как есть
-            title = {
-                if (tokens.terminal != null) {
-                    Column {
-                        TerminalStatusStrip()
+        Box(modifier = modifier) {
+            TopAppBar(
+                // Forge v2: заголовок печатается за блочным курсором с RGB-расслоением; в M3E — как есть
+                title = {
+                    if (tokens.terminal != null) {
+                        Column {
+                            TerminalStatusStrip()
+                            Box(Modifier.terminalTitleReveal()) { title() }
+                        }
+                    } else {
                         Box(Modifier.terminalTitleReveal()) { title() }
                     }
-                } else {
-                    Box(Modifier.terminalTitleReveal()) { title() }
-                }
-            },
-            // Forge v2: неоновая линия под панелью; в M3E — no-op
-            modifier = modifier.vlNeonRule(tokens),
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors ?: defaultColors,
-            scrollBehavior = scrollBehavior
+                },
+                // Forge v2: неоновая линия под панелью; в M3E — no-op
+                modifier = Modifier.vlNeonRule(tokens),
+                navigationIcon = navigationIcon,
+                actions = actions,
+                colors = colors ?: defaultColors,
+                scrollBehavior = scrollBehavior
+            )
+            if (tokens.isForge || tokens.led != null) {
+                VlBottomLedHairline(modifier = Modifier.align(Alignment.BottomCenter))
+            }
+        }
+    }
+}
+
+/**
+ * Тонкая нижняя LED-линия со свечением для шапок и панелей (Forge / Biolume с LED).
+ */
+@Composable
+fun VlBottomLedHairline(modifier: Modifier = Modifier) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val ledColor = tokens.led?.color ?: cs.primary
+    val hasLed = tokens.led != null || tokens.isForge
+
+    if (hasLed && !tokens.reduceMotion) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(1.5.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            cs.outlineVariant.copy(alpha = 0.08f),
+                            ledColor.copy(alpha = 0.75f),
+                            cs.outlineVariant.copy(alpha = 0.08f),
+                        )
+                    )
+                )
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.20f else 0.35f))
         )
     }
 }

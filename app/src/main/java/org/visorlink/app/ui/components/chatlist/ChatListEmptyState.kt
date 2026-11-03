@@ -19,11 +19,57 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.visorlink.app.R
+import org.visorlink.app.ui.components.led.VlLedExpression
+import org.visorlink.app.ui.components.led.VlLedFace
+import org.visorlink.app.ui.components.led.VlLedScreen
 
 @Composable
 fun ChatListEmptyState(
     modifier: Modifier = Modifier
 ) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val titleColor = cs.onSurface
+    val subColor = cs.onSurfaceVariant
+
+    if (tokens.isForge) {
+        Box(modifier, contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                VlLedScreen(
+                    radius = 16.dp,
+                    padding = PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    VlLedFace(
+                        expression = VlLedExpression.SLEEPY,
+                        dot = 2.5.dp,
+                        gap = 1.dp,
+                        autoBlink = true,
+                        interactive = true,
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        stringResource(R.string.chatlist_empty_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = titleColor
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        stringResource(R.string.chatlist_empty_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = subColor
+                    )
+                }
+            }
+        }
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "empty_breath")
     val breathScale by infiniteTransition.animateFloat(
         initialValue = 0.92f, targetValue = 1.08f,
@@ -36,11 +82,8 @@ fun ChatListEmptyState(
         label = "breath_alpha"
     )
 
-    val cs = MaterialTheme.colorScheme
     val primaryColor = cs.primary
     val primaryContainer = cs.primaryContainer
-    val titleColor = cs.onSurface
-    val subColor = cs.onSurfaceVariant
 
     Box(modifier, contentAlignment = Alignment.Center) {
         Column(
@@ -52,7 +95,7 @@ fun ChatListEmptyState(
                     modifier = Modifier
                         .size(96.dp)
                         .scale(breathScale)
-                        .background(primaryContainer.copy(alpha = breathAlpha), VlTheme.tokens.shapes.adapt(CircleShape))
+                        .background(primaryContainer.copy(alpha = breathAlpha), tokens.shapes.adapt(CircleShape))
                 )
 
                 Icon(

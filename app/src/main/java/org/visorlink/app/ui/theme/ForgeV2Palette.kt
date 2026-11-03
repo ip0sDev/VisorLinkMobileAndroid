@@ -4,6 +4,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.Dp
@@ -50,6 +51,7 @@ object ForgeV2 {
         val neon: Float,
         /** Оттенок Beast — по признаку, а не по ссылке: подкрашенная копия ([tintedBy]) — уже другой объект. */
         val beast: Boolean = false,
+        val proAccent: Color? = null,
     )
 
     val Protogen = Flavor(
@@ -101,6 +103,22 @@ object ForgeV2 {
         beast = true,
     )
 
+    // ── Clean Room (светлая): фарфор и молочное стекло ──
+    val CleanBackground = Color(0xFFEEEFEE)
+    val CleanSurface = Color(0xFFF8F8F6)
+    val CleanContainerLowest = Color(0xFFFFFFFF)
+    val CleanContainerLow = Color(0xFFF5F5F4)
+    val CleanContainer = Color(0xFFF1F1F0)
+    val CleanContainerHigh = Color(0xFFE9EAE9)
+    val CleanContainerHighest = Color(0xFFE1E2E3)
+    val CleanOnSurface = Color(0xFF17181B)
+    val CleanOnSurfaceVariant = Color(0xFF55585F)
+    val CleanKey = Color(0xFFFF5A1F) // Международный оранжевый: клавиши и светодиоды
+    val CleanGraphite = Color(0xFF26272B) // Графит: «мои» пузыри и второй цвет
+    val CleanTertiary = Color(0xFF0F7A6A)
+    val CleanError = Color(0xFFC8243C)
+    val CleanScreen = Color(0xFFFAFAF9) // Светлое стекло LED-экрана
+
     /** `color-mix(in srgb, a p%, b)` для непрозрачного b. */
     internal fun mix(a: Color, fraction: Float, b: Color): Color = a.copy(alpha = fraction).compositeOver(b)
 }
@@ -117,14 +135,14 @@ object ForgeV2 {
  */
 internal fun ForgeV2.Flavor.tintedBy(accent: Color): ForgeV2.Flavor {
     val neon = ProAccent.readable(accent, light = false).withContrastAgainst(containerHigh, min = 4.5f, towards = Color.White)
-    return copy(primary = neon, onPrimary = ProAccent.onColor(neon))
+    return copy(primary = neon, onPrimary = ProAccent.onColor(neon), proAccent = accent)
 }
 
 /**
  * Контейнеры M3 — непрозрачные смеси (как `--selection-fill` в вебе), а не primary
  * с альфой: полупрозрачный `*Container` на поверхности контейнера не читается.
  */
-fun forgeV2ColorScheme(f: ForgeV2.Flavor): ColorScheme = darkColorScheme(
+fun forgeV2ColorScheme(f: ForgeV2.Flavor, dark: Boolean = true): ColorScheme = if (dark) darkColorScheme(
     primary = f.primary,
     onPrimary = f.onPrimary,
     primaryContainer = ForgeV2.mix(f.primary, 0.16f, f.container),
@@ -169,7 +187,62 @@ fun forgeV2ColorScheme(f: ForgeV2.Flavor): ColorScheme = darkColorScheme(
     inverseSurface = f.onSurface,
     inverseOnSurface = f.surface,
     scrim = Color.Black,
-)
+) else forgeV2CleanRoomColorScheme(f)
+
+private fun forgeV2CleanRoomColorScheme(f: ForgeV2.Flavor): ColorScheme {
+    val cleanKey = if (f.proAccent != null) {
+        ProAccent.readable(f.proAccent, light = true).withContrastAgainst(ForgeV2.CleanBackground, min = 3f, towards = Color.Black)
+    } else {
+        ForgeV2.CleanKey
+    }
+    val container = ForgeV2.CleanContainer
+    return lightColorScheme(
+        primary = cleanKey,
+        onPrimary = Color.White,
+        primaryContainer = ForgeV2.mix(cleanKey, 0.14f, container),
+        onPrimaryContainer = cleanKey,
+        inversePrimary = Color(0xFF3DF2FF),
+
+        secondary = ForgeV2.CleanGraphite,
+        onSecondary = Color(0xFFF4F4F2),
+        secondaryContainer = ForgeV2.mix(ForgeV2.CleanGraphite, 0.10f, container),
+        onSecondaryContainer = ForgeV2.CleanGraphite,
+
+        tertiary = ForgeV2.CleanTertiary,
+        onTertiary = Color.White,
+        tertiaryContainer = ForgeV2.mix(ForgeV2.CleanTertiary, 0.12f, container),
+        onTertiaryContainer = ForgeV2.CleanTertiary,
+
+        error = ForgeV2.CleanError,
+        onError = Color.White,
+        errorContainer = ForgeV2.mix(ForgeV2.CleanError, 0.12f, container),
+        onErrorContainer = ForgeV2.CleanError,
+
+        background = ForgeV2.CleanBackground,
+        onBackground = ForgeV2.CleanOnSurface,
+        surface = ForgeV2.CleanSurface,
+        onSurface = ForgeV2.CleanOnSurface,
+        surfaceVariant = ForgeV2.CleanContainerHigh,
+        onSurfaceVariant = ForgeV2.CleanOnSurfaceVariant,
+        surfaceTint = cleanKey,
+
+        surfaceContainerLowest = ForgeV2.CleanContainerLowest,
+        surfaceContainerLow = ForgeV2.CleanContainerLow,
+        surfaceContainer = container,
+        surfaceContainerHigh = ForgeV2.CleanContainerHigh,
+        surfaceContainerHighest = ForgeV2.CleanContainerHighest,
+        surfaceDim = ForgeV2.CleanBackground,
+        surfaceBright = ForgeV2.CleanContainerHighest,
+
+        outline = Color.Black.copy(alpha = 0.16f),
+        outlineVariant = Color.Black.copy(alpha = 0.08f),
+
+        inverseSurface = ForgeV2.CleanOnSurface,
+        inverseOnSurface = ForgeV2.CleanSurface,
+        scrim = Color.Black,
+    )
+}
+
 
 /** Шкала скруглений: xs 2 · sm 3 · md 4 · lg 6/8 · 2xl 8/10 (ограничивает любую форму). */
 fun forgeV2Shapes(f: ForgeV2.Flavor): VlShapeTokens {
@@ -202,46 +275,83 @@ fun forgeV2Shapes(f: ForgeV2.Flavor): VlShapeTokens {
  * Структура: контур `primary` 16 % вместо неоморфного рельефа (--neo-shadow-out / -in),
  * под «поднятым» — короткая мягкая тень вниз.
  */
-internal fun forgeV2Structure(f: ForgeV2.Flavor) = VlStructureTokens(
-    enabled = true,
-    shadowDark = Color.Black.copy(alpha = 0.55f),
-    shadowLight = Color.Transparent,
-    outline = f.primary.copy(alpha = 0.30f),
-    // Жёсткие плиты: панель — тусклая плита под цвет основного, кнопка — яркая второго цвета
-    hardShadow = ForgeV2.mix(f.primary, 0.26f, f.background),
-    hardShadowAlt = ForgeV2.mix(f.secondary, 0.85f, f.background),
-    hardOffset = 4.dp,
-    raisedOffset = 6.dp,
-    raisedBlur = 18.dp,
-    insetOffset = 2.dp,
-    insetBlur = 8.dp,
-)
-
-/** Неон: --glow-primary, у Beast мягче. Основная кнопка светится и в покое. */
-internal fun forgeV2Signal(f: ForgeV2.Flavor) = VlSignalTokens(
-    enabled = true,
-    glowBlur = if (f.beast) 12.dp else 14.dp,
-    glowAlpha = if (f.beast) 0.22f else 0.35f,
-    fabRestAlpha = 0f,
-    focusBorder = 2.dp,
-    pulsePeriodMs = 2000,
-    buttonRestAlpha = 0f,
-)
-
-/** Дисплей терминала: неоновая дымка основного цвета сверху, у Protogen ещё сканлайны. */
-internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
-    VlTerminalTokens(
-        labelPrefix = "",
-        tag = "BEAST",
-        neon = f.primary,
-        neonAlt = f.secondary,
+internal fun forgeV2Structure(f: ForgeV2.Flavor, dark: Boolean = true) = if (dark) {
+    VlStructureTokens(
+        enabled = true,
+        shadowDark = Color.Black.copy(alpha = 0.55f),
+        shadowLight = Color.Transparent,
+        outline = f.primary.copy(alpha = 0.30f),
+        // Жёсткие плиты: панель — тусклая плита под цвет основного, кнопка — яркая второго цвета
+        hardShadow = ForgeV2.mix(f.primary, 0.26f, f.background),
+        hardShadowAlt = ForgeV2.mix(f.secondary, 0.85f, f.background),
+        hardOffset = 4.dp,
+        raisedOffset = 6.dp,
+        raisedBlur = 18.dp,
+        insetOffset = 2.dp,
+        insetBlur = 8.dp,
     )
 } else {
+    VlStructureTokens(
+        enabled = true,
+        shadowDark = Color.Black.copy(alpha = 0.12f),
+        shadowLight = Color.White.copy(alpha = 0.80f),
+        outline = Color(0xFF17181B).copy(alpha = 0.16f),
+        hardShadow = Color(0xFFD8D9D8),
+        hardShadowAlt = ForgeV2.mix(ForgeV2.CleanKey, 0.30f, ForgeV2.CleanBackground),
+        hardOffset = 4.dp,
+        raisedOffset = 4.dp,
+        raisedBlur = 10.dp,
+        insetOffset = 2.dp,
+        insetBlur = 6.dp,
+    )
+}
+
+/** Неон: --glow-primary, у Beast мягче. Основная кнопка светится и в покое. */
+internal fun forgeV2Signal(f: ForgeV2.Flavor, dark: Boolean = true) = if (dark) {
+    VlSignalTokens(
+        enabled = true,
+        glowBlur = if (f.beast) 12.dp else 14.dp,
+        glowAlpha = if (f.beast) 0.22f else 0.35f,
+        fabRestAlpha = 0f,
+        focusBorder = 2.dp,
+        pulsePeriodMs = 2000,
+        buttonRestAlpha = 0f,
+    )
+} else {
+    VlSignalTokens(
+        enabled = true,
+        glowBlur = 8.dp,
+        glowAlpha = 0.16f,
+        fabRestAlpha = 0f,
+        focusBorder = 2.dp,
+        pulsePeriodMs = 2000,
+        buttonRestAlpha = 0f,
+    )
+}
+
+/** Дисплей терминала: неоновая дымка основного цвета сверху, у Protogen ещё сканлайны. */
+internal fun forgeV2Terminal(f: ForgeV2.Flavor, dark: Boolean = true) = if (dark) {
+    if (f.beast) {
+        VlTerminalTokens(
+            labelPrefix = "",
+            tag = "BEAST",
+            neon = f.primary,
+            neonAlt = f.secondary,
+        )
+    } else {
+        VlTerminalTokens(
+            labelPrefix = "> ",
+            tag = "PROTOGEN",
+            neon = f.primary,
+            neonAlt = f.secondary,
+        )
+    }
+} else {
     VlTerminalTokens(
-        labelPrefix = "> ",
-        tag = "PROTOGEN",
-        neon = f.primary,
-        neonAlt = f.secondary,
+        labelPrefix = if (f.beast) "" else "> ",
+        tag = if (f.beast) "BEAST" else "PROTOGEN",
+        neon = ForgeV2.CleanKey,
+        neonAlt = ForgeV2.CleanGraphite,
     )
 }
 
@@ -249,29 +359,68 @@ internal fun forgeV2Terminal(f: ForgeV2.Flavor) = if (f.beast) {
  * Тумблер «риска»: тонкая светящаяся планка вместо круглого бегунка — круг не вписывался
  * в трек со скруглением 6–8 dp. Включённый трек подсвечен контуром и заливкой.
  */
-internal val ForgeV2Switch = VlSwitchTokens(
+internal fun forgeV2Switch(f: ForgeV2.Flavor, dark: Boolean = true) = VlSwitchTokens(
     thumb = RoundedCornerShape(2.dp),
     thumbWidth = 10.dp,
     thumbHeight = 22.dp,
-    thumbGlow = 0f,
+    thumbGlow = if (dark) (if (f.beast) 0.5f else 0.8f) else 0f,
     litTrack = true,
+    ledDots = true,
 )
 
-internal fun forgeV2Status(f: ForgeV2.Flavor) = VlStatusTokens(
-    success = f.success,
-    onSuccess = f.background,
-    warning = f.warning,
-    onWarning = f.background,
-)
+internal val ForgeV2Switch = forgeV2Switch(ForgeV2.Protogen, true)
 
-internal fun forgeV2Bubbles(f: ForgeV2.Flavor) = VlBubbleTokens(
-    mineBg = ForgeV2.mix(f.primary, 0.22f, f.container),
-    mineFg = f.onSurface,
-    otherBg = f.container,
-    otherFg = f.onSurface,
-    mineBorder = f.primary.copy(alpha = 0.45f),
-    otherBorder = f.primary.copy(alpha = 0.22f),
-)
+internal fun forgeV2Status(f: ForgeV2.Flavor, dark: Boolean = true) = if (dark) {
+    VlStatusTokens(
+        success = f.success,
+        onSuccess = f.background,
+        warning = f.warning,
+        onWarning = f.background,
+    )
+} else {
+    VlStatusTokens(
+        success = Color(0xFF1B8556),
+        onSuccess = Color.White,
+        warning = Color(0xFFC77700),
+        onWarning = Color.White,
+    )
+}
+
+internal fun forgeV2Bubbles(f: ForgeV2.Flavor, dark: Boolean = true) = if (dark) {
+    VlBubbleTokens(
+        mineBg = ForgeV2.mix(f.primary, 0.22f, f.container),
+        mineFg = f.onSurface,
+        otherBg = f.container,
+        otherFg = f.onSurface,
+        mineBorder = f.primary.copy(alpha = 0.45f),
+        otherBorder = f.primary.copy(alpha = 0.22f),
+    )
+} else {
+    VlBubbleTokens(
+        mineBg = ForgeV2.CleanGraphite,
+        mineFg = Color(0xFFF4F4F2),
+        otherBg = ForgeV2.CleanContainer,
+        otherFg = ForgeV2.CleanOnSurface,
+        mineBorder = ForgeV2.CleanKey.copy(alpha = 0.30f),
+        otherBorder = Color.Black.copy(alpha = 0.08f),
+    )
+}
+
+fun forgeV2Led(f: ForgeV2.Flavor, dark: Boolean = true): VlLedTokens = if (dark) {
+    VlLedTokens(
+        color = f.primary,
+        screen = if (f.beast) Color(0xFF080605) else Color(0xFF050507),
+        offAlpha = 0.08f,
+        glowBlur = 6.dp,
+    )
+} else {
+    VlLedTokens(
+        color = if (f.proAccent != null) ProAccent.readable(f.proAccent, light = true) else ForgeV2.CleanKey,
+        screen = ForgeV2.CleanScreen,
+        offAlpha = 0.10f,
+        glowBlur = 0.dp,
+    )
+}
 
 /** Терминал: короткие переходы без пружины, нажатие — лёгкое сжатие. */
 internal val ForgeV2Motion = VlMotionTokens(
@@ -283,3 +432,4 @@ internal val ForgeV2Motion = VlMotionTokens(
     durationMs = 120,
     glitch = true,
 )
+

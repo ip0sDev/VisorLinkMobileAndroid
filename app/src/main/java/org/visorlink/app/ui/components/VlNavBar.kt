@@ -446,6 +446,10 @@ private fun NeumorphicLiquidNavBarContent(
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            if (tokens.isForge) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                org.visorlink.app.ui.components.led.VlLedDot(size = 4.dp, color = contentColor)
+                            }
                         }
                     }
                 }
