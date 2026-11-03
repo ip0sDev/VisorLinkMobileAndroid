@@ -92,6 +92,7 @@ object IdCardMaterials {
         IdEdition.RARE -> hsl(212f, 88f, 64f)
         IdEdition.EPIC -> hsl(276f, 80f, 70f)
         IdEdition.LEGENDARY -> hsl(42f, 95f, 58f)
+        IdEdition.UNIQUE -> hsl(340f, 95f, 65f)
     }
 
     /** `--ed-soft`: подложка значка тиража и лучей раскрытия. */
@@ -100,7 +101,7 @@ object IdCardMaterials {
             IdEdition.COMMON, IdEdition.UNCOMMON -> 0.16f
             IdEdition.RARE -> 0.18f
             IdEdition.EPIC -> 0.2f
-            IdEdition.LEGENDARY -> 0.22f
+            IdEdition.LEGENDARY, IdEdition.UNIQUE -> 0.22f
         },
     )
 
@@ -121,6 +122,20 @@ object IdCardMaterials {
     val ReelHolo = listOf(Color(0xFFFF8BD1), Color(0xFF8BD8FF), Color(0xFFA5FFB0), Color(0xFFFFE28B), Color(0xFFFF8BD1))
     val ReelHoloGalaxy = listOf(Color(0xFF2B1A5E), Color(0xFF7A5CFF), Color(0xFFFF79D9), Color(0xFF39E1FF), Color(0xFF2B1A5E))
     val ReelLegendaryGlint = hsl(42f, 100f, 80f, 0.45f)
+
+    // ── ROOT «Корона» (custom.pattern = "root") ──
+    val RootGold = Color(0xFFE8B64C)
+    val RootCyan = Color(0xFF3DF2FF)
+    val RootRainbow = listOf(
+        0.0f to Color(0xFFE8B64C), 0.06f to Color(0xFFFFF1C9), 0.12f to Color(0xFF3DF2FF),
+        0.18f to Color(0xFFB8862E), 0.24f to Color(0xFFE8B64C)
+    )
+    val RootHolo = listOf(0.0f to Color(0xFF5A4520), 0.42f to Color(0xFFE8B64C), 0.62f to Color(0xFFFFF1C9), 1.0f to Color(0xFF9C7A2E))
+    val RootReveal = listOf(
+        0.0f to Color(0xFFFFF6DE), 0.04f to Color(0xFFE8B64C), 0.08f to Color(0xFF3DF2FF),
+        0.12f to Color(0xFFE8B64C), 0.16f to Color(0xFFFFF6DE)
+    )
+    val RootSparkle = Color(0xFFFFE9A8)
 
     // ── Формы ──
 

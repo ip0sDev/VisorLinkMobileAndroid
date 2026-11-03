@@ -15,7 +15,15 @@ object IdSkinRules {
     const val BASE_SLOTS = 5
     const val MAX_SLOTS = 20
     const val ROLL_COOLDOWN_MS = 7L * 24 * 3600 * 1000
+    const val ROLL_COOLDOWN_PRO_MS = 3L * 24 * 3600 * 1000 + 12L * 3600 * 1000 // 3.5 дня
     const val TRADE_NOTE_MAX = 140
+    const val SKIN_HOLD_MS = 14L * 24 * 3600 * 1000
+
+    /** Легендарная прокрутка: тираж «редкий» и выше, без недельного лимита (PREMIUM_ROLL_COST_BITS). */
+    const val PREMIUM_ROLL_COST_BITS = 2000
+
+    /** Слотов сверху, пока PRO активен. */
+    const val PRO_BONUS_SLOTS = 5
 
     /** id виртуального скина старой карты без `skinId` (как `'__card'` в вебе). */
     const val VIRTUAL_SKIN_ID = "__card"
@@ -23,9 +31,29 @@ object IdSkinRules {
     /** Последняя прокрутка (как lastRollAt на сервере): у старых карт — замена документа или выдача. */
     fun lastRollAt(card: IdCard): Long = card.rolledAt ?: card.reissuedAt ?: card.issuedAt
 
-    fun rollAvailableAt(card: IdCard): Long = lastRollAt(card) + ROLL_COOLDOWN_MS
+    /**
+     * Две прокрутки за любые 7 дней с PRO: следующая — через неделю от предпоследней (rolledPrevAt),
+     * если бросок был один — через 3.5 дня от последнего; без PRO — через 7 дней от последнего.
+     */
+    fun rollAvailableAt(card: IdCard, pro: Boolean = false): Long {
+        val last = lastRollAt(card)
+        if (!pro) return last + ROLL_COOLDOWN_MS
+        val prev = card.rolledPrevAt
+        return if (prev != null && prev > 0L) {
+            prev + ROLL_COOLDOWN_MS
+        } else {
+            last + ROLL_COOLDOWN_PRO_MS
+        }
+    }
 
+    /** Купленные слоты (5…20). */
     fun slotsOf(card: IdCard): Int = (card.slots ?: BASE_SLOTS).coerceIn(BASE_SLOTS, MAX_SLOTS)
+
+    /** Вместимость инвентаря: купленные слоты + 5, пока PRO активен. */
+    fun capacityOf(card: IdCard, pro: Boolean = false): Int = slotsOf(card) + (if (pro) PRO_BONUS_SLOTS else 0)
+
+    /** Занятые слоты: PRO-карты и виртуальные бланки места не занимают (сервер occupiedSlots). */
+    fun occupied(items: List<IdSkin>): Int = items.count { !it.pro && !it.virtual }
 
     /**
      * Инвентарь для показа (как `inventoryOf` в вебе): у карты, выданной до инвентаря, подписка
@@ -42,9 +70,9 @@ object IdSkinRules {
     fun equippedId(card: IdCard?, items: List<IdSkin>): String? = items.firstOrNull { it.virtual }?.id ?: card?.skinId
 
     /** Состояние панели прокрутки — в порядке проверок веба (кулдаун важнее нехватки слота и Bits). */
-    fun rollState(card: IdCard, bits: Int, used: Int, now: Long): RollState = when {
-        rollAvailableAt(card) > now -> RollState.COOLDOWN
-        slotsOf(card) - used <= 0 -> RollState.FULL
+    fun rollState(card: IdCard, bits: Int, used: Int, now: Long, pro: Boolean = false): RollState = when {
+        rollAvailableAt(card, pro) > now -> RollState.COOLDOWN
+        capacityOf(card, pro) - used <= 0 -> RollState.FULL
         bits < ROLL_COST_BITS -> RollState.BITS
         else -> RollState.READY
     }
@@ -54,7 +82,11 @@ enum class RollState { COOLDOWN, FULL, BITS, READY }
 
 /** Как скин попал к текущему владельцу. */
 enum class IdSkinOrigin(val id: String) {
-    ISSUE("issue"), ROLL("roll"), TRADE("trade");
+    ISSUE("issue"),
+    ROLL("roll"),
+    TRADE("trade"),
+    GIFT("gift"),
+    PRO("pro");
 
     companion object {
         fun of(id: Any?): IdSkinOrigin = entries.firstOrNull { it.id == id } ?: ISSUE
@@ -90,7 +122,7 @@ data class IdSkinLook(
             val serial = m["serial"] as? String ?: return null
             val traits = IdCardTraits.parse(m["traits"], m["seed"])
             val custom = IdCustomLook.parse(m["custom"])
-            // Кастомный скин — всегда эпический (у старых записей тиража может не быть)
+            // Кастомный скин — тир из узора или эпический (у старых записей тиража может не быть)
             val edition = IdEdition.of(m["edition"]) ?: custom?.edition ?: traits.edition
             return IdSkinLook(serial, traits, edition, custom)
         }
@@ -122,13 +154,23 @@ data class IdSkin(
     /** Бланк карты, выданной до инвентаря: показывается надетым, действий нет. */
     val virtual: Boolean = false,
     val custom: IdCustomLook? = null,
+    /** PRO-карта (`pro: true` или узор PRO): слот не занимает, надеть — только с PRO, не передаётся. */
+    val pro: Boolean = false,
 ) {
     val look: IdSkinLook get() = IdSkinLook(serial, traits, edition, custom)
+
+    /** Единственный экземпляр (карта администратора): сервер не даёт продать или обменять. */
+    val single: Boolean get() = custom?.pattern?.isSingle == true
+
+    /** Получен меньше 14 дней назад: передать (подарить) пока нельзя (SKIN_HOLD_MS на сервере). */
+    fun onHold(now: Long): Boolean = obtainedAt > 0 && now - obtainedAt < IdSkinRules.SKIN_HOLD_MS
 
     companion object {
         fun parse(id: String, raw: Map<*, *>?): IdSkin? {
             if (raw == null || id.isEmpty()) return null
             val look = IdSkinLook.parse(raw) ?: return null
+            val origin = IdSkinOrigin.of(raw["origin"])
+            val isPro = raw["pro"] == true || origin == IdSkinOrigin.PRO || (look.custom?.pattern?.isPro == true)
             return IdSkin(
                 id = id,
                 serial = look.serial,
@@ -136,10 +178,11 @@ data class IdSkin(
                 edition = look.edition,
                 mintedAt = millis(raw["mintedAt"]) ?: 0,
                 obtainedAt = millis(raw["obtainedAt"]) ?: 0,
-                origin = IdSkinOrigin.of(raw["origin"]),
+                origin = origin,
                 trades = (raw["trades"] as? Number)?.toInt() ?: 0,
                 listedIn = (raw["listedIn"] as? String)?.takeIf { it.isNotEmpty() },
                 custom = look.custom,
+                pro = isPro,
             )
         }
 
@@ -154,6 +197,7 @@ data class IdSkin(
             origin = IdSkinOrigin.ISSUE,
             virtual = true,
             custom = card.custom,
+            pro = card.custom?.pattern?.isPro == true,
         )
     }
 }

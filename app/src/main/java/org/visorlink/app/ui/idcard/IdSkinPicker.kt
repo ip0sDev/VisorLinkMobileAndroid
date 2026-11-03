@@ -80,6 +80,8 @@ internal sealed interface SkinPickPurpose {
 
     /** [wearer] — та же «примерка», что в карточке обмена (с учётом маски). */
     data class Offer(val trade: IdTrade, val wearer: IdSkinWearer) : SkinPickPurpose
+
+    data class Gift(val chatId: String, val recipientName: String) : SkinPickPurpose
 }
 
 /**
@@ -91,6 +93,8 @@ internal sealed interface SkinPickPurpose {
 internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
     val repo: IdCardRepository = koinInject()
     val users: UserRepository = koinInject()
+    val giftRepo: org.visorlink.app.data.repository.UserGiftRepository = org.koin.compose.currentKoinScope().getOrNull() ?: org.visorlink.app.data.repository.UserGiftRepository()
+    val clock = LocalIdCardClock.current
     val haptics = rememberCardHaptics()
     val scope = rememberCoroutineScope()
     val uid = LocalIdModeState.current.myUid
@@ -108,9 +112,11 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
     var error by remember { mutableStateOf<Throwable?>(null) }
 
     val post = purpose is SkinPickPurpose.Post
+    val isGift = purpose is SkinPickPurpose.Gift
     val items = IdSkinRules.inventoryOf(card, (skinsState as? IdSkinsState.Ready)?.skins.orEmpty())
     val equippedId = IdSkinRules.equippedId(card, items)
-    fun blocked(s: IdSkin) = s.id == equippedId || s.virtual || (post && s.listedIn != null)
+    val now = remember(clock) { clock() }
+    fun blocked(s: IdSkin) = s.id == equippedId || s.virtual || (post && s.listedIn != null) || (isGift && (s.listedIn != null || s.onHold(now)))
     val choices = items.filterNot(::blocked)
     val pick = items.firstOrNull { it.id == selected }
     val wearer = (purpose as? SkinPickPurpose.Offer)?.wearer ?: card.wearer(profile)
@@ -126,6 +132,7 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
                 when (purpose) {
                     is SkinPickPurpose.Post -> repo.postTrade(purpose.chatId, skin.id, note.trim())
                     is SkinPickPurpose.Offer -> repo.offerTrade(purpose.trade.id, skin.id)
+                    is SkinPickPurpose.Gift -> giftRepo.send(purpose.chatId, kind = "skin", skinId = skin.id, note = note.trim())
                 }
                 haptics.success()
                 sent = true
@@ -139,9 +146,17 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
     }
 
     IdOverlay(onDismiss = { if (!busy) onClose() }, dismissible = !busy) {
-        OverlayKicker(stringResource(R.string.idskin_trade_kicker))
-        OverlayTitle(stringResource(if (post) R.string.idskin_picker_title_post else R.string.idskin_picker_title_offer))
-        OverlayLead(stringResource(if (post) R.string.idskin_picker_lead_post else R.string.idskin_picker_lead_offer))
+        OverlayKicker(if (isGift) stringResource(R.string.gift_attach).uppercase() else stringResource(R.string.idskin_trade_kicker))
+        OverlayTitle(when (purpose) {
+            is SkinPickPurpose.Gift -> stringResource(R.string.gift_picker_title, purpose.recipientName)
+            is SkinPickPurpose.Post -> stringResource(R.string.idskin_picker_title_post)
+            is SkinPickPurpose.Offer -> stringResource(R.string.idskin_picker_title_offer)
+        })
+        OverlayLead(when (purpose) {
+            is SkinPickPurpose.Gift -> stringResource(R.string.gift_skin_hint)
+            is SkinPickPurpose.Post -> stringResource(R.string.idskin_picker_lead_post)
+            is SkinPickPurpose.Offer -> stringResource(R.string.idskin_picker_lead_offer)
+        })
 
         if (purpose is SkinPickPurpose.Offer) VersusBlock(purpose.trade, pick, wearer, person)
 
@@ -155,7 +170,7 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
                     selected = it
                     haptics.tap()
                 }
-                if (post) {
+                if (post || isGift) {
                     VlTextField(
                         value = note,
                         onValueChange = { v -> note = v.replace('\n', ' ').take(IdSkinRules.TRADE_NOTE_MAX) },
@@ -173,13 +188,14 @@ internal fun IdSkinPicker(purpose: SkinPickPurpose, onClose: () -> Unit) {
             SkinActionButton(
                 when {
                     sent -> stringResource(R.string.idskin_picker_sent)
-                    busy -> stringResource(R.string.idskin_picker_sending)
+                    busy -> if (isGift) stringResource(R.string.gift_sending_status) else stringResource(R.string.idskin_picker_sending)
+                    isGift -> stringResource(R.string.gift_action_send)
                     post -> stringResource(R.string.idskin_picker_submit_post)
                     else -> stringResource(R.string.idskin_picker_submit_offer)
                 },
                 ::submit,
                 enabled = pick != null && !busy && !sent,
-                icon = if (post) Icons.AutoMirrored.Filled.Send else Icons.Default.SwapHoriz,
+                icon = if (isGift) Icons.AutoMirrored.Filled.Send else if (post) Icons.AutoMirrored.Filled.Send else Icons.Default.SwapHoriz,
             )
         }
     }

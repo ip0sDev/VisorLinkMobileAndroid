@@ -98,6 +98,9 @@ data class UserProfile(
         return proUntil.toDate().time > System.currentTimeMillis()
     }
 
+    @get:com.google.firebase.firestore.Exclude
+    val isPro: Boolean get() = isProActive()
+
     /** Telegram привязан (`telegramId`). */
     val hasTelegram: Boolean
         @com.google.firebase.firestore.Exclude get() = telegramId?.toString()?.isNotBlank() == true
@@ -667,6 +670,12 @@ data class Message(
     val tradeId: String? = null,
 
     // Подарки
+    val userGift: Boolean = false,
+    val giftId: String? = null,
+    val design: String? = null,
+    @get:PropertyName("skin") @set:PropertyName("skin")
+    var giftSkin: Map<String, Any?>? = null,
+    val giftStatus: String? = null,
     val redeemed: Boolean = false,
     val redeemedByUid: String? = null,
     val redeemedByUsername: String? = null,

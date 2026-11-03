@@ -282,6 +282,8 @@ private fun SpecsTable(skin: IdSkin) {
             IdSkinOrigin.ISSUE -> R.string.idskin_origin_issue
             IdSkinOrigin.ROLL -> R.string.idskin_origin_roll
             IdSkinOrigin.TRADE -> R.string.idskin_origin_trade
+            IdSkinOrigin.GIFT -> R.string.idskin_origin_gift
+            IdSkinOrigin.PRO -> R.string.idskin_origin_pro
         },
     )
     // (подпись, значение, моноширинное)

@@ -1116,6 +1116,8 @@
     <string name="idskin_origin_issue">При выдаче</string>
     <string name="idskin_origin_roll">Прокрутка</string>
     <string name="idskin_origin_trade">Обмен</string>
+    <string name="idskin_origin_gift">Подарок</string>
+    <string name="idskin_origin_pro">PRO</string>
     <string name="idskin_wear_0">Как новая</string>
     <string name="idskin_wear_1">Лёгкие следы</string>
     <string name="idskin_wear_2">Потёртая</string>
@@ -1438,5 +1440,64 @@
     <!-- Signal -->
     <string name="signal_title">Сигнал</string>
     <string name="signal_back">Назад</string>
+
+    <!-- Phase 2: Gifts & ID-Cards -->
+    <string name="gift_user_title">Подарок</string>
+    <string name="gift_action_send">Подарить</string>
+    <string name="gift_attach">Подарок</string>
+    <string name="gift_picker_kicker">ПОДАРОК</string>
+    <string name="gift_picker_title">Подарок для %1$s</string>
+    <string name="gift_pro_week">PRO на 7 дней</string>
+    <string name="gift_pro_month">PRO на 30 дней</string>
+    <string name="gift_postcard">Открытка</string>
+    <string name="gift_skin">ID-карта</string>
+    <string name="gift_note_label">Подпись (необязательно)</string>
+    <string name="gift_note_placeholder">Пара слов к подарку</string>
+    <string name="gift_send_action">Подарить за %1$d Bits</string>
+    <string name="gift_sent_status">Отправлено</string>
+    <string name="gift_sending_status">Отправка…</string>
+    <string name="gift_not_enough_bits">Не хватает Bits.</string>
+    <string name="gift_pro_eternal_hint">У %1$s бесконечный PRO — подарите открытку или ID-карту.</string>
+    <string name="gift_postcard_hint">Открытка — просто приятность: получателю ничего не начисляется.</string>
+    <string name="gift_skin_hint">Подарите скин из своего инвентаря. Надетый, выставленный на обмен и полученный меньше 14 дней назад подарить нельзя.</string>
+    <string name="gift_choose_skin">Выбрать скин</string>
+    <string name="gift_revoke_hint">Пока подарок не открыт, его можно отозвать — Bits вернутся.</string>
+    <string name="gift_your_gift">Ваш подарок</string>
+    <string name="gift_from_user">Подарок от @%1$s</string>
+    <string name="gift_opened_by">Открыл(а) @%1$s</string>
+    <string name="gift_cancelled">Подарок отозван</string>
+    <string name="gift_waiting">Ждёт, пока откроют</string>
+    <string name="gift_action_cancel">Отозвать</string>
+    <string name="gift_action_open_gift">Открыть подарок</string>
+    <string name="gift_action_opening_gift">Активация…</string>
+    <string name="gift_bits_title">100 Bits</string>
+    <string name="gift_bits_hint">Бонус на баланс</string>
+    <string name="gift_bits_received">+100 BITS!</string>
+    <string name="gift_pro_received">ВЫ ПОЛУЧИЛИ PRO!</string>
+
+    <!-- Postcard designs -->
+    <string name="postcard_spark">Искры</string>
+    <string name="postcard_aurora">Сияние</string>
+    <string name="postcard_supernova">Сверхновая</string>
+
+    <!-- Ion Gift -->
+    <string name="idcard_ion_title">Подарок: VL Ion</string>
+    <string name="idcard_ion_banner_hint">Нажмите, чтобы открыть подарок</string>
+    <string name="idcard_ion_opening">Открываем подарок…</string>
+    <string name="idcard_ion_claim">Забрать</string>
+    <string name="idcard_ion_desc">Новая карта в стиле Forge: фарфор и тёплый оранжевый LED. Один раз на человека, падает в инвентарь.</string>
+    <string name="idcard_ion_done">VL Ion в инвентаре — наденьте его из списка ниже.</string>
+
+    <!-- Additional ID Skin Anti-Farm Error Strings -->
+    <string name="idskin_err_trust_age">Обмен откроется через %1$s: аккаунту нужно 30 дней.</string>
+    <string name="idskin_err_trust_activity">Обмен откроется после ещё %1$s дн. общения.</string>
+    <string name="idskin_err_skin_hold">Этот скин можно будет передать через %1$s.</string>
+    <string name="idskin_err_trade_limit">Не больше 5 обменов за 30 дней. Следующий — через %1$s.</string>
+    <string name="idskin_err_invite_link">Между тем, кого вы пригласили (или кто пригласил вас), обмен откроется через %1$s.</string>
+    <string name="idskin_err_peer_not_ready">Собеседнику пока недоступен обмен.</string>
+    <string name="idskin_err_pro_card">PRO-карту нельзя продать, обменять или подарить.</string>
+    <string name="idskin_err_single">Эта карта существует в одном экземпляре и не передаётся.</string>
+    <string name="idskin_err_pro_required">Нужен активный PRO.</string>
+    <string name="idskin_err_pro_claimed">PRO-карты уже в инвентаре.</string>
 
 </resources>

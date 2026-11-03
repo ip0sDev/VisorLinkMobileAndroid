@@ -39,25 +39,55 @@ enum class IdFoil(val id: String) {
     }
 }
 
+/** Тираж: у карты считается из признаков (`editionOf`), у скина хранится (у старых записей может не быть). */
+enum class IdEdition(val id: String) {
+    COMMON("common"),
+    UNCOMMON("uncommon"),
+    RARE("rare"),
+    EPIC("epic"),
+    LEGENDARY("legendary"),
+    UNIQUE("unique");
+
+    companion object {
+        fun of(id: Any?): IdEdition? = entries.firstOrNull { it.id == id }
+    }
+}
+
 /**
  * Авторский узор кастомного скина (`custom.pattern`): своя форма и эмблема голограммы, защитная
  * сетка под печатью и большое «скрытое изображение» поверх. Рисуется только с валидной палитрой.
  */
-enum class IdPattern(val id: String) {
+enum class IdPattern(val id: String, val edition: IdEdition) {
     /** Коты: голограмма — кошачья голова, сетка из лапок и мордочек, кот под луной при наклоне. */
-    NEKO("neko");
+    NEKO("neko", IdEdition.UNIQUE),
+
+    /** ROOT «Корона» — карта администратора, единственная на весь VisorLink (серийник VL-ROOT-0001). */
+    ROOT("root", IdEdition.UNIQUE),
+
+    // Серия VL (Forge): у каждого узора свой тир, подложка, эффект и голограмма
+    VL_ION("vl-ion", IdEdition.COMMON),
+    VL_PRISM("vl-prism", IdEdition.UNCOMMON),
+    VL_BLACKOUT("vl-blackout", IdEdition.UNCOMMON),
+    VL_PULSE("vl-pulse", IdEdition.RARE),
+    VL_BUDDY("vl-buddy", IdEdition.RARE),
+    VL_LUMEN("vl-lumen", IdEdition.RARE),
+
+    // Эпические VL (Warp, Ferro, Vital)
+    VL_WARP("vl-warp", IdEdition.EPIC),
+    VL_FERRO("vl-ferro", IdEdition.EPIC),
+    VL_VITAL("vl-vital", IdEdition.EPIC),
+
+    // PRO-карты (Aurum, Noir): эпические, в прокрутку не попадают, носятся только с активным PRO и не передаются
+    VL_PRO_AURUM("vl-pro-aurum", IdEdition.EPIC),
+    VL_PRO_NOIR("vl-pro-noir", IdEdition.EPIC);
+
+    val isVl: Boolean get() = id.startsWith("vl-")
+    val isSingle: Boolean get() = this == ROOT
+    val isPro: Boolean get() = this == VL_PRO_AURUM || this == VL_PRO_NOIR
+    val hasArt: Boolean get() = this == NEKO || this == ROOT || isPro || (isVl && edition != IdEdition.EPIC)
 
     companion object {
         fun of(id: Any?): IdPattern? = entries.firstOrNull { it.id == id }
-    }
-}
-
-/** Тираж: у карты считается из признаков (`editionOf`), у скина хранится (у старых записей может не быть). */
-enum class IdEdition(val id: String) {
-    COMMON("common"), UNCOMMON("uncommon"), RARE("rare"), EPIC("epic"), LEGENDARY("legendary");
-
-    companion object {
-        fun of(id: Any?): IdEdition? = entries.firstOrNull { it.id == id }
     }
 }
 
@@ -125,13 +155,15 @@ data class IdCard(
     /** Слотов инвентаря (5…20); нет — базовые 5. */
     val slots: Int? = null,
     val rolledAt: Long? = null,
+    /** Предпоследняя прокрутка: с PRO следующая — через неделю от неё (две за любые 7 дней). */
+    val rolledPrevAt: Long? = null,
     val equippedAt: Long? = null,
     /** Опубликованная визитка `/card/{slug}` (пишет только сервер); `null` — не опубликована. */
     val publicCard: PublicCardRef? = null,
     /** Кастомный скин (подарок админа) — от надетого скина; `null` — обычная палитра режима. */
     val custom: IdCustomLook? = null,
 ) {
-    /** Тираж карты: кастомный скин — эпический, с авторским узором — легендарный (веб `cardEdition`), иначе — из признаков. */
+    /** Тираж карты: кастомный скин — эпический, с авторским узором — тир узора, иначе — из признаков. */
     val edition: IdEdition get() = custom?.edition ?: traits.edition
 
     companion object {
@@ -151,6 +183,7 @@ data class IdCard(
                 skinId = (raw["skinId"] as? String)?.takeIf { it.isNotEmpty() },
                 slots = (raw["slots"] as? Number)?.toInt(),
                 rolledAt = millis(raw["rolledAt"]),
+                rolledPrevAt = millis(raw["rolledPrevAt"]),
                 equippedAt = millis(raw["equippedAt"]),
                 custom = IdCustomLook.parse(raw["custom"]),
                 publicCard = (raw["publicCard"] as? Map<*, *>)?.let { pc ->
@@ -254,8 +287,8 @@ data class IdCustomLook(
     /** Авторский голографический узор (подарок «один из одного»); неизвестное значение — без узора. */
     val pattern: IdPattern? = null,
 ) {
-    /** Тираж кастомного скина: с авторским узором — легендарный, иначе — эпический. */
-    val edition: IdEdition get() = if (pattern != null && colors != null) IdEdition.LEGENDARY else IdEdition.EPIC
+    /** Тираж кастомного скина: с авторским узором — тир узора, иначе — эпический. */
+    val edition: IdEdition get() = if (pattern != null && colors != null) pattern.edition else IdEdition.EPIC
 
     /** Цвета палитры или `null`, если хоть один невалиден — тогда палитра режима. */
     val colors: Triple<String, String, String>?

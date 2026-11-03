@@ -109,6 +109,7 @@ val appModule = module {
     // Блокировки пользователь→пользователь: blocks / blockedBy + setUserBlock
     single { BlockRepository(get(), get(), androidContext()) }
     single { SignalRepository(get(), androidContext()) }
+    single { org.visorlink.app.data.repository.UserGiftRepository() }
     // ID-карты: карта и callables, Mask Mode (только на устройстве), контекст темы открытого чата
     single { org.visorlink.app.data.repository.IdCardRepository(get(), get()) }
     single { org.visorlink.app.data.repository.SurpriseRepository(get(), get(), androidContext()) }

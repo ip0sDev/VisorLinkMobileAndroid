@@ -151,6 +151,8 @@ fun ChatScreen(
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var showIdTradePicker by remember { mutableStateOf(false) }
+    var showGiftPicker by remember { mutableStateOf(false) }
+    var showGiftSkinPicker by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
     // Автоматическое закрытие меню стикеров и вложений при начале листания чата
@@ -248,6 +250,16 @@ fun ChatScreen(
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
             showIdTradePicker = true
+        }
+    } else null
+
+    val canGift = canSendMessage && uiState.otherUser?.isBot != true && uiState.chatType == ChatType.DIRECT
+    val openGift: (() -> Unit)? = if (canGift) {
+        {
+            showMediaPicker = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            showGiftPicker = true
         }
     } else null
 
@@ -474,7 +486,8 @@ fun ChatScreen(
                             showMediaPicker = false
                             viewModel.sendVideo(uri)
                         },
-                        onOpenIdTrade = openIdTrade
+                        onOpenIdTrade = openIdTrade,
+                        onOpenGiftPicker = openGift
                     )
                 }
             ) { innerPadding ->
@@ -819,6 +832,31 @@ fun ChatScreen(
         org.visorlink.app.ui.idcard.IdSkinPicker(
             purpose = org.visorlink.app.ui.idcard.SkinPickPurpose.Post(chatId),
             onClose = { showIdTradePicker = false },
+        )
+    }
+
+    if (showGiftPicker) {
+        val recipient = uiState.otherUser
+        val recipientName = recipient?.displayName?.takeIf { it.isNotBlank() } ?: recipient?.username ?: "User"
+        val isEternalPro = recipient?.isEternalPro == true
+        GiftPickerBottomSheet(
+            chatId = chatId,
+            recipientName = recipientName,
+            isEternalPro = isEternalPro,
+            onDismiss = { showGiftPicker = false },
+            onOpenSkinPicker = {
+                showGiftPicker = false
+                showGiftSkinPicker = true
+            }
+        )
+    }
+
+    if (showGiftSkinPicker) {
+        val recipient = uiState.otherUser
+        val recipientName = recipient?.displayName?.takeIf { it.isNotBlank() } ?: recipient?.username ?: "User"
+        org.visorlink.app.ui.idcard.IdSkinPicker(
+            purpose = org.visorlink.app.ui.idcard.SkinPickPurpose.Gift(chatId, recipientName),
+            onClose = { showGiftSkinPicker = false },
         )
     }
     }

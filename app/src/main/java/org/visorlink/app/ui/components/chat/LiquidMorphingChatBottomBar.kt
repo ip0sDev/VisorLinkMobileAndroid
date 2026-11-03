@@ -93,6 +93,7 @@ fun LiquidMorphingChatBottomBar(
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
     onOpenIdTrade: (() -> Unit)? = null,
+    onOpenGiftPicker: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -273,6 +274,7 @@ fun LiquidMorphingChatBottomBar(
                                 onCloseMediaPicker()
                             },
                             onOpenIdTrade = onOpenIdTrade,
+                            onOpenGiftPicker = onOpenGiftPicker,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

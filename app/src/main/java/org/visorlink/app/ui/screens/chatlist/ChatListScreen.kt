@@ -86,6 +86,7 @@ fun ChatListScreen(
     val context = LocalContext.current
 
     var showFabMenu by remember { mutableStateOf(false) }
+    var showIonReveal by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
@@ -221,6 +222,10 @@ fun ChatListScreen(
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
                     ) {
+                        org.visorlink.app.ui.idcard.IonGiftBanner(
+                            uid = viewModel.currentUid,
+                            onOpenReveal = { showIonReveal = true }
+                        )
                         ChatListEmptyState(
                             modifier = Modifier.fillMaxSize()
                         )
@@ -240,6 +245,12 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
+                        item(key = "ion_gift_banner") {
+                            org.visorlink.app.ui.idcard.IonGiftBanner(
+                                uid = viewModel.currentUid,
+                                onOpenReveal = { showIonReveal = true }
+                            )
+                        }
                         if (compactList) {
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
                             item(key = "compact_chats_card") {
@@ -439,6 +450,13 @@ fun ChatListScreen(
                 )
             }
         }
+    }
+
+    if (showIonReveal) {
+        org.visorlink.app.ui.idcard.IonGiftReveal(
+            uid = viewModel.currentUid,
+            onDismiss = { showIonReveal = false }
+        )
     }
 }
 

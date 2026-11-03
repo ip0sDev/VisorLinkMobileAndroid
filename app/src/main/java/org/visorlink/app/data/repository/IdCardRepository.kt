@@ -61,7 +61,13 @@ sealed interface IdTradeState {
  * Ошибка callable с причиной из `details`: `cooldown` (+ `waitMs`), `no-card`, `not-enough-bits`,
  * `standard-id`, у инвентаря и обмена — `no-slot`, `equipped`, `already-listed`, `trade-closed`…
  */
-class IdCardException(val reason: String?, val waitMs: Long, message: String?, cause: Throwable?) : Exception(message, cause)
+class IdCardException(
+    val reason: String?,
+    val waitMs: Long,
+    message: String?,
+    cause: Throwable?,
+    val daysLeft: Int = 0
+) : Exception(message, cause)
 
 /**
  * ID-карты (спеки ANDROID_ID_CARDS_SPEC.md, ANDROID_ID_SKINS_AND_SESSIONS_SPEC.md): карта,
@@ -191,6 +197,38 @@ class IdCardRepository(
         return raw?.let { IdSkin.parse(it["id"] as? String ?: "", it) } ?: throw IdCardException(null, 0, "Empty skin", null)
     }
 
+    /**
+     * Подарок VL Ion по флагу `vl_ion_claim` (сервер: idSkins.claimIon): `true` — флаг включён и подарок
+     * ещё не забран. Ошибка сети — `false`: блок просто не показывается.
+     */
+    suspend fun ionGiftAvailable(): Boolean = try {
+        val res = call(INVENTORY, mapOf("action" to "ionStatus"))
+        res["available"] == true
+    } catch (e: Exception) {
+        if (BuildConfig.DEBUG) Log.w(TAG, "ionStatus failed", e)
+        false
+    }
+
+    /** Забрать Ion: один раз на человека, скин падает в инвентарь (нет места — сервер даёт +1 слот). */
+    suspend fun claimIonGift(): IdSkin {
+        val raw = call(INVENTORY, mapOf("action" to "claimIon"))["skin"] as? Map<*, *>
+        return raw?.let { IdSkin.parse(it["id"] as? String ?: "", it) } ?: throw IdCardException(null, 0, "Empty skin", null)
+    }
+
+    /**
+     * Легендарная прокрутка: −2 000 Bits, тираж «редкий» и выше, нужен свободный слот; без недельного лимита
+     * и не трогает `rolledAt` / `rolledPrevAt`. Ошибки: `no-slot`, `not-enough-bits`.
+     */
+    suspend fun rollPremiumSkin(): IdSkin {
+        val raw = call(INVENTORY, mapOf("action" to "rollPremium"))["skin"] as? Map<*, *>
+        return raw?.let { IdSkin.parse(it["id"] as? String ?: "", it) } ?: throw IdCardException(null, 0, "Empty skin", null)
+    }
+
+    /** Забрать недостающие PRO-карты (Aurum, Noir): только с активным PRO (`pro-required`), обе есть — `pro-claimed`. */
+    suspend fun claimProCards() {
+        call(INVENTORY, mapOf("action" to "claimPro"))
+    }
+
     /** Надеть; если скин был выставлен на обмен — обмен закрывается. */
     suspend fun equipSkin(skinId: String): IdCard? =
         IdCard.parse(call(INVENTORY, mapOf("action" to "equip", "skinId" to skinId))["card"] as? Map<*, *>)
@@ -257,11 +295,13 @@ class IdCardRepository(
         functions.getHttpsCallable(name).call(data).await().getData() as? Map<*, *> ?: emptyMap<Any, Any>()
     } catch (e: FirebaseFunctionsException) {
         val details = e.details as? Map<*, *>
+        val days = (details?.get("daysLeft") as? Number)?.toInt() ?: 0
         throw IdCardException(
             reason = details?.get("reason") as? String,
             waitMs = (details?.get("waitMs") as? Number)?.toLong() ?: 0,
             message = e.message,
             cause = e,
+            daysLeft = days,
         )
     }
 

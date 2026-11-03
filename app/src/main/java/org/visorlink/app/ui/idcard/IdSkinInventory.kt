@@ -133,11 +133,13 @@ fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Mod
 
     val bits = profile.bits
     val items = IdSkinRules.inventoryOf(card, raw)
-    val slots = IdSkinRules.slotsOf(card)
-    val free = max(0, slots - items.size)
+    val isPro = profile.isPro
+    val slots = IdSkinRules.capacityOf(card, isPro)
+    val occupied = IdSkinRules.occupied(items)
+    val free = max(0, slots - occupied)
     val equippedId = IdSkinRules.equippedId(card, items)
-    val rollLeft = rememberCountdown(IdSkinRules.rollAvailableAt(card))
-    val rollState = if (rollLeft > 0) RollState.COOLDOWN else IdSkinRules.rollState(card, bits, items.size, System.currentTimeMillis())
+    val rollLeft = rememberCountdown(IdSkinRules.rollAvailableAt(card, isPro))
+    val rollState = if (rollLeft > 0) RollState.COOLDOWN else IdSkinRules.rollState(card, bits, occupied, System.currentTimeMillis(), isPro)
     val wearer = card.wearer(profile)
     val person = profile.idCardPerson()
     val open = items.firstOrNull { it.id == openId }
@@ -161,7 +163,7 @@ fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Mod
     }
 
     Column(modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        InventoryHeader(bits = bits, used = items.size, slots = slots)
+        InventoryHeader(bits = bits, used = occupied, slots = slots)
 
         RollPanel(
             state = rollState,

@@ -357,8 +357,13 @@ private fun IdCardScene(
     val traits = card.traits
     val details = remember(traits.seed) { IdCardGenerator.deriveDetails(traits.seed) }
     // Кастомный скин заменяет палитру режима (раскладка и графика — режима), если все три цвета валидны
-    val palette = remember(card.mode, traits.variant, traits.finish, card.custom) {
-        card.custom?.colors?.let { (b, pr, se) -> customPalette(b, pr, se, traits.finish) } ?: cardPalette(card.mode, traits.variant, traits.finish)
+    val palette = remember(card.mode, traits.variant, traits.finish, card.custom, card.pattern) {
+        val pat = card.pattern
+        if (pat != null && isVlArt(pat)) {
+            vlPalette(pat)
+        } else {
+            card.custom?.colors?.let { (b, pr, se) -> customPalette(b, pr, se, traits.finish) } ?: cardPalette(card.mode, traits.variant, traits.finish)
+        }
     }
     // Своя подпись (§2.2) или росчерк из seed (§2.1): штрихи в координатах 100×30
     val strokes = remember(signature, traits.seed) {
@@ -441,10 +446,15 @@ private fun IdCardScene(
                     cameraDistance = 11f * density.density * (width.value / 36f)
                 },
         ) {
-            val faceShape = if (card.mode == IdMode.PROTOGEN) ProtogenFaceShape else IdCardMaterials.corner(em * 0.95f)
+            val pat = card.pattern
+            val faceShape = when {
+                card.mode == IdMode.PROTOGEN -> ProtogenFaceShape
+                pat != null && isVlArt(pat) -> IdCardMaterials.corner(em * 1.15f)
+                else -> IdCardMaterials.corner(em * 0.95f)
+            }
             if (!tilt.showBack) {
                 Face(card, palette, details, faceShape, em, tilt, p) {
-                    FrontContent(card, person, name, palette, details, em, accent, emojis, p, strokes)
+                    FrontContent(card, person, name, palette, details, em, accent, emojis, p, strokes, tilt)
                 }
             } else {
                 Box(Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }) {
@@ -655,6 +665,7 @@ private fun Face(
             .drawBehind {
                 drawBase(palette.base)
                 if (pattern == IdPattern.NEKO) drawNekoLattice(tilt, palette.tone == CardTone.LIGHT)
+                if (pattern == IdPattern.ROOT) with(RootArt) { drawRootLattice(tilt, palette.tone == CardTone.LIGHT) }
             }
             .drawWithContent {
                 drawContent()
@@ -741,6 +752,13 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
         if (pattern == IdPattern.NEKO) {
             val opacity = p.revealFlash ?: if (tilt.interactive) clamp(mag * 1.4f - 0.05f, 0f, 1f) else 0.2f
             drawNekoReveal(fx, fy, opacity, light)
+        }
+        if (pattern == IdPattern.ROOT) {
+            val opacity = p.revealFlash ?: if (tilt.interactive) clamp(mag * 1.4f - 0.05f, 0f, 1f) else 0.2f
+            with(RootArt) { drawRootReveal(fx, fy, opacity, light) }
+        }
+        if (pattern != null && isVlArt(pattern)) {
+            drawVlFx(pattern, tilt, vlVariant(traits.seed).rot)
         }
         if (traits.wear > 0) {
             // Зерно: статичная текстура плиткой 6em
@@ -856,7 +874,15 @@ private fun BoxScope.FrontContent(
     emojis: String,
     p: IssueProgress,
     strokes: List<List<Pair<Double, Double>>>,
+    tilt: CardTiltState,
 ) {
+    val vl = card.pattern != null && isVlArt(card.pattern)
+    if (vl) {
+        val pat = card.pattern!!
+        Canvas(Modifier.matchParentSize()) {
+            drawVlBackdrop(pat, vlVariant(card.traits.seed).rot)
+        }
+    }
     val density = LocalDensity.current
     val mode = card.mode
     val traits = card.traits
@@ -891,11 +917,34 @@ private fun BoxScope.FrontContent(
         )
     }
 
-    Photo(mode, person, name, pal, em, traits.tilt.toFloat(), p)
+    val lensColor = if (vl) {
+        val pat = card.pattern!!
+        if (pat.isPro) pal.neon else vlVariant(traits.seed).led ?: pal.neon
+    } else null
+    Photo(mode, person, name, pal, em, traits.tilt.toFloat(), p, lens = lensColor)
 
     if (mode == IdMode.PROTOGEN) LedVisor(d.led, pal, em, p)
 
     Fields(card, name, person.username ?: "user", registered, formatCardDate(card.issuedAt), pal, em, p)
+
+    if (vl) {
+        val pat = card.pattern!!
+        val username = person.username ?: "user"
+        val text = if (pat.isPro) "VISORLINK PRO * $username * ${card.serial}" else "${card.serial} * VISORLINK * $username"
+        val variant = vlVariant(traits.seed)
+        val led = vlLedColor(pat, variant)
+        val yPos = if (mode == IdMode.STANDARD) 13.0f else if (mode == IdMode.PROTOGEN) 16.2f else 14.7f
+        Box(Modifier.at(12.4f, yPos, em).graphicsLayer { alpha = p.serial }) {
+            VlDisplay(
+                text = text,
+                face = pat == IdPattern.VL_BUDDY,
+                led = led,
+                tone = pal.tone,
+                em = em,
+                tilt = tilt,
+            )
+        }
+    }
 
     when (mode) {
         IdMode.STANDARD -> {
@@ -976,7 +1025,7 @@ private fun BoxScope.FrontContent(
                     val s = 1.35f + (1f - 1.35f) * p.holo
                     scaleX = s; scaleY = s
                 },
-            em, p, pattern = card.pattern,
+            em, p, tilt = tilt, pattern = card.pattern,
         )
     }
 
@@ -1114,7 +1163,7 @@ private fun Header(mode: IdMode, pal: CardPalette, em: Dp, p: IssueProgress) {
 }
 
 @Composable
-private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPalette, em: Dp, tiltDeg: Float, p: IssueProgress) {
+private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPalette, em: Dp, tiltDeg: Float, p: IssueProgress, lens: Color? = null) {
     val density = LocalDensity.current
     val (left, top, w) = when (mode) {
         IdMode.PROTOGEN -> Triple(1.6f, 3.5f, 9.2f)
@@ -1130,6 +1179,22 @@ private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPal
         }
     }
     Box(Modifier.at(left, top, em).size(em * w, em * h).graphicsLayer { rotationZ = tiltDeg }) {
+        if (lens != null) {
+            val ring = 0.48f
+            Canvas(Modifier.matchParentSize()) {
+                val emPx = em.toPx()
+                drawRoundRect(
+                    color = lens.copy(alpha = 0.7f * p.develop),
+                    topLeft = Offset(-emPx * ring / 2, -emPx * ring / 2),
+                    size = Size(size.width + emPx * ring, size.height + emPx * ring),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius((em * (0.35f + ring / 2)).toPx()),
+                    style = Stroke(width = (em * ring).toPx())
+                )
+                val lamp = Offset(size.width - emPx * 0.1f, emPx * 0.1f)
+                drawCircle(pal.photoBg, radius = (em * (0.45f + 0.18f)).toPx(), center = lamp)
+                drawCircle(lens.copy(alpha = p.develop), radius = (em * 0.45f).toPx(), center = lamp)
+            }
+        }
         Box(
             Modifier
                 .fillMaxSize()
@@ -1422,18 +1487,32 @@ private fun Stamp(
 /** Голограмма: форма-маска, радужная фольга (сдвигается при наклоне), блик и тиснёная эмблема. */
 @Composable
 private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.HoloShape, sizeEm: Float, modifier: Modifier, em: Dp, p: IssueProgress, tilt: CardTiltState? = null, pattern: IdPattern? = null) {
+    val tiltState = tilt ?: LocalCardTilt.current
+    if (pattern != null && isVlArt(pattern)) {
+        val sweep = 1f - p.holoSweep
+        Canvas(modifier.size(em * sizeEm)) {
+            paintVlHolo(pattern, tiltState ?: CardTiltState(), sweep, p.holo)
+        }
+        return
+    }
     val context = LocalContext.current
     val neko = pattern == IdPattern.NEKO
-    val mask = remember(shape, neko) { if (neko) NekoArt.holoMask else holoShapePath(shape) }
+    val root = pattern == IdPattern.ROOT
+    val mask = remember(shape, neko, root) {
+        when {
+            neko -> NekoArt.holoMask
+            root -> RootArt.holoMask
+            else -> holoShapePath(shape)
+        }
+    }
     val brand = remember(context) { ResourcesCompat.getFont(context, R.font.space_grotesk_semibold) }
-    val tiltState = tilt ?: LocalCardTilt.current
     Canvas(modifier.size(em * sizeEm)) {
         val s = size.width / 100f
         val clip = Path().apply { addPath(mask) }.also { it.transform(androidx.compose.ui.graphics.Matrix().apply { scale(s, s) }) }
         clipPath(clip) {
             val box = Size(size.width * 3f, size.height * 3f)
-            // Золото — всегда золотой фон, даже у галактики (правило золота в CSS идёт позже)
             when {
+                root -> drawRect(cssLinear(135f, IdCardMaterials.RootHolo, size))
                 neko -> drawRect(cssLinear(135f, IdCardMaterials.NekoHolo, size))
                 traits.finish == IdFinish.GOLD -> drawRect(cssLinear(135f, IdCardMaterials.HoloGold, size))
                 traits.foil == IdFoil.GALAXY -> drawRect(Brush.radialGradient(colorStops = IdCardMaterials.HoloGalaxy.toTypedArray(), center = Offset(size.width * 0.32f, size.height * 0.3f), radius = size.width * 0.75f))
@@ -1443,14 +1522,17 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             val fy = tiltState?.fy ?: 0f
             val sweep = 1f - p.holoSweep
             val rainbowOrigin = Offset(-size.width + (-fx * 0.16f + 0.3f * sweep) * box.width, -size.height + (-fy * 0.13f + 0.22f * sweep) * box.height)
-            val (stops, alpha) = if (neko) IdCardMaterials.NekoRainbow to 0.7f else when (traits.foil) {
-                IdFoil.AURORA -> IdCardMaterials.RainbowAurora to 0.85f
-                IdFoil.GALAXY -> IdCardMaterials.RainbowGalaxy to 0.5f
-                else -> IdCardMaterials.RainbowClassic to (if (traits.foil == IdFoil.PRISM) 0.85f else 0.32f)
+            val (stops, alpha) = when {
+                root -> IdCardMaterials.RootRainbow to 0.78f
+                neko -> IdCardMaterials.NekoRainbow to 0.7f
+                else -> when (traits.foil) {
+                    IdFoil.AURORA -> IdCardMaterials.RainbowAurora to 0.85f
+                    IdFoil.GALAXY -> IdCardMaterials.RainbowGalaxy to 0.5f
+                    else -> IdCardMaterials.RainbowClassic to (if (traits.foil == IdFoil.PRISM) 0.85f else 0.32f)
+                }
             }
             drawRect(cssRepeating(118f, stops, box, rainbowOrigin), alpha = alpha)
-            if (traits.foil == IdFoil.GALAXY && !neko) {
-                // Звёзды — две сетки, 1.1em и 1.4em
+            if (traits.foil == IdFoil.GALAXY && !neko && !root) {
                 for ((stepEm, r, a) in listOf(Triple(1.1f, 0.05f, 1f), Triple(1.4f, 0.04f, 0.7f))) {
                     val step = (em * stepEm).toPx()
                     var yy = 0f
@@ -1464,7 +1546,11 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             val glintOrigin = Offset(-size.width - fx * 0.34f * box.width, -size.height + fy * 0.26f * box.height)
             drawRect(cssLinear(115f, listOf(0f to Color.Transparent, 0.44f to Color.Transparent, 0.5f to Color.White.copy(alpha = 0.8f), 0.56f to Color.Transparent, 1f to Color.Transparent), box, glintOrigin))
             scale(s, s, pivot = Offset.Zero) {
-                if (neko) with(NekoArt) { drawHoloEmblem() } else drawHoloEmblem(mode, brand)
+                when {
+                    root -> with(RootArt) { drawHoloEmblem() }
+                    neko -> with(NekoArt) { drawHoloEmblem() }
+                    else -> drawHoloEmblem(mode, brand)
+                }
             }
         }
     }
@@ -1665,6 +1751,7 @@ internal fun editionName(e: IdEdition) = stringResource(
         IdEdition.RARE -> R.string.idcard_edition_rare
         IdEdition.EPIC -> R.string.idcard_edition_epic
         IdEdition.LEGENDARY -> R.string.idcard_edition_legendary
+        IdEdition.UNIQUE -> R.string.surprise_gift_card_kicker
     },
 )
 
