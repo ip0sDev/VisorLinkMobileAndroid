@@ -1140,7 +1140,11 @@ class ChatRepository(
         }
     }
 
-    suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {
+    suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String, hideReads: Boolean = false) {
+        if (hideReads) {
+            resetUnreadCount(chatId, uid, hideReads = true)
+            return
+        }
         val unread = messages.filter { it.senderId != uid && !it.readBy.contains(uid) && !it.deleted }
         if (unread.isEmpty()) return
         val batch = db.batch()
@@ -1157,13 +1161,15 @@ class ChatRepository(
         batch.commit().await()
     }
 
-    suspend fun resetUnreadCount(chatId: String, uid: String) {
+    suspend fun resetUnreadCount(chatId: String, uid: String, hideReads: Boolean = false) {
         if (uid.isEmpty() || chatId.isEmpty()) return
         try {
             val chatUpdates = hashMapOf<String, Any>(
-                "unreadCount.$uid" to 0L,
-                "lastMessage.readBy" to FieldValue.arrayUnion(uid)
+                "unreadCount.$uid" to 0L
             )
+            if (!hideReads) {
+                chatUpdates["lastMessage.readBy"] = FieldValue.arrayUnion(uid)
+            }
             db.collection("chats").document(chatId).update(chatUpdates).await()
         } catch (_: Exception) {}
     }

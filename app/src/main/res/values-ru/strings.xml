@@ -1435,4 +1435,8 @@
     <string name="settings_surprise_demo_title">Демо сюрприза</string>
     <string name="settings_surprise_demo_subtitle">Весь показ на встроенных данных, подарок не выдаётся</string>
 
+    <!-- Signal -->
+    <string name="signal_title">Сигнал</string>
+    <string name="signal_back">Назад</string>
+
 </resources>

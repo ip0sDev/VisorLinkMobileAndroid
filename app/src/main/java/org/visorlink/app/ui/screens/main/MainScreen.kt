@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.main
 
+import org.visorlink.app.ui.screens.signal.AchievementToastHost
+
 import android.app.Activity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
@@ -74,6 +76,7 @@ fun MainScreen(
     onEditDiaryEntry: (String) -> Unit,
     onLoggedOut: () -> Unit = {},
     onOpenStickers: () -> Unit = {},
+    onOpenSignal: () -> Unit = {},
     mainViewModel: MainViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -279,6 +282,8 @@ fun MainScreen(
                         )
                     }
                 }
+
+                AchievementToastHost(onOpenSignal = onOpenSignal)
             }
         }
     }

@@ -73,6 +73,25 @@ data class UserProfile(
     val banned: Boolean = false,
     /** Причина блокировки (запасной вариант, если `bans/{uid}` недоступен). */
     val banReason: String? = null,
+
+    // Стрик и Сигнал (пишет сервер)
+    val streakBest: Int = 0,
+    val activeDays: Int = 0,
+    val streakFreezes: Int = 0,
+    val streakFreezeGrantAt: Any? = null,
+    val lastFreezeUse: Map<String, Any?>? = null,
+    val timeZone: String? = null,
+
+    // Невидимка PRO (пишет клиент в settings / дублируется)
+    val hideOnline: Boolean = false,
+    val hideReads: Boolean = false,
+
+    // Косметика (пишет сервер cosmetics callable)
+    val emojiStatus: String? = null,
+    val nameColor: String? = null,
+    val emojiStatusUnlocked: Boolean = false,
+    val nameColorUnlocked: Boolean = false,
+    val unlocks: Map<String, Any?> = emptyMap(),
 ) {
     fun isProActive(): Boolean {
         if (proUntil == null) return false
@@ -90,7 +109,61 @@ data class UserProfile(
             hasTelegram -> "ID $telegramId"
             else -> null
         }
+
+    /** Вечный PRO (выдан администратором): `proUntil` за 2090 год. */
+    val isEternalPro: Boolean
+        @com.google.firebase.firestore.Exclude get() {
+            val date = proUntil?.toDate() ?: return false
+            val cal = java.util.Calendar.getInstance().apply { time = date }
+            return cal.get(java.util.Calendar.YEAR) > 2090
+        }
+
+    val hidesOnline: Boolean
+        @com.google.firebase.firestore.Exclude get() =
+            (hideOnline || (settings["hideOnline"] as? Boolean == true)) && isProActive()
+
+    val hidesReads: Boolean
+        @com.google.firebase.firestore.Exclude get() =
+            (hideReads || (settings["hideReads"] as? Boolean == true)) && isProActive()
+
+    val isEmojiStatusUnlocked: Boolean
+        @com.google.firebase.firestore.Exclude get() =
+            emojiStatusUnlocked || (unlocks["emojiStatus"] as? Boolean == true)
+
+    val isNameColorUnlocked: Boolean
+        @com.google.firebase.firestore.Exclude get() =
+            nameColorUnlocked || (unlocks["nameColor"] as? Boolean == true)
+
+    val shownEmojiStatus: String?
+        @com.google.firebase.firestore.Exclude get() =
+            if (emojiStatus != null && (isProActive() || isEmojiStatusUnlocked)) emojiStatus else null
+
+    val shownNameColor: String?
+        @com.google.firebase.firestore.Exclude get() =
+            if (nameColor != null && (isProActive() || isNameColorUnlocked)) nameColor else null
+
+    val streakFreezeGrantAtMs: Long
+        @com.google.firebase.firestore.Exclude get() = when (val v = streakFreezeGrantAt) {
+            is Number -> v.toLong()
+            is Timestamp -> v.toDate().time
+            is java.util.Date -> v.time
+            else -> 0L
+        }
+
+    val parsedLastFreezeUse: FreezeUseInfo?
+        @com.google.firebase.firestore.Exclude get() {
+            val m = lastFreezeUse ?: return null
+            val at = (m["at"] as? Number)?.toLong() ?: return null
+            val n = (m["n"] as? Number)?.toInt() ?: 1
+            return FreezeUseInfo(at = at, n = n)
+        }
 }
+
+@IgnoreExtraProperties
+data class FreezeUseInfo(
+    val at: Long = 0L,
+    val n: Int = 1
+)
 
 enum class ChatType { DIRECT, GROUP, CHANNEL, EMERGENCY }
 
@@ -918,7 +991,7 @@ data class Incident(
     val isActive: Boolean get() = !resolved
 }
 
-data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null)
+data class PresenceData(val online: Boolean = false, val lastSeen: Long? = null, val hidden: Boolean = false)
 
 sealed class TopbarStatus {
     object Online : TopbarStatus()

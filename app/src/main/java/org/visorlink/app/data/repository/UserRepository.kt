@@ -322,10 +322,42 @@ class UserRepository(
         awaitClose { ref.removeEventListener(listener) }
     }
 
-    suspend fun buyPro(useTrial: Boolean) {
+    suspend fun buyPro(useTrial: Boolean, plan: String = "month") {
+        val data = mutableMapOf<String, Any?>("useTrial" to useTrial)
+        if (!useTrial) data["plan"] = plan
         functions.getHttpsCallable("buyProSubscription")
-            .call(mapOf("useTrial" to useTrial))
+            .call(data)
             .await()
+    }
+
+    suspend fun updateUserField(uid: String, field: String, value: Any) {
+        db.collection("users").document(uid).update(field, value).await()
+        updateCachedProfile(uid) { current ->
+            when (field) {
+                "settings.hideOnline" -> {
+                    val newSettings = current.settings.toMutableMap().apply { put("hideOnline", value) }
+                    current.copy(settings = newSettings, hideOnline = value as? Boolean ?: false)
+                }
+                "settings.hideReads" -> {
+                    val newSettings = current.settings.toMutableMap().apply { put("hideReads", value) }
+                    current.copy(settings = newSettings, hideReads = value as? Boolean ?: false)
+                }
+                "showStreak" -> current.copy(showStreak = value as? Boolean ?: true)
+                "timeZone" -> current.copy(timeZone = value as? String)
+                else -> current
+            }
+        }
+    }
+
+    suspend fun syncTimeZone(uid: String, saved: String?) {
+        val tz = try {
+            java.util.TimeZone.getDefault().id
+        } catch (_: Exception) { return }
+        if (tz.isNullOrBlank() || tz.length > 64 || tz == saved) return
+        try {
+            db.collection("users").document(uid).update("timeZone", tz).await()
+            updateCachedProfile(uid) { it.copy(timeZone = tz) }
+        } catch (_: Exception) {}
     }
 
     suspend fun updateShowStreak(show: Boolean) {

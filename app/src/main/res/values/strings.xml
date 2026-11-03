@@ -1429,4 +1429,8 @@
     <string name="settings_surprise_demo_title">Surprise demo</string>
     <string name="settings_surprise_demo_subtitle">The whole show on built-in data, no gift is granted</string>
 
+    <!-- Signal -->
+    <string name="signal_title">Signal</string>
+    <string name="signal_back">Back</string>
+
 </resources>

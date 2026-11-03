@@ -26,6 +26,8 @@ class PresenceManager(val uid: String) : DefaultLifecycleObserver {
     private var isAppInForeground = false
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var heartbeatJob: Job? = null
+    var isHidden: Boolean = false
+        private set
 
     init {
         try {
@@ -50,15 +52,43 @@ class PresenceManager(val uid: String) : DefaultLifecycleObserver {
     }
 
     private fun markOnline() {
-        presenceRef.updateChildren(
+        if (isHidden) return
+        presenceRef.setValue(
             mapOf("online" to true, "lastSeen" to ServerValue.TIMESTAMP)
         )
     }
 
     private fun markOffline() {
-        presenceRef.updateChildren(
+        if (isHidden) return
+        presenceRef.setValue(
             mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
         )
+    }
+
+    fun setHidden(hidden: Boolean) {
+        if (isHidden == hidden) return
+        isHidden = hidden
+        if (hidden) {
+            heartbeatJob?.cancel()
+            try {
+                presenceRef.onDisconnect().cancel()
+                presenceRef.setValue(mapOf("online" to false, "hidden" to true))
+            } catch (e: Exception) {
+                Log.w("PresenceManager", "presence hide failed: ${e.message}")
+            }
+        } else {
+            try {
+                presenceRef.onDisconnect().setValue(
+                    mapOf("online" to false, "lastSeen" to ServerValue.TIMESTAMP)
+                )
+            } catch (_: Exception) {}
+            if (isAppInForeground) {
+                markOnline()
+                startHeartbeat()
+            } else {
+                markOffline()
+            }
+        }
     }
 
     private fun startListening() {
@@ -142,16 +172,17 @@ class PresenceManager(val uid: String) : DefaultLifecycleObserver {
             val listener = object : ValueEventListener {
                 override fun onDataChange(snap: DataSnapshot) {
                     if (!snap.exists()) {
-                        trySend(PresenceData(online = false, lastSeen = null))
+                        trySend(PresenceData(online = false, lastSeen = null, hidden = false))
                         return
                     }
-                    val online = snap.child("online").getValue(Boolean::class.java) ?: false
-                    val lastSeen = when (val raw = snap.child("lastSeen").value) {
+                    val hidden = snap.child("hidden").getValue(Boolean::class.java) == true
+                    val online = if (hidden) false else (snap.child("online").getValue(Boolean::class.java) ?: false)
+                    val lastSeen = if (hidden) null else when (val raw = snap.child("lastSeen").value) {
                         is Number -> raw.toLong()
                         is String -> raw.toLongOrNull()
                         else -> null
                     }
-                    trySend(PresenceData(online, lastSeen))
+                    trySend(PresenceData(online = online, lastSeen = lastSeen, hidden = hidden))
                 }
                 override fun onCancelled(e: DatabaseError) {
                     trySend(PresenceData(online = false, lastSeen = null))

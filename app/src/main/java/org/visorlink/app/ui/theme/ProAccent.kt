@@ -68,7 +68,7 @@ object ProAccent {
 
     private fun rgb(hex: String): List<Double> = listOf(1, 3, 5).map { hex.substring(it, it + 2).toInt(16).toDouble() }
 
-    private fun parse(hex: String): Color = rgb(hex).let { Color(it[0].toInt(), it[1].toInt(), it[2].toInt()) }
+    fun parse(hex: String): Color = rgb(hex).let { Color(it[0].toInt(), it[1].toInt(), it[2].toInt()) }
 
     private fun toColor(c: List<Double>): Color {
         val v = c.map { it.coerceIn(0.0, 255.0).roundToInt() }

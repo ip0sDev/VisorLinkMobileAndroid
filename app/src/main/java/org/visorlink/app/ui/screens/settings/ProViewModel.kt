@@ -2,39 +2,57 @@ package org.visorlink.app.ui.screens.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import org.visorlink.app.data.repository.UserRepository
+import com.google.firebase.functions.FirebaseFunctionsException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.visorlink.app.data.remote.EconomyException
+import org.visorlink.app.data.repository.CosmeticsRepository
+import org.visorlink.app.data.repository.UserRepository
 
 data class ProUiState(
     val isLoading: Boolean = false,
+    val isCosmeticsLoading: Boolean = false,
     val successMessage: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val cosmeticsError: String? = null
 )
 
 class ProViewModel(
     private val userRepository: UserRepository
 ) : ViewModel() {
 
+    companion object {
+        val planBits: Map<String, Int> = mapOf("month" to 1000, "year" to 10000)
+    }
+
     private val _uiState = MutableStateFlow(ProUiState())
     val uiState: StateFlow<ProUiState> = _uiState.asStateFlow()
 
-    fun buyPro(useTrial: Boolean = false) {
+    fun buyPro(useTrial: Boolean = false, plan: String = "month") {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, successMessage = null) }
             try {
-                userRepository.buyPro(useTrial)
-                val msg = if (useTrial) "PRO триал активирован на 1 день!" else "PRO активирован на 30 дней!"
+                userRepository.buyPro(useTrial, plan)
+                val msg = when {
+                    useTrial -> "PRO триал активирован на 1 день!"
+                    plan == "year" -> "PRO на год активирован! 🎉"
+                    else -> "PRO активирован на 30 дней!"
+                }
                 _uiState.update { it.copy(isLoading = false, successMessage = msg) }
             } catch (e: Exception) {
                 var msg = e.message ?: "Неизвестная ошибка"
+                val reason = when (e) {
+                    is EconomyException -> e.reason
+                    is FirebaseFunctionsException -> (e.details as? Map<*, *>)?.get("reason") as? String
+                    else -> null
+                }
 
-                // Парсим ошибки от Cloud Function и нового бэкенда
-                if (msg.contains("Not enough bits", ignoreCase = true) || msg.contains("bits", ignoreCase = true) || msg.contains("битов", ignoreCase = true)) {
-                    msg = "Недостаточно Битов для покупки PRO."
+                if (reason == "not-enough-bits" || msg.contains("not enough bits", ignoreCase = true) || msg.contains("битов", ignoreCase = true)) {
+                    val price = planBits[plan] ?: planBits["month"] ?: 1000
+                    msg = "Нужно $price Bits."
                 } else if (msg.contains("already pro", ignoreCase = true) || msg.contains("Already active", ignoreCase = true) || msg.contains("уже активна", ignoreCase = true)) {
                     msg = "У вас уже активна подписка PRO."
                 } else if (msg.contains("trial already used", ignoreCase = true) || msg.contains("Пробный период", ignoreCase = true) || msg.contains("пробную", ignoreCase = true)) {
@@ -46,17 +64,57 @@ class ProViewModel(
         }
     }
 
+    fun updateUserSettings(uid: String, key: String, value: Any) {
+        viewModelScope.launch {
+            try {
+                userRepository.updateUserField(uid, "settings.$key", value)
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Не удалось сохранить настройку") }
+            }
+        }
+    }
+
+    fun setCosmetics(
+        emojiStatus: String? = CosmeticsRepository.KEEP_STRING,
+        nameColor: String? = CosmeticsRepository.KEEP_STRING,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCosmeticsLoading = true, cosmeticsError = null) }
+            try {
+                CosmeticsRepository.setCosmetics(emojiStatus, nameColor)
+                _uiState.update { it.copy(isCosmeticsLoading = false) }
+                onSuccess()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isCosmeticsLoading = false, cosmeticsError = CosmeticsRepository.errorText(e)) }
+            }
+        }
+    }
+
+    fun unlockCosmetic(item: String, onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCosmeticsLoading = true, cosmeticsError = null) }
+            try {
+                CosmeticsRepository.unlock(item)
+                _uiState.update { it.copy(isCosmeticsLoading = false) }
+                onSuccess()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isCosmeticsLoading = false, cosmeticsError = CosmeticsRepository.errorText(e)) }
+            }
+        }
+    }
+
     fun toggleShowStreak(show: Boolean) {
         viewModelScope.launch {
             try {
                 userRepository.updateShowStreak(show)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _uiState.update { it.copy(error = "Ошибка обновления стрик-статуса") }
             }
         }
     }
 
     fun clearMessages() {
-        _uiState.update { it.copy(error = null, successMessage = null) }
+        _uiState.update { it.copy(error = null, successMessage = null, cosmeticsError = null) }
     }
 }

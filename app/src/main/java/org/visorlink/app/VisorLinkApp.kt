@@ -40,6 +40,7 @@ import org.koin.core.context.startKoin
 class VisorLinkApp : Application(), ImageLoaderFactory {
 
     private var presenceManager: PresenceManager? = null
+    private var profileSyncJob: kotlinx.coroutines.Job? = null
 
     override fun newImageLoader(): ImageLoader {
         return AppImageLoader.get(this)
@@ -189,7 +190,19 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                         Log.e("VisorLinkApp", "FCM token sync failed on auth state change", e)
                     }
                 }
+                profileSyncJob?.cancel()
+                profileSyncJob = MainScope().launch {
+                    val userRepo = GlobalContext.getOrNull()?.get<UserRepository>() ?: return@launch
+                    userRepo.userProfileFlow(uid).collect { profile ->
+                        if (profile != null) {
+                            presenceManager?.setHidden(profile.hidesOnline)
+                            userRepo.syncTimeZone(uid, profile.timeZone)
+                        }
+                    }
+                }
             } else {
+                profileSyncJob?.cancel()
+                profileSyncJob = null
                 GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.SessionRepository>()?.stopWatching()
                 GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.BlockRepository>()?.stop()
                 presenceManager?.detach()

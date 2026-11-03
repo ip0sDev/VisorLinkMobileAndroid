@@ -89,6 +89,8 @@ fun SettingsScreen(
     onOpenFlagFlipper: () -> Unit = {},
     onOpenAnimationTest: () -> Unit = {},
     onNavigateToAppCheckDiagnostic: () -> Unit = {},
+    onOpenPro: () -> Unit = {},
+    onOpenSignal: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     userRepository: UserRepository = koinInject(),
     authRepository: AuthRepository = koinInject(),
@@ -327,7 +329,7 @@ fun SettingsScreen(
                     }
                   }
                     Box(modifier = Modifier.liquidPillCardSlideOut(index = 1)) {
-                        ProStatusBanner(profile = p, proViewModel = proViewModel, proState = proState, hapticEnabled = hapticEnabled)
+                        CompactProTile(profile = p, onClick = onOpenPro)
                     }
                 }
 
@@ -1071,77 +1073,7 @@ fun ChangePasswordDialog(
     )
 }
 
-@Composable
-private fun ProStatusBanner(profile: UserProfile, proViewModel: ProViewModel, proState: ProUiState, hapticEnabled: Boolean) {
-    VlSettingsSection(title = stringResource(R.string.pro_title), isPremium = true) {
-        val expirySubtitle = if (profile.isProActive()) {
-            val until = profile.proUntil
-            val isEternal = until == null || (until.toDate().time - System.currentTimeMillis() > 365L * 24 * 3600 * 1000)
-            if (isEternal) {
-                "бесконечный PRO"
-            } else {
-                val dateStr = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.getDefault()).format(until.toDate())
-                "Активен до $dateStr"
-            }
-        } else null
 
-        VlSettingsItem(
-            icon = Icons.Default.WorkspacePremium,
-            title = if (profile.isProActive()) stringResource(R.string.pro_status_active) else stringResource(R.string.pro_status_inactive),
-            subtitle = expirySubtitle
-        )
-        VlSettingsItem(
-            icon = Icons.Default.Toll,
-            title = stringResource(R.string.pro_bits),
-            trailing = { Text(profile.bits.toString(), fontWeight = FontWeight.Bold, color = VlCategoryTint.ProGold) }
-        )
-
-        if (!profile.isProActive()) {
-            val buttonShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp))
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                if (!profile.trialUsed) {
-                    OutlinedButton(
-                        onClick = { proViewModel.buyPro(true) },
-                        enabled = !proState.isLoading,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                        shape = buttonShape
-                    ) {
-                        Text("Попробовать PRO бесплатно (1 день)")
-                    }
-                }
-                Button(
-                    onClick = { proViewModel.buyPro(false) },
-                    enabled = !proState.isLoading,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = buttonShape
-                ) {
-                    if (proState.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
-                    } else {
-                        Text(stringResource(R.string.pro_action_buy, 100))
-                    }
-                }
-            }
-        }
-
-        if (proState.error != null) {
-            Text(
-                text = proState.error,
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-        }
-        if (proState.successMessage != null) {
-            Text(
-                text = proState.successMessage,
-                color = MaterialTheme.colorScheme.primary,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-            )
-        }
-    }
-}
 
 private const val KEY_DEV_SETTINGS = "dev_settings_visible"
 

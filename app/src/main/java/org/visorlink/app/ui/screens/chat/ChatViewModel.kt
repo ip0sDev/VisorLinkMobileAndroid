@@ -493,10 +493,11 @@ class ChatViewModel(
                     }
 
                     if (ActiveChatTracker.isChatActive(chatId)) {
+                        val hideReads = _uiState.value.currentUser?.hidesReads == true
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
-                                chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
-                                chatRepository.resetUnreadCount(chatId, currentUid)
+                                chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid, hideReads = hideReads)
+                                chatRepository.resetUnreadCount(chatId, currentUid, hideReads = hideReads)
                                 NotificationHelper.clearNotification(context, chatId)
                             }
                             catch (_: Exception) {}
@@ -871,8 +872,9 @@ class ChatViewModel(
                 }
 
                 if (ActiveChatTracker.isChatActive(chatId)) {
+                    val hideReads = _uiState.value.currentUser?.hidesReads == true
                     try {
-                        chatRepository.markMessagesAsRead(chatId, older, currentUid)
+                        chatRepository.markMessagesAsRead(chatId, older, currentUid, hideReads = hideReads)
                         NotificationHelper.clearNotification(context, chatId)
                     }
                     catch (_: Exception) {}

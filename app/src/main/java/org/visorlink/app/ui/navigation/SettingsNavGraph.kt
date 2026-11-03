@@ -32,7 +32,22 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenFlagFlipper = { navController.navigate(Screen.FlagFlipper.route) },
             onOpenAnimationTest = { navController.navigate(Screen.AnimationTest.route) },
             onNavigateToAppCheckDiagnostic = { navController.navigate(Screen.AppCheckDiagnostic.route) },
+            onOpenPro = { navController.navigate(Screen.Pro.route) },
+            onOpenSignal = { navController.navigate(Screen.Signal.route) },
             themeViewModel = themeViewModel
+        )
+    }
+
+    composable(Screen.Pro.route) {
+        org.visorlink.app.ui.screens.settings.ProScreen(
+            onNavigateBack = { navController.popBackStack() },
+            onOpenSignal = { navController.navigate(Screen.Signal.route) }
+        )
+    }
+
+    composable(Screen.Signal.route) {
+        org.visorlink.app.ui.screens.signal.SignalScreen(
+            onNavigateBack = { navController.popBackStack() }
         )
     }
 

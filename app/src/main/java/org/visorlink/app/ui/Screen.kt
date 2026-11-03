@@ -77,4 +77,6 @@ sealed class Screen(val route: String) {
     object DiaryEntry : Screen("diary_entry?id={id}") {
         fun createRoute(id: String? = null) = if (id != null) "diary_entry?id=$id" else "diary_entry"
     }
+    object Signal : Screen("signal")
+    object Pro : Screen("pro")
 }
