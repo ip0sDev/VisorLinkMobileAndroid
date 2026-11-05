@@ -102,7 +102,7 @@ class MainActivity : AppCompatActivity() {
             // Тема по режиму ID-карты (веб: ModeThemeSync): после входа её решает режим
             // (Biolume / Forge v2), а не выбор в настройках
             val authState by authViewModel.authState.collectAsState()
-            val myUid = (authState as? org.visorlink.app.data.repository.AuthState.Verified)?.user?.uid
+            val myUid = (authState as? org.visorlink.app.data.repository.AuthState.Verified)?.user?.uid ?: firebaseAuth.currentUser?.uid
             val myProfile by remember(myUid) {
                 if (myUid == null) kotlinx.coroutines.flow.flowOf(null) else userRepository.userProfileFlow(myUid)
             }.collectAsState(initial = null)
@@ -122,6 +122,7 @@ class MainActivity : AppCompatActivity() {
                 myUid?.let { themePrefs.getString(KEY_LAST_PRO_ACCENT + it, null) }?.takeIf { it.length == 7 }
                     ?.let { androidx.compose.ui.graphics.Color(it.substring(1).toLong(16) or 0xFF000000) }
             }
+            val effectiveProAccent = if (myProfile != null) myProfile?.proAccent() else cachedProAccent
             val maskState by maskModeManager.state.collectAsState()
             val chatThemeContext by chatThemeController.context.collectAsState()
             val modeTheme = org.visorlink.app.data.idcard.ModeThemeRules.resolve(
@@ -140,14 +141,15 @@ class MainActivity : AppCompatActivity() {
             val viewerTheme = if (idModeState.enabled) {
                 org.visorlink.app.ui.theme.ViewerTheme(
                     appTheme = modeTheme.toAppTheme(),
-                    themeMode = if (modeTheme.forceDark) org.visorlink.app.data.model.ThemeMode.DARK else themeMode,
+                    // Forge теперь есть и светлая (Clean Room): особый режим больше не держит тёмную тему принудительно
+                    themeMode = themeMode,
                     colorPreset = colorPreset,
                     modeDriven = true,
                     // Цвет профиля PRO — акцент всего интерфейса (Biolume и Forge v2)
-                    proAccent = if (myProfile != null) myProfile?.proAccent() else cachedProAccent,
+                    proAccent = effectiveProAccent,
                 )
             } else {
-                org.visorlink.app.ui.theme.ViewerTheme(appTheme, themeMode, colorPreset)
+                org.visorlink.app.ui.theme.ViewerTheme(appTheme, themeMode, colorPreset, proAccent = effectiveProAccent)
             }
 
             LaunchedEffect(Unit) {
@@ -164,7 +166,7 @@ class MainActivity : AppCompatActivity() {
             // Смена темы целиком (Biolume ↔ Forge, светлая ↔ тёмная) — растворением снимка
             org.visorlink.app.ui.theme.ThemeCrossfade(
                 value = viewerTheme,
-                key = { it.appTheme to it.themeMode },
+                key = { Triple(it.appTheme, it.themeMode, it.proAccent) },
             ) { shownTheme ->
             VisorLinkTheme(
                 appTheme = shownTheme.appTheme,

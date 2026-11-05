@@ -65,7 +65,7 @@ fun CreateChatScreen(
             VlTopAppBar(
                 title = { Text(stringResource(titleRes), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         onNavigateBack()
                     }) {

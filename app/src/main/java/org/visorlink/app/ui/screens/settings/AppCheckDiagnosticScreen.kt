@@ -47,7 +47,7 @@ fun AppCheckDiagnosticScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.appcheck_diagnostic_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 }

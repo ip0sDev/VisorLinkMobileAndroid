@@ -81,7 +81,7 @@ fun StickerPickerBottomSheet(
         sheetState = sheetState,
         dragHandle = null,
         shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        containerColor = if (tokens.isBiolume) cs.surfaceContainerLow else cs.surface,
+        containerColor = if (tokens.structure.enabled) cs.surfaceContainerLow else cs.surface,
         contentWindowInsets = { WindowInsets(0) }
     ) {
         Box(
@@ -699,7 +699,7 @@ private fun StickerCell(
             .background(
                 when {
                     bare -> if (isPressed) cs.primary.copy(alpha = 0.12f) else Color.Transparent
-                    tokens.isBiolume -> cs.surfaceContainer.copy(alpha = 0.65f)
+                    tokens.structure.enabled -> cs.surfaceContainer.copy(alpha = 0.65f)
                     else -> cs.surfaceVariant.copy(alpha = 0.4f)
                 },
                 itemShape
@@ -708,7 +708,6 @@ private fun StickerCell(
                 if (tokens.structure.enabled && !bare) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), itemShape)
                 else Modifier
             )
-            .vlCornerBrackets(cs.primary, active = bare && isPressed, length = 10.dp, thickness = 2.dp)
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -729,7 +728,7 @@ private fun StickerCell(
             .align(Alignment.BottomEnd)
             .padding(6.dp)
             .clip(VlTheme.tokens.shapes.adapt(CircleShape))
-            .background(cs.surface.copy(alpha = if (tokens.isBiolume) 0.85f else 0.75f))
+            .background(cs.surface.copy(alpha = if (tokens.structure.enabled) 0.85f else 0.75f))
             .then(
                 if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.3f), VlTheme.tokens.shapes.adapt(CircleShape))
                 else Modifier

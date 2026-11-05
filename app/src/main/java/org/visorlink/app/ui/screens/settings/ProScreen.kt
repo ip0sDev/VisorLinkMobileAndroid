@@ -11,9 +11,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -83,9 +83,9 @@ fun ProScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.pro_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(R.string.custom_back)
                         )
                     }
@@ -165,7 +165,7 @@ fun CompactProTile(
         isPremium = true
     ) {
         VlSettingsItem(
-            icon = if (isActive) Icons.Default.WorkspacePremium else Icons.Default.Stars,
+            icon = if (isActive) Icons.Rounded.WorkspacePremium else Icons.Rounded.Stars,
             iconColor = if (isActive) ProGold else cs.onSurfaceVariant,
             title = "VisorLink PRO",
             subtitle = subtitleParts.joinToString(" • "),
@@ -192,7 +192,7 @@ fun CompactProTile(
                         }
                     }
                     Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                         contentDescription = null,
                         tint = cs.onSurfaceVariant
                     )
@@ -223,14 +223,14 @@ fun ProStatusBanner(
         isPremium = true
     ) {
         VlSettingsItem(
-            icon = if (isActive) Icons.Default.WorkspacePremium else Icons.Default.Stars,
+            icon = if (isActive) Icons.Rounded.WorkspacePremium else Icons.Rounded.Stars,
             iconColor = if (isActive) ProGold else cs.onSurfaceVariant,
             title = if (isActive) "Статус: Активен" else "Статус: Неактивен",
             subtitle = if (eternal) "♾️ Бесконечный PRO" else if (isActive) "До ${profile.proUntil?.toDate()?.let { proDateFormat.format(it) } ?: ""}" else "Разблокируйте золотой бейдж"
         )
 
         VlSettingsItem(
-            icon = Icons.Default.Toll,
+            icon = Icons.Rounded.Toll,
             iconColor = ProGold,
             title = "Ваши Биты",
             trailing = {
@@ -244,12 +244,12 @@ fun ProStatusBanner(
         )
 
         VlSettingsItem(
-            icon = Icons.Default.LocalFireDepartment,
+            icon = Icons.Rounded.LocalFireDepartment,
             iconColor = Color(0xFFE11D48),
             title = "Стрик: ${profile.streak} дн.",
             subtitle = "Открыть «Сигнал»",
             trailing = {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = cs.onSurfaceVariant)
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = cs.onSurfaceVariant)
             },
             onClick = onOpenSignal
         )
@@ -384,15 +384,15 @@ fun ProPerksSection(
     val pro = profile.isProActive()
 
     val perks = listOf(
-        Pair(Icons.Default.FolderCopy, "Папки чатов — до 10 вкладок над списком"),
-        Pair(Icons.Default.PhotoLibrary, "Альбомы до 20 фото вместо 10"),
-        Pair(Icons.Default.VisibilityOff, "Невидимка: скрыть «в сети» и отметки о прочтении"),
-        Pair(Icons.Default.Badge, "ID-карты: две прокрутки в неделю и +5 слотов"),
-        Pair(Icons.Default.WorkspacePremium, "Две PRO-карты ID — Aurum и Noir"),
-        Pair(Icons.Default.ScheduleSend, "Отложенные сообщения — до 20 запланированных"),
-        Pair(Icons.Default.Insights, "«Сигнал»: собеседники за всё время"),
-        Pair(Icons.Default.EmojiEmotions, "Эмодзи-статус и цвет ника бесплатно"),
-        Pair(Icons.Default.Palette, "Кастомизация профиля: фон, GIF, цвет, шрифт, раскладка")
+        Pair(Icons.Rounded.FolderCopy, "Папки чатов — до 10 вкладок над списком"),
+        Pair(Icons.Rounded.PhotoLibrary, "Альбомы до 20 фото вместо 10"),
+        Pair(Icons.Rounded.VisibilityOff, "Невидимка: скрыть «в сети» и отметки о прочтении"),
+        Pair(Icons.Rounded.Badge, "ID-карты: две прокрутки в неделю и +5 слотов"),
+        Pair(Icons.Rounded.WorkspacePremium, "Две PRO-карты ID — Aurum и Noir"),
+        Pair(Icons.Rounded.ScheduleSend, "Отложенные сообщения — до 20 запланированных"),
+        Pair(Icons.Rounded.Insights, "«Сигнал»: собеседники за всё время"),
+        Pair(Icons.Rounded.EmojiEmotions, "Эмодзи-статус и цвет ника бесплатно"),
+        Pair(Icons.Rounded.Palette, "Кастомизация профиля: фон, GIF, цвет, шрифт, раскладка")
     )
 
     VlSettingsSection(
@@ -417,19 +417,19 @@ fun ProPerksSection(
         }
 
         VlSettingsItem(
-            icon = Icons.Default.FolderCopy,
+            icon = Icons.Rounded.FolderCopy,
             iconColor = if (pro) ProGold else cs.onSurfaceVariant,
             title = "Папки чатов",
             subtitle = "Умные вкладки и фильтры над списком чатов",
             trailing = {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = cs.onSurfaceVariant)
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = cs.onSurfaceVariant)
             },
             onClick = onOpenChatFolders
         )
 
         // Тумблер hideOnline
         VlSettingsItem(
-            icon = if (pro) Icons.Default.VisibilityOff else Icons.Default.Lock,
+            icon = if (pro) Icons.Rounded.VisibilityOff else Icons.Rounded.Lock,
             iconColor = if (pro) null else cs.onSurfaceVariant,
             title = "Скрыть «в сети»",
             subtitle = "Собеседники увидят «был(а) недавно» вместо статуса и времени захода.",
@@ -447,7 +447,7 @@ fun ProPerksSection(
 
         // Тумблер hideReads
         VlSettingsItem(
-            icon = if (pro) Icons.Default.DoneAll else Icons.Default.Lock,
+            icon = if (pro) Icons.Rounded.DoneAll else Icons.Rounded.Lock,
             iconColor = if (pro) null else cs.onSurfaceVariant,
             title = "Скрыть «прочитано»",
             subtitle = "Вы читаете сообщения, но собеседники не видят отметок о прочтении.",
@@ -572,7 +572,7 @@ fun CosmeticsSection(
                         onClick = { proViewModel.setCosmetics(emojiStatus = null) },
                         enabled = !proState.isCosmeticsLoading
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Убрать")
                     }
@@ -637,7 +637,7 @@ fun CosmeticsSection(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Lock, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     Text(
                         "С PRO или за 300 Bits навсегда",
                         style = MaterialTheme.typography.bodySmall,
@@ -648,7 +648,7 @@ fun CosmeticsSection(
                         onClick = { unlockDialogItem = "emojiStatus" },
                         enabled = !proState.isCosmeticsLoading && profile.bits >= 300
                     ) {
-                        Icon(Icons.Default.Toll, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Toll, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Купить за 300")
                     }
@@ -672,7 +672,7 @@ fun CosmeticsSection(
                         onClick = { proViewModel.setCosmetics(nameColor = null) },
                         enabled = !proState.isCosmeticsLoading
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Rounded.Close, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Убрать")
                     }
@@ -700,7 +700,7 @@ fun CosmeticsSection(
                                 ) {
                                     if (isSelected) {
                                         Icon(
-                                            Icons.Default.Check,
+                                            Icons.Rounded.Check,
                                             contentDescription = null,
                                             tint = cs.surface,
                                             modifier = Modifier.size(18.dp)
@@ -717,7 +717,7 @@ fun CosmeticsSection(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.Lock, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Rounded.Lock, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     Text(
                         "С PRO или за 500 Bits навсегда",
                         style = MaterialTheme.typography.bodySmall,
@@ -728,7 +728,7 @@ fun CosmeticsSection(
                         onClick = { unlockDialogItem = "nameColor" },
                         enabled = !proState.isCosmeticsLoading && profile.bits >= 500
                     ) {
-                        Icon(Icons.Default.Toll, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Toll, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Купить за 500")
                     }

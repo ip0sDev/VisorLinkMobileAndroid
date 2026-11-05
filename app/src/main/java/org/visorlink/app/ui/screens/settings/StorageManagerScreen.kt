@@ -156,7 +156,7 @@ fun StorageManagerScreen(
                     modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text(stringResource(R.string.storage_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             topBarJelly.press(0.06f)
                             onNavigateBack()
@@ -165,7 +165,7 @@ fun StorageManagerScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             topBarJelly.press(0.06f)
                             viewModel.refresh()

@@ -61,7 +61,7 @@ fun SearchScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.search_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         onNavigateBack()
                     }) {

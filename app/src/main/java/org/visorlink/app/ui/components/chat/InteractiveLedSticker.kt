@@ -68,6 +68,8 @@ fun InteractiveLedSticker(
 
     val squashFactor = remember { Animatable(1f) }
     val popProgress = remember { Animatable(1f) }
+    var squashJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var popJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
     val pad = size * 0.075f
     val pitch = (size - pad * 2) / 32f
@@ -84,14 +86,15 @@ fun InteractiveLedSticker(
         controller.flash(reaction, durationMs = if (overload) 1400L else 900L, haptic = true)
 
         if (!still) {
-            scope.launch {
-                // Сжатие -> перелёт -> покой (сохранение объёма)
-                squashFactor.snapTo(1f)
-                squashFactor.animateTo(0.86f, tween(100, easing = FastOutSlowInEasing))
-                squashFactor.animateTo(1.06f, tween(170, easing = FastOutSlowInEasing))
-                squashFactor.animateTo(1.0f, tween(190, easing = FastOutSlowInEasing))
+            squashJob?.cancel()
+            squashJob = scope.launch {
+                // Плавное сжатие без мгновенного сброса snapTo
+                squashFactor.animateTo(0.88f, tween(90, easing = FastOutSlowInEasing))
+                squashFactor.animateTo(1.04f, tween(140, easing = FastOutSlowInEasing))
+                squashFactor.animateTo(1.0f, tween(160, easing = FastOutSlowInEasing))
             }
-            scope.launch {
+            popJob?.cancel()
+            popJob = scope.launch {
                 popProgress.snapTo(0f)
                 popProgress.animateTo(1f, tween(900, easing = LinearEasing))
             }

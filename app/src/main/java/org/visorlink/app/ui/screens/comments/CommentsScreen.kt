@@ -102,7 +102,7 @@ fun CommentsScreen(
         topBar = {
             VlTopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
@@ -120,7 +120,7 @@ fun CommentsScreen(
                         val post = uiState.post
                         val enabled = post?.commentsEnabled != false
                         
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             viewModel.toggleComments(enabled)
                         }) {

@@ -293,6 +293,8 @@ internal fun biolumeBubbles(isDark: Boolean, primary: Color) = VlBubbleTokens(
     mineFg = if (isDark) Biolume.AbyssOnSurface else Biolume.TidepoolOnSurface,
     otherBg = if (isDark) Biolume.AbyssContainer else Biolume.TidepoolContainer,
     otherFg = if (isDark) Biolume.AbyssOnSurface else Biolume.TidepoolOnSurface,
+    mineBorder = primary.copy(alpha = if (isDark) 0.28f else 0.20f),
+    otherBorder = (if (isDark) Color.White else Color.Black).copy(alpha = if (isDark) 0.07f else 0.08f),
 )
 
 internal fun biolumeSelectionFill(isDark: Boolean, primary: Color, proAccent: Boolean = false): Color = lerp(

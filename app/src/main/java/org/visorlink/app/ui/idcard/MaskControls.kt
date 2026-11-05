@@ -1,9 +1,11 @@
 package org.visorlink.app.ui.idcard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -32,13 +34,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.koin.compose.koinInject
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.VlAlertDialog
 import org.visorlink.app.ui.components.VlDialogButton
 import org.visorlink.app.ui.components.VlSettingsItem
+import org.visorlink.app.ui.components.VlTopAppBarButton
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlStructure
 import org.visorlink.app.utils.MaskDuration
 import org.visorlink.app.utils.MaskModeManager
 import org.visorlink.app.utils.MaskState
@@ -165,26 +171,32 @@ fun MaskToolbarButton() {
     if (!state.special && !mask.active) return
     val manager: MaskModeManager = koinInject()
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+    val shape = tokens.shapes.rounded(12.dp)
+    val dark = tokens.isDark
+    val borderColor = cs.outlineVariant.copy(alpha = if (dark) 0.15f else 0.30f)
+
     if (mask.active) {
-        val shape = VlTheme.tokens.shapes.chip
         Row(
-            Modifier
+            modifier = Modifier
+                .defaultMinSize(minHeight = 36.dp)
+                .then(
+                    if (tokens.structure.enabled) Modifier.vlStructure(tokens.structure, VlDepth.Raised, shape)
+                    else Modifier
+                )
                 .clip(shape)
-                .background(VlTheme.tokens.selectionFill, shape)
-                .height(32.dp)
-                .padding(start = 10.dp, end = 2.dp),
+                .background(tokens.selectionFill, shape)
+                .border(1.dp, borderColor, shape)
+                .padding(start = 10.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // В шапке места мало: длинная подпись выдавливала заголовок, и тот переносился
-            // по буквам на всю высоту экрана. Здесь — только время окончания, полная подпись
-            // остаётся в описании для TalkBack и во вкладке «ID-карта»
             val full = maskUntilLabel(mask)
-            Icon(Icons.Outlined.TheaterComedy, full, Modifier.size(16.dp), tint = cs.onSurface)
+            Icon(Icons.Outlined.TheaterComedy, full, Modifier.size(16.dp), tint = cs.primary)
             mask.until?.let { until ->
                 Text(
                     java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT, LocalConfiguration.current.locales[0]).format(Date(until)),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = cs.onSurface,
                     maxLines = 1,
                     softWrap = false,
@@ -195,8 +207,12 @@ fun MaskToolbarButton() {
             }
         }
     } else {
-        IconButton(onClick = { manager.enable(null) }) {
-            Icon(Icons.Outlined.TheaterComedy, stringResource(R.string.idcard_mask_quick))
+        VlTopAppBarButton(onClick = { manager.enable(null) }) {
+            Icon(
+                Icons.Outlined.TheaterComedy,
+                contentDescription = stringResource(R.string.idcard_mask_quick),
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

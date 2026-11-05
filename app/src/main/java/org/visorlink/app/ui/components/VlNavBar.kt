@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -12,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,13 +55,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import org.visorlink.app.R
+import org.visorlink.app.ui.components.led.VlLedDot
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
-import org.visorlink.app.ui.theme.vlTopTicks
+import org.visorlink.app.ui.theme.vlSignalGlow
 import kotlin.math.abs
 
 /**
@@ -79,10 +84,24 @@ fun VlNavigationBar(
     profileEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
+    if (tokens.isForge) {
+        ForgeKeyDock(
+            selectedTab = selectedTab,
+            onTabSelected = onTabSelected,
+            diaryEnabled = diaryEnabled,
+            discoverEnabled = discoverEnabled,
+            musicEnabled = musicEnabled,
+            onOpenDiary = onOpenDiary,
+            onOpenMusic = onOpenMusic,
+            profileEnabled = profileEnabled,
+            modifier = modifier,
+        )
+        return
+    }
+
+    val cs = MaterialTheme.colorScheme
     val isDark = cs.surface.luminance() < 0.5f
-    // У M3E bar = 32dp, у Biolume — 50% от 64dp, то есть те же 32dp; у Forge — без скруглений
     val barShape: Shape = tokens.shapes.bar
 
     Box(
@@ -193,7 +212,7 @@ private fun NeumorphicLiquidNavBarContent(
     val tokens = VlTheme.tokens
     val density = LocalDensity.current
     val haptic = rememberHaptic()
-    val invertedPill = tokens.structure.hardShadow != null
+    val invertedPill = false
 
     val chatsLabel = stringResource(R.string.nav_tab_chats)
     val feedLabel = stringResource(R.string.feed_title)
@@ -329,7 +348,6 @@ private fun NeumorphicLiquidNavBarContent(
             .fillMaxWidth()
             .height(64.dp)
             .vlInset(tokens.structure, barShape)
-            .vlTopTicks(cs.primary, active = tokens.structure.hardShadow != null)
             .clip(barShape)
             .background(cs.surfaceContainerLow)
             .vlHairline(cs.outlineVariant.copy(alpha = 0.5f), barShape)
@@ -614,3 +632,171 @@ private fun <T> navSpring(glitch: Boolean): androidx.compose.animation.core.Fini
 private fun <T> navBouncy(glitch: Boolean, stiffness: Float = Spring.StiffnessLow): androidx.compose.animation.core.FiniteAnimationSpec<T> =
     if (glitch) TerminalMotion.tween(200)
     else spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = stiffness)
+
+/**
+ * Нижняя панель Forge: стеклянный док с приборными клавишами.
+ * Неактивные — приподнятые клавиши, активная утоплена, над её иконкой горит светодиод режима.
+ */
+@Composable
+private fun ForgeKeyDock(
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    diaryEnabled: Boolean,
+    discoverEnabled: Boolean,
+    musicEnabled: Boolean,
+    onOpenDiary: () -> Unit,
+    onOpenMusic: () -> Unit,
+    profileEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+    val shape = tokens.shapes.bar
+    val haptic = rememberHaptic()
+
+    val chatsLabel = stringResource(R.string.nav_tab_chats)
+    val feedLabel = stringResource(R.string.feed_title)
+    val musicLabel = stringResource(R.string.nav_tab_music)
+    val diaryLabel = stringResource(R.string.diary_title)
+    val profileLabel = stringResource(R.string.nav_tab_profile)
+
+    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, profileLabel, diaryEnabled, discoverEnabled, musicEnabled, profileEnabled, onOpenDiary, onOpenMusic) {
+        buildList {
+            add(VlNavTabDef(0, Icons.Outlined.ChatBubbleOutline, Icons.Filled.ChatBubble, chatsLabel) { onTabSelected(0) })
+            if (discoverEnabled) {
+                add(VlNavTabDef(1, Icons.Outlined.Explore, Icons.Filled.Explore, feedLabel) { onTabSelected(1) })
+            }
+            if (musicEnabled) {
+                add(VlNavTabDef(3, Icons.Default.Audiotrack, Icons.Default.Audiotrack, musicLabel, onOpenMusic))
+            }
+            if (diaryEnabled) {
+                add(VlNavTabDef(2, Icons.Default.Edit, Icons.Default.Edit, diaryLabel, onOpenDiary))
+            }
+            if (profileEnabled) {
+                add(VlNavTabDef(NAV_TAB_PROFILE, Icons.Outlined.Badge, Icons.Filled.Badge, profileLabel) { onTabSelected(NAV_TAB_PROFILE) })
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(72.dp)
+                .vlRaised(tokens.structure, shape)
+                .clip(shape)
+                .vlKeycapBackground(tokens.structure, cs.surfaceContainerLow, shape, VlDepth.Raised)
+                .vlHairline(cs.outlineVariant, shape)
+                .padding(horizontal = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                navTabs.forEach { tab ->
+                    val isSelected = tab.tabId == selectedTab
+                    ForgeNavKey(
+                        tab = tab,
+                        selected = isSelected,
+                        onClick = {
+                            if (!isSelected) {
+                                haptic.perform(HapticType.SELECTION)
+                            }
+                            tab.onClick()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ForgeNavKey(
+    tab: VlNavTabDef,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val led = tokens.led
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isDown = selected || isPressed
+
+    val fill = if (selected) {
+        if (tokens.isDark) (led?.screen ?: cs.surfaceContainerLowest) else cs.surfaceContainerHigh
+    } else {
+        cs.surfaceContainerHigh
+    }
+    val targetIconColor = if (selected) {
+        if (tokens.isDark) (led?.color ?: cs.primary) else cs.onSurface
+    } else {
+        cs.onSurfaceVariant
+    }
+    val iconColor by animateColorAsState(
+        targetValue = targetIconColor,
+        animationSpec = tween(durationMillis = 220),
+        label = "forgenavkey_icon_color"
+    )
+
+    val keyShape = tokens.shapes.button
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.92f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "forgenavkey_scale"
+    )
+    val ledScale by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+        label = "forgenavkey_led_scale"
+    )
+
+    Box(
+        modifier = Modifier
+            .scale(scale)
+            .size(width = 56.dp, height = 52.dp)
+            .then(
+                if (isDown) Modifier.vlInset(tokens.structure, keyShape)
+                else Modifier.vlRaised(tokens.structure, keyShape)
+            )
+            .clip(keyShape)
+            .vlKeycapBackground(tokens.structure, fill, keyShape, depth = if (isDown) VlDepth.Inset else VlDepth.Raised)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        // Иконка клавиши центрирована; при выборе смещается на 5dp вниз
+        Icon(
+            imageVector = if (selected) tab.selectedIcon else tab.icon,
+            contentDescription = tab.label,
+            tint = iconColor,
+            modifier = Modifier
+                .padding(top = if (selected) 5.dp else 0.dp)
+                .size(22.dp)
+        )
+
+        // Светодиод сверху по центру (top = 7dp, size = 4dp)
+        if (ledScale > 0.01f) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 7.dp)
+                    .scale(ledScale)
+            ) {
+                VlLedDot(color = led?.color ?: cs.primary, size = 4.dp)
+            }
+        }
+    }
+}

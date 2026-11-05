@@ -40,6 +40,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.NAV_TAB_PROFILE
+import org.visorlink.app.ui.components.led.VlLedFace
+import org.visorlink.app.ui.components.led.VlLedExpression
+import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.components.VlNavigationBar
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
@@ -155,11 +158,20 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.WifiOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        if (VlTheme.tokens.led != null) {
+                            VlLedFace(
+                                expression = VlLedExpression.SLEEPY,
+                                dot = 1.5.dp,
+                                gap = 0.5.dp,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.WifiOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = "Offline Mode",

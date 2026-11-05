@@ -101,7 +101,7 @@ fun DiaryScreen(
                 modifier = Modifier.liquidJelly(topBarJelly),
                 title = { Text(stringResource(R.string.diary_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         topBarJelly.press(0.06f)
                         onNavigateBack()
@@ -111,7 +111,7 @@ fun DiaryScreen(
                 },
                 actions = {
                     val exportJelly = rememberLiquidJellyState()
-                    IconButton(
+                    org.visorlink.app.ui.components.VlTopAppBarButton(
                         onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             exportJelly.pulse(0.12f)

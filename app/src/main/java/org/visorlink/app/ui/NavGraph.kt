@@ -2,7 +2,10 @@ package org.visorlink.app.ui
 
 import androidx.compose.runtime.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -171,9 +174,10 @@ fun VisorLinkNavGraph(
     }
 
     val glitchNav = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
-    NavHost(
-        navController = navController,
-        startDestination = start,
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = start,
         contentAlignment = Alignment.TopStart,
         // Forge v2 — терминал: короткий ровный сдвиг с проявлением вместо въезда на весь экран
         enterTransition = {
@@ -558,6 +562,15 @@ fun VisorLinkNavGraph(
             )
         }
     }
+
+    if (isSessionReady) {
+        org.visorlink.app.ui.screens.signal.AchievementToastHost(
+            onOpenSignal = {
+                navController.navigate(Screen.Signal.route)
+            }
+        )
+    }
+}
 }
 
 /** Экраны до входа в приложение: на них ворота авторизации переводят дальше сами. */

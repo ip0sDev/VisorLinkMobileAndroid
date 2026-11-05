@@ -68,7 +68,7 @@ fun CustomizationScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.settings_custom_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.custom_back))
                     }
                 },

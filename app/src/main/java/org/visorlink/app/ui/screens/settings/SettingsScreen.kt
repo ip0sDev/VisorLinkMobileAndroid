@@ -20,14 +20,16 @@ import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlRaised
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +45,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,6 +82,7 @@ import java.util.*
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onOpenProfile: () -> Unit = {},
     onOpenCacheSettings: () -> Unit = {},
     onOpenStorageManager: () -> Unit = {},
     onOpenStatus: () -> Unit = {},
@@ -204,12 +208,14 @@ fun SettingsScreen(
                     modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        IconButton(onClick = {
-                            haptic.perform(HapticType.CLICK, hapticEnabled)
-                            topBarJelly.press(0.06f)
-                            onNavigateBack()
-                        }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                        VlTopAppBarButton(
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                topBarJelly.press(0.06f)
+                                onNavigateBack()
+                            }
+                        ) {
+                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, stringResource(R.string.action_back))
                         }
                     }
                 )
@@ -233,7 +239,7 @@ fun SettingsScreen(
                     val appearance = ProfileAppearance.resolve(owner = p, viewer = p)
                     val tokens = VlTheme.tokens
                     val cs = MaterialTheme.colorScheme
-                    val accountShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(32.dp))
+                    val accountShape = tokens.shapes.card
                     val isDark = cs.surface.luminance() < 0.5f
 
                     val accountBrush = remember(isDark, cs) {
@@ -259,6 +265,10 @@ fun SettingsScreen(
                             .clip(accountShape)
                             .background(accountBrush, accountShape)
                             .border(accountBorder, accountShape)
+                            .clickable {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                onOpenProfile()
+                            }
                     ) {
                         appearance.backgroundUrl?.let { url ->
                             AsyncImage(
@@ -285,12 +295,23 @@ fun SettingsScreen(
                                     .padding(horizontal = 20.dp, vertical = 18.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                AvatarWithPresence(
-                                    avatarUrl = p.avatarUrl,
-                                    displayName = p.displayName.ifEmpty { p.username },
-                                    isOnline = true,
-                                    size = 64.dp
-                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .background(
+                                            Brush.linearGradient(listOf(cs.primary, cs.tertiary)),
+                                            CircleShape
+                                        )
+                                        .padding(3.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    AvatarWithPresence(
+                                        avatarUrl = p.avatarUrl,
+                                        displayName = p.displayName.ifEmpty { p.username },
+                                        isOnline = true,
+                                        size = 66.dp
+                                    )
+                                }
                                 Spacer(Modifier.width(16.dp))
                                 Column(Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -298,13 +319,11 @@ fun SettingsScreen(
                                             text = p.displayName.ifEmpty { p.username },
                                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                             color = cs.onSurface,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
                                         )
                                         appearance.emojis?.let { Text(" $it", style = MaterialTheme.typography.titleLarge) }
-                                        if (p.isProActive()) {
-                                            Spacer(Modifier.width(8.dp))
-                                            ProBadge()
-                                        }
                                     }
                                     Spacer(Modifier.height(2.dp))
                                     Text(
@@ -323,6 +342,24 @@ fun SettingsScreen(
                                         )
                                     }
                                 }
+                                Spacer(Modifier.width(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .background(cs.surfaceContainerHighest.copy(alpha = 0.5f), CircleShape)
+                                        .clickable {
+                                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                                            onOpenProfile()
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Edit,
+                                        contentDescription = "Edit Profile",
+                                        tint = cs.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
                             }
                           }
                         }
@@ -331,6 +368,29 @@ fun SettingsScreen(
                     Box(modifier = Modifier.liquidPillCardSlideOut(index = 1)) {
                         CompactProTile(profile = p, onClick = onOpenPro)
                     }
+
+                    VlSettingsSection(
+                        title = "Активность",
+                        modifier = Modifier.liquidPillCardSlideOut(index = 2)
+                    ) {
+                        VlSettingsItem(
+                            icon = Icons.Rounded.Sensors,
+                            iconColor = MaterialTheme.colorScheme.primary,
+                            title = "Сигнал",
+                            subtitle = if (p.streak > 0) "Серия ${p.streak} дн. • вехи, заморозки и достижения" else "Серия сообщений, вехи, заморозки и достижения",
+                            trailing = {
+                                if (p.streak > 0) {
+                                    Text(
+                                        "🔥 ${p.streak} дн.",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = VlTheme.tokens.status.warning
+                                    )
+                                }
+                            },
+                            onClick = onOpenSignal
+                        )
+                    }
                 }
 
                 VlSettingsSection(
@@ -338,8 +398,8 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 2),
                     isPremium = true
                 ) {
-                    VlSettingsItem(icon = Icons.Default.Brush, title = stringResource(R.string.settings_custom_design_title), subtitle = stringResource(R.string.settings_custom_design_sub), onClick = { if (profile?.isProActive() == true) onOpenCustomization() else Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show() })
-                    VlSettingsItem(icon = Icons.Default.HideImage, title = stringResource(R.string.settings_custom_hide_title), subtitle = stringResource(R.string.settings_custom_hide_sub), trailing = { VlSwitch(checked = profile?.ignoreCustomizations ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateIgnoreCustomizations(v) } }) })
+                    VlSettingsItem(icon = Icons.Rounded.Brush, title = stringResource(R.string.settings_custom_design_title), subtitle = stringResource(R.string.settings_custom_design_sub), onClick = { if (profile?.isProActive() == true) onOpenCustomization() else Toast.makeText(context, context.getString(R.string.settings_custom_pro_only), Toast.LENGTH_SHORT).show() })
+                    VlSettingsItem(icon = Icons.Rounded.HideImage, title = stringResource(R.string.settings_custom_hide_title), subtitle = stringResource(R.string.settings_custom_hide_sub), trailing = { VlSwitch(checked = profile?.ignoreCustomizations ?: false, onCheckedChange = { v -> scope.launch { userRepository.updateIgnoreCustomizations(v) } }) })
                 }
 
                 // ID-карты: тему решает режим карты, а не пользователь (спека §7)
@@ -349,25 +409,66 @@ fun SettingsScreen(
                         title = stringResource(R.string.idcard_title),
                         modifier = Modifier.liquidPillCardSlideOut(index = 3)
                     ) {
-                        VlSettingsItem(icon = Icons.Default.Badge, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.idcard_title), subtitle = stringResource(R.string.idcard_settings_sub), onClick = onOpenIdCard)
+                        VlSettingsItem(icon = Icons.Rounded.Badge, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.idcard_title), subtitle = stringResource(R.string.idcard_settings_sub), onClick = onOpenIdCard)
                     }
                 } else {
                     VlSettingsSection(
                         title = stringResource(R.string.settings_section_theme),
                         modifier = Modifier.liquidPillCardSlideOut(index = 3)
                     ) {
-                        VlThemeSelector(
-                            selected = currentTheme,
-                            onSelect = { themeViewModel.setTheme(it) },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            themeMode = currentMode,
-                            colorPreset = currentPreset,
+                        VlOptionRow(
+                            icon = Icons.Rounded.Layers,
+                            label = "Biolume",
+                            desc = stringResource(R.string.theme_biolume_desc),
+                            selected = currentTheme == AppTheme.BIOLUME,
+                            index = 0,
+                            total = 4,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                themeViewModel.setTheme(AppTheme.BIOLUME)
+                            }
+                        )
+                        VlOptionRow(
+                            icon = Icons.Rounded.AutoAwesome,
+                            label = "Material 3 Expressive",
+                            desc = stringResource(R.string.theme_m3e_desc),
+                            selected = currentTheme == AppTheme.MATERIAL3_EXPRESSIVE,
+                            index = 1,
+                            total = 4,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                themeViewModel.setTheme(AppTheme.MATERIAL3_EXPRESSIVE)
+                            }
+                        )
+                        VlOptionRow(
+                            icon = Icons.Rounded.Memory,
+                            label = "Forge (Protogen)",
+                            desc = "Холодный неон, Clean Room днём",
+                            selected = currentTheme == AppTheme.FORGE_PROTOGEN,
+                            index = 2,
+                            total = 4,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                themeViewModel.setTheme(AppTheme.FORGE_PROTOGEN)
+                            }
+                        )
+                        VlOptionRow(
+                            icon = Icons.Rounded.Memory,
+                            label = "Forge (Beast)",
+                            desc = "Тёплый янтарный неон",
+                            selected = currentTheme == AppTheme.FORGE_BEAST,
+                            index = 3,
+                            total = 4,
+                            onClick = {
+                                haptic.perform(HapticType.CLICK, hapticEnabled)
+                                themeViewModel.setTheme(AppTheme.FORGE_BEAST)
+                            }
                         )
                     }
                 }
 
                 // Пресеты акцента — только в Biolume: у Forge палитра режима фиксирована
-                if (idModeState.theme.style != org.visorlink.app.data.idcard.ModeStyle.FORGE) {
+                if (!currentTheme.isForgeV2 && idModeState.theme.style != org.visorlink.app.data.idcard.ModeStyle.FORGE) {
                     VlSettingsSection(
                         title = stringResource(R.string.settings_section_accent),
                         modifier = Modifier.liquidPillCardSlideOut(index = 4)
@@ -392,14 +493,15 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_dark_title),
                     modifier = Modifier.liquidPillCardSlideOut(index = 5)
                 ) {
-                    // Особый режим держит тёмную: у Forge нет светлой версии — выбор неактивен с подсказкой
-                    val darkLocked = idModeState.theme.forceDark
+                    // Forge теперь имеет Clean Room (светлая) и Blackout LED (тёмная), режим больше не блокирует выбор
+                    val darkLocked = false
                     val setMode = { m: ThemeMode -> if (!darkLocked) themeViewModel.setThemeMode(m) }
                     val shown = if (darkLocked) ThemeMode.DARK else currentMode
                     Column(Modifier.then(if (darkLocked) Modifier.graphicsLayer { alpha = 0.55f } else Modifier)) {
-                        VlOptionRow(icon = Icons.Default.SettingsBrightness, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = shown == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { setMode(ThemeMode.SYSTEM) })
-                        VlOptionRow(icon = Icons.Default.LightMode, label = stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = shown == ThemeMode.LIGHT, index = 1, total = 3, onClick = { setMode(ThemeMode.LIGHT) })
-                        VlOptionRow(icon = Icons.Default.DarkMode, label = stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = shown == ThemeMode.DARK, index = 2, total = 3, onClick = { setMode(ThemeMode.DARK) })
+                        val isForge = currentTheme.isForgeV2
+                        VlOptionRow(icon = Icons.Rounded.BrightnessAuto, label = stringResource(R.string.settings_dark_system), desc = stringResource(R.string.settings_dark_system_desc), selected = shown == ThemeMode.SYSTEM, index = 0, total = 3, onClick = { setMode(ThemeMode.SYSTEM) })
+                        VlOptionRow(icon = Icons.Rounded.LightMode, label = if (isForge) "Светлая (Clean Room)" else stringResource(R.string.settings_dark_light), desc = stringResource(R.string.settings_dark_light_desc), selected = shown == ThemeMode.LIGHT, index = 1, total = 3, onClick = { setMode(ThemeMode.LIGHT) })
+                        VlOptionRow(icon = Icons.Rounded.DarkMode, label = if (isForge) "Тёмная (Blackout LED)" else stringResource(R.string.settings_dark_dark), desc = stringResource(R.string.settings_dark_dark_desc), selected = shown == ThemeMode.DARK, index = 2, total = 3, onClick = { setMode(ThemeMode.DARK) })
                     }
                     if (darkLocked) {
                         Text(
@@ -415,23 +517,23 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_language),
                     modifier = Modifier.liquidPillCardSlideOut(index = 6)
                 ) {
-                    VlOptionRow(icon = Icons.Default.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
-                    VlOptionRow(icon = Icons.Default.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
-                    VlOptionRow(icon = Icons.Default.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
+                    VlOptionRow(icon = Icons.Rounded.Language, label = stringResource(R.string.settings_language_system), selected = currentLang == AppLanguage.SYSTEM, index = 0, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.SYSTEM) })
+                    VlOptionRow(icon = Icons.Rounded.Translate, label = stringResource(R.string.settings_language_en), selected = currentLang == AppLanguage.EN, index = 1, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.EN) })
+                    VlOptionRow(icon = Icons.Rounded.GTranslate, label = stringResource(R.string.settings_language_ru), selected = currentLang == AppLanguage.RU, index = 2, total = 3, onClick = { themeViewModel.setLanguage(AppLanguage.RU) })
                 }
 
                 VlSettingsSection(
                     title = stringResource(R.string.settings_section_management),
                     modifier = Modifier.liquidPillCardSlideOut(index = 7)
                 ) {
-                    VlSettingsItem(icon = Icons.Default.NotificationsActive, iconColor = colorNotif, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
-                    VlSettingsItem(icon = Icons.Default.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
-                    VlSettingsItem(icon = Icons.Default.KeyboardHide, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
-                    VlSettingsItem(icon = Icons.Default.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
-                    VlSettingsItem(icon = Icons.Default.Explore, iconColor = VlCategoryTint.Emerald, title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsStateWithLifecycle().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
+                    VlSettingsItem(icon = Icons.Rounded.NotificationsActive, iconColor = colorNotif, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
+                    VlSettingsItem(icon = Icons.Rounded.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
+                    VlSettingsItem(icon = Icons.Rounded.SwipeUp, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
+                    VlSettingsItem(icon = Icons.Rounded.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
+                    VlSettingsItem(icon = Icons.Rounded.Explore, iconColor = VlCategoryTint.Emerald, title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsStateWithLifecycle().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
                     val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
                     VlSettingsItem(
-                        icon = Icons.Default.MusicNote,
+                        icon = Icons.Rounded.Audiotrack,
                         iconColor = VlCategoryTint.Pink,
                         title = stringResource(R.string.music_settings_title),
                         subtitle = stringResource(R.string.music_settings_desc),
@@ -449,7 +551,7 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 8)
                 ) {
                     VlSettingsItem(
-                        icon = Icons.Default.Book,
+                        icon = Icons.Rounded.MenuBook,
                         iconColor = MaterialTheme.colorScheme.primary,
                         title = stringResource(R.string.diary_enable_title),
                         subtitle = stringResource(R.string.diary_enable_sub),
@@ -466,7 +568,7 @@ fun SettingsScreen(
                     )
                     if (profile?.diaryEnabled == true) {
                         VlSettingsItem(
-                            icon = Icons.Default.Notifications,
+                            icon = Icons.Rounded.Schedule,
                             iconColor = VlCategoryTint.Amber,
                             title = stringResource(R.string.diary_reminders_title),
                             subtitle = stringResource(R.string.diary_reminders_sub, profile?.diaryReminderTime ?: "21:00"),
@@ -507,13 +609,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_privacy),
                     modifier = Modifier.liquidPillCardSlideOut(index = 9)
                 ) {
-                    VlSettingsItem(icon = Icons.Default.VisibilityOff, iconColor = colorStealth, title = stringResource(R.string.settings_stealth_title), subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off), trailing = { VlSwitch(checked = isStealthEnabled, onCheckedChange = { if (it) { if (hasStealthPin) { stealthManager.setEnabled(true); isStealthEnabled = true } else showStealthSetup = true } else showStealthDisable = true }) })
+                    VlSettingsItem(icon = Icons.Rounded.VisibilityOff, iconColor = colorStealth, title = stringResource(R.string.settings_stealth_title), subtitle = if (isStealthEnabled) stringResource(R.string.settings_stealth_sub_on) else stringResource(R.string.settings_stealth_sub_off), trailing = { VlSwitch(checked = isStealthEnabled, onCheckedChange = { if (it) { if (hasStealthPin) { stealthManager.setEnabled(true); isStealthEnabled = true } else showStealthSetup = true } else showStealthDisable = true }) })
                     if (hasStealthPin) {
-                        VlSettingsItem(icon = Icons.Default.Password, iconColor = colorStealthPin, title = stringResource(R.string.settings_stealth_change_pin), subtitle = stringResource(R.string.settings_stealth_change_pin_sub), onClick = { showStealthChangePin = true })
+                        VlSettingsItem(icon = Icons.Rounded.Password, iconColor = colorStealthPin, title = stringResource(R.string.settings_stealth_change_pin), subtitle = stringResource(R.string.settings_stealth_change_pin_sub), onClick = { showStealthChangePin = true })
                     }
                     if (hasStealthPin && isStealthEnabled) {
                         VlSettingsItem(
-                            icon = Icons.Default.Fingerprint,
+                            icon = Icons.Rounded.Fingerprint,
                             iconColor = colorStealthBiometric,
                             title = stringResource(R.string.settings_stealth_biometric),
                             subtitle = stringResource(R.string.settings_stealth_biometric_sub),
@@ -546,8 +648,8 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_storage),
                     modifier = Modifier.liquidPillCardSlideOut(index = 10)
                 ) {
-                    VlSettingsItem(icon = Icons.Default.Storage, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
-                    VlSettingsItem(icon = Icons.Default.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
+                    VlSettingsItem(icon = Icons.Rounded.CleaningServices, iconColor = colorStorage, title = stringResource(R.string.settings_cache_title), onClick = onOpenCacheSettings)
+                    VlSettingsItem(icon = Icons.Rounded.CloudQueue, iconColor = colorStorage, title = stringResource(R.string.storage_title), onClick = onOpenStorageManager)
                 }
 
                 // Как войти: почта с паролем (и его смена), Google
@@ -564,7 +666,7 @@ fun SettingsScreen(
                     modifier = Modifier.liquidPillCardSlideOut(index = 11)
                 ) {
                     TwoFactorItems(profile, security)
-                    VlSettingsItem(icon = Icons.Default.Devices, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_sessions_title), subtitle = stringResource(R.string.settings_sessions_sub), onClick = onOpenSessions)
+                    VlSettingsItem(icon = Icons.Rounded.Devices, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_sessions_title), subtitle = stringResource(R.string.settings_sessions_sub), onClick = onOpenSessions)
                 }
 
                 VlSettingsSection(
@@ -573,7 +675,7 @@ fun SettingsScreen(
                 ) {
                     // telegramAccount уже с «@» (или «ID …») — в строке префикса нет
                     VlSettingsItem(
-                        icon = Icons.AutoMirrored.Filled.Send,
+                        icon = ImageVector.vectorResource(R.drawable.ic_telegram),
                         iconColor = VlCategoryTint.Telegram,
                         title = if (telegramLinked) stringResource(R.string.settings_tg_linked, profile?.telegramAccount ?: profile?.tg_username?.let { "@$it" }.orEmpty()) else stringResource(R.string.settings_tg_link),
                         subtitle = if (telegramLinked) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),
@@ -600,9 +702,9 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_account),
                     modifier = Modifier.liquidPillCardSlideOut(index = 11)
                 ) {
-                    VlSettingsItem(icon = Icons.AutoMirrored.Filled.Logout, iconColor = MaterialTheme.colorScheme.error, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
+                    VlSettingsItem(icon = Icons.AutoMirrored.Rounded.Logout, iconColor = MaterialTheme.colorScheme.error, title = stringResource(R.string.settings_logout), isDestructive = true, onClick = { showLogoutDialog = true })
                     VlSettingsItem(
-                        icon = Icons.Default.DeleteForever,
+                        icon = Icons.Rounded.DeleteForever,
                         iconColor = MaterialTheme.colorScheme.error,
                         title = stringResource(R.string.settings_delete_account_title),
                         subtitle = stringResource(R.string.settings_delete_account_subtitle),
@@ -617,7 +719,7 @@ fun SettingsScreen(
                         modifier = Modifier.liquidPillCardSlideOut(index = 11)
                     ) {
                         VlSettingsItem(
-                            icon = Icons.Default.Storefront,
+                            icon = Icons.Rounded.Storefront,
                             iconColor = colorUpdateChan,
                             title = "Ipos Store",
                             subtitle = if (UpdateManager.isStoreInstalled()) "Клиент установлен (фоновые обновления)" else "Не установлен (нажмите для скачивания)",
@@ -634,7 +736,7 @@ fun SettingsScreen(
                             else -> UpdateManager.getSavedChannel(context)
                         }
                         VlSettingsItem(
-                            icon = Icons.Default.Tune,
+                            icon = Icons.Rounded.Science,
                             iconColor = colorUpdateChan,
                             title = stringResource(R.string.settings_update_channel),
                             subtitle = channelSubtitle,
@@ -643,7 +745,7 @@ fun SettingsScreen(
                             }
                         )
                         VlSettingsItem(
-                            icon = Icons.Default.Sync,
+                            icon = Icons.Rounded.Sync,
                             iconColor = colorUpdateCheck,
                             title = stringResource(R.string.settings_check_updates),
                             subtitle = stringResource(R.string.settings_check_updates_sub),
@@ -688,7 +790,7 @@ fun SettingsScreen(
                 ) {
                     val uriHandler = LocalUriHandler.current
                     VlSettingsItem(
-                        icon = Icons.Default.BugReport,
+                        icon = Icons.Rounded.BugReport,
                         iconColor = MaterialTheme.colorScheme.error,
                         title = stringResource(R.string.settings_bug_report_title),
                         subtitle = stringResource(R.string.settings_bug_report_subtitle),
@@ -698,7 +800,7 @@ fun SettingsScreen(
                         }
                     )
                     VlSettingsItem(
-                        icon = Icons.Default.Info, 
+                        icon = Icons.Rounded.Info, 
                         title = "VisorLink", 
                         subtitle = "Версия $versionString",
                         onClick = {
@@ -720,16 +822,16 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    VlSettingsItem(icon = Icons.Default.HealthAndSafety, iconColor = MaterialTheme.colorScheme.primary, title = "Статус системы", subtitle = "Доступность сервисов VisorLink", onClick = onOpenStatus)
+                    VlSettingsItem(icon = Icons.Rounded.HealthAndSafety, iconColor = MaterialTheme.colorScheme.primary, title = "Статус системы", subtitle = "Доступность сервисов VisorLink", onClick = onOpenStatus)
                     VlSettingsItem(
-                        icon = Icons.Default.Gavel,
+                        icon = Icons.Rounded.Gavel,
                         iconColor = MaterialTheme.colorScheme.primary,
                         title = "Правовая информация",
                         subtitle = "Условия использования и конфиденциальность",
                         onClick = { showLegalDialog = true }
                     )
                     VlSettingsItem(
-                        icon = Icons.Default.OpenInBrowser,
+                        icon = Icons.Rounded.OpenInBrowser,
                         iconColor = MaterialTheme.colorScheme.primary,
                         title = "Политика конфиденциальности онлайн",
                         subtitle = "https://visorlink.org",
@@ -753,7 +855,7 @@ fun SettingsScreen(
 
         VlAlertDialog(
             onDismissRequest = { if (!isDeleting) showDeleteAccountDialog = false },
-            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            icon = { Icon(Icons.Rounded.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
             title = { Text(stringResource(R.string.delete_account_dialog_title), fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -940,7 +1042,7 @@ fun SettingsScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 if (isSelected) {
-                                    Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                                    Icon(Icons.Rounded.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                                 }
                             }
                         }
@@ -1099,7 +1201,7 @@ private fun DevSettingsSection(
     VlSettingsSection(title = "Настройки разработчика", modifier = modifier) {
 
             VlSettingsItem(
-                icon = Icons.Default.VerifiedUser,
+                icon = Icons.Rounded.VerifiedUser,
                 iconColor = VlCategoryTint.Emerald,
                 title = "App Check Диагностика",
                 subtitle = "Проверка целостности и токенов Play Integrity / Debug",
@@ -1109,7 +1211,7 @@ private fun DevSettingsSection(
             )
 
             VlSettingsItem(
-                icon = Icons.Default.AutoAwesome,
+                icon = Icons.Rounded.AutoAwesome,
                 iconColor = MaterialTheme.colorScheme.primary,
                 title = stringResource(R.string.settings_animation_test_title),
                 subtitle = stringResource(R.string.settings_animation_test_subtitle),
@@ -1119,7 +1221,7 @@ private fun DevSettingsSection(
             )
 
             VlSettingsItem(
-                icon = Icons.Default.Code,
+                icon = Icons.Rounded.Code,
                 iconColor = MaterialTheme.colorScheme.tertiary,
                 title = stringResource(R.string.settings_debug_show_ids_title),
                 subtitle = stringResource(R.string.settings_debug_show_ids_desc),
@@ -1132,7 +1234,7 @@ private fun DevSettingsSection(
             )
 
             VlSettingsItem(
-                icon = Icons.Default.Terminal,
+                icon = Icons.Rounded.Terminal,
                 iconColor = VlCategoryTint.Indigo,
                 title = "Aegis Project Debug",
                 subtitle = "Отладка локальной базы данных и логов Aegis",
@@ -1143,7 +1245,7 @@ private fun DevSettingsSection(
 
             if (showFlagFlipper) {
                 VlSettingsItem(
-                    icon = Icons.Default.ToggleOn,
+                    icon = Icons.Rounded.ToggleOn,
                     iconColor = VlCategoryTint.Pink,
                     title = stringResource(R.string.flag_flipper_title),
                     subtitle = "Управление Feature Flags в реальном времени",
@@ -1162,7 +1264,7 @@ private fun DevSettingsSection(
             }.collectAsStateWithLifecycle(initialValue = null)
             if (BuildConfig.DEBUG || me?.isAdmin == true) {
                 VlSettingsItem(
-                    icon = Icons.Default.CardGiftcard,
+                    icon = Icons.Rounded.CardGiftcard,
                     iconColor = VlCategoryTint.Pink,
                     title = stringResource(R.string.settings_surprise_demo_title),
                     subtitle = stringResource(R.string.settings_surprise_demo_subtitle),
@@ -1171,7 +1273,7 @@ private fun DevSettingsSection(
             }
 
             VlSettingsItem(
-                icon = Icons.Default.Fingerprint,
+                icon = Icons.Rounded.Fingerprint,
                 iconColor = MaterialTheme.colorScheme.secondary,
                 title = "ID клиента",
                 subtitle = clientFlagsId,
@@ -1184,7 +1286,7 @@ private fun DevSettingsSection(
             )
 
             VlSettingsItem(
-                icon = Icons.Default.Info,
+                icon = Icons.Rounded.Info,
                 title = "Копировать данные сборки",
                 subtitle = versionString,
                 onClick = {
@@ -1196,7 +1298,7 @@ private fun DevSettingsSection(
             )
 
             VlSettingsItem(
-                icon = Icons.Default.VisibilityOff,
+                icon = Icons.Rounded.VisibilityOff,
                 iconColor = MaterialTheme.colorScheme.error,
                 title = "Скрыть настройки разработчика",
                 subtitle = "Вернуть можно пятью нажатиями на версию",

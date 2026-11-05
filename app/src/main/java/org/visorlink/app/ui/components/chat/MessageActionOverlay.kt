@@ -10,6 +10,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -55,9 +56,15 @@ import org.visorlink.app.data.model.Message
 import org.visorlink.app.data.model.MessageType
 import org.visorlink.app.data.model.Reaction
 import org.visorlink.app.data.model.SendStatus
+import androidx.compose.ui.graphics.luminance
+import org.visorlink.app.ui.components.led.VlLedDot
+import org.visorlink.app.ui.components.led.VlLedMarquee
+import org.visorlink.app.ui.components.led.VlLedScreen
 import org.visorlink.app.ui.components.liquidPopIn
 import org.visorlink.app.ui.components.rememberLiquidPopProgress
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlRaised
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.UsageRankManager
 import org.visorlink.app.utils.rememberHaptic
@@ -242,7 +249,7 @@ fun MessageActionOverlay(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.45f * bgAlpha))
+            .background(Color.Black.copy(alpha = if (VlTheme.tokens.led != null) 0.35f * bgAlpha else 0.45f * bgAlpha))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
@@ -397,13 +404,22 @@ private fun LiquidReactionCapsule(
     }
 
     Column {
-        Surface(
-            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(26.dp)),
-            color = cs.surface.copy(alpha = 0.94f),
-            tonalElevation = 8.dp,
-            shadowElevation = 8.dp,
-            border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.25f)),
+        val tokens = VlTheme.tokens
+        val isDark = cs.surface.luminance() < 0.5f
+        val capsuleShape = tokens.shapes.adapt(RoundedCornerShape(26.dp))
+        val capsuleBg = if (tokens.structure.enabled) {
+            if (isDark) cs.surfaceContainer.copy(alpha = 0.88f) else cs.surfaceContainerLow.copy(alpha = 0.94f)
+        } else cs.surface.copy(alpha = 0.94f)
+
+        Box(
             modifier = Modifier
+                .then(
+                    if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, capsuleShape)
+                    else Modifier
+                )
+                .clip(capsuleShape)
+                .background(capsuleBg, capsuleShape)
+                .border(BorderStroke(1.dp, cs.outlineVariant.copy(alpha = if (isDark) 0.16f else 0.40f)), capsuleShape)
                 .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
         ) {
             Row(
@@ -562,6 +578,15 @@ private fun EmojiDockItem(
             fontSize = 22.sp,
             modifier = Modifier.scale(if (isUserReacted) 1.05f else 1.0f)
         )
+        if (isUserReacted && VlTheme.tokens.led != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp)
+            ) {
+                VlLedDot(size = 3.dp, color = VlTheme.tokens.led?.color ?: cs.primary)
+            }
+        }
     }
 }
 
@@ -715,18 +740,33 @@ private fun ActionGlassCard(
         })
     }
 
-    val cardRadius = VlTheme.tokens.shapes.cardRadius
-    val windowShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(cardRadius))
+    val tokens = VlTheme.tokens
+    val isDark = cs.surface.luminance() < 0.5f
+    val cardRadius = tokens.shapes.cardRadius
+    val windowShape = tokens.shapes.adapt(RoundedCornerShape(cardRadius))
+    val cardBg = if (tokens.structure.enabled) {
+        if (isDark) cs.surfaceContainer.copy(alpha = 0.90f) else cs.surfaceContainerLow.copy(alpha = 0.96f)
+    } else cs.surface.copy(alpha = 0.95f)
 
-    Surface(
-        shape = windowShape,
-        color = cs.surface.copy(alpha = 0.95f),
-        tonalElevation = 8.dp,
-        shadowElevation = 8.dp,
-        border = BorderStroke(1.dp, cs.outlineVariant.copy(alpha = 0.25f)),
+    // Статус-строка сообщения: время + статус прочтения (✓ / ✓✓) для Forge LED-строки
+    val status = remember(message, isMine) {
+        val time = message.createdAt?.toDate()?.let {
+            java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(it)
+        }
+        val read = if (isMine) "✓✓" else null
+        listOfNotNull(time, read).joinToString(" • ")
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, windowShape)
+                else Modifier
+            )
             .clip(windowShape)
+            .background(cardBg, windowShape)
+            .border(BorderStroke(1.dp, cs.outlineVariant.copy(alpha = if (isDark) 0.16f else 0.40f)), windowShape)
             .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {}
     ) {
         Column(
@@ -734,13 +774,27 @@ private fun ActionGlassCard(
                 .fillMaxWidth()
                 .clip(windowShape)
         ) {
+            if (tokens.led != null && status.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 10.dp, end = 10.dp, top = 10.dp, bottom = 4.dp)
+                        .fillMaxWidth()
+                ) {
+                    VlLedScreen(
+                        radius = 10.dp,
+                        padding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        VlLedMarquee(text = status, dot = 1.2.dp, gap = 0.6.dp)
+                    }
+                }
+            }
             actionList.forEachIndexed { index, action ->
-                val isFirst = index == 0
+                val isFirst = index == 0 && (tokens.led == null || status.isEmpty())
                 val isLast = index == actionList.lastIndex
                 val itemShape = when {
-                    actionList.size == 1 -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(cardRadius))
-                    isFirst -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cardRadius, topEnd = cardRadius, bottomStart = 0.dp, bottomEnd = 0.dp))
-                    isLast -> VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = cardRadius, bottomEnd = cardRadius))
+                    actionList.size == 1 && isFirst -> tokens.shapes.adapt(RoundedCornerShape(cardRadius))
+                    isFirst -> tokens.shapes.adapt(RoundedCornerShape(topStart = cardRadius, topEnd = cardRadius, bottomStart = 0.dp, bottomEnd = 0.dp))
+                    isLast -> tokens.shapes.adapt(RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = cardRadius, bottomEnd = cardRadius))
                     else -> RectangleShape
                 }
 
@@ -776,6 +830,7 @@ private fun ActionRowItem(
     onClick: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
     val color = if (destructive) cs.error else cs.onSurface
     val bgColor = if (isHovered) {
@@ -806,8 +861,16 @@ private fun ActionRowItem(
             text = label,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
             color = color,
-            maxLines = 1
+            maxLines = 1,
+            modifier = Modifier.weight(1f, fill = false)
         )
+        if (isHovered && tokens.led != null) {
+            Spacer(Modifier.weight(1f))
+            VlLedDot(
+                size = 4.dp,
+                color = if (destructive) cs.error else (tokens.led?.color ?: cs.primary)
+            )
+        }
     }
 }
 

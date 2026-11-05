@@ -225,10 +225,10 @@ class ThemeScreenshotTest(
             VlTopAppBar(
                 title = { Text("Настройки") },
                 navigationIcon = {
-                    IconButton(onClick = {}) { Icon(Icons.Default.ArrowBack, null) }
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {}) { Icon(Icons.Default.ArrowBack, null) }
                 },
                 actions = {
-                    IconButton(onClick = {}) { Icon(Icons.Default.MoreVert, null) }
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {}) { Icon(Icons.Default.MoreVert, null) }
                 },
             )
             VlCard(modifier = Modifier.fillMaxWidth()) {
@@ -269,7 +269,17 @@ class ThemeScreenshotTest(
             unreadCount = mapOf(me to unread),
             lastSeq = 40L + id.filter { it.isDigit() }.toLong() * 7 + unread,
         )
+        val tokens = VlTheme.tokens
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (tokens.led != null) {
+                org.visorlink.app.ui.components.chatlist.ChatBoardView(
+                    unread = 5,
+                    online = true,
+                    sync = org.visorlink.app.data.model.SyncState.SYNCED,
+                    gift = true,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
             ChatListItem(
                 chat = chat("u1", "Иван Петров", "Привет! Скинешь файлы?", "u1", 3),
                 chatType = ChatType.DIRECT,

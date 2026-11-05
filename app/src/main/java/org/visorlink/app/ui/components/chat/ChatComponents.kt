@@ -93,6 +93,19 @@ fun resolveCdnUrl(cdnMediaId: String?, fallbackUrl: String?): String? {
 
 @Composable
 fun TypingDots(primaryColor: Color = Color.Unspecified) {
+    val tokens = VlTheme.tokens
+    if (tokens.led != null) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            org.visorlink.app.ui.components.led.VlLedTyping()
+            Text(
+                stringResource(R.string.chat_typing),
+                style = MaterialTheme.typography.labelSmall,
+                color = tokens.led.color,
+                fontSize = 11.sp
+            )
+        }
+        return
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "typing")
     val color = if (primaryColor == Color.Unspecified) MaterialTheme.colorScheme.primary else primaryColor
     val cycleDuration = 1200
@@ -586,16 +599,46 @@ fun RecordingBar(
         }
 
         Row(Modifier.weight(1f).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(12.dp)
-                    .liquidJelly(micJelly)
-                    .background(Color.Red.copy(alpha = dotAlpha), VlTheme.tokens.shapes.indicator)
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}", style = MaterialTheme.typography.bodyMedium, color = timerColor)
-            Spacer(Modifier.width(6.dp))
-            Text(stringResource(R.string.chat_recording_label), style = MaterialTheme.typography.bodySmall, color = labelColor)
+            val tokens = VlTheme.tokens
+            val timeStr = "${elapsed / 60}:${(elapsed % 60).toString().padStart(2, '0')}"
+            if (tokens.led != null) {
+                org.visorlink.app.ui.components.led.VlLedScreen(
+                    padding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        org.visorlink.app.ui.components.led.VlLedDot(
+                            size = 7.dp,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        org.visorlink.app.ui.components.led.VlLedText(
+                            text = "REC",
+                            dot = 1.5.dp,
+                            gap = 0.75.dp,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        org.visorlink.app.ui.components.led.VlLedText(
+                            text = timeStr,
+                            dot = 2.dp,
+                            gap = 1.dp,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.chat_recording_label), style = MaterialTheme.typography.bodySmall, color = labelColor)
+            } else {
+                Box(
+                    Modifier
+                        .size(12.dp)
+                        .liquidJelly(micJelly)
+                        .background(Color.Red.copy(alpha = dotAlpha), tokens.shapes.indicator)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(timeStr, style = MaterialTheme.typography.bodyMedium, color = timerColor)
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.chat_recording_label), style = MaterialTheme.typography.bodySmall, color = labelColor)
+            }
         }
 
         IconButton(
@@ -644,6 +687,7 @@ fun ReplyBanner(message: Message, onDismiss: () -> Unit) {
 
 @Composable
 fun MessageStatusIcon(status: String) {
+    val tokens = VlTheme.tokens
     val icon = when (status) {
         SendStatus.SENDING -> Icons.Default.Schedule
         SendStatus.QUEUED  -> Icons.Default.Schedule
@@ -653,7 +697,7 @@ fun MessageStatusIcon(status: String) {
     val tint = when (status) {
         SendStatus.SENDING, SendStatus.QUEUED -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         SendStatus.ERROR   -> MaterialTheme.colorScheme.error
-        else               -> MaterialTheme.colorScheme.primary
+        else               -> tokens.led?.color ?: MaterialTheme.colorScheme.primary
     }
 
     val desc = when (status) {
@@ -666,8 +710,10 @@ fun MessageStatusIcon(status: String) {
 
 @Composable
 fun ReadReceipt(isRead: Boolean) {
+    val tokens = VlTheme.tokens
     val desc = if (isRead) stringResource(R.string.chat_read) else stringResource(R.string.chat_sent)
-    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = desc, modifier = Modifier.size(15.dp), tint = if (isRead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+    val readTint = tokens.led?.color ?: MaterialTheme.colorScheme.primary
+    Icon(imageVector = if (isRead) Icons.Default.DoneAll else Icons.Default.Done, contentDescription = desc, modifier = Modifier.size(15.dp), tint = if (isRead) readTint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
 }
 
 @Composable

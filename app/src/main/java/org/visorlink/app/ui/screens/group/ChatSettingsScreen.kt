@@ -314,7 +314,7 @@ fun ChatSettingsScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         if (uiState.isEditingInfo) viewModel.cancelEditingInfo()
                         else onNavigateBack()
                     }) {
@@ -323,7 +323,7 @@ fun ChatSettingsScreen(
                 },
                 actions = {
                     if (uiState.isAdmin && !uiState.isEditingInfo) {
-                        IconButton(onClick = { viewModel.startEditingInfo() }) {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = { viewModel.startEditingInfo() }) {
                             Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
                         }
                     }

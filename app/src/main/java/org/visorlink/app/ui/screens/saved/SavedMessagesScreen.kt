@@ -172,7 +172,7 @@ fun SavedMessagesScreen(
         topBar = {
             VlTopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onNavigateBack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                     }
                 },
@@ -188,11 +188,11 @@ fun SavedMessagesScreen(
                 },
                 actions = {
                     if (uiState.settings?.pinEnabled == true) {
-                        IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.lock() }) {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); viewModel.lock() }) {
                             Icon(Icons.Default.Lock, stringResource(R.string.saved_pin_disable), tint = MaterialTheme.colorScheme.primary)
                         }
                     }
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
                         Icon(Icons.Default.Settings, stringResource(R.string.chat_action_settings))
                     }
                 },

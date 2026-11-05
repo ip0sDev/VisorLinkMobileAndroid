@@ -7,8 +7,8 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -21,16 +21,16 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.ImageShader
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.TileMode
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.asAndroidPath
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
@@ -48,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 
 /**
- * Два независимых слоя глубины из гайдлайна §4.
+ * Два независимых слоя глубины из гайдлайна §4 (Biolume и Forge).
  *
  * Все модификаторы здесь — **не-composable** и принимают токены явным параметром.
  * Это осознанно: так их можно ставить в условные ветки модификаторной цепочки
@@ -67,10 +69,14 @@ private fun Shape.toPath(size: Size, layoutDirection: LayoutDirection, density: 
 }
 
 /**
- * Рисует ТОЛЬКО тень (заливка прозрачная) — стандартный приём через
- * `Paint.setShadowLayer`. Другого способа получить мягкую смещённую тень
- * произвольной формы в Compose нет: `Modifier.shadow` не даёт управлять смещением
- * и не умеет рисовать вторую тень от противоположного источника света.
+ * Перевод радиуса размытия дизайна в сигму Гаусса (паритет с Flutter `shadowSigma` в `vl_depth.dart`).
+ */
+private fun shadowSigma(blurPx: Float): Float = blurPx * 0.57735f + 0.5f
+
+/**
+ * Рисует мягкую смещённую тень произвольной формы через `BlurMaskFilter`
+ * (полный паритет с Flutter `drawSoftShadow` и `_drawInsetShadow` в `vl_depth.dart`).
+ * Использование `Paint.setShadowLayer` с `Color.TRANSPARENT` на Android Skia обнуляет альфу тени.
  */
 private fun DrawScope.drawSoftShadow(
     path: Path,
@@ -81,29 +87,61 @@ private fun DrawScope.drawSoftShadow(
     strokeWidthPx: Float? = null,
 ) {
     if (color.alpha <= 0.001f || blurPx <= 0f) return
+    val sigma = shadowSigma(blurPx)
 
     drawIntoCanvas { canvas ->
+        val native = canvas.nativeCanvas
+        native.save()
+        native.translate(dx, dy)
         val paint = android.graphics.Paint().apply {
             isAntiAlias = true
-            this.color = android.graphics.Color.TRANSPARENT
+            this.color = color.toArgb()
             if (strokeWidthPx != null) {
                 style = android.graphics.Paint.Style.STROKE
                 strokeWidth = strokeWidthPx
             } else {
                 style = android.graphics.Paint.Style.FILL
             }
-            setShadowLayer(blurPx, dx, dy, color.toArgb())
+            maskFilter = android.graphics.BlurMaskFilter(
+                sigma,
+                android.graphics.BlurMaskFilter.Blur.NORMAL,
+            )
         }
-        canvas.nativeCanvas.drawPath(path.asAndroidPath(), paint)
+        native.drawPath(path.asAndroidPath(), paint)
+        native.restore()
     }
+}
+
+// ── Заливка клавиши (Forge keycap) ───────────────────────────────────────────
+
+/**
+ * Заливка поверхности с учётом светового градиента приборных клавиш ([VlStructureTokens.keycap]):
+ * в состоянии [VlDepth.Raised] верхняя кромка клавиши светлее к белому (на фарфоре — в полную силу
+ * `keycapSheen`, на цветных и графитовых клавишах — до 16 %, чтобы не выбеливать тон).
+ * В Biolume и M3E (или в [VlDepth.Inset] / [VlDepth.Flat]) — обычная сплошная заливка.
+ */
+fun Modifier.vlKeycapBackground(
+    tokens: VlStructureTokens,
+    color: Color,
+    shape: Shape,
+    depth: VlDepth = VlDepth.Raised,
+): Modifier {
+    if (color.alpha <= 0.001f) return this
+    if (tokens.keycap && depth == VlDepth.Raised) {
+        val sheen = if (color.luminance() > 0.6f) tokens.keycapSheen else minOf(tokens.keycapSheen, 0.16f)
+        val topColor = lerp(color, Color.White, sheen)
+        return this.background(Brush.verticalGradient(listOf(topColor, color)), shape)
+    }
+    return this.background(color, shape)
 }
 
 // ── §4.1 Слой структуры: Raised ──────────────────────────────────────────────
 
 /**
- * Приподнятая поверхность: тень от невидимого источника сверху-слева плюс
- * контр-подсветка снизу-справа. Для элементов, которые «на что-то нажимают» —
- * карточки, tonal/outlined-кнопки, чипы в покое, thumb тумблера.
+ * Приподнятая поверхность:
+ * - В Biolume: двойной свет/тень от источника сверху-слева.
+ * - В Forge (`tokens.keycap == true`): направленный свет сверху — тень строго вниз + плотная
+ *   контактная тень под нижним ребром и внутренний блик верхней кромки.
  */
 fun Modifier.vlRaised(
     tokens: VlStructureTokens,
@@ -111,14 +149,47 @@ fun Modifier.vlRaised(
 ): Modifier {
     if (!tokens.enabled) return this
 
-    // Forge v2, жёсткий блок: пассивная панель — только крепкий контур. Плита (vlHardShadow) —
-    // признак того, что нажимается или активно (кнопка, FAB, поле в фокусе, диалог): когда плита
-    // была у каждой карточки и раздела, экран терял иерархию и читался шаблоном
+    if (tokens.keycap) {
+        return this
+            .drawBehind {
+                val path = shape.toPath(size, layoutDirection, this)
+                drawSoftShadow(
+                    path = path,
+                    color = tokens.shadowDark,
+                    blurPx = tokens.raisedBlur.toPx(),
+                    dx = 0f,
+                    dy = tokens.raisedOffset.toPx(),
+                )
+                // Плотная контактная тень прямо под нижним ребром: клавиша «сидит» в панели
+                drawSoftShadow(
+                    path = path,
+                    color = tokens.shadowDark,
+                    blurPx = 2.dp.toPx(),
+                    dx = 0f,
+                    dy = 1.dp.toPx(),
+                )
+            }
+            .drawWithContent {
+                drawContent()
+                val path = shape.toPath(size, layoutDirection, this)
+                val sheenBrush = Brush.verticalGradient(
+                    0f to tokens.shadowLight,
+                    0.35f to Color.Transparent,
+                )
+                clipPath(path) {
+                    drawPath(
+                        path = path,
+                        brush = sheenBrush,
+                        style = Stroke(width = 2.dp.toPx()),
+                    )
+                }
+            }
+    }
+
     if (tokens.outline != null && tokens.hardShadow != null) {
         return this.vlHairline(tokens.outline, shape, width = 1.5.dp)
     }
 
-    // Forge v2: плоская панель — контур поверх содержимого и короткая мягкая тень вниз
     tokens.outline?.let { outline ->
         return this
             .drawBehind {
@@ -166,7 +237,24 @@ fun Modifier.vlInset(
 ): Modifier {
     if (!tokens.enabled) return this
 
-    // Forge v2, жёсткий блок: принимающая поверхность плоская, только контур
+    if (tokens.keycap) {
+        return this.drawWithContent {
+            drawContent()
+            val path = shape.toPath(size, layoutDirection, this)
+            // Свет сверху: тень падает от верхней кромки вниз
+            clipPath(path) {
+                drawSoftShadow(
+                    path = path,
+                    color = tokens.shadowDark,
+                    blurPx = tokens.insetBlur.toPx(),
+                    dx = 0f,
+                    dy = tokens.insetOffset.toPx(),
+                    strokeWidthPx = tokens.insetOffset.toPx() * 2f,
+                )
+            }
+        }
+    }
+
     if (tokens.outline != null && tokens.hardShadow != null) {
         val outline = tokens.outline
         return this.drawWithContent {
@@ -176,7 +264,6 @@ fun Modifier.vlInset(
         }
     }
 
-    // Forge v2: контур и внутренняя тень сверху (--neo-shadow-in)
     tokens.outline?.let { outline ->
         return this.drawWithContent {
             drawContent()
@@ -241,10 +328,7 @@ fun Modifier.vlStructure(
  *
  * Цветное свечение поверх структуры. Включается ТОЛЬКО когда элемент что-то
  * сообщает: focus, press, live, selected-CTA. Гайдлайн §10: в покое не светится
- * ничего, кроме FAB, и на экране одновременно активен максимум один glow.
- *
- * @param active выключает эффект целиком, чтобы вызывающему коду не приходилось
- *   плодить условные ветки в модификаторной цепочке.
+ * ничего, кроме FAB (и клавиши в Forge), и на экране одновременно активен максимум один glow.
  */
 fun Modifier.vlSignalGlow(
     tokens: VlSignalTokens,
@@ -252,7 +336,7 @@ fun Modifier.vlSignalGlow(
     shape: Shape,
     active: Boolean = true,
     alphaOverride: Float? = null,
-    /** false — постоянное свечение темы (кнопка Forge v2), а не сигнал: в счёт §10 не идёт. */
+    /** false — постоянное свечение темы (кнопка Forge), а не сигнал: в счёт §10 не идёт. */
     counted: Boolean = true,
 ): Modifier {
     if (!tokens.enabled || !active) return this
@@ -290,7 +374,7 @@ fun Modifier.vlSignalGlow(
 val LocalSignalCounter = compositionLocalOf<AtomicInteger?> { null }
 
 /**
- * Сигнальный контур — 1px по границе формы. Используется вместе с [vlSignalGlow]
+ * Сигнальный контур — по границе формы. Используется вместе с [vlSignalGlow]
  * у сфокусированного поля (§4.2). НЕ путать с нейтральным `outlineVariant`: это
  * разные по смыслу токены (§10).
  */
@@ -316,7 +400,7 @@ fun Modifier.vlSignalBorder(
 
 /**
  * Нейтральная грань для случаев, где неоморфная тень плохо читается — например
- * на цветной заливке (§3.1). Карточка в Biolume = raised + эта грань (§7).
+ * на цветной заливке (§3.1). Карточка в Biolume/Forge = raised + эта грань (§7).
  */
 fun Modifier.vlHairline(
     color: Color,
@@ -331,8 +415,7 @@ fun Modifier.vlHairline(
 }
 
 /**
- * Строка таблицы терминала: без коробки. Снизу — тонкий разделитель от [dividerStart] до края,
- * слева — полоса [accent] (непрочитанное), при нажатии — заливка [pressFill].
+ * Строка таблицы (оставлено для совместимости).
  */
 fun Modifier.vlTableRow(
     divider: Color,
@@ -352,8 +435,7 @@ fun Modifier.vlTableRow(
 }
 
 /**
- * Линейка вдоль верхнего края: засечки внутрь, каждая пятая выше, к правому краю гаснут. Для
- * контейнеров терминала (навбар).
+ * Линейка вдоль верхнего края (оставлено для совместимости).
  */
 fun Modifier.vlTopTicks(color: Color, active: Boolean = true, step: Dp = 8.dp): Modifier {
     if (!active) return this
@@ -371,8 +453,7 @@ fun Modifier.vlTopTicks(color: Color, active: Boolean = true, step: Dp = 8.dp): 
 }
 
 /**
- * Угловые скобки на двух НЕсрезанных углах (верхний-конечный и нижний-начальный): вместе со
- * срезом [ChamferShape] они замыкают силуэт. [progress] — рост скобок от 0 до полной длины.
+ * Угловые скобки (оставлено для совместимости).
  */
 fun Modifier.vlCornerBrackets(
     color: Color,
@@ -390,18 +471,15 @@ fun Modifier.vlCornerBrackets(
         val t = thickness.toPx()
         val w = size.width
         val h = size.height
-        // верхний правый
         drawLine(color, Offset(w - len, t / 2), Offset(w, t / 2), strokeWidth = t)
         drawLine(color, Offset(w - t / 2, 0f), Offset(w - t / 2, len), strokeWidth = t)
-        // нижний левый
         drawLine(color, Offset(0f, h - t / 2), Offset(len, h - t / 2), strokeWidth = t)
         drawLine(color, Offset(t / 2, h - len), Offset(t / 2, h), strokeWidth = t)
     }
 }
 
 /**
- * «Трассировка» контура: яркий отрезок пробегает по периметру формы и гаснет. Играет один раз
- * при появлении панели или фокусе поля; [progress] 0..1, при 0 и 1 ничего не рисуется.
+ * «Трассировка» контура (оставлено для совместимости).
  */
 fun Modifier.vlTraceBorder(
     color: Color,
@@ -428,8 +506,7 @@ fun Modifier.vlTraceBorder(
 }
 
 /**
- * Жёсткая тень: плотная копия формы, сдвинутая вправо-вниз без размытия. Рисуется под элементом,
- * поэтому элементу нужен запас [offset] справа и снизу.
+ * Жёсткая тень (оставлено для совместимости).
  */
 fun Modifier.vlHardShadow(
     color: Color,
@@ -447,8 +524,7 @@ fun Modifier.vlHardShadow(
 }
 
 /**
- * Косая «предупреждающая» штриховка по форме: у опасных действий в Forge v2. Узор рисуется
- * поверх содержимого, поэтому цвет берут полупрозрачным.
+ * Косая «предупреждающая» штриховка (оставлено для совместимости).
  */
 fun Modifier.vlHazardStripes(
     color: Color,
@@ -473,8 +549,7 @@ fun Modifier.vlHazardStripes(
 }
 
 /**
- * Пунктирный контур по форме — «погашенный» элемент терминала (disabled в Forge v2).
- * Сплошной контур значит «живой», пунктир — «сейчас недоступен».
+ * Пунктирный контур по форме (оставлено для совместимости).
  */
 fun Modifier.vlDashedBorder(
     color: Color,
@@ -505,10 +580,6 @@ fun Modifier.vlDashedBorder(
  * Допустим только там, где элемент действительно сообщает live-состояние:
  * статус-точка «онлайн», индикатор записи, загрузка. FAB, кнопки и карточки
  * НЕ пульсируют (§6).
- *
- * Расширяющееся кольцо + растущий glow, период 2.4s, ease-in-out. При
- * [VlTokens.reduceMotion] заменяется статичным glow той же интенсивности, что на
- * пике — ровно как требует §6/§8.
  */
 fun Modifier.vlBiopulse(
     tokens: VlTokens,
@@ -568,22 +639,16 @@ fun Modifier.vlBiopulse(
     }
 }
 
-/**
- * Кольцо пульса должно расти НАРУЖУ, поэтому обрезать его формой нельзя —
- * просто рисуем без клипа. Обёртка существует, чтобы намерение читалось в коде.
- */
 private inline fun DrawScope.clipPathInverseSafe(block: DrawScope.() -> Unit) = block()
 
-// ── Forge v2: фон-дисплей терминала ──────────────────────────────────────────
+// ── Фоновые и линейные модификаторы ──────────────────────────────────────────
 
 /**
- * Дисплей терминала поверх интерфейса ([VlTokens.terminal]): неоновая дымка сверху и
- * сканлайны (веб: `.app-layout::after` у Protogen). Рисуется поверх содержимого с малой
- * непрозрачностью — экраны сами заливают фон, и подложка под ними была бы не видна.
- * Ставится один раз у корня приложения; в остальных темах — no-op.
+ * Фон поверх интерфейса ([VlTokens.terminal]): если не заданы дымка или сканлайны — no-op.
  */
 fun Modifier.vlTerminalBackdrop(tokens: VlTokens): Modifier {
     val t = tokens.terminal ?: return this
+    if (t.haze == null && !t.scanlines) return this
     return this.drawWithCache {
         val w = size.width
         val h = size.height
@@ -591,8 +656,6 @@ fun Modifier.vlTerminalBackdrop(tokens: VlTokens): Modifier {
         val haze = t.haze?.let {
             Brush.radialGradient(listOf(it, Color.Transparent), center = Offset(w * 0.5f, -h * 0.06f), radius = big * 0.7f)
         }
-        // Сканлайны — один тайл 1×gap px в текстуре: GPU размножает его одним drawRect.
-        // Раньше это был путь из сотен прямоугольников, который растеризовался заново на каждый кадр.
         val scan = if (t.scanlines) {
             val line = 1.dp.toPx().coerceAtLeast(1f)
             val gap = 3.dp.toPx().coerceAtLeast(line + 1f)
@@ -613,27 +676,21 @@ fun Modifier.vlTerminalBackdrop(tokens: VlTokens): Modifier {
 }
 
 /**
- * Неоновая линия под элементом (Forge v2: под верхней панелью): основной цвет слева,
- * второй к середине, к правому краю гаснет.
+ * Тонкая LED-линия под шапкой экрана (Forge): мягкий градиент с центральным LED-отсветом.
+ * В остальных темах — no-op.
  */
-fun Modifier.vlNeonRule(tokens: VlTokens, width: Dp = 1.dp): Modifier {
-    val t = tokens.terminal ?: return this
+fun Modifier.vlNeonRule(tokens: VlTokens, width: Dp = 1.5.dp): Modifier {
+    val ledColor = tokens.led?.color ?: tokens.terminal?.neon ?: return this
     return this.drawWithContent {
         drawContent()
         val h = width.toPx()
-        // Тонкая линия по всей ширине и жирный блок слева — как метка раздела на плите
-        drawRect(t.neon.copy(alpha = 0.28f), Offset(0f, size.height - h), Size(size.width, h))
-        // Засечки линейки: каждая пятая выше, к правому краю гаснут
-        val step = 8.dp.toPx()
-        var i = 0
-        while (i * step < size.width) {
-            val x = i * step
-            val major = i % 5 == 0
-            val a = 0.32f * (1f - x / size.width * 0.85f)
-            val tick = if (major) 5.dp.toPx() else 3.dp.toPx()
-            drawRect(t.neon.copy(alpha = a), Offset(x, size.height - h - tick), Size(1.dp.toPx(), tick))
-            i++
-        }
-        drawRect(t.neon, Offset(0f, size.height - h * 3f), Size(size.width * 0.28f, h * 3f))
+        val brush = Brush.horizontalGradient(
+            listOf(
+                ledColor.copy(alpha = 0.08f),
+                ledColor.copy(alpha = 0.75f),
+                ledColor.copy(alpha = 0.08f),
+            )
+        )
+        drawRect(brush, Offset(0f, size.height - h), Size(size.width, h))
     }
 }

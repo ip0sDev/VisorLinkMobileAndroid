@@ -150,7 +150,7 @@ fun ProfileScreen(
                             Text(titleText, fontWeight = FontWeight.Bold)
                         },
                         navigationIcon = {
-                            IconButton(onClick = {
+                            org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 topBarJelly.press(0.06f)
                                 if (uiState.isEditing) viewModel.cancelEditing() else onNavigateBack()
@@ -160,7 +160,7 @@ fun ProfileScreen(
                         },
                         actions = {
                             if (!uiState.isEditing) {
-                                IconButton(onClick = {
+                                org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
                                     topBarJelly.press(0.06f)
                                     viewModel.startEditing()
@@ -168,7 +168,7 @@ fun ProfileScreen(
                                     Icon(Icons.Default.Edit, stringResource(R.string.action_edit))
                                 }
 
-                                IconButton(onClick = {
+                                org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                                     haptic.perform(HapticType.CLICK, hapticEnabled)
                                     topBarJelly.press(0.06f)
                                     showLogout = true

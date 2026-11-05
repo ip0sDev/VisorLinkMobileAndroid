@@ -103,7 +103,7 @@ fun MusicLibraryScreen(
                             )
                         },
                         navigationIcon = {
-                            IconButton(onClick = {
+                            org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                                 topBarJelly.press(0.06f)
                                 if (uiState.selectedPlaylist != null) {
                                     viewModel.selectPlaylist(null)
@@ -116,7 +116,7 @@ fun MusicLibraryScreen(
                         },
                         actions = {
                             if (uiState.selectedTab == 0 && uiState.selectedPlaylist == null) {
-                                IconButton(
+                                org.visorlink.app.ui.components.VlTopAppBarButton(
                                     onClick = {
                                         addJelly.pulse(0.12f)
                                         showCreatePlaylistDialog = true

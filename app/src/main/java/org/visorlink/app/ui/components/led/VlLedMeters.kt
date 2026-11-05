@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.components.led
 
+import android.graphics.BlurMaskFilter
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,9 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
@@ -124,8 +126,8 @@ fun VlLedLevelMeter(
 // ── VlLedProgress ───────────────────────────────────────────────────────────
 
 /**
- * Прогресс рядом точек на всю доступную ширину.
- * [value] = null — бегущий неопределённый индикатор.
+ * Прогресс рядом точек на всю доступную ширину с плавной субпиксельной границей.
+ * [value] = null — бегущий неопределённый индикатор с плавной инерцией.
  */
 @Composable
 fun VlLedProgress(
@@ -173,17 +175,18 @@ fun VlLedProgress(
             )
         ) {
             val block = max(3, cols / 6)
-            val start = if (value != null) {
-                0
+            val isIndeterminate = value == null
+            val startF = if (!isIndeterminate) {
+                0f
             } else if (still) {
-                (cols - block) / 2
+                ((cols - block) / 2).toFloat()
             } else {
-                ((cols + block) * animOffset).toInt() - block
+                (cols + block) * animOffset - block
             }
-            val end = if (value != null) {
-                (value.coerceIn(0f, 1f) * cols).roundToInt()
+            val endF = if (!isIndeterminate) {
+                value!!.coerceIn(0f, 1f) * cols
             } else {
-                start + block
+                startF + block
             }
 
             vlPaintLedDots(
@@ -192,7 +195,12 @@ fun VlLedProgress(
                 dotPx = dotPx,
                 gapPx = gapPx,
                 ink = ink,
-                lit = { x, _ -> x in start until end }
+                intensity = { x, _ ->
+                    val x0 = x.toFloat()
+                    val x1 = (x + 1).toFloat()
+                    val overlap = (min(x1, endF) - max(x0, startF)).coerceIn(0f, 1f)
+                    overlap
+                }
             )
         }
     }
@@ -201,7 +209,7 @@ fun VlLedProgress(
 // ── VlLedSpinner ────────────────────────────────────────────────────────────
 
 /**
- * Загрузчик-«змейка»: бежит по кольцу из 12 точек, хвост затухает.
+ * Загрузчик-«змейка»: бежит по кольцу из 12 точек, хвост плавно затухает по кривой люминофора.
  */
 @Composable
 fun VlLedSpinner(
@@ -232,7 +240,7 @@ fun VlLedSpinner(
             .size(size)
     ) {
         val n = 12
-        val tail = 6
+        val tail = 6f
         val dotPx = size.toPx() * 0.16f
         val center = Offset(this.size.width / 2f, this.size.height / 2f)
         val radius = (this.size.minDimension - dotPx) / 2f
@@ -242,42 +250,57 @@ fun VlLedSpinner(
             return center + Offset(cos(angle) * radius, sin(angle) * radius)
         }
 
-        val head = if (value != null || still) -1 else (floor(anim * n).toInt() % n)
-        val litCount = if (value != null) (value.coerceIn(0f, 1f) * n).roundToInt() else null
+        val headFloat = if (value != null || still) -1f else ((anim * n) % n)
+        val litCount = if (value != null) value.coerceIn(0f, 1f) * n else null
 
         fun level(i: Int): Float {
-            if (litCount != null) return if (i < litCount) 1f else 0f
+            if (litCount != null) {
+                val rem = litCount - i
+                return rem.coerceIn(0f, 1f)
+            }
             if (still) return 1f
-            val k = (head - i + n) % n
-            return if (k < tail) 1f - (k.toFloat() / tail) else 0f
+            val dist = (headFloat - i + n) % n
+            return if (dist < tail) {
+                val decay = 1f - (dist / tail)
+                decay * decay
+            } else 0f
         }
 
-        val offPts = ArrayList<Offset>()
-        val onPts = ArrayList<Offset>()
+        val r = dotPx / 2f
+        val blurPx = dotPx * 1.5f
+        val sigma = blurPx * 0.57735f + 0.5f
+        val glowRadius = r * 1.4f
+
         for (i in 0 until n) {
             val pt = posAt(i)
-            if (level(i) > 0f) onPts.add(pt) else offPts.add(pt)
-        }
-
-        if (offPts.isNotEmpty()) {
-            drawPoints(
-                points = offPts,
-                pointMode = PointMode.Points,
-                color = ink.off,
-                strokeWidth = dotPx,
-                cap = StrokeCap.Round,
-            )
-        }
-
-        for (i in 0 until n) {
             val l = level(i)
-            if (l > 0f) {
-                drawPoints(
-                    points = listOf(posAt(i)),
-                    pointMode = PointMode.Points,
+
+            // 1. Погашенная база матрицы
+            drawCircle(
+                color = ink.off,
+                radius = r,
+                center = pt
+            )
+
+            if (l > 0.02f) {
+                // 2. Ореол свечения
+                if (ink.glowBlur > 0.dp && l > 0.1f) {
+                    drawIntoCanvas { canvas ->
+                        val glowPaint = android.graphics.Paint().apply {
+                            isAntiAlias = true
+                            style = android.graphics.Paint.Style.FILL
+                            this.color = ink.on.copy(alpha = 0.70f * l).toArgb()
+                            maskFilter = BlurMaskFilter(sigma, BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawCircle(pt.x, pt.y, glowRadius, glowPaint)
+                    }
+                }
+
+                // 3. Сам светодиод с инерцией
+                drawCircle(
                     color = lerp(ink.off, ink.on, l),
-                    strokeWidth = dotPx,
-                    cap = StrokeCap.Round,
+                    radius = r * (0.86f + 0.14f * l),
+                    center = pt
                 )
             }
         }

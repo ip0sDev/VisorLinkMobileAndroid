@@ -196,7 +196,7 @@ fun VlGlassPanel(
                 .vlRaised(tokens.structure, shape)
                 .clip(shape)
                 // §3.1: sheet/диалог живут на surfaceContainerHigh.
-                .background(cs.surfaceContainerHigh, shape)
+                .vlKeycapBackground(tokens.structure, cs.surfaceContainerHigh, shape, VlDepth.Raised)
                 .vlHairline(cs.outlineVariant, shape)
         ) {
             content()
@@ -244,56 +244,59 @@ fun VlButton(
     val onContainer = if (isDestructive) cs.onError else cs.onPrimary
 
     val shape: Shape = if (isPressed) tokens.shapes.buttonPressed else tokens.shapes.button
-    val hardAlt = tokens.structure.hardShadowAlt
-    val hardPx = with(androidx.compose.ui.platform.LocalDensity.current) { tokens.structure.hardOffset.roundToPx() }
-
-    // Forge v2: неон при появлении вспыхивает втрое и за 0,9 с успокаивается до тихого свечения в покое
-    val restAlpha = tokens.signal.buttonRestAlpha
-    val intro = remember { Animatable(if (restAlpha > 0f && tokens.glitchMotion) 1f else 0f) }
-    LaunchedEffect(Unit) { if (intro.value > 0f) intro.animateTo(0f, TerminalMotion.tween(900)) }
-    val glowAlpha = restAlpha * (1f + 2f * intro.value)
+    val keycap = tokens.structure.keycap
+    val restGlow = keycap && tokens.signal.buttonRestAlpha > 0f
+    val depth = when {
+        tokens.structure.enabled && enabled -> if (isPressed) VlDepth.Inset else VlDepth.Raised
+        else -> VlDepth.Flat
+    }
 
     Button(
         onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
-            // Жёсткий блок: кнопка стоит на плите второго цвета, при нажатии «вдавливается» в неё
-            .then(if (hardAlt != null) Modifier.vlHardShadow(hardAlt, shape, tokens.structure.hardOffset, active = enabled && !isDestructive) else Modifier)
-            .offset { if (hardAlt != null && isPressed && enabled) IntOffset(hardPx, hardPx) else IntOffset.Zero }
-            // Свечение — ответ на действие, а не константа (§4.2). Forge v2 держит неон
-            // и в покое (buttonRestAlpha): это свойство темы, а не сигнал, поэтому не в счёт §10.
             .vlSignalGlow(
                 tokens = tokens.signal,
                 color = container,
                 shape = shape,
-                // Опасное действие в покое не светится — неон не должен звать к «Удалить»
-                active = enabled && hardAlt == null && (isPressed || (!isDestructive && tokens.signal.buttonRestAlpha > 0f)),
-                alphaOverride = if (isPressed) null else glowAlpha,
+                active = enabled && (isPressed || (!isDestructive && restGlow)),
+                alphaOverride = if (isPressed) null else tokens.signal.buttonRestAlpha,
                 counted = isPressed,
             )
-            // Нажатие и фокус с клавиатуры/D-pad в терминале — неоновый контур по форме кнопки
             .vlSignalBorder(
                 tokens = tokens.signal,
-                color = tokens.terminal?.neon ?: container,
+                color = container,
                 shape = shape,
-                active = tokens.terminal != null && enabled && (isPressed || isFocused),
+                active = enabled && isFocused,
             )
-            // Терминал: недоступная кнопка — пунктирный контур, как у погасшего поля
-            .vlDashedBorder(cs.outline, shape, active = tokens.terminal != null && !enabled)
-            // Опасное действие в терминале — косая штриховка (и никакой яркой плиты)
-            .vlHazardStripes(cs.onError.copy(alpha = 0.22f), shape, active = tokens.terminal != null && isDestructive && enabled),
+            .then(
+                if (tokens.structure.enabled) {
+                    Modifier.vlStructure(tokens.structure, depth, shape)
+                } else {
+                    Modifier
+                }
+            )
+            .then(
+                if (keycap && enabled && !isPressed) {
+                    Modifier.vlKeycapBackground(tokens.structure, container, shape = shape, depth = depth)
+                } else {
+                    Modifier
+                }
+            ),
         enabled = enabled,
         shape = shape,
         interactionSource = interactionSource,
         elevation = when {
             tokens.isBiolume -> ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
-            hardAlt != null -> ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp)
+            tokens.structure.enabled -> ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp)
             else -> ButtonDefaults.buttonElevation()
         },
         colors = ButtonDefaults.buttonColors(
-            containerColor = container,
-            contentColor = onContainer
+            containerColor = if (keycap && enabled && !isPressed) Color.Transparent else container,
+            contentColor = onContainer,
+            disabledContainerColor = cs.onSurface.copy(alpha = 0.12f),
+            disabledContentColor = cs.onSurface.copy(alpha = 0.38f),
         )
     ) {
         content()
@@ -368,7 +371,7 @@ fun VlSwitch(
         label = "vlswitch_thumb",
     )
     val thumbColor by animateColorAsState(
-        targetValue = when {
+        targetValue = sw.thumbColor ?: when {
             m3Style && checked -> cs.onPrimary
             m3Style -> cs.outline
             checked -> cs.primary
@@ -385,6 +388,7 @@ fun VlSwitch(
             .clip(trackShape)
             .background(
                 when {
+                    checked && sw.trackOnColor != null -> sw.trackOnColor!!
                     m3Style && checked -> cs.primary
                     m3Style -> cs.surfaceContainerHighest
                     checked && sw.litTrack -> cs.primary.copy(alpha = 0.28f).compositeOver(cs.surfaceContainer)
@@ -411,16 +415,33 @@ fun VlSwitch(
             },
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (sw.ledDots && checked) {
+        val led = if (sw.ledDots) tokens.led else null
+        if (led != null) {
+            val dotsColor = if (checked) led.color else led.off
             Row(
                 modifier = Modifier
-                    .padding(start = 8.dp)
-                    .align(Alignment.CenterStart),
+                    .padding(horizontal = 10.dp)
+                    .align(if (checked) Alignment.CenterStart else Alignment.CenterEnd),
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                repeat(3) {
-                    org.visorlink.app.ui.components.led.VlLedDot(size = 3.dp, color = cs.primary)
+                repeat(4) {
+                    Box(
+                        modifier = Modifier
+                            .size(3.dp)
+                            .background(dotsColor, CircleShape)
+                            .then(
+                                if (checked && led.glowBlur > 0.dp) {
+                                    Modifier.vlSignalGlow(
+                                        tokens = tokens.signal,
+                                        color = led.color,
+                                        shape = CircleShape,
+                                        active = true,
+                                        counted = false,
+                                    )
+                                } else Modifier
+                            )
+                    )
                 }
             }
         }
@@ -443,7 +464,7 @@ fun VlSwitch(
                 )
                 .vlRaised(structure, thumbShape)
                 .clip(thumbShape)
-                .background(thumbColor, thumbShape)
+                .vlKeycapBackground(structure, thumbColor, thumbShape, VlDepth.Raised)
         )
     }
 }
@@ -469,40 +490,29 @@ fun VlSegmentedControl(
     val tokens = VlTheme.tokens
     val shape = tokens.shapes.pill
     val itemShape: Shape = tokens.shapes.pill
-    // Forge v2: выбор — инвертированный блок (сплошной цвет, тёмный текст), как выделение в терминале
-    val inverted = tokens.structure.hardShadow != null
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .alpha(if (enabled) 1f else 0.45f)
-            .then(if (inverted) Modifier.border(1.5.dp, tokens.structure.outline ?: cs.outline, shape) else Modifier)
-            .vlDashedBorder(cs.outline, shape, active = !enabled && tokens.terminal != null)
             .background(cs.surfaceContainerLow, shape)
             .padding(4.dp)
     ) {
         Row(Modifier.fillMaxWidth()) {
             labels.forEachIndexed { i, label ->
                 val isSelected = selectedIndex == i
-                val targetBg = when {
-                    !isSelected -> Color.Transparent
-                    // Плотная заливка: primaryContainer с alpha .12 на контейнере
-                    // не читался, выбор выглядел как его отсутствие.
-                    inverted -> cs.primary
-                    else -> tokens.selectionFill
-                }
+                val targetBg = if (isSelected) tokens.selectionFill else Color.Transparent
                 val bgColor by animateColorAsState(targetBg, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_bg")
                 val textColor by animateColorAsState(
-                    if (isSelected) (if (inverted) cs.onPrimary else cs.primary) else cs.onSurfaceVariant, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_txt"
+                    if (isSelected) cs.primary else cs.onSurfaceVariant, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_txt"
                 )
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(itemShape)
                         .background(bgColor, itemShape)
                         .then(
-                            if (tokens.structure.enabled && isSelected && !inverted) {
+                            if (tokens.structure.enabled && isSelected) {
                                 Modifier.vlInset(tokens.structure, itemShape)
                             } else {
                                 Modifier
@@ -511,14 +521,30 @@ fun VlSegmentedControl(
                         .clickable(
                             enabled = enabled,
                             interactionSource = remember { MutableInteractionSource() }, indication = null
-                        ) { haptic.perform(HapticType.SELECTION, hapticEnabled); onSelected(i) }
-                        .padding(vertical = 12.dp),
+                        ) {
+                            if (i != selectedIndex) {
+                                haptic.perform(HapticType.SELECTION, hapticEnabled)
+                            }
+                            onSelected(i)
+                        }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    // Forge: у выбранной клавиши горит светодиод
+                    if (isSelected && tokens.led != null) {
+                        org.visorlink.app.ui.components.led.VlLedDot(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .offset(y = (-8).dp),
+                            size = 4.dp,
+                            color = tokens.led!!.color,
+                        )
+                    }
                     Text(
                         text = label,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                         color = textColor,
+                        maxLines = 1,
                         fontSize = 14.sp
                     )
                 }
@@ -543,19 +569,20 @@ fun VlIconTray(
     val tokens = VlTheme.tokens
     val color = iconColor ?: if (isError) cs.error else if (selected) cs.primary else cs.onSurfaceVariant
     val size = 40.dp
-    // Жёсткий блок: кнопка-иконка — квадратная плита, а не круг
-    val shape = if (tokens.structure.hardShadow != null) tokens.shapes.rounded(2.dp) else tokens.shapes.indicator
+    val shape = tokens.shapes.indicator
 
+    val depth = if (tokens.structure.enabled) VlDepth.Raised else VlDepth.Flat
+    val trayFill = if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerHigh
     Box(
         modifier = modifier
             .size(size)
             .vlStructure(
                 tokens = tokens.structure,
-                depth = if (tokens.structure.enabled) VlDepth.Raised else VlDepth.Flat,
+                depth = depth,
                 shape = shape,
             )
             .clip(shape)
-            .background(if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerHigh, shape),
+            .vlKeycapBackground(tokens.structure, trayFill, shape, depth),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = contentDescription, tint = color, modifier = Modifier.size(20.dp))
@@ -613,20 +640,21 @@ fun VlSettingsSection(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Forge v2: моноширинная капитель в цвете primary (у Protogen — префикс «> ») и
-            // линия до края, гаснущая вправо, — заголовок HUD
-            val terminal = VlTheme.tokens.terminal
-            if (terminal != null) {
-                // Подпись «расшифровывается» при появлении раздела
-                TerminalDecodeText(
-                    text = terminal.labelPrefix + title.uppercase(),
-                    color = titleColor.copy(alpha = 0.9f),
-                    style = org.visorlink.app.ui.theme.ForgeV2SectionLabel,
+            val tokens = VlTheme.tokens
+            val led = tokens.led
+            if (tokens.isForge) {
+                org.visorlink.app.ui.components.led.VlLedDot(
+                    size = 5.dp,
+                    color = if (isPremium) Color(0xFFC5A059) else (led?.color ?: cs.primary),
+                    modifier = Modifier.padding(end = 8.dp),
                 )
-                // Линейка с засечками вместо простой линии
-                TerminalRuler(
-                    color = titleColor,
-                    modifier = Modifier.padding(start = 10.dp).weight(1f),
+                Text(
+                    title.uppercase(),
+                    color = cs.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 12.sp,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.weight(1f),
                 )
             } else {
                 Text(
@@ -634,7 +662,8 @@ fun VlSettingsSection(
                     color = titleColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    letterSpacing = 1.2.sp
+                    letterSpacing = 1.2.sp,
+                    modifier = Modifier.weight(1f),
                 )
             }
             if (isPremium) {
@@ -647,8 +676,6 @@ fun VlSettingsSection(
             }
         }
 
-        // §7: карточка = neumorphic-raised + нейтральная грань. Это контейнер всех
-        // настроек, поэтому именно здесь рельеф даёт максимум читаемости структуры.
         val tokens = VlTheme.tokens
         val sectionShape = tokens.shapes.rounded(32.dp)
         val isDark = cs.surface.luminance() < 0.5f
@@ -664,8 +691,6 @@ fun VlSettingsSection(
             BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
         }
 
-        // Терминал: при появлении раздела по контуру пробегает яркий отрезок
-        val trace = rememberTrace(Unit, enabled = tokens.structure.hardShadow != null)
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -677,10 +702,6 @@ fun VlSettingsSection(
                 .clip(sectionShape)
                 .background(cardBrush, sectionShape)
                 .border(cardBorder, sectionShape)
-                .then(
-                    if (tokens.structure.hardShadow != null) Modifier.vlTraceBorder(cs.primary, sectionShape, { trace.value })
-                    else Modifier
-                )
         ) {
             Column(
                 modifier = Modifier
@@ -739,14 +760,12 @@ fun VlSettingsItem(
                 .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier
-                    .size(42.dp)
-                    .background(color.copy(alpha = 0.16f), iconShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, contentDescription = title, tint = color, modifier = Modifier.size(22.dp))
-            }
+            VlGlyph(
+                icon = icon,
+                color = iconColor,
+                destructive = isDestructive,
+                size = 42.dp
+            )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = if (isDestructive) color else cs.onSurface)
@@ -828,22 +847,11 @@ fun VlOptionRow(
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier
-                    .size(42.dp)
-                    .background(
-                        if (selected) cs.primary.copy(alpha = 0.22f) else cs.surfaceContainerHigh,
-                        iconShape
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = label,
-                    tint = if (selected) cs.primary else cs.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
+            VlGlyph(
+                icon = icon,
+                muted = !selected,
+                size = 42.dp
+            )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -881,6 +889,7 @@ fun VlOptionRow(
 fun ProBadge(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
+            .wrapContentSize()
             .background(
                 Brush.linearGradient(listOf(Color(0xFFFFD700), Color(0xFFF39C12))),
                 VlTheme.tokens.shapes.adapt(RoundedCornerShape(6.dp))
@@ -892,7 +901,9 @@ fun ProBadge(modifier: Modifier = Modifier) {
             color = Color.Black,
             fontSize = 9.sp,
             fontWeight = FontWeight.ExtraBold,
-            letterSpacing = 0.5.sp
+            letterSpacing = 0.5.sp,
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

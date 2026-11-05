@@ -1,14 +1,14 @@
 package org.visorlink.app.ui.components
 
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import org.visorlink.app.ui.theme.BiolumeBrandStyle
 import org.visorlink.app.ui.theme.VlTheme
 
@@ -41,18 +41,17 @@ fun VlBrandText(
     )
 }
 
-
 /**
- * Название приложения в шапке экрана. В Biolume — фирменный вордмарк, в
- * остальных темах — обычный заголовок панели. Раньше эту развилку делал сам
- * ChatListScreen, а экраны о теме знать не должны.
+ * Название приложения в шапке экрана. В Biolume — фирменный вордмарк, в Forge —
+ * Unbounded Light (titleLarge), в остальных темах — жирный заголовок панели.
  */
 @Composable
 fun VlBarBrandText(
     text: String,
     modifier: Modifier = Modifier,
 ) {
-    if (VlTheme.tokens.isBiolume) {
+    val tokens = VlTheme.tokens
+    if (tokens.isBiolume) {
         VlBrandText(
             text = text,
             modifier = modifier,
@@ -61,10 +60,14 @@ fun VlBarBrandText(
         )
     } else {
         Text(
-            text,
+            text = text,
             modifier = modifier,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            style = if (tokens.isForge) {
+                MaterialTheme.typography.titleLarge
+            } else {
+                MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            },
+            color = MaterialTheme.colorScheme.onSurface,
         )
     }
 }

@@ -1,18 +1,19 @@
 package org.visorlink.app.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -20,11 +21,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.ui.theme.vlCornerBrackets
 import org.visorlink.app.ui.theme.vlHairline
-import org.visorlink.app.ui.theme.vlHardShadow
-import org.visorlink.app.ui.theme.vlTraceBorder
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlSignalBorder
 
 @Composable
 fun VlAlertDialog(
@@ -42,12 +41,9 @@ fun VlAlertDialog(
         onDismissRequest = onDismissRequest,
         properties = DialogProperties(dismissOnBackPress = dismissible, dismissOnClickOutside = dismissible),
     ) {
-        // Диалог «всплывает» каплей: пружина с перелётом вместо мгновенной подстановки
         val popProgress = rememberLiquidPopProgress()
 
         val body: @Composable () -> Unit = {
-            // Ширина как у M3 AlertDialog: без минимума короткий диалог («Выйти?»)
-            // сжимался до ширины кнопок и выглядел обрывком
             Column(
                 Modifier
                     .widthIn(min = 280.dp, max = 560.dp)
@@ -55,7 +51,6 @@ fun VlAlertDialog(
             ) {
                 title?.let {
                     CompositionLocalProvider(
-                        // Гарнитура — из роли темы: Inter в Biolume, моно со свечением в Forge v2
                         LocalTextStyle provides TextStyle(
                             fontFamily = MaterialTheme.typography.titleLarge.fontFamily,
                             shadow = MaterialTheme.typography.titleLarge.shadow,
@@ -76,7 +71,8 @@ fun VlAlertDialog(
                     Spacer(Modifier.height(24.dp))
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (tokens.structure.hardShadow != null) Arrangement.spacedBy(10.dp, Alignment.End) else Arrangement.End,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically,
                         content = actions,
                     )
                 }
@@ -84,26 +80,14 @@ fun VlAlertDialog(
         }
 
         if (tokens.structure.enabled) {
-            // §3.1: диалоги и sheet сидят на surfaceContainerHigh; рельеф raised
-            // + нейтральная грань, никакого свечения (§10).
-            // Форма берётся из токенов напрямую: прибавка к cardRadius давала бы
-            // в Forge скругление 8dp вместо прямого угла.
             val shape = tokens.shapes.card
-            // Жёсткая плита выходит за границы диалога вправо и вниз — окну нужен запас под неё
-            val plate = if (tokens.structure.hardShadow != null) tokens.structure.hardOffset else 0.dp
-            val trace = rememberTrace(Unit, enabled = tokens.structure.hardShadow != null)
             Box(
                 modifier = modifier
-                    .padding(end = plate, bottom = plate)
                     .liquidPopIn(popProgress)
-                    // Диалог — активный слой: у него плита, хотя пассивные панели её больше не носят
-                    .then(tokens.structure.hardShadow?.let { Modifier.vlHardShadow(it, shape, tokens.structure.hardOffset) } ?: Modifier)
                     .vlRaised(tokens.structure, shape)
                     .clip(shape)
                     .background(cs.surfaceContainerHigh, shape)
                     .vlHairline(cs.outlineVariant, shape)
-                    .vlTraceBorder(cs.primary, shape, { trace.value })
-                    .vlCornerBrackets(cs.primary, active = tokens.structure.hardShadow != null, progress = { trace.value })
             ) { body() }
         } else {
             VlSurface(
@@ -115,13 +99,6 @@ fun VlAlertDialog(
     }
 }
 
-/**
- * Тот же диалог в форме API M3 `AlertDialog` (confirmButton / dismissButton /
- * icon). Нужен, чтобы экраны переходили с M3-диалогов заменой имени: раньше
- * десяток диалогов в ChatScreen, ChatSettingsScreen, SettingsScreen и
- * StorageManagerScreen рисовался M3 по умолчанию и выпадал из темы — в Forge
- * со скруглёнными углами и без жёсткой тени.
- */
 @Composable
 fun VlAlertDialog(
     onDismissRequest: () -> Unit,
@@ -156,6 +133,9 @@ fun VlAlertDialog(
     )
 }
 
+/**
+ * Текстовая кнопка диалогов и второстепенных действий (порт Flutter `VlDialogButton`).
+ */
 @Composable
 fun VlDialogButton(
     onClick: (() -> Unit)?,
@@ -164,31 +144,27 @@ fun VlDialogButton(
     isDestructive: Boolean = false,
     isLoading: Boolean = false,
     enabled: Boolean = true,
-    content: @Composable () -> Unit,
+    icon: ImageVector? = null,
+    label: String? = null,
+    content: (@Composable () -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val active = onClick != null && enabled && !isLoading
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     val tokens = VlTheme.tokens
-    // Жёсткий блок: главное и опасное действие — сплошные блоки, отмена — контур
-    val block = tokens.structure.hardShadow != null
-    val filled = block && (isDestructive || isPrimary)
-    val blockShape = tokens.shapes.rounded(2.dp)
-    val color = if (filled) (if (isDestructive) cs.onError else cs.onPrimary)
-    else if (isDestructive) cs.error else if (isPrimary) cs.primary else cs.onSurfaceVariant
+    val color = if (isDestructive) cs.error else if (isPrimary) cs.primary else cs.onSurfaceVariant
     val opacity = if (!active) 0.4f else if (isPressed) 0.55f else 1f
+    val shape = tokens.shapes.rounded(12.dp)
 
-    Row(
-        modifier
+    Box(
+        modifier = modifier
             .alpha(opacity)
-            .then(
-                if (filled) Modifier.background(if (isDestructive) cs.error else cs.primary, blockShape)
-                else if (block) Modifier.border(1.5.dp, tokens.structure.outline ?: cs.outline, blockShape)
-                else Modifier
-            )
+            .clip(shape)
+            .vlSignalBorder(tokens.signal, cs.primary, shape, active = isFocused)
             .then(
                 if (active) Modifier.clickable(
                     interactionSource = interactionSource,
@@ -196,20 +172,65 @@ fun VlDialogButton(
                     onClick = onClick!!,
                 ) else Modifier
             )
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(12.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        if (isLoading) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = color)
-        } else {
-            CompositionLocalProvider(
-                LocalTextStyle provides TextStyle(
-                    fontFamily = MaterialTheme.typography.labelLarge.fontFamily,
-                    color = color,
-                    fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
-                    fontSize = 15.sp
-                )
-            ) { content() }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = color)
+            } else {
+                if (icon != null) {
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(16.dp))
+                }
+                if (label != null) {
+                    Text(
+                        text = label,
+                        style = TextStyle(
+                            fontFamily = MaterialTheme.typography.labelLarge.fontFamily,
+                            color = color,
+                            fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            letterSpacing = MaterialTheme.typography.labelLarge.letterSpacing,
+                        )
+                    )
+                } else if (content != null) {
+                    CompositionLocalProvider(
+                        LocalTextStyle provides TextStyle(
+                            fontFamily = MaterialTheme.typography.labelLarge.fontFamily,
+                            color = color,
+                            fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
+                            fontSize = 15.sp,
+                            letterSpacing = MaterialTheme.typography.labelLarge.letterSpacing,
+                        )
+                    ) { content() }
+                }
+            }
         }
     }
 }
+
+/** Перегрузка с меткой-строкой [label] (Flutter signature). */
+@Composable
+fun VlDialogButton(
+    label: String,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    isPrimary: Boolean = false,
+    isDestructive: Boolean = false,
+    isLoading: Boolean = false,
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) = VlDialogButton(
+    onClick = onClick,
+    modifier = modifier,
+    isPrimary = isPrimary,
+    isDestructive = isDestructive,
+    isLoading = isLoading,
+    enabled = enabled,
+    icon = icon,
+    label = label,
+    content = null,
+)

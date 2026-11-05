@@ -43,7 +43,7 @@ fun SessionsScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.sessions_title), style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) }
                 },
             )
         },

@@ -98,7 +98,7 @@ fun TopicListScreen(
         topBar = {
             VlTopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         onNavigateBack()
                     }) {
@@ -146,14 +146,14 @@ fun TopicListScreen(
                 },
                 actions = {
                     if (state.canCreateTopic) {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             viewModel.openCreateDialog()
                         }) {
                             Icon(Icons.Default.Add, contentDescription = stringResource(R.string.topics_create_title))
                         }
                     }
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         onOpenSettings(chatId)
                     }) {

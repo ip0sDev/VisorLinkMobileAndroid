@@ -23,13 +23,11 @@ import org.visorlink.app.ui.theme.VlTheme
 import kotlin.math.roundToInt
 
 /**
- * Фоновое цветное свечение-меш.
+ * Фоновое цветное свечение.
  *
- * В Biolume приглушено до 3–4% непрозрачности: три постоянно анимированных
- * цветных пятна противоречат §1.2 («один сигнал за раз») и §10 («не
- * подсвечивать glow-ом состояние покоя»), роль фона там играет рельеф.
- *
- * Также уважает системное отключение анимаций (§8).
+ * Строго монохромное: используется исключительно текущий акцентный цвет пользователя
+ * (overrideAccent или cs.primary), без посторонних цветов (secondary/tertiary),
+ * чтобы исключить грязную смесь оттенков на фоне.
  */
 @Composable
 fun VlAmbientGlow(
@@ -40,38 +38,34 @@ fun VlAmbientGlow(
     if (simplifiedGraphics) return
 
     val tokens = VlTheme.tokens
-    if (tokens.reduceMotion) return
+    if (tokens.reduceMotion || tokens.isForge) return
 
     val cs = MaterialTheme.colorScheme
-    val isBiolume = tokens.isBiolume
     val isDark = cs.surface.luminance() < 0.5f
 
-    // Для Biolume используем палитру мягкого глубоководного биолюминесцентного градиента
-    val c1 = remember(overrideAccent, cs.primary, isBiolume, isDark) {
-        if (isBiolume) {
-            if (isDark) Color(0xFF35C7E8).copy(alpha = 0.035f) // Abyss Primary Cyan (мягкий)
-            else cs.primary.copy(alpha = 0.04f)
-        } else {
-            val accent = overrideAccent ?: cs.primary
-            accent.copy(alpha = if (isDark) 0.20f else 0.35f)
-        }
+    // Текущий акцентный цвет пользователя
+    val accent = overrideAccent ?: cs.primary
+
+    // Мягкие, чистые полупрозрачности только из акцентного цвета
+    val alpha1 = if (tokens.isBiolume) {
+        if (isDark) 0.04f else 0.035f
+    } else {
+        if (isDark) 0.08f else 0.045f
     }
-    val c2 = remember(cs.secondary, cs.tertiary, isBiolume, isDark) {
-        if (isBiolume) {
-            if (isDark) Color(0xFF8C6BFF).copy(alpha = 0.030f) // Abyss Secondary Violet (мягкий)
-            else cs.secondary.copy(alpha = 0.035f)
-        } else {
-            cs.tertiary.copy(alpha = if (isDark) 0.15f else 0.25f)
-        }
+    val alpha2 = if (tokens.isBiolume) {
+        if (isDark) 0.03f else 0.025f
+    } else {
+        if (isDark) 0.06f else 0.035f
     }
-    val c3 = remember(cs.secondary, cs.primary, isBiolume, isDark) {
-        if (isBiolume) {
-            if (isDark) Color(0xFF6FC6FF).copy(alpha = 0.025f) // Abyss Tertiary Moon Cyan (мягкий)
-            else cs.tertiary.copy(alpha = 0.03f)
-        } else {
-            cs.secondary.copy(alpha = if (isDark) 0.15f else 0.25f)
-        }
+    val alpha3 = if (tokens.isBiolume) {
+        if (isDark) 0.025f else 0.02f
+    } else {
+        if (isDark) 0.04f else 0.025f
     }
+
+    val c1 = remember(accent, alpha1) { accent.copy(alpha = alpha1) }
+    val c2 = remember(accent, alpha2) { accent.copy(alpha = alpha2) }
+    val c3 = remember(accent, alpha3) { accent.copy(alpha = alpha3) }
 
     val brush1 = remember(c1) { Brush.radialGradient(listOf(c1, Color.Transparent)) }
     val brush2 = remember(c2) { Brush.radialGradient(listOf(c2, Color.Transparent)) }

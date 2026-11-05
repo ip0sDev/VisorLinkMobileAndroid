@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlin.math.floor
 import org.visorlink.app.ui.theme.VlTheme
 
 // ── Точечный алфавит 5×7 ───────────────────────────────────────────────────
@@ -173,7 +174,8 @@ fun VlLedText(
 /**
  * Бегущая строка шрифтом 5×7:
  *  - Если помещается целиком в ширину — отображается статично;
- *  - Если не помещается — плавно бежит, зацикливаясь через разделитель «·»;
+ *  - Если не помещается — плавно бежит, зацикливаясь через разделитель «·» с непрерывной
+ *    субпиксельной инерцией светодиодов;
  *  - При «убрать анимации» (reduceMotion) обрезается с многоточием;
  *  - При несовместимом тексте (иероглифы/эмодзи) показывает обычный Text.
  */
@@ -237,23 +239,23 @@ fun VlLedMarquee(
                 semanticLabel = label,
             )
         } else {
-            // Бегущая анимация
+            // Бегущая анимация с субпиксельным скроллингом и инерцией люминофора
             val loopText = remember(text) { "$text · " }
             val loopRows = remember(loopText) { vlLedTextRows(loopText) }
             val loopCols = remember(loopRows) { (loopRows.firstOrNull()?.length ?: 0) + 1 }
 
-            var offsetCols by remember(text) { mutableIntStateOf(0) }
+            var offsetFloat by remember(text) { mutableFloatStateOf(0f) }
 
             LaunchedEffect(text, loopCols, speedColsPerSec) {
-                offsetCols = 0
+                offsetFloat = 0f
                 // 1 секунду стоим в начале, чтобы прочитать первое слово
                 delay(1000)
                 val startTime = System.currentTimeMillis()
                 while (isActive) {
                     val elapsedSec = (System.currentTimeMillis() - startTime) / 1000f
-                    val moved = (elapsedSec * speedColsPerSec).toInt()
-                    offsetCols = if (loopCols > 0) moved % loopCols else 0
-                    delay(30)
+                    val moved = elapsedSec * speedColsPerSec
+                    offsetFloat = if (loopCols > 0) moved % loopCols else 0f
+                    delay(16) // ~60 FPS плавного движения
                 }
             }
 
@@ -273,10 +275,18 @@ fun VlLedMarquee(
                     dotPx = dotPx,
                     gapPx = gapPx,
                     ink = ink,
-                    lit = { x, y ->
-                        val i = (x + offsetCols) % loopCols
-                        val rowStr = loopRows.getOrNull(y) ?: ""
-                        i < rowStr.length && rowStr[i] == '#'
+                    intensity = { x, y ->
+                        if (loopCols <= 0) 0f else {
+                            val u = (x + offsetFloat) % loopCols
+                            val col0 = floor(u).toInt()
+                            val frac = u - col0
+                            val col1 = (col0 + 1) % loopCols
+                            val rowStr = loopRows.getOrNull(y) ?: ""
+                            val lit0 = col0 < rowStr.length && rowStr[col0] == '#'
+                            val lit1 = col1 < rowStr.length && rowStr[col1] == '#'
+                            val v = (if (lit0) 1f - frac else 0f) + (if (lit1) frac else 0f)
+                            v.coerceIn(0f, 1f)
+                        }
                     }
                 )
             }

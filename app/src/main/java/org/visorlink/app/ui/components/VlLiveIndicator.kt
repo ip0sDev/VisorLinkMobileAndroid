@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import org.visorlink.app.ui.components.led.VlLedDot
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlBiopulse
 
@@ -44,8 +45,8 @@ fun VlLiveDot(
 }
 
 /**
- * Статус-точка присутствия: зелёная «онлайн» с биопульсом, серая «офлайн» без него.
- * В MATERIAL3 пульса нет вообще — сигнальный слой там отключён.
+ * Неоновая сигнальная точка «в сети» (порт Flutter `VlPresenceDot`).
+ * В Forge при online=true горит светодиод [VlLedDot] с ореолом; в Biolume/M3E — статичный кружок цвета success / outline.
  */
 @Composable
 fun VlPresenceDot(
@@ -54,10 +55,16 @@ fun VlPresenceDot(
     size: Dp = 10.dp,
 ) {
     val tokens = VlTheme.tokens
-    VlLiveDot(
-        modifier = modifier,
-        size = size,
-        color = if (online) tokens.status.success else MaterialTheme.colorScheme.outline,
-        active = online,
-    )
+    val cs = MaterialTheme.colorScheme
+    if (tokens.led != null && online) {
+        VlLedDot(color = tokens.status.success, size = size, modifier = modifier)
+    } else {
+        val color = if (online) tokens.status.success else cs.outline
+        Box(
+            modifier = modifier
+                .size(size)
+                .clip(tokens.shapes.indicator)
+                .background(color, tokens.shapes.indicator)
+        )
+    }
 }

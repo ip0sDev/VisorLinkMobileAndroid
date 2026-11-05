@@ -5,14 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,8 +26,9 @@ import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 
 /**
- * Всплывающее уведомление о новом достижении. Слушает `achievements/{uid}`, фильтрует
- * ещё не виденные через `seenKey` и показывает карточку вверху экрана с переходом в «Сигнал».
+ * Всплывающее уведомление о новом достижении (веб `AchievementToast.jsx` / Flutter `achievement_toast.dart`):
+ * слушает `achievements/{uid}`, фильтрует ещё не виденные через локальное хранилище и показывает
+ * плашку вверху экрана с переходом в «Сигнал» по тапу.
  */
 @Composable
 fun AchievementToastHost(
@@ -54,11 +52,11 @@ fun AchievementToastHost(
             for (item in fresh) {
                 currentAchievement = item.a
                 haptic.perform(HapticType.SUCCESS)
-                delay(6000L)
+                delay(7000L)
                 if (currentAchievement == item.a) {
                     currentAchievement = null
                 }
-                delay(600L)
+                delay(900L)
             }
         }
     }
@@ -66,23 +64,24 @@ fun AchievementToastHost(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         contentAlignment = Alignment.TopCenter
     ) {
         AnimatedVisibility(
             visible = currentAchievement != null,
-            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(300)) + fadeIn(),
-            exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(250)) + fadeOut()
+            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(260)) + fadeIn(tween(260)),
+            exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(260)) + fadeOut(tween(260))
         ) {
             val a = currentAchievement
             if (a != null) {
                 val cs = MaterialTheme.colorScheme
                 val tokens = VlTheme.tokens
                 val shape = tokens.shapes.card
+                val iconShape = tokens.shapes.rounded(10.dp)
 
                 Box(
                     modifier = Modifier
+                        .widthIn(max = 420.dp)
                         .fillMaxWidth()
                         .then(if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, shape) else Modifier)
                         .clip(shape)
@@ -102,7 +101,7 @@ fun AchievementToastHost(
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(iconShape)
                                 .background(tokens.status.warning.copy(alpha = 0.16f)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -114,28 +113,35 @@ fun AchievementToastHost(
                             )
                         }
 
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             Text(
-                                "НОВОЕ ДОСТИЖЕНИЕ",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = cs.onSurfaceVariant,
-                                letterSpacing = 1.4.sp,
-                                fontWeight = FontWeight.Bold
+                                text = "НОВОЕ ДОСТИЖЕНИЕ",
+                                style = tokens.data.dataSmall.copy(
+                                    color = cs.onSurfaceVariant,
+                                    fontSize = 10.sp,
+                                    letterSpacing = 1.4.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                             Text(
-                                a.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = cs.onSurface,
-                                fontWeight = FontWeight.Bold
+                                text = a.title,
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    color = cs.onSurface,
+                                    fontWeight = FontWeight.Bold
+                                )
                             )
                         }
 
                         Text(
-                            "+${a.bits}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            color = tokens.status.warning
+                            text = "+${a.bits}",
+                            style = tokens.data.dataSmall.copy(
+                                color = tokens.status.warning,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
                     }
                 }

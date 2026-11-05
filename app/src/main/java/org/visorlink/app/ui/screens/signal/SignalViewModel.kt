@@ -22,6 +22,7 @@ data class SignalUiState(
     val stats: SignalStats = SignalStats.EMPTY,
     val achievements: Map<String, Long> = emptyMap(),
     val peerProfiles: Map<String, UserProfile> = emptyMap(),
+    val blockedUids: Set<String> = emptySet(),
     val isBuyingFreeze: Boolean = false,
     val freezeError: String? = null,
     val now: Long = System.currentTimeMillis()
@@ -59,6 +60,12 @@ class SignalViewModel(
             viewModelScope.launch {
                 signalRepository.achievements(uid).collect { achs ->
                     _uiState.update { it.copy(achievements = achs, now = System.currentTimeMillis()) }
+                }
+            }
+
+            viewModelScope.launch {
+                blockRepository.blocks.collect { blocked ->
+                    _uiState.update { it.copy(blockedUids = blocked) }
                 }
             }
         }

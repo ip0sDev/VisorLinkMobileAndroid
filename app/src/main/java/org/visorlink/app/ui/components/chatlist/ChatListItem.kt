@@ -34,9 +34,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.ui.components.led.VlLedDigits
+import org.visorlink.app.ui.components.led.VlLedScreen
+import org.visorlink.app.ui.components.led.VlLedTyping
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlStructure
 import org.visorlink.app.ui.theme.vlTableRow
 import org.visorlink.app.data.model.Chat
 import org.visorlink.app.data.model.ChatType
@@ -44,7 +50,6 @@ import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.data.model.isLastMessageRead
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.CachedImage
-import org.visorlink.app.ui.components.TerminalSeqTag
 import org.visorlink.app.ui.components.terminalData
 import java.text.SimpleDateFormat
 import java.util.*
@@ -54,12 +59,13 @@ fun MessageStatusIcon(
     isRead: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val tokens = VlTheme.tokens
     if (isRead) {
         // Двойная галочка (✓✓)
         Icon(
             painter = painterResource(id = R.drawable.ic_check_double),
             contentDescription = "Прочитано",
-            tint = MaterialTheme.colorScheme.primary, // Акцентный цвет
+            tint = tokens.led?.color ?: MaterialTheme.colorScheme.primary,
             modifier = modifier.size(16.dp, 11.dp)
         )
     } else {
@@ -92,19 +98,17 @@ fun ChatListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+    val shape = tokens.shapes.card
+    val isDark = cs.surface.luminance() < 0.5f
+
+    val pressTarget = if (tokens.structure.keycap) tokens.motion.pressScale else 0.97f
     val itemScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed) pressTarget else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
         label = "item_press"
     )
-
-    val cs = MaterialTheme.colorScheme
-    val tokens = VlTheme.tokens
-    // Forge v2: список — таблица, а не стопка карточек: коробка у каждой строки превращала
-    // экран в шум из рамок. Разделитель снизу, непрочитанное — полоса слева
-    val tableRow = tokens.structure.hardShadow != null
-    val shape = if (tableRow) androidx.compose.ui.graphics.RectangleShape else tokens.shapes.card
-    val isDark = cs.surface.luminance() < 0.5f
 
     val titleColor = cs.onSurface
     val subColor = cs.onSurfaceVariant
@@ -115,17 +119,22 @@ fun ChatListItem(
         isLastMessageRead(chat, currentUid)
     }
 
-    val cardColor = remember(tokens.isBiolume, isDark, cs) {
-        if (tokens.isBiolume) {
-            if (isDark) cs.surfaceContainer.copy(alpha = 0.70f)
-            else cs.surfaceContainerLow.copy(alpha = 0.90f)
+    val depth = when {
+        !tokens.structure.enabled || isCompactList -> VlDepth.Flat
+        tokens.structure.keycap && isPressed -> VlDepth.Inset
+        else -> VlDepth.Raised
+    }
+
+    val cardColor = remember(tokens.structure.enabled, isDark, cs) {
+        if (tokens.structure.enabled) {
+            if (isDark) cs.surfaceContainer else cs.surfaceContainerLow
         } else {
             if (isDark) cs.surfaceVariant.copy(alpha = 0.45f) else cs.surface
         }
     }
 
-    val cardBorder = remember(tokens.isBiolume, isDark, cs) {
-        if (tokens.isBiolume) {
+    val cardBorder = remember(tokens.structure.enabled, isDark, cs) {
+        if (tokens.structure.enabled) {
             val topColor = if (isDark) cs.outlineVariant.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.45f)
             val bottomColor = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.10f)
             BorderStroke(1.dp, Brush.verticalGradient(listOf(topColor, bottomColor)))
@@ -137,45 +146,37 @@ fun ChatListItem(
         }
     }
 
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = if (tableRow) 0.dp else 12.dp)
-            .padding(vertical = if (!isCompactList && !tableRow) 6.dp else 0.dp)
-            .scale(if (tableRow) 1f else itemScale)
+            .padding(horizontal = 12.dp)
+            .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
+            .scale(itemScale)
             .then(
-                if (tableRow) {
-                    Modifier.vlTableRow(
-                        divider = tokens.structure.outline?.copy(alpha = 0.18f) ?: cs.outlineVariant,
-                        accent = if (unreadCount > 0) cs.primary else null,
-                        pressed = isPressed,
-                        pressFill = cs.primary.copy(alpha = 0.08f),
-                        dividerStart = 82.dp,
-                    )
-                } else if (tokens.structure.enabled && !isCompactList) {
-                    Modifier.vlRaised(tokens.structure, shape)
+                if (tokens.structure.enabled && !isCompactList) {
+                    Modifier.vlStructure(tokens.structure, depth, shape)
                 } else if (tokens.structure.enabled) {
                     Modifier.vlHairline(cs.outlineVariant, shape)
                 } else {
                     Modifier
                 }
             )
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        shape = shape,
-        color = if (tableRow) Color.Transparent else cardColor,
-        border = if (tableRow) null else cardBorder
+            .clip(shape)
+            .vlKeycapBackground(tokens.structure, cardColor, shape, depth)
+            .border(cardBorder, shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (tokens.isBiolume) {
+                    if (tokens.structure.enabled && !tokens.structure.keycap) {
                         val gTop = if (isDark) cs.surfaceContainerHigh.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.18f)
                         val gBottom = Color.Transparent
                         Modifier.background(Brush.verticalGradient(listOf(gTop, gBottom)))
                     } else Modifier
                 )
-                .padding(horizontal = if (tableRow) 16.dp else 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
+                .padding(horizontal = 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {
@@ -258,8 +259,6 @@ fun ChatListItem(
                     }
                     chat.lastMessageAt?.let {
                         Spacer(Modifier.width(8.dp))
-                        // В компактном списке код съедал бы имя
-                        if (!isCompactList) TerminalSeqTag(chat.lastSeq, subColor.copy(alpha = 0.55f), Modifier.padding(end = 6.dp))
                         Text(
                             formatTime(it.toDate()),
                             style = MaterialTheme.typography.labelSmall.terminalData(),
@@ -277,13 +276,17 @@ fun ChatListItem(
                         if (isTyping) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(if (tokens.led != null) 8.dp else 4.dp)
                             ) {
-                                Text(text = "✍️", fontSize = 12.sp)
+                                if (tokens.led != null) {
+                                    VlLedTyping()
+                                } else {
+                                    Text(text = "✍️", fontSize = 12.sp)
+                                }
                                 Text(
                                     text = stringResource(R.string.chat_typing),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = cs.primary,
+                                    color = tokens.led?.color ?: cs.primary,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -471,16 +474,21 @@ fun ChatListItemCompact(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(modifier = Modifier.weight(1f)) {
+                    val tokens = VlTheme.tokens
                     if (isTyping) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(if (tokens.led != null) 8.dp else 4.dp)
                         ) {
-                            Text(text = "✍️", fontSize = 12.sp)
+                            if (tokens.led != null) {
+                                VlLedTyping()
+                            } else {
+                                Text(text = "✍️", fontSize = 12.sp)
+                            }
                             Text(
                                 text = stringResource(R.string.chat_typing),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = cs.primary,
+                                color = tokens.led?.color ?: cs.primary,
                                 fontWeight = FontWeight.Medium
                             )
                         }
@@ -538,20 +546,36 @@ fun ChatListItemCompact(
 @Composable
 fun ChatUnreadBadge(
     count: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    muted: Boolean = false,
 ) {
     if (count <= 0) return
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val text = if (count > 99) "99+" else count.toString()
 
+    // В Forge непрочитанные показываем как LED-счетчик на темном стекле (порт Flutter `_UnreadBadge`)
+    if (tokens.led != null) {
+        VlLedScreen(
+            modifier = modifier,
+            radius = 7.dp,
+            padding = PaddingValues(horizontal = 5.dp, vertical = 3.dp),
+        ) {
+            VlLedDigits(
+                text = text,
+                color = if (muted) cs.onSurfaceVariant else tokens.led.color,
+            )
+        }
+        return
+    }
+
     Surface(
         modifier = modifier
             .height(20.dp)
             .widthIn(min = 20.dp),
         shape = tokens.shapes.pill,
-        color = cs.primary,
-        contentColor = cs.onPrimary
+        color = if (muted) cs.surfaceContainerHighest else cs.primary,
+        contentColor = if (muted) cs.onSurfaceVariant else cs.onPrimary
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 6.dp),
@@ -563,7 +587,7 @@ fun ChatUnreadBadge(
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp
                 ),
-                color = cs.onPrimary,
+                color = if (muted) cs.onSurfaceVariant else cs.onPrimary,
                 maxLines = 1
             )
         }

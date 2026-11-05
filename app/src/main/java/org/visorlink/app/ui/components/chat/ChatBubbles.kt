@@ -788,7 +788,6 @@ internal fun TextBubble(
                                     fontSize = 10.sp,
                                 )
                             }
-                            TerminalSeqTag(message.seq, textColor.copy(alpha = 0.4f))
                             Text(
                                 message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
                                 style = MaterialTheme.typography.labelSmall.terminalData(), color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,

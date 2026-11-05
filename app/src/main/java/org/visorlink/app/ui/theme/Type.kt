@@ -1,8 +1,6 @@
 package org.visorlink.app.ui.theme
 
 import androidx.compose.material3.Typography
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -13,7 +11,7 @@ import org.visorlink.app.data.model.AppTheme
 import org.visorlink.app.data.model.ProfileFont
 
 /**
- * Типографика тем.
+ * Типографика тем (паритет с Flutterlink `lib/theme/vl/vl_typography.dart`).
  *
  * Гайдлайн §5: официальная шкала M3 сохраняется целиком — кегли и интерлиньяж не
  * трогаем, меняются только гарнитуры, вес и трекинг. Поэтому базой берётся
@@ -25,9 +23,8 @@ import org.visorlink.app.data.model.ProfileFont
 // ── Гарнитуры ────────────────────────────────────────────────────────────────
 
 /**
- * Текстовая гарнитура Biolume. Оптический размер 18pt: он рассчитан на кегли до
- * ~18sp, а вся наша шкала body/label/title лежит в 11–22sp (24/28pt-версии Inter
- * предназначены для display и на мелком тексте выглядят разреженно).
+ * Текстовая гарнитура Biolume и Forge. Оптический размер 18pt: он рассчитан на кегли до
+ * ~18sp, а вся наша шкала body/label/title лежит в 11–22sp.
  */
 private val Inter = FontFamily(
     Font(R.font.inter_regular, FontWeight.Normal),
@@ -44,13 +41,6 @@ private val JetBrainsMono = FontFamily(
 
 /**
  * Space Grotesk — ТОЛЬКО для латинского вордмарка, см. [BiolumeBrandStyle].
- *
- * Гайдлайн §5 отдаёт ему display / headline / titleLarge, но в шрифте **нет ни
- * одного кириллического глифа** (проверено по таблице cmap: отсутствуют все 66
- * букв). В русскоязычном интерфейсе это дало бы заголовки системным шрифтом, а в
- * смешанных строках — две гарнитуры в одном слове. Поэтому заголовочные роли
- * отданы Inter SemiBold, а Space Grotesk остался там, где текст латинский по
- * определению — на названии приложения.
  */
 private val SpaceGrotesk = FontFamily(
     Font(R.font.space_grotesk_medium, FontWeight.Medium),
@@ -58,10 +48,7 @@ private val SpaceGrotesk = FontFamily(
 )
 
 /**
- * «Округлая» гарнитура профиля. Раньше `rounded` отображался в
- * `FontFamily.SansSerif` — это тот же Roboto, и выбор в редакторе ничего не менял.
- * Nunito (OFL, лицензия в `licenses/nunito-OFL.txt`) покрывает кириллицу целиком;
- * веса — статические инстансы вариативного шрифта.
+ * «Округлая» гарнитура профиля. Nunito (OFL) покрывает кириллицу целиком.
  */
 private val Nunito = FontFamily(
     Font(R.font.nunito_regular, FontWeight.Normal),
@@ -70,16 +57,21 @@ private val Nunito = FontFamily(
 )
 
 /**
- * Заголовки Forge v2: Unbounded — широкий футуристичный гротеск (OFL, кириллица целиком).
- * Medium — основное начертание; SemiBold нужен жирным заголовкам (диалог), чтобы Android
- * не утолщал Medium синтетически.
+ * Заголовки Forge: Unbounded — широкий футуристичный гротеск (OFL, кириллица целиком).
+ * Все заголовочные роли в Forge рендерятся начертанием Light (w300), как в макетах приборной панели
+ * (см. `vl_typography.dart` и `vl_app_bar.dart`), даже если экран передаёт `FontWeight.Bold`.
  */
 private val Unbounded = FontFamily(
-    Font(R.font.unbounded_medium, FontWeight.Medium),
-    Font(R.font.unbounded_semibold, FontWeight.SemiBold),
+    Font(R.font.unbounded_light, FontWeight.Light),
+    Font(R.font.unbounded_light, FontWeight.Normal),
+    Font(R.font.unbounded_light, FontWeight.Medium),
+    Font(R.font.unbounded_light, FontWeight.SemiBold),
+    Font(R.font.unbounded_light, FontWeight.Bold),
+    Font(R.font.unbounded_light, FontWeight.ExtraBold),
+    Font(R.font.unbounded_light, FontWeight.Black),
 )
 
-/** Заголовочная роль: Inter SemiBold вместо Space Grotesk — причина выше. */
+/** Заголовочная роль Biolume: Inter SemiBold вместо Space Grotesk (кириллица). */
 private val DisplayFamily = Inter
 
 /** Текстовая: title / body / label. */
@@ -127,11 +119,9 @@ private val BiolumeBase = Typography()
 /**
  * Веса из таблицы §5 применены к названным там ролям; ОСТАЛЬНЫЕ роли тоже
  * переводятся на [TextFamily] — иначе `bodySmall`, `titleSmall` и `labelMedium`
- * остались бы на системном Roboto и интерфейс мешал бы две гарнитуры. Кегли и
- * интерлиньяж везде оставлены дефолтные M3 (§5: «шкала не меняется»).
+ * остались бы на системном Roboto и интерфейс мешал бы две гарнитуры.
  */
 val BiolumeTypography = Typography(
-    // §5: Space Grotesk-роли → Inter SemiBold/Medium (кириллица, см. выше).
     displayLarge = BiolumeBase.displayLarge.copy(
         fontFamily = DisplayFamily, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp,
     ),
@@ -154,7 +144,6 @@ val BiolumeTypography = Typography(
         fontFamily = DisplayFamily, fontWeight = FontWeight.Medium,
     ),
 
-    // §5: Inter-роли.
     titleMedium = BiolumeBase.titleMedium.copy(
         fontFamily = TextFamily, fontWeight = FontWeight.SemiBold, letterSpacing = 0.1.sp,
     ),
@@ -197,83 +186,63 @@ val BiolumeDataTypography = VlDataTypography(
     ),
 )
 
-// ── Forge v2: терминал ───────────────────────────────────────────────────────
+// ── Forge: приборная типографика ─────────────────────────────────────────────
 
-/** Моно-данные Forge v2: JetBrains Mono с лёгким трекингом. */
+/**
+ * Данные в Forge (время сообщений, счётчики в списке): Inter с табличными цифрами — моно-шрифт
+ * остаётся только у LED-дисплеев, чтобы обычные подписи не читались «терминалом».
+ */
 val ForgeDataTypography = VlDataTypography(
     dataMedium = TextStyle(
-        fontFamily = DataFamily,
+        fontFamily = TextFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.5.sp,
+        fontFeatureSettings = "tnum",
     ),
     dataSmall = TextStyle(
-        fontFamily = DataFamily,
+        fontFamily = TextFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp,
+        fontFeatureSettings = "tnum",
     ),
 )
 
 /**
- * Forge v2: крупные заголовки (display, headline, titleLarge — в том числе заголовок верхней
- * панели) — Unbounded; метки и текст кнопок (labelLarge) — моно с трекингом, как командная
- * строка; текст сообщений и описаний — Inter, как в вебе (--font-ui). Капитель у заголовков
- * разделов задаёт [VlTerminalTokens], а не шкала. В вебе заголовки — JetBrains Mono
- * (--font-brand); Unbounded — Android-слой, см. спеку §7.
+ * Forge: крупные заголовки — Unbounded Light (w300), как в макетах приборной панели; всё остальное,
+ * включая кнопки — чистый Inter.
  */
 val ForgeV2Typography = BiolumeTypography.copy(
-    displayLarge = BiolumeTypography.displayLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium),
-    displayMedium = BiolumeTypography.displayMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium),
-    displaySmall = BiolumeTypography.displaySmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium),
-    headlineLarge = BiolumeTypography.headlineLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-    headlineMedium = BiolumeTypography.headlineMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-    headlineSmall = BiolumeTypography.headlineSmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-    titleLarge = BiolumeTypography.titleLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Medium, letterSpacing = 0.sp),
-    labelLarge = BiolumeTypography.labelLarge.copy(fontFamily = DataFamily, fontWeight = FontWeight.Bold, letterSpacing = 1.0.sp),
+    displayLarge = BiolumeTypography.displayLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light),
+    displayMedium = BiolumeTypography.displayMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light),
+    displaySmall = BiolumeTypography.displaySmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light),
+    headlineLarge = BiolumeTypography.headlineLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light, letterSpacing = 0.sp),
+    headlineMedium = BiolumeTypography.headlineMedium.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light, letterSpacing = 0.sp),
+    headlineSmall = BiolumeTypography.headlineSmall.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light, letterSpacing = 0.sp),
+    titleLarge = BiolumeTypography.titleLarge.copy(fontFamily = Unbounded, fontWeight = FontWeight.Light, letterSpacing = 0.sp),
 )
 
-/**
- * Шкала оттенка: крупные заголовки (display, headline, titleLarge — в том числе заголовок
- * верхней панели) светятся неоном своего основного цвета, у Beast мягче.
- */
-fun forgeV2Typography(f: ForgeV2.Flavor): Typography {
-    fun TextStyle.neon() = this
-    return with(ForgeV2Typography) {
-        copy(
-            displayLarge = displayLarge.neon(), displayMedium = displayMedium.neon(), displaySmall = displaySmall.neon(),
-            headlineLarge = headlineLarge.neon(), headlineMedium = headlineMedium.neon(), headlineSmall = headlineSmall.neon(),
-            titleLarge = titleLarge.neon(),
-        )
-    }
-}
+fun forgeV2Typography(@Suppress("UNUSED_PARAMETER") f: ForgeV2.Flavor): Typography = ForgeV2Typography
 
-private val ForgeV2ProtogenTypography = forgeV2Typography(ForgeV2.Protogen)
-private val ForgeV2BeastTypography = forgeV2Typography(ForgeV2.Beast)
-
-/** Заголовок раздела Forge v2: моно, 11 sp, трекинг 0.08em. */
+/** Заголовок раздела Forge: капитель Inter SemiBold 12 sp с трекингом 1 sp. */
 val ForgeV2SectionLabel = TextStyle(
-    fontFamily = DataFamily,
-    fontWeight = FontWeight.Medium,
-    fontSize = 11.sp,
-    letterSpacing = 0.9.sp,
+    fontFamily = TextFamily,
+    fontWeight = FontWeight.SemiBold,
+    fontSize = 12.sp,
+    letterSpacing = 1.0.sp,
 )
 
 // ── PRO-шрифт профиля ────────────────────────────────────────────────────────
 
 fun baseTypography(theme: AppTheme): Typography = when (theme) {
     AppTheme.BIOLUME -> BiolumeTypography
-    AppTheme.FORGE_PROTOGEN -> ForgeV2ProtogenTypography
-    AppTheme.FORGE_BEAST -> ForgeV2BeastTypography
+    AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> ForgeV2Typography
     AppTheme.MATERIAL3_EXPRESSIVE -> Material3Typography
 }
 
 /**
  * Подменяет гарнитуру во всех ролях, сохраняя кегли, веса и трекинг темы.
- * Моно — JetBrains Mono, а не системный моноширинный: тот без кириллицы на
- * части прошивок и не совпадает с data-ролями.
  */
 fun Typography.withProfileFont(font: ProfileFont): Typography {
     val family = when (font) {

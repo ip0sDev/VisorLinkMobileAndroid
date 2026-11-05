@@ -39,9 +39,11 @@ import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidRevealEnter
 import org.visorlink.app.ui.components.liquidRevealExit
 import org.visorlink.app.ui.components.rememberLiquidJellyState
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
 import org.visorlink.app.ui.theme.vlInset
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
 import org.visorlink.app.data.model.*
 import org.visorlink.app.ui.screens.chat.ChatUiState
@@ -479,6 +481,7 @@ fun ChatBottomBar(
                                 val sendEnabled = !uiState.isCooldown && !uiState.isBotGenerating && (!isBot || inputText.length <= 600)
                                 if (hasTextOrEdit) {
                                     val sendScale by animateFloatAsState(if (!sendEnabled) 0.85f else 1f, label = "")
+                                    val sendBg = if (sendEnabled) cs.primary else cs.surfaceVariant
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
@@ -489,7 +492,14 @@ fun ChatBottomBar(
                                                 if (tokens.structure.enabled && !block) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .background(if (sendEnabled) cs.primary else cs.surfaceVariant, actionShape)
+                                            .clip(actionShape)
+                                            .then(
+                                                if (tokens.structure.keycap && sendEnabled) {
+                                                    Modifier.vlKeycapBackground(tokens.structure, sendBg, actionShape, VlDepth.Raised)
+                                                } else {
+                                                    Modifier.background(sendBg, actionShape)
+                                                }
+                                            )
                                             .then(
                                                 if (tokens.structure.enabled && !block) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
                                                 else Modifier
@@ -508,6 +518,7 @@ fun ChatBottomBar(
                                         Icon(if (uiState.editingMessage != null) Icons.Default.Check else Icons.AutoMirrored.Filled.Send, "Send", tint = if (sendEnabled) cs.onPrimary else cs.onSurfaceVariant, modifier = Modifier.size(22.dp))
                                     }
                                 } else {
+                                    val micBg = if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant
                                     Box(
                                         modifier = Modifier
                                             .size(48.dp)
@@ -517,7 +528,14 @@ fun ChatBottomBar(
                                                 if (tokens.structure.enabled && !block) Modifier.vlRaised(tokens.structure, tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .background(if (!uiState.isBotGenerating) cs.primaryContainer else cs.surfaceVariant, actionShape)
+                                            .clip(actionShape)
+                                            .then(
+                                                if (tokens.structure.keycap && !uiState.isBotGenerating) {
+                                                    Modifier.vlKeycapBackground(tokens.structure, micBg, actionShape, VlDepth.Raised)
+                                                } else {
+                                                    Modifier.background(micBg, actionShape)
+                                                }
+                                            )
                                             .then(
                                                 when {
                                                     // Микрофон в терминале — контурный блок: главное действие (отправка) остаётся сплошным

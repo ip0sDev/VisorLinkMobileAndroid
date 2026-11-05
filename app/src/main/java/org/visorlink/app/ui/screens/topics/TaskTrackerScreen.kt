@@ -63,7 +63,7 @@ fun TaskTrackerScreen(
         topBar = {
             VlTopAppBar(
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         onNavigateBack()
                     }) {
@@ -126,7 +126,7 @@ fun TaskTrackerScreen(
                 },
                 actions = {
                     if (state.canModifyTasks) {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             viewModel.openCreateTaskDialog()
                         }) {

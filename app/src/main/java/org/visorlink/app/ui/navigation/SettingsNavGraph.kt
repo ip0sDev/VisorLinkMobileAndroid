@@ -22,6 +22,7 @@ fun NavGraphBuilder.settingsNavGraph(
     composable(Screen.Settings.route) {
         SettingsScreen(
             onNavigateBack = { navController.popBackStack() },
+            onOpenProfile = { navController.navigate(Screen.Profile.route) },
             onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
             onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
             onOpenSessions = { navController.navigate(Screen.Sessions.route) },

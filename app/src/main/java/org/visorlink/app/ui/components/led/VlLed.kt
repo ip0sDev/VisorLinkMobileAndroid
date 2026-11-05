@@ -13,11 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PointMode
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
@@ -30,10 +28,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
-import org.visorlink.app.ui.components.VlSurface
-import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.utils.HapticHelper
+import org.visorlink.app.ui.theme.vlInset
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import kotlin.random.Random
@@ -65,7 +61,7 @@ fun rememberLedInk(color: Color? = null): VlLedInk {
 }
 
 /**
- * Отрисовка всех точек единым батчем через DrawScope / Canvas.drawPoints:
+ * Отрисовка всех точек через DrawScope / drawCircle (с субпиксельным сглаживанием без муара):
  *  1. Погашенные точки;
  *  2. Общий размытый ореол всех горящих точек (на темном стекле);
  *  3. Горящие точки (с опциональной построчной раскраской rowColor).
@@ -79,81 +75,93 @@ fun DrawScope.vlPaintLedDots(
     rowColor: ((Int) -> Color)? = null,
     lit: (x: Int, y: Int) -> Boolean,
 ) {
+    vlPaintLedDots(
+        cols = cols,
+        rows = rows,
+        dotPx = dotPx,
+        gapPx = gapPx,
+        ink = ink,
+        rowColor = rowColor,
+        intensity = { x, y -> if (lit(x, y)) 1f else 0f },
+    )
+}
+
+/**
+ * Отрисовка матрицы светодиодов с аналоговой непрерывной интенсивностью (инерция люминофора):
+ * [intensity] возвращает яркость точки от 0.0f (погашена) до 1.0f (полный накал).
+ */
+@JvmName("vlPaintLedDotsIntensity")
+fun DrawScope.vlPaintLedDots(
+    cols: Int,
+    rows: Int,
+    dotPx: Float,
+    gapPx: Float,
+    ink: VlLedInk,
+    rowColor: ((Int) -> Color)? = null,
+    intensity: (x: Int, y: Int) -> Float,
+) {
     if (cols <= 0 || rows <= 0) return
     val r = dotPx / 2f
-    val off = ArrayList<Offset>(cols * rows)
-    val on = ArrayList<Offset>(cols * rows)
-    val byRow = if (rowColor != null) List(rows) { ArrayList<Offset>() } else null
+    val blurPx = if (ink.glowBlur > 0.dp) ink.glowBlur.toPx() * 0.6f else 0f
+    val hasGlow = blurPx > 0f
+    val sigma = if (hasGlow) blurPx * 0.57735f + 0.5f else 0f
+    val glowRadius = r * 1.4f
 
+    // 1. Погашенные точки — база светодиодной матрицы
     for (y in 0 until rows) {
         val top = y * (dotPx + gapPx) + r
         for (x in 0 until cols) {
-            val pt = Offset(x * (dotPx + gapPx) + r, top)
-            if (lit(x, y)) {
-                on.add(pt)
-                byRow?.get(y)?.add(pt)
-            } else {
-                off.add(pt)
+            val v = intensity(x, y)
+            if (v <= 0.01f) {
+                drawCircle(
+                    color = ink.off,
+                    radius = r,
+                    center = Offset(x * (dotPx + gapPx) + r, top),
+                )
             }
         }
     }
 
-    // 1. Погашенные точки
-    if (off.isNotEmpty()) {
-        drawPoints(
-            points = off,
-            pointMode = PointMode.Points,
-            color = ink.off,
-            strokeWidth = dotPx,
-            cap = StrokeCap.Round,
-        )
-    }
-
-    if (on.isEmpty()) return
-
-    // 2. Ореол свечения
-    if (ink.glowBlur > 0.dp) {
-        val blurPx = ink.glowBlur.toPx() * 0.6f
-        if (blurPx > 0f) {
-            drawIntoCanvas { canvas ->
-                val nativeCanvas = canvas.nativeCanvas
-                val glowPaint = android.graphics.Paint().apply {
-                    isAntiAlias = true
-                    strokeWidth = dotPx * 1.4f
-                    strokeCap = android.graphics.Paint.Cap.ROUND
-                    color = ink.on.copy(alpha = 0.65f).toArgb()
-                    maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
+    // 2. Ореол свечения для светящихся точек
+    if (hasGlow) {
+        drawIntoCanvas { canvas ->
+            val nativeCanvas = canvas.nativeCanvas
+            val glowPaint = android.graphics.Paint().apply {
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+                maskFilter = BlurMaskFilter(sigma, BlurMaskFilter.Blur.NORMAL)
+            }
+            for (y in 0 until rows) {
+                val top = y * (dotPx + gapPx) + r
+                val onColor = rowColor?.invoke(y) ?: ink.on
+                for (x in 0 until cols) {
+                    val v = intensity(x, y)
+                    if (v > 0.05f) {
+                        val px = x * (dotPx + gapPx) + r
+                        val alpha = (0.70f * v.coerceIn(0f, 1f))
+                        glowPaint.color = onColor.copy(alpha = alpha).toArgb()
+                        nativeCanvas.drawCircle(px, top, glowRadius, glowPaint)
+                    }
                 }
-                val pts = FloatArray(on.size * 2)
-                for (i in on.indices) {
-                    val p = on[i]
-                    pts[i * 2] = p.x
-                    pts[i * 2 + 1] = p.y
-                }
-                nativeCanvas.drawPoints(pts, glowPaint)
             }
         }
     }
 
-    // 3. Сами горящие точки
-    if (byRow == null) {
-        drawPoints(
-            points = on,
-            pointMode = PointMode.Points,
-            color = ink.on,
-            strokeWidth = dotPx,
-            cap = StrokeCap.Round,
-        )
-    } else {
-        for (y in 0 until rows) {
-            val rowPts = byRow[y]
-            if (rowPts.isNotEmpty()) {
-                drawPoints(
-                    points = rowPts,
-                    pointMode = PointMode.Points,
-                    color = rowColor?.invoke(y) ?: ink.on,
-                    strokeWidth = dotPx,
-                    cap = StrokeCap.Round,
+    // 3. Сами светодиоды с аналоговым нарастанием и затуханием яркости
+    for (y in 0 until rows) {
+        val top = y * (dotPx + gapPx) + r
+        val onColor = rowColor?.invoke(y) ?: ink.on
+        for (x in 0 until cols) {
+            val v = intensity(x, y)
+            if (v > 0.01f) {
+                val pt = Offset(x * (dotPx + gapPx) + r, top)
+                val clamped = v.coerceIn(0f, 1f)
+                val dotColor = androidx.compose.ui.graphics.lerp(ink.off, onColor, clamped)
+                val dotRadius = r * (0.86f + 0.14f * clamped)
+                drawCircle(
+                    color = dotColor,
+                    radius = dotRadius,
+                    center = pt,
                 )
             }
         }
@@ -162,6 +170,7 @@ fun DrawScope.vlPaintLedDots(
 
 /**
  * Матрица светодиодов: строки, где `#` — горящая точка, любой другой символ — погашенная.
+ * Если передан [intensity], используется плавная непрерывная яркость для инерции светодиодов.
  */
 @Composable
 fun VlLedMatrix(
@@ -171,6 +180,7 @@ fun VlLedMatrix(
     gap: Dp = 1.dp,
     color: Color? = null,
     contentDescription: String? = null,
+    intensity: ((x: Int, y: Int) -> Float)? = null,
 ) {
     val cols = remember(rows) { rows.maxOfOrNull { it.length } ?: 0 }
     val rowCount = rows.size
@@ -190,17 +200,28 @@ fun VlLedMatrix(
     ) {
         val dotPx = dot.toPx()
         val gapPx = gap.toPx()
-        vlPaintLedDots(
-            cols = cols,
-            rows = rowCount,
-            dotPx = dotPx,
-            gapPx = gapPx,
-            ink = ink,
-            lit = { x, y ->
-                val line = rows.getOrNull(y) ?: ""
-                x < line.length && line[x] == '#'
-            }
-        )
+        if (intensity != null) {
+            vlPaintLedDots(
+                cols = cols,
+                rows = rowCount,
+                dotPx = dotPx,
+                gapPx = gapPx,
+                ink = ink,
+                intensity = intensity,
+            )
+        } else {
+            vlPaintLedDots(
+                cols = cols,
+                rows = rowCount,
+                dotPx = dotPx,
+                gapPx = gapPx,
+                ink = ink,
+                lit = { x, y ->
+                    val line = rows.getOrNull(y) ?: ""
+                    x < line.length && line[x] == '#'
+                }
+            )
+        }
     }
 }
 
@@ -220,12 +241,22 @@ fun VlLedDot(
     Box(
         modifier = modifier
             .size(size)
-            .shadow(
-                elevation = size * 1.6f,
-                shape = CircleShape,
-                ambientColor = on,
-                spotColor = on,
-            )
+            .drawBehind {
+                val r = this.size.minDimension / 2f
+                val blurPx = (size * 1.6f).toPx()
+                if (blurPx > 0f) {
+                    val sigma = blurPx * 0.57735f + 0.5f
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint().apply {
+                            isAntiAlias = true
+                            style = android.graphics.Paint.Style.FILL
+                            this.color = on.copy(alpha = 0.8f).toArgb()
+                            maskFilter = BlurMaskFilter(sigma, BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawCircle(center.x, center.y, r, paint)
+                    }
+                }
+            }
             .clip(CircleShape)
             .background(on)
     )
@@ -244,13 +275,14 @@ fun VlLedScreen(
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val screenColor = tokens.led?.screen ?: cs.surfaceContainerHighest
+    val shape = tokens.shapes.rounded(radius)
 
-    VlSurface(
-        modifier = modifier,
-        isInput = true,
-        customRadius = radius,
-        overrideColor = screenColor,
-        contentPadding = padding,
+    Box(
+        modifier = modifier
+            .vlInset(tokens.structure, shape)
+            .clip(shape)
+            .background(screenColor, shape)
+            .padding(padding),
         content = content,
     )
 }
@@ -393,6 +425,53 @@ fun vlLedDissolve(from: List<String>, to: List<String>, t: Float): List<String> 
     return rows
 }
 
+/**
+ * Расчет непрерывной яркости светодиода с люминофорной инерцией при смене выражения:
+ * Затухающие точки плавно угасают с экспоненциальным шлейфом, новые плавно разгораются.
+ */
+fun vlLedSmoothTransitionIntensity(
+    from: List<String>?,
+    to: List<String>,
+    progress: Float,
+    x: Int,
+    y: Int,
+): Float {
+    val toLine = to.getOrNull(y) ?: ""
+    val toLit = x < toLine.length && toLine[x] == '#'
+    if (from == null || progress >= 1f) {
+        return if (toLit) 1f else 0f
+    }
+    val fromLine = from.getOrNull(y) ?: ""
+    val fromLit = x < fromLine.length && fromLine[x] == '#'
+
+    if (fromLit && toLit) return 1f
+    if (!fromLit && !toLit) return 0f
+
+    val p = progress.coerceIn(0f, 1f)
+    val phase = ((x * 7919 + y * 104729) % 97) / 97f
+
+    return if (fromLit && !toLit) {
+        // Угасание точки: инерция затухания люминофора
+        val startDecay = phase * 0.20f
+        val endDecay = (startDecay + 0.70f).coerceAtMost(1f)
+        if (p <= startDecay) 1f
+        else if (p >= endDecay) 0f
+        else {
+            val localT = (p - startDecay) / (endDecay - startDecay)
+            (1f - localT) * (1f - localT)
+        }
+    } else {
+        // Разгорание точки: плавный прогрев кристалла
+        val startRise = (phase * 0.25f + 0.15f).coerceAtMost(0.75f)
+        val endRise = 1f
+        if (p <= startRise) 0f
+        else {
+            val localT = (p - startRise) / (endRise - startRise)
+            localT * (2f - localT)
+        }
+    }
+}
+
 fun vlLedFaceHaptic(e: VlLedExpression): HapticType? = when (e) {
     VlLedExpression.HAPPY -> HapticType.CLICK
     VlLedExpression.BOOP -> HapticType.BOOP
@@ -420,11 +499,13 @@ class VlLedFaceController {
     var flashTrigger by mutableLongStateOf(0L)
         private set
 
+    private var nextTrigger = 0L
+
     fun flash(expression: VlLedExpression, durationMs: Long = 1000L, haptic: Boolean = true) {
         flashExpression = expression
         flashDurationMs = durationMs
         flashHaptic = haptic
-        flashTrigger = System.currentTimeMillis()
+        flashTrigger = ++nextTrigger
     }
 
     internal fun clearFlash() {
@@ -457,12 +538,24 @@ fun VlLedFace(
     val haptic = rememberHaptic()
 
     var activeCycled by remember { mutableStateOf<VlLedExpression?>(null) }
+    var activeCycledTrigger by remember { mutableLongStateOf(0L) }
     val currentBase = activeCycled ?: expression
     val activeFlash = controller?.flashExpression
     val targetExpr = activeFlash ?: currentBase
 
-    var fromRows by remember { mutableStateOf<List<String>?>(null) }
-    var transitionProgress by remember { mutableFloatStateOf(1f) }
+    // Автоматический возврат к базовому статусу через 3.5 секунды после тапа
+    LaunchedEffect(activeCycledTrigger) {
+        if (activeCycledTrigger > 0L && activeCycled != null) {
+            delay(3500)
+            activeCycled = null
+        }
+    }
+
+    // При внешнем изменении базового выражения (сеть, синхронизация) сбрасываем локальный цикл
+    LaunchedEffect(expression) {
+        activeCycled = null
+    }
+
     var blink by remember { mutableStateOf(false) }
     var tick by remember { mutableIntStateOf(0) }
 
@@ -474,45 +567,6 @@ fun VlLedFace(
         }
         delay(controller.flashDurationMs)
         controller.clearFlash()
-    }
-
-    // Растворение при смене эмоции
-    var lastExpr by remember { mutableStateOf(targetExpr) }
-    LaunchedEffect(targetExpr) {
-        if (lastExpr != targetExpr && !still) {
-            fromRows = vlLedFaceRows(lastExpr, blink = blink, tick = tick)
-            lastExpr = targetExpr
-            val startTime = System.currentTimeMillis()
-            val duration = 120f
-            while (isActive) {
-                val elapsed = System.currentTimeMillis() - startTime
-                val p = (elapsed / duration).coerceIn(0f, 1f)
-                transitionProgress = p
-                if (p >= 1f) break
-                delay(16)
-            }
-            fromRows = null
-            transitionProgress = 1f
-        } else {
-            lastExpr = targetExpr
-            fromRows = null
-            transitionProgress = 1f
-        }
-    }
-
-    // Автоморгание раз в 3–5 секунд
-    if (autoBlink && !still) {
-        LaunchedEffect(targetExpr) {
-            while (isActive) {
-                val nextDelay = 3000L + Random.nextInt(2000)
-                delay(nextDelay)
-                if (targetExpr != VlLedExpression.SLEEPY) {
-                    blink = true
-                    delay(140)
-                    blink = false
-                }
-            }
-        }
     }
 
     // Анимационный тик для бегающих глаз, слез и глитча
@@ -541,22 +595,78 @@ fun VlLedFace(
         }
     }
 
-    val targetRows = remember(targetExpr, pupilX, pupilY, blink, tick) {
-        vlLedFaceRows(
-            expression = targetExpr,
-            pupilX = pupilX,
-            pupilY = pupilY,
-            blink = blink,
-            tick = tick,
-        )
+    // Автоморгание раз в 3–5 секунд
+    if (autoBlink && !still) {
+        LaunchedEffect(targetExpr) {
+            while (isActive) {
+                val nextDelay = 3000L + Random.nextInt(2000)
+                delay(nextDelay)
+                if (targetExpr != VlLedExpression.SLEEPY) {
+                    blink = true
+                    delay(140)
+                    blink = false
+                }
+            }
+        }
     }
 
-    val displayRows = remember(targetRows, fromRows, transitionProgress) {
-        val from = fromRows
-        if (from != null && transitionProgress < 1f) {
-            vlLedDissolve(from, targetRows, transitionProgress)
+    // Синхронное управление кадрами перехода:
+    // Исключает гонку рендеринга (1-кадровую вспышку целевого кадра перед анимацией)
+    var activeFromRows by remember { mutableStateOf<List<String>?>(null) }
+    var activeToRows by remember {
+        mutableStateOf(vlLedFaceRows(expression = targetExpr, pupilX = pupilX, pupilY = pupilY, blink = blink, tick = tick))
+    }
+    var transitionProgress by remember { mutableFloatStateOf(1f) }
+
+    var lastRenderedExpr by remember { mutableStateOf(targetExpr) }
+    var lastRenderedBlink by remember { mutableStateOf(blink) }
+
+    if (lastRenderedExpr != targetExpr || lastRenderedBlink != blink) {
+        val nextTarget = vlLedFaceRows(expression = targetExpr, pupilX = pupilX, pupilY = pupilY, blink = blink, tick = tick)
+        if (!still) {
+            // Если предыдущий переход был в процессе — берем текущее промежуточное состояние
+            activeFromRows = if (activeFromRows != null && transitionProgress < 1f) {
+                List(12) { y ->
+                    val sb = java.lang.StringBuilder(32)
+                    for (x in 0 until 32) {
+                        val v = vlLedSmoothTransitionIntensity(activeFromRows, activeToRows, transitionProgress, x, y)
+                        sb.append(if (v > 0.45f) '#' else '.')
+                    }
+                    sb.toString()
+                }
+            } else {
+                activeToRows
+            }
+            activeToRows = nextTarget
+            transitionProgress = 0f
+            lastRenderedExpr = targetExpr
+            lastRenderedBlink = blink
         } else {
-            targetRows
+            activeFromRows = null
+            activeToRows = nextTarget
+            transitionProgress = 1f
+            lastRenderedExpr = targetExpr
+            lastRenderedBlink = blink
+        }
+    } else if (transitionProgress >= 1f) {
+        // В покое синхронно обновляем тики (зрачки scan, капли cry, глитч)
+        activeToRows = vlLedFaceRows(expression = targetExpr, pupilX = pupilX, pupilY = pupilY, blink = blink, tick = tick)
+    }
+
+    // Плавное приращение прогресса перехода (люминофорная инерция)
+    LaunchedEffect(lastRenderedExpr, lastRenderedBlink) {
+        if (transitionProgress < 1f) {
+            val startTime = System.currentTimeMillis()
+            val duration = if (lastRenderedBlink) 100f else 220f
+            while (isActive) {
+                val elapsed = System.currentTimeMillis() - startTime
+                val p = (elapsed / duration).coerceIn(0f, 1f)
+                transitionProgress = p
+                if (p >= 1f) break
+                delay(16)
+            }
+            activeFromRows = null
+            transitionProgress = 1f
         }
     }
 
@@ -588,16 +698,20 @@ fun VlLedFace(
                 val currentIndex = order.indexOf(currentBase)
                 val next = order[(currentIndex + 1) % order.size]
                 activeCycled = next
+                activeCycledTrigger++
                 vlLedFaceHaptic(next)?.let { h -> haptic.perform(h) }
             }
     } else Modifier
 
     VlLedMatrix(
-        rows = displayRows,
+        rows = activeToRows,
         dot = dot,
         gap = gap,
         color = color,
         modifier = modifier.then(clickModifier),
+        intensity = { x, y ->
+            vlLedSmoothTransitionIntensity(activeFromRows, activeToRows, transitionProgress, x, y)
+        }
     )
 }
 
@@ -684,6 +798,22 @@ fun VlLedTyping(
             Box(
                 modifier = Modifier
                     .size(dot)
+                    .drawBehind {
+                        if (alpha > 0.6f) {
+                            val r = this.size.minDimension / 2f
+                            val blurPx = (dot * 1.5f).toPx()
+                            val sigma = blurPx * 0.57735f + 0.5f
+                            drawIntoCanvas { canvas ->
+                                val paint = android.graphics.Paint().apply {
+                                    isAntiAlias = true
+                                    style = android.graphics.Paint.Style.FILL
+                                    this.color = ink.on.copy(alpha = alpha * 0.8f).toArgb()
+                                    maskFilter = BlurMaskFilter(sigma, BlurMaskFilter.Blur.NORMAL)
+                                }
+                                canvas.nativeCanvas.drawCircle(center.x, center.y, r, paint)
+                            }
+                        }
+                    }
                     .clip(CircleShape)
                     .background(ink.on.copy(alpha = alpha))
             )

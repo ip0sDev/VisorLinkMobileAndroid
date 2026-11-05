@@ -33,6 +33,7 @@ import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlBarBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.VlTopAppBarButton
 import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chatlist.*
 import org.visorlink.app.ui.theme.*
@@ -44,7 +45,6 @@ import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
 import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.ui.components.calculateJellyScale
 import org.visorlink.app.ui.components.liquidJelly
-import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.components.LiquidPullRefreshLayout
 import androidx.compose.ui.graphics.graphicsLayer
@@ -92,6 +92,22 @@ fun ChatListScreen(
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     val triggerKey = remember(isActive, chats.isEmpty()) { "${isActive}_${chats.isNotEmpty()}" }
+
+    val isLed = VlTheme.tokens.led != null
+    val totalUnread = remember(chats, viewModel.currentUid) {
+        chats.sumOf { it.unreadCountFor(viewModel.currentUid) }
+    }
+    val isOnline = syncState != SyncState.WAITING_FOR_NETWORK
+
+    val idCardRepo: org.visorlink.app.data.repository.IdCardRepository = org.koin.compose.koinInject()
+    var ionGiftAvailable by remember { mutableStateOf(false) }
+    LaunchedEffect(viewModel.currentUid) {
+        try {
+            ionGiftAvailable = idCardRepo.ionGiftAvailable()
+        } catch (_: Exception) {
+            ionGiftAvailable = false
+        }
+    }
 
     LaunchedEffect(chats) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -167,12 +183,12 @@ fun ChatListScreen(
                     // Mask Mode: маска до выключения / индикатор «Маска до 18:30» (спека §8)
                     org.visorlink.app.ui.idcard.MaskToolbarButton()
 
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSearch() }) {
-                        Icon(Icons.Default.Search, stringResource(R.string.action_search))
+                    VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSearch() }) {
+                        Icon(Icons.Default.Search, stringResource(R.string.action_search), modifier = Modifier.size(20.dp))
                     }
 
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
-                        Icon(Icons.Outlined.Settings, stringResource(R.string.settings_title))
+                    VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
+                        Icon(Icons.Outlined.Settings, stringResource(R.string.settings_title), modifier = Modifier.size(20.dp))
                     }
 
                     if (showProfileButton) {
@@ -182,10 +198,7 @@ fun ChatListScreen(
                             hapticEnabled = hapticEnabled,
                             onClick = { onOpenProfile() }
                         )
-                        // Без отступа аватар упирался в край экрана (в шапке без рамки — Forge, M3E)
-                        Spacer(Modifier.width(8.dp))
                     }
-                    Spacer(Modifier.width(8.dp))
                 }
             )
         },
@@ -222,10 +235,24 @@ fun ChatListScreen(
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
                     ) {
-                        org.visorlink.app.ui.idcard.IonGiftBanner(
-                            uid = viewModel.currentUid,
-                            onOpenReveal = { showIonReveal = true }
-                        )
+                        if (isLed) {
+                            ChatBoard(
+                                unread = 0,
+                                online = isOnline,
+                                sync = syncState,
+                                compact = compactList,
+                                gift = ionGiftAvailable,
+                                onGift = { showIonReveal = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            org.visorlink.app.ui.idcard.IonGiftBanner(
+                                uid = viewModel.currentUid,
+                                onOpenReveal = { showIonReveal = true }
+                            )
+                        }
                         ChatListEmptyState(
                             modifier = Modifier.fillMaxSize()
                         )
@@ -245,11 +272,27 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
-                        item(key = "ion_gift_banner") {
-                            org.visorlink.app.ui.idcard.IonGiftBanner(
-                                uid = viewModel.currentUid,
-                                onOpenReveal = { showIonReveal = true }
-                            )
+                        if (isLed) {
+                            item(key = "forge_chat_board") {
+                                ChatBoard(
+                                    unread = totalUnread,
+                                    online = isOnline,
+                                    sync = syncState,
+                                    compact = compactList,
+                                    gift = ionGiftAvailable,
+                                    onGift = { showIonReveal = true },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                        } else {
+                            item(key = "ion_gift_banner") {
+                                org.visorlink.app.ui.idcard.IonGiftBanner(
+                                    uid = viewModel.currentUid,
+                                    onOpenReveal = { showIonReveal = true }
+                                )
+                            }
                         }
                         if (compactList) {
                             // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
@@ -260,10 +303,6 @@ fun ChatListScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .liquidPillCardSlideOut(
-                                            index = 0,
-                                            triggerKey = triggerKey
-                                        )
                                         .padding(horizontal = 12.dp)
                                         .padding(bottom = 12.dp)
                                         .background(cs.surfaceContainerLow, shape)
@@ -348,12 +387,7 @@ fun ChatListScreen(
                             item(key = "saved_messages") {
                                 val savedChat = viewModel.savedMessagesEntry
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .liquidPillCardSlideOut(
-                                            index = 0,
-                                            triggerKey = triggerKey
-                                        )
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     ChatListItem(
                                         chat = savedChat,
@@ -377,12 +411,7 @@ fun ChatListScreen(
                             ) { index, chat ->
                                 if (viewModel.isInvitesEntry(chat)) {
                                     Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .liquidPillCardSlideOut(
-                                                index = index + 1,
-                                                triggerKey = triggerKey
-                                            )
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         ChatListItem(
                                             chat = chat,
@@ -406,12 +435,7 @@ fun ChatListScreen(
                                 }
 
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .liquidPillCardSlideOut(
-                                            index = index + 1,
-                                            triggerKey = triggerKey
-                                        )
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     ChatListItem(
                                         chat = chat,

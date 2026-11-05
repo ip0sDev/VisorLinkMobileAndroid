@@ -72,7 +72,7 @@ fun SavedMessagesSettingsScreen(
                     modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text("Настройки Избранного", fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             topBarJelly.press(0.06f)
                             onNavigateBack()

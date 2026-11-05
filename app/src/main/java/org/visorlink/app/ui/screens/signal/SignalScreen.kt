@@ -1,25 +1,29 @@
 package org.visorlink.app.ui.screens.signal
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,14 +35,19 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.R
 import org.visorlink.app.data.model.*
 import org.visorlink.app.ui.components.VlCard
+import org.visorlink.app.ui.components.VlSegmentedControl
 import org.visorlink.app.ui.components.VlSwitch
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.VlTopAppBarButton
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlDashedBorder
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlInset
+import org.visorlink.app.ui.theme.vlRaised
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.max
-import kotlin.math.min
 
 private fun groupDigits(n: Int): String =
     String.format(Locale.US, "%,d", n).replace(',', ' ')
@@ -49,10 +58,6 @@ private val dateFormatRu by lazy {
 
 private val monthFormatRu by lazy {
     SimpleDateFormat("LLL", Locale("ru"))
-}
-
-private val dayFormatRu by lazy {
-    SimpleDateFormat("d MMMM", Locale("ru"))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -77,9 +82,9 @@ fun SignalScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.signal_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(R.string.signal_back)
                         )
                     }
@@ -97,51 +102,59 @@ fun SignalScreen(
                 CircularProgressIndicator()
             }
         } else {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                    .padding(innerPadding),
+                contentAlignment = Alignment.TopCenter
             ) {
-                StreakCard(
-                    profile = profile,
-                    stats = uiState.stats,
-                    now = uiState.now
-                )
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = 720.dp)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    StreakCard(
+                        profile = profile,
+                        stats = uiState.stats,
+                        now = uiState.now
+                    )
 
-                StreakFreezeCard(
-                    profile = profile,
-                    now = uiState.now,
-                    isBuying = uiState.isBuyingFreeze,
-                    error = uiState.freezeError,
-                    onBuy = { viewModel.buyStreakFreeze() }
-                )
+                    StreakFreezeCard(
+                        profile = profile,
+                        now = uiState.now,
+                        isBuying = uiState.isBuyingFreeze,
+                        error = uiState.freezeError,
+                        onBuy = { viewModel.buyStreakFreeze() }
+                    )
 
-                CalendarCard(
-                    stats = uiState.stats,
-                    now = uiState.now
-                )
+                    CalendarCard(
+                        stats = uiState.stats,
+                        now = uiState.now
+                    )
 
-                PeersCard(
-                    stats = uiState.stats,
-                    peerProfiles = uiState.peerProfiles,
-                    pro = profile.isProActive(),
-                    now = uiState.now
-                )
+                    PeersCard(
+                        stats = uiState.stats,
+                        peerProfiles = uiState.peerProfiles,
+                        blockedUids = uiState.blockedUids,
+                        pro = profile.isProActive(),
+                        now = uiState.now
+                    )
 
-                AchievementsCard(
-                    achievementsMap = uiState.achievements
-                )
+                    AchievementsCard(
+                        achievementsMap = uiState.achievements
+                    )
 
-                FooterCard(
-                    profile = profile,
-                    stats = uiState.stats,
-                    onShowStreakChange = { viewModel.setShowStreak(it) }
-                )
+                    FooterCard(
+                        profile = profile,
+                        stats = uiState.stats,
+                        onShowStreakChange = { viewModel.setShowStreak(it) }
+                    )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(32.dp))
+                }
             }
         }
     }
@@ -171,7 +184,7 @@ private fun SignalCardContainer(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 if (icon != null) {
-                    Icon(icon, contentDescription = null, tint = cs.primary, modifier = Modifier.size(20.dp))
+                    Icon(icon, contentDescription = null, tint = cs.primary, modifier = Modifier.size(18.dp))
                 }
                 Text(
                     text = title,
@@ -190,6 +203,57 @@ private fun SignalCardContainer(
                 )
             }
             content()
+        }
+    }
+}
+
+@Composable
+private fun SignalSmallButton(
+    text: String,
+    onClick: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    primary: Boolean = true,
+    icon: ImageVector? = null
+) {
+    val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+    val enabled = onClick != null
+    val fg = if (primary) cs.onPrimary else cs.onSurface
+    val bg = if (primary) cs.primary else cs.surfaceContainerHighest
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val shape = tokens.shapes.button
+    val depthModifier = if (tokens.structure.enabled && enabled) {
+        if (isPressed) Modifier.vlInset(tokens.structure, shape)
+        else Modifier.vlRaised(tokens.structure, shape)
+    } else Modifier
+
+    Surface(
+        onClick = { onClick?.invoke() },
+        enabled = enabled,
+        shape = shape,
+        color = bg,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .height(40.dp)
+            .alpha(if (enabled) (if (isPressed) 0.75f else 1f) else 0.45f)
+            .then(depthModifier)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = fg, modifier = Modifier.size(16.dp))
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = fg
+            )
         }
     }
 }
@@ -235,7 +299,7 @@ private fun StreakCard(
 
     SignalCardContainer(
         title = "Сигнал",
-        icon = Icons.Default.Sensors
+        icon = Icons.Rounded.Sensors
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -245,10 +309,11 @@ private fun StreakCard(
             Column {
                 Text(
                     text = "$shown",
-                    style = MaterialTheme.typography.displayMedium,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    color = if (urgent) tokens.status.warning else cs.primary
+                    style = tokens.data.dataMedium.copy(
+                        fontSize = 52.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (urgent) tokens.status.warning else cs.primary
+                    )
                 )
                 Text(
                     text = "дн. подряд",
@@ -270,7 +335,8 @@ private fun StreakCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = "Веха: ${ms.day} дн.",
@@ -279,10 +345,10 @@ private fun StreakCard(
                 )
                 Text(
                     text = "+${groupDigits(ms.bonus)} Bits",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontFamily = FontFamily.Monospace,
-                    color = tokens.status.warning,
-                    fontWeight = FontWeight.Bold
+                    style = tokens.data.dataSmall.copy(
+                        color = tokens.status.warning,
+                        fontWeight = FontWeight.Bold
+                    )
                 )
             }
             LinearProgressIndicator(
@@ -307,20 +373,30 @@ private fun StreakCard(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Лучшая серия", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                Text("$best", style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "$best",
+                    style = tokens.data.dataSmall.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                )
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text("Активных дней", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                Text(groupDigits(profile.activeDays), style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Text(
+                    text = groupDigits(profile.activeDays),
+                    style = tokens.data.dataSmall.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                )
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("Сообщений", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
-                Text(groupDigits(total), style = MaterialTheme.typography.titleMedium, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                Text("Сообщений за полгода", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                Text(
+                    text = groupDigits(total),
+                    style = tokens.data.dataSmall.copy(fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = cs.onSurface)
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun StreakFreezeCard(
     profile: UserProfile,
@@ -330,6 +406,7 @@ private fun StreakFreezeCard(
     onBuy: () -> Unit
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val pro = profile.isProActive()
     val stock = freezeStock(
         freezes = profile.streakFreezes,
@@ -353,20 +430,20 @@ private fun StreakFreezeCard(
 
     SignalCardContainer(
         title = "Заморозки",
-        icon = Icons.Default.AcUnit,
+        icon = Icons.Rounded.AcUnit,
         trailing = {
             Text(
                 "${stock.freezes} / ${SignalRules.FREEZE_MAX}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = cs.onSurfaceVariant
+                style = tokens.data.dataSmall.copy(color = cs.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             )
         },
         desc = "Заморозка прикрывает одни пропущенные сутки: если вы не писали дольше 48 часов, серия не сгорит. Тратится сама, когда нужна; замороженный день серию не растит."
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        val slotShape = tokens.shapes.rounded(12.dp)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (i in 0 until SignalRules.FREEZE_MAX) {
@@ -374,17 +451,20 @@ private fun StreakFreezeCard(
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .then(
+                                if (!active) Modifier.vlDashedBorder(
+                                    color = cs.outlineVariant.copy(alpha = 0.8f),
+                                    shape = slotShape
+                                ) else Modifier
+                            )
+                            .clip(slotShape)
                             .background(
                                 if (active) cs.primary.copy(alpha = 0.16f) else cs.surfaceContainerLow
-                            )
-                            .then(
-                                if (!active) Modifier.border(1.dp, cs.outlineVariant.copy(alpha = 0.8f), RoundedCornerShape(12.dp)) else Modifier
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.AcUnit,
+                            Icons.Rounded.AcUnit,
                             contentDescription = null,
                             tint = if (active) cs.primary else cs.onSurfaceVariant.copy(alpha = 0.4f),
                             modifier = Modifier.size(22.dp)
@@ -398,37 +478,38 @@ private fun StreakFreezeCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    TextButton(onClick = { confirm = false }, enabled = !isBuying) {
-                        Text("Отмена")
-                    }
-                    Button(
-                        onClick = {
-                            confirm = false
-                            onBuy()
-                        },
-                        enabled = !isBuying
-                    ) {
-                        Text(if (isBuying) "Загрузка…" else "Купить за ${SignalRules.FREEZE_PRICE}")
-                    }
+                    Text(
+                        "Спишется ${SignalRules.FREEZE_PRICE} Bits.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurface
+                    )
+                    SignalSmallButton(
+                        text = "Отмена",
+                        onClick = if (isBuying) null else { { confirm = false } },
+                        primary = false
+                    )
+                    SignalSmallButton(
+                        text = if (isBuying) "Загрузка…" else "Купить",
+                        onClick = if (isBuying) null else { { confirm = false; onBuy() } },
+                        primary = true
+                    )
                 }
             } else {
-                OutlinedButton(
-                    onClick = { confirm = true },
-                    enabled = !full && !poor && !isBuying
-                ) {
-                    Icon(
-                        if (full) Icons.Default.Lock else Icons.Default.AcUnit,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(if (full) "Запас полон" else "Купить · ${SignalRules.FREEZE_PRICE}")
-                }
+                SignalSmallButton(
+                    text = if (full) "Запас полон" else "Купить заморозку · ${SignalRules.FREEZE_PRICE}",
+                    onClick = if (full || poor || isBuying) null else { { confirm = true } },
+                    primary = false,
+                    icon = if (full) Icons.Rounded.Lock else Icons.Rounded.AcUnit
+                )
             }
         }
 
         if (!full && poor && !confirm) {
-            Text("Нужно ${SignalRules.FREEZE_PRICE} Bits.", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+            Text(
+                "Нужно ${SignalRules.FREEZE_PRICE} Bits.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant
+            )
         }
         if (recentUse != null) {
             Text(
@@ -454,40 +535,54 @@ private fun CalendarCard(
     val cal = remember(stats.days, now) {
         buildCalendar(stats.days, SignalRules.WEEKS, now)
     }
+    val cell = 14.dp
+    val gap = 3.dp
+    val width = (SignalRules.WEEKS * 17 - 3).dp
 
     SignalCardContainer(
         title = "Активность",
         desc = "Дней с сообщениями за полгода: ${cal.activeDays}."
     ) {
-        Column(
+        val scrollState = rememberScrollState()
+        LaunchedEffect(Unit) {
+            scrollState.scrollTo(scrollState.maxValue)
+        }
+
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState(), reverseScrolling = true)
+                .horizontalScroll(scrollState)
         ) {
-            // Метки месяцев над колонками
-            Box(
-                modifier = Modifier
-                    .width((SignalRules.WEEKS * 17).dp)
-                    .height(18.dp)
+            Column(
+                modifier = Modifier.width(width),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                for (m in cal.months) {
-                    Text(
-                        text = monthFormatRu.format(m.date),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = cs.onSurfaceVariant,
-                        modifier = Modifier.offset(x = (m.col * 17).dp)
-                    )
+                // Метки месяцев
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                ) {
+                    for (m in cal.months) {
+                        Text(
+                            text = monthFormatRu.format(m.date),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.onSurfaceVariant,
+                            modifier = Modifier.offset(x = (m.col * 17).dp)
+                        )
+                    }
                 }
-            }
 
-            // Матрица 7 строк x 26 колонок
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                for (col in cal.columns) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        for (cell in col) {
-                            ActivityCellWidget(cell = cell)
+                // Матрица колонок
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(gap),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    for (col in cal.columns) {
+                        Column(verticalArrangement = Arrangement.spacedBy(gap)) {
+                            for (c in col) {
+                                ActivityCellWidget(level = c.level, future = c.future, size = 14)
+                            }
                         }
                     }
                 }
@@ -512,12 +607,11 @@ private fun CalendarCard(
 
 @Composable
 private fun ActivityCellWidget(
-    cell: CalendarCell? = null,
-    level: Int = cell?.level ?: 0,
+    level: Int,
+    future: Boolean = false,
     size: Int = 14
 ) {
     val cs = MaterialTheme.colorScheme
-    val future = cell?.future == true
     val mix = when (level.coerceIn(0, 4)) {
         1 -> 0.28f
         2 -> 0.52f
@@ -544,53 +638,55 @@ private fun ActivityCellWidget(
 private fun PeersCard(
     stats: SignalStats,
     peerProfiles: Map<String, UserProfile>,
+    blockedUids: Set<String>,
     pro: Boolean,
     now: Long
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     var allTime by remember { mutableStateOf(false) }
     val effectiveAllTime = allTime && pro
 
-    val top = remember(stats.peers, effectiveAllTime, now) {
-        topPeers(stats.peers, allTime = effectiveAllTime, limit = 5, now = now)
+    val top = remember(stats.peers, effectiveAllTime, blockedUids, now) {
+        topPeers(stats.peers, allTime = effectiveAllTime, limit = 5, exclude = blockedUids, now = now)
+    }
+
+    val visibleRows = remember(top, peerProfiles) {
+        top.mapNotNull { r ->
+            val p = peerProfiles[r.uid]
+            if (p != null && (p.isBot || (p.username.isEmpty() && p.displayName.isEmpty()))) {
+                null
+            } else {
+                r to p
+            }
+        }
     }
 
     SignalCardContainer(
         title = "С кем вы общаетесь",
         desc = "Сколько сообщений вы написали в личных чатах. Видите только вы."
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .background(cs.surfaceContainerHighest)
-                .padding(2.dp)
-        ) {
-            FilterChip(
-                selected = !allTime,
-                onClick = { allTime = false },
-                label = { Text("30 дней") },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            FilterChip(
-                selected = allTime,
-                onClick = { if (pro) allTime = true },
-                label = { Text(if (pro) "Всё время" else "🔒 Всё время") },
-                modifier = Modifier.weight(1f)
-            )
-        }
+        VlSegmentedControl(
+            labels = listOf(
+                "30 дней",
+                if (pro) "Всё время" else "🔒 Всё время"
+            ),
+            selectedIndex = if (allTime) 1 else 0,
+            onSelected = { index ->
+                if (index == 1 && !pro) return@VlSegmentedControl
+                allTime = (index == 1)
+            }
+        )
 
-        if (top.isEmpty()) {
+        if (visibleRows.isEmpty()) {
             Text(
                 "Пока пусто — статистика появится после первых сообщений.",
                 style = MaterialTheme.typography.bodySmall,
                 color = cs.onSurfaceVariant
             )
         } else {
-            val maxCount = max(1, top.firstOrNull()?.count ?: 1)
-            top.forEachIndexed { index, row ->
-                val p = peerProfiles[row.uid]
+            val maxCount = max(1, visibleRows.firstOrNull()?.first?.count ?: 1)
+            visibleRows.forEachIndexed { index, (row, p) ->
                 val name = p?.displayName?.ifEmpty { p.username } ?: p?.username?.ifEmpty { "..." } ?: "..."
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -599,9 +695,7 @@ private fun PeersCard(
                 ) {
                     Text(
                         "${index + 1}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
-                        color = cs.onSurfaceVariant,
+                        style = tokens.data.dataSmall.copy(color = cs.onSurfaceVariant),
                         modifier = Modifier.width(18.dp)
                     )
                     Box(
@@ -650,9 +744,7 @@ private fun PeersCard(
 
                     Text(
                         groupDigits(row.count),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold
+                        style = tokens.data.dataSmall.copy(color = cs.onSurface, fontWeight = FontWeight.SemiBold)
                     )
                 }
             }
@@ -663,7 +755,7 @@ private fun PeersCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(Icons.Default.Lock, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                Icon(Icons.Rounded.Lock, contentDescription = null, tint = cs.onSurfaceVariant, modifier = Modifier.size(13.dp))
                 Text("Статистика за всё время — в PRO", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
             }
         }
@@ -677,16 +769,15 @@ private fun AchievementsCard(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val count = ACHIEVEMENTS.count { achievementsMap.containsKey(it.id) }
+    val shape = tokens.shapes.rounded(12.dp)
 
     SignalCardContainer(
         title = "Достижения",
-        icon = Icons.Default.EmojiEvents,
+        icon = Icons.Rounded.EmojiEvents,
         trailing = {
             Text(
                 "$count / ${ACHIEVEMENTS.size}",
-                style = MaterialTheme.typography.bodyMedium,
-                fontFamily = FontFamily.Monospace,
-                color = cs.onSurfaceVariant
+                style = tokens.data.dataSmall.copy(color = cs.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             )
         },
         desc = "Разовые награды Bits за важные шаги. Начисляются сами."
@@ -696,24 +787,26 @@ private fun AchievementsCard(
                 val unlocked = achievementsMap.containsKey(a.id)
                 val at = achievementsMap[a.id]
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .alpha(if (unlocked) 1f else 0.55f),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Box(
                         modifier = Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(shape)
                             .background(
                                 if (unlocked) cs.primary.copy(alpha = 0.16f) else cs.surfaceContainerLow
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            if (unlocked) achievementIcon(a.id) else Icons.Default.Lock,
+                            if (unlocked) achievementIcon(a.id) else Icons.Rounded.Lock,
                             contentDescription = null,
                             tint = if (unlocked) cs.primary else cs.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(19.dp)
                         )
                     }
 
@@ -728,10 +821,7 @@ private fun AchievementsCard(
 
                     Text(
                         "+${groupDigits(a.bits)}",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        color = tokens.status.warning
+                        style = tokens.data.dataSmall.copy(color = tokens.status.warning, fontWeight = FontWeight.Bold)
                     )
                 }
             }
@@ -755,7 +845,7 @@ private fun FooterCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
-                Icons.Default.LocalFireDepartment,
+                Icons.Rounded.LocalFireDepartment,
                 contentDescription = null,
                 tint = Color(0xFFE11D48),
                 modifier = Modifier.size(24.dp)
@@ -797,15 +887,15 @@ private fun FooterCard(
 }
 
 fun achievementIcon(id: String): ImageVector = when (id) {
-    "id_card" -> Icons.Default.Badge
-    "sticker_pack" -> Icons.Default.EmojiEmotions
-    "first_trade" -> Icons.Default.SwapHoriz
-    "first_gift" -> Icons.Default.CardGiftcard
-    "streak_30" -> Icons.Default.LocalFireDepartment
-    "streak_100" -> Icons.Default.RocketLaunch
-    "half_year" -> Icons.Default.EventAvailable
-    "one_year" -> Icons.Default.Cake
-    "bug_hunter" -> Icons.Default.BugReport
-    "recruiter" -> Icons.Default.PersonAddAlt1
-    else -> Icons.Default.EmojiEvents
+    "id_card" -> Icons.Rounded.Badge
+    "sticker_pack" -> Icons.Rounded.EmojiEmotions
+    "first_trade" -> Icons.Rounded.SwapHoriz
+    "first_gift" -> Icons.Rounded.CardGiftcard
+    "streak_30" -> Icons.Rounded.LocalFireDepartment
+    "streak_100" -> Icons.Rounded.RocketLaunch
+    "half_year" -> Icons.Rounded.EventAvailable
+    "one_year" -> Icons.Rounded.Cake
+    "bug_hunter" -> Icons.Rounded.BugReport
+    "recruiter" -> Icons.Rounded.PersonAddAlt1
+    else -> Icons.Rounded.EmojiEvents
 }

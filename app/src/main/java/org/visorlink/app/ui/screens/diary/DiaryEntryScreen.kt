@@ -107,12 +107,12 @@ fun DiaryEntryScreen(
             VlTopAppBar(
                 title = { Text(if (entryId == null) stringResource(R.string.diary_new_entry) else stringResource(R.string.diary_edit_entry), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
                     }
                 },
                 actions = {
-                    IconButton(
+                    org.visorlink.app.ui.components.VlTopAppBarButton(
                         onClick = {
                             saveJelly.pulse(0.14f)
                             viewModel.saveEntry(textFieldValue.text) { success, _ ->
