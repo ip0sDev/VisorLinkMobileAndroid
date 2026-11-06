@@ -33,6 +33,8 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.SelectedMediaItem
 import org.visorlink.app.data.model.StickerItem
 import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.isVlMatte
+import org.visorlink.app.ui.components.vlBackdropBlur
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerViewContent
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.screens.chat.ChatUiState
@@ -94,6 +96,7 @@ fun LiquidMorphingChatBottomBar(
     onVideoRecorded: (Uri) -> Unit,
     onOpenIdTrade: (() -> Unit)? = null,
     onOpenGiftPicker: (() -> Unit)? = null,
+    onSchedule: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -141,6 +144,8 @@ fun LiquidMorphingChatBottomBar(
     }
 
     val panelShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius))
+    // Матовая панель: backdrop-блюр контента под ней + полупрозрачный тон
+    val matte = isVlMatte()
 
     Box(
         modifier = modifier
@@ -151,7 +156,11 @@ fun LiquidMorphingChatBottomBar(
                 if (isExpanded) {
                     Modifier
                         .clip(panelShape)
-                        .background(cs.surfaceContainerLow)
+                        .vlBackdropBlur()
+                        .background(
+                            if (matte) cs.surfaceContainerLow.copy(alpha = if (tokens.isDark) 0.75f else 0.85f)
+                            else cs.surfaceContainerLow
+                        )
                         .then(
                             if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                             else Modifier
@@ -212,7 +221,8 @@ fun LiquidMorphingChatBottomBar(
                         onSendRecord = onSendRecord,
                         onClearReply = onClearReply,
                         onCancelEdit = onCancelEdit,
-                        onJoinChannel = onJoinChannel
+                        onJoinChannel = onJoinChannel,
+                        onSchedule = onSchedule
                     )
                 }
 

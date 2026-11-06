@@ -50,8 +50,9 @@ fun VlTopAppBarButton(
     val depth = if (tokens.structure.enabled) {
         if (isPressed && enabled) VlDepth.Inset else VlDepth.Raised
     } else VlDepth.Flat
+    // Кнопки полупрозрачные: сквозь них читается матовый бар (F vl_chrome.dart:146-148)
     val color = if (tokens.structure.enabled) {
-        if (dark) cs.surfaceContainer else cs.surfaceContainerLow
+        if (dark) cs.surfaceContainer.copy(alpha = 0.8f) else cs.surfaceContainerLow.copy(alpha = 0.9f)
     } else cs.surfaceContainerHighest.copy(alpha = 0.50f)
     val borderColor = cs.outlineVariant.copy(alpha = if (dark) 0.15f else 0.30f)
 
@@ -98,7 +99,11 @@ fun VlTopAppBar(
 ) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
-    val bgColor = cs.surface
+    // Матовый бар (F vl_chrome.dart:197-230): в Biolume/Forge — настоящий backdrop blur
+    // поверх него — полупрозрачный tint alpha(surface, 0.70/0.85). При «убрать анимации»
+    // и в M3E — сплошная поверхность.
+    val matte = isVlMatte()
+    val bgColor = if (matte) cs.surface.copy(alpha = if (tokens.isDark) 0.70f else 0.85f) else cs.surface
 
     val titleStyle = if (tokens.isForge) {
         MaterialTheme.typography.titleLarge.copy(
@@ -117,6 +122,7 @@ fun VlTopAppBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .vlBackdropBlur()
             .background(bgColor)
     ) {
         Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
@@ -152,8 +158,8 @@ fun VlTopAppBar(
                 }
 
                 Row(
-                    modifier = Modifier.padding(end = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(end = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     content = actions,
                 )

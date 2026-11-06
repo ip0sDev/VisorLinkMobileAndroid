@@ -295,6 +295,20 @@ fun FullscreenPlayerDialog(
                             .fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
+                        if (tokens.led != null) {
+                            // Forge: вместо героя — LED-табло с мордочкой в такт баса (F _PlayerBoard)
+                            PlayerLedBoard(
+                                track = track,
+                                playerManager = playerManager,
+                                positionMs = state.currentMs,
+                                totalMs = state.durationMs,
+                                value = if (state.durationMs > 0) state.currentMs.toFloat() / state.durationMs else 0f,
+                                onSeek = { fraction -> playerManager.seekToMs((fraction * state.durationMs).toLong()) },
+                                playing = state.isPlaying,
+                                loading = state.isLoading,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        } else {
                         AnimatedContent(
                             targetState = visualMode,
                             transitionSpec = {
@@ -320,11 +334,12 @@ fun FullscreenPlayerDialog(
                                 }
                                 PlayerVisualMode.WAVE -> {
                                     PlayerAudioVisualizer(
-                                        isPlaying = state.isPlaying,
+                                        playerManager = playerManager,
                                         onTap = { visualMode = PlayerVisualMode.COVER }
                                     )
                                 }
                             }
+                        }
                         }
                     }
 
@@ -1288,18 +1303,14 @@ private fun PlayerVinylTurntable(
  */
 @Composable
 private fun PlayerAudioVisualizer(
-    isPlaying: Boolean,
+    playerManager: MusicPlayerManager,
     onTap: () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "viz_motion")
-    val time by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = (2 * Math.PI).toFloat(),
-        animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing)),
-        label = "viz_time"
-    )
-
     val cs = MaterialTheme.colorScheme
     val barCount = 26
+    // Реальный спектр (FFT аудиосессии) или процедурный фолбэк (порт Flutter PlayerWaveVisualizer)
+    val musicLevels = rememberMusicLevels(playerManager, barCount)
+    val levels = musicLevels.values.value
 
     Box(
         modifier = Modifier
@@ -1318,22 +1329,10 @@ private fun PlayerAudioVisualizer(
             val startX = (w - totalBarsW) / 2f
 
             for (i in 0 until barCount) {
-                val phase = i * 0.25f
-                val normX = i.toFloat() / barCount
+                // Полосы 0..1: 0 — бас слева, верх справа (как во Flutter: playerWaveBars = 26)
+                val rawH = levels.getOrElse(i) { 0f }
 
-                // Симуляция спектрального отклика
-                val rawH = if (isPlaying) {
-                    val w1 = (sin(time * 3.2f + phase) + 1f) * 0.5f
-                    val w2 = (sin(time * 5.4f - phase * 1.8f) + 1f) * 0.5f
-                    val w3 = (cos(time * 2.1f + phase * 0.9f) + 1f) * 0.5f
-                    (w1 * 0.50f + w2 * 0.35f + w3 * 0.15f).coerceIn(0.12f, 1.0f)
-                } else {
-                    0.08f
-                }
-
-                // Параболическое распределение высоты (бас по центру, спад к краям)
-                val curve = 1f - (2f * (normX - 0.5f)).let { it * it * 0.4f }
-                val barH = (rawH * 95.dp.toPx() * curve).coerceAtLeast(8.dp.toPx())
+                val barH = (rawH * 95.dp.toPx()).coerceAtLeast(8.dp.toPx())
                 val x = startX + i * (barW + spacing)
 
                 // Верхняя спектральная полоса

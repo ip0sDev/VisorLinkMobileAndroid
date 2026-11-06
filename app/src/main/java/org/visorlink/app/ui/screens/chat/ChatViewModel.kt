@@ -92,6 +92,7 @@ data class ChatUiState(
     val blockedByPeer: Boolean = false,
     /** Я заблокировал собеседника (`blocks`): писать нельзя, пока не разблокирую. */
     val blockedByMe: Boolean = false,
+    val scheduledMessages: List<org.visorlink.app.data.model.ScheduledMessage> = emptyList(),
 ) {
     /** Блокировка в любую сторону закрывает отправку в личном чате (сервер откажет правилами). */
     val isBlockedDirect get() = blockedByPeer || blockedByMe
@@ -122,6 +123,7 @@ class ChatViewModel(
     /** Google Диск: медиа загружаются на Диск отправителя. `null` — проверка выключена (тесты). */
     private val driveAuth: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
     private val blockRepository: org.visorlink.app.data.repository.BlockRepository? = null,
+    private val scheduledRepository: org.visorlink.app.data.repository.ScheduledRepository? = null,
 ) : AndroidViewModel(context) {
 
     // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
@@ -292,6 +294,14 @@ class ChatViewModel(
     }
 
     init {
+        if (scheduledRepository != null && currentUid.isNotEmpty() && chatId.isNotEmpty()) {
+            viewModelScope.launch {
+                scheduledRepository.mine(currentUid, chatId).collect { list ->
+                    _uiState.update { it.copy(scheduledMessages = list) }
+                }
+            }
+        }
+
         val initialMode = wallpaperPrefs.getString("mode_$chatId", "mine") ?: "mine"
         _uiState.update { it.copy(wallpaperMode = initialMode) }
 
@@ -1512,6 +1522,75 @@ class ChatViewModel(
 
     fun openFullscreenAudio() {
         musicPlayerManager.openFullscreenPlayer()
+    }
+
+    fun scheduleMessage(
+        text: String,
+        sendAt: Long,
+        replyTo: Message? = null,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                val replyMap = replyTo?.let {
+                    mapOf(
+                        "id" to it.id,
+                        "text" to it.text,
+                        "senderUsername" to it.senderUsername
+                    )
+                }
+                repo.create(
+                    chatId = chatId,
+                    topicId = _uiState.value.topicId,
+                    text = text,
+                    sendAt = sendAt,
+                    replyTo = replyMap
+                )
+                onSuccess()
+            } catch (e: Exception) {
+                val reason = (e as? org.visorlink.app.data.remote.EconomyException)?.reason
+                onError(org.visorlink.app.data.model.scheduledReasonText(reason))
+            }
+        }
+    }
+
+    fun updateScheduledMessage(
+        id: String,
+        text: String? = null,
+        sendAt: Long? = null,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.update(id = id, text = text, sendAt = sendAt)
+                onSuccess()
+            } catch (e: Exception) {
+                val reason = (e as? org.visorlink.app.data.remote.EconomyException)?.reason
+                onError(org.visorlink.app.data.model.scheduledReasonText(reason))
+            }
+        }
+    }
+
+    fun cancelScheduledMessage(id: String) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.cancel(id)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun sendScheduledMessageNow(id: String) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.sendNow(id)
+            } catch (_: Exception) {}
+        }
     }
 
     fun saveTrackToLibrary(track: MusicTrack) {

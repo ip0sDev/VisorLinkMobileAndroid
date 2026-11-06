@@ -78,7 +78,7 @@ private fun shadowSigma(blurPx: Float): Float = blurPx * 0.57735f + 0.5f
  * (полный паритет с Flutter `drawSoftShadow` и `_drawInsetShadow` в `vl_depth.dart`).
  * Использование `Paint.setShadowLayer` с `Color.TRANSPARENT` на Android Skia обнуляет альфу тени.
  */
-private fun DrawScope.drawSoftShadow(
+internal fun DrawScope.drawSoftShadow(
     path: Path,
     color: Color,
     blurPx: Float,

@@ -67,6 +67,9 @@ class MusicPlayerManager(private val context: Context) {
     private val _state = MutableStateFlow(MusicPlayerState())
     val state: StateFlow<MusicPlayerState> = _state.asStateFlow()
 
+    /** Нативный FFT аудиосессии для визуализаторов (порт Flutter `AudioVisualizer.kt`). */
+    val visualizer = VisualizerEngine()
+
     private val _showFullscreenPlayer = MutableStateFlow(false)
     val showFullscreenPlayer: StateFlow<Boolean> = _showFullscreenPlayer.asStateFlow()
 
@@ -117,6 +120,9 @@ class MusicPlayerManager(private val context: Context) {
         exoPlayer = ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .build().apply {
+            // FFT-визуализатор вешается на аудиосессию плеера; доступ к audioSessionId
+            // инициализирует аудиосессию
+            visualizer.attach(audioSessionId)
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     when (playbackState) {
@@ -656,6 +662,7 @@ class MusicPlayerManager(private val context: Context) {
 
     fun release() {
         stop()
+        visualizer.detach()
         exoPlayer?.release()
         exoPlayer = null
         mediaSession?.release()

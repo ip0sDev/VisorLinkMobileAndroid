@@ -15,7 +15,6 @@ class ThemeViewModel(private val repository: SettingsRepository) : ViewModel() {
     val hapticEnabled: StateFlow<Boolean> = repository.hapticEnabled
     val notificationsEnabled: StateFlow<Boolean> = repository.notificationsEnabled
     val dynamicChatInput: StateFlow<Boolean> = repository.dynamicChatInput
-    val compactChatList: StateFlow<Boolean> = repository.compactChatList
     val discoverEnabled: StateFlow<Boolean> = repository.discoverEnabled
     val musicEnabled: StateFlow<Boolean> = repository.musicEnabled
     val showMusicOnboarding: StateFlow<Boolean> = repository.showMusicOnboarding
@@ -29,7 +28,6 @@ class ThemeViewModel(private val repository: SettingsRepository) : ViewModel() {
     fun setHaptic(enabled: Boolean) = repository.setHaptic(enabled)
     fun setNotifications(enabled: Boolean) = repository.setNotifications(enabled)
     fun setDynamicChatInput(enabled: Boolean) = repository.setDynamicChatInput(enabled)
-    fun setCompactChatList(enabled: Boolean) = repository.setCompactChatList(enabled)
     fun setDiscoverEnabled(enabled: Boolean) = repository.setDiscoverEnabled(enabled)
     fun setMusicEnabled(enabled: Boolean) = repository.setMusicEnabled(enabled)
     fun setShowDebugIds(enabled: Boolean) = repository.setShowDebugIds(enabled)

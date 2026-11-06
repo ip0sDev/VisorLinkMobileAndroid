@@ -5,6 +5,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -36,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.isVlMatte
+import org.visorlink.app.ui.components.vlBackdropBlur
 import org.visorlink.app.ui.components.liquidRevealEnter
 import org.visorlink.app.ui.components.liquidRevealExit
 import org.visorlink.app.ui.components.rememberLiquidJellyState
@@ -56,7 +60,7 @@ import kotlinx.coroutines.delay
 import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalPermissionsApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalPermissionsApi::class)
 @Composable
 fun ChatBottomBar(
     uiState: ChatUiState,
@@ -78,7 +82,8 @@ fun ChatBottomBar(
     onSendRecord: () -> Unit,
     onClearReply: () -> Unit,
     onCancelEdit: () -> Unit = {},
-    onJoinChannel: (() -> Unit)? = null
+    onJoinChannel: (() -> Unit)? = null,
+    onSchedule: (() -> Unit)? = null
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
@@ -217,11 +222,19 @@ fun ChatBottomBar(
             // Forge v2: панель — единственный контейнер. Поле не рисует свою коробку, кнопки — блоки
             // без колец и рельефа: раньше было «коробка в коробке в коробке»
             val block = tokens.structure.hardShadow != null
-            val panelBrush = remember(isDark, cs, tokens) {
+            // Матовая панель: backdrop-блюр сообщений под ней + полупрозрачный тон
+            val matte = isVlMatte()
+            val panelBrush = remember(isDark, cs, tokens, matte) {
                 if (tokens.isBiolume) {
-                    val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
-                    val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.90f) else cs.surfaceContainer.copy(alpha = 0.92f)
-                    Brush.verticalGradient(listOf(topColor, bottomColor))
+                    if (matte) {
+                        val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.80f) else cs.surfaceContainerLow.copy(alpha = 0.90f)
+                        val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.75f) else cs.surfaceContainer.copy(alpha = 0.85f)
+                        Brush.verticalGradient(listOf(topColor, bottomColor))
+                    } else {
+                        val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
+                        val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.90f) else cs.surfaceContainer.copy(alpha = 0.92f)
+                        Brush.verticalGradient(listOf(topColor, bottomColor))
+                    }
                 } else {
                     Brush.verticalGradient(listOf(cs.surfaceContainerLow, cs.surfaceContainerLow))
                 }
@@ -257,6 +270,7 @@ fun ChatBottomBar(
                         else Modifier
                     )
                     .clip(panelShape)
+                    .vlBackdropBlur()
                     .background(panelBrush, panelShape)
                     .then(if (block) Modifier else Modifier.border(panelBorder, panelShape))
                     .padding(4.dp)
@@ -504,15 +518,22 @@ fun ChatBottomBar(
                                                 if (tokens.structure.enabled && !block) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), tokens.shapes.indicator)
                                                 else Modifier
                                             )
-                                            .clickable(
+                                            .combinedClickable(
                                                 enabled = sendEnabled,
                                                 interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) { 
-                                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                                sendBtnJelly.pulse(0.09f)
-                                                onSend() 
-                                            },
+                                                indication = null,
+                                                onClick = {
+                                                    haptic.perform(HapticType.CLICK, hapticEnabled)
+                                                    sendBtnJelly.pulse(0.09f)
+                                                    onSend()
+                                                },
+                                                onLongClick = if (onSchedule != null && uiState.editingMessage == null) {
+                                                    {
+                                                        haptic.perform(HapticType.LONG_PRESS, hapticEnabled)
+                                                        onSchedule()
+                                                    }
+                                                } else null
+                                            ),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Icon(if (uiState.editingMessage != null) Icons.Default.Check else Icons.AutoMirrored.Filled.Send, "Send", tint = if (sendEnabled) cs.onPrimary else cs.onSurfaceVariant, modifier = Modifier.size(22.dp))

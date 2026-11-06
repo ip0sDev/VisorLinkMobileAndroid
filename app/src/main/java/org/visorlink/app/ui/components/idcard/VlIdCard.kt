@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -61,7 +62,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.Shape
@@ -76,10 +80,13 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
@@ -645,6 +652,32 @@ private val ProtogenFaceShape: Shape = GenericShape { size, _ ->
     close()
 }
 
+/** Полигон фото Protogen (F _ProtogenPhotoClipper, vl_id_card.dart:1495-1506). */
+private fun protogenPhotoPath(s: Size): Path = Path().apply {
+    moveTo(0f, 0f)
+    lineTo(s.width * 0.84f, 0f)
+    lineTo(s.width, s.height * 0.09f)
+    lineTo(s.width, s.height)
+    lineTo(s.width * 0.16f, s.height)
+    lineTo(0f, s.height * 0.91f)
+    close()
+}
+
+/** Фото Protogen серии VL: многоугольник ∩ скругление (F _VlProtogenPhotoClipper, vl_id_card.dart:1479-1493). */
+private fun vlProtogenPhotoShape(radius: Dp): Shape = object : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val round = Path().apply {
+            addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    Rect(0f, 0f, size.width, size.height),
+                    androidx.compose.ui.geometry.CornerRadius(with(density) { radius.toPx() }),
+                )
+            )
+        }
+        return Outline.Generic(Path().apply { op(protogenPhotoPath(size), round, PathOperation.Intersect) })
+    }
+}
+
 @Composable
 private fun Face(
     card: IdCard,
@@ -703,7 +736,11 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
     val revealArt = remember(traits.foil, traits.seed) { if (reveal) RevealArt(traits.foil == IdFoil.GALAXY, traits.seed) else null }
     val scratches = remember(traits.seed, traits.wear) { IdCardGenerator.scratches(traits.seed, traits.wear * 5) }
     val light = palette.tone == CardTone.LIGHT
-    Canvas(Modifier.matchParentSize()) {
+    Canvas(
+        // Offscreen: внутри есть blend-режимы и слои (reveal-фольга) — без изоляции
+        // слоя они артефачат на некоторых устройствах
+        Modifier.matchParentSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    ) {
         val w = size.width
         val h = size.height
         val emPx = em.toPx()
@@ -733,10 +770,12 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
             val galaxy = traits.foil == IdFoil.GALAXY
             val box = Size(w * 2.2f, h * 2.2f)
             val origin = Offset(-w * 0.6f - fx * 0.16f * box.width, -h * 0.6f - fy * 0.13f * box.height)
+            // Шейдер — в ART-координатах (период компенсирован): прямая заливка маски,
+            // без saveLayer/SrcIn — как у Neko/Root, это надёжнее по композитингу
             val brush = if (galaxy) {
-                cssRepeating(118f, IdCardMaterials.RevealGalaxy, box, origin)
+                artRepeatingShader(IdCardMaterials.RevealGalaxy, box, origin)
             } else {
-                cssRepeating(118f, IdCardMaterials.RainbowAurora, box, origin)
+                artRepeatingShader(IdCardMaterials.RainbowAurora, box, origin)
             }
             // Как каскад CSS: правило светлого тона идёт последним и перекрывает и галактику
             val fillAlpha = when {
@@ -744,9 +783,12 @@ private fun BoxScope.Overlays(traits: IdCardTraits, details: IdCardGenerator.Det
                 galaxy -> 0.95f
                 else -> 0.32f
             }
-            scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
-                drawPath(art.fill, brush, alpha = opacity * fillAlpha)
-                drawPath(art.strokes, brush, alpha = opacity * fillAlpha, style = Stroke(2.2f))
+            val a = opacity * fillAlpha
+            if (a > 0f) {
+                scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
+                    drawPath(art.fill, brush, alpha = a)
+                    drawPath(art.strokes, brush, alpha = a, style = Stroke(2.2f))
+                }
             }
         }
         if (pattern == IdPattern.NEKO) {
@@ -858,7 +900,9 @@ private fun DrawScope.drawChip(corner: Int, emPx: Float, core: Color) {
 
 private fun Modifier.at(x: Float, y: Float, em: Dp) = this.offset(x = em * x, y = em * y)
 
-private fun emSp(em: Dp, k: Float, density: androidx.compose.ui.unit.Density) = with(density) { (em * k).toSp() }
+/** Кегль карты: не реагирует на системный масштаб шрифта (F: MediaQuery.withNoTextScaling, vl_id_card.dart:204). */
+private fun emSp(em: Dp, k: Float, density: androidx.compose.ui.unit.Density) =
+    ((em * k).value / density.fontScale).sp
 
 // ── Лицевая сторона ──
 
@@ -882,6 +926,12 @@ private fun BoxScope.FrontContent(
         Canvas(Modifier.matchParentSize()) {
             drawVlBackdrop(pat, vlVariant(card.traits.seed).rot)
         }
+        // PRO-подложка, зависящая от наклона (F _VlFront:931 → _VlProBackPainter)
+        if (pat.isPro) {
+            Canvas(Modifier.matchParentSize()) {
+                drawVlProBack(pat, tilt)
+            }
+        }
     }
     val density = LocalDensity.current
     val mode = card.mode
@@ -890,10 +940,15 @@ private fun BoxScope.FrontContent(
     // Форма голограммы: у кастомного скина — своя (§4.5)
     val holoShape = card.custom?.holo ?: d.holoShape
 
-    // Защитная печать: гильош / дорожки / окрас (со сдвигом печати)
-    PrintLayer(mode, d, d.artSeed, pal, em, faint = false, p = p)
+    // VL-карта — композиция `_VlFront` (F vl_series_art.dart:887-1005): без печати,
+    // штампов, подписи Standard и HUD — только backdrop, шапка VL, фото-линза, поля,
+    // LED-вставка, серийник, голограмма и наклейка
+    if (!vl) {
+        // Защитная печать: гильош / дорожки / окрас (со сдвигом печати)
+        PrintLayer(mode, d, d.artSeed, pal, em, faint = false, p = p)
+    }
 
-    if (mode == IdMode.PROTOGEN) {
+    if (mode == IdMode.PROTOGEN && !vl) {
         // Рамка: неоновый контур со срезами и линия под шапкой
         Canvas(Modifier.matchParentSize().graphicsLayer { alpha = p.head }) {
             scale(size.width / ART_W, size.height / ART_H, pivot = Offset.Zero) {
@@ -904,9 +959,13 @@ private fun BoxScope.FrontContent(
         }
     }
 
-    Header(mode, pal, em, p)
+    if (vl) {
+        VlHeader(mode, pal, em, p)
+    } else {
+        Header(mode, pal, em, p)
+    }
 
-    if (mode == IdMode.STANDARD) {
+    if (mode == IdMode.STANDARD && !vl) {
         Text(
             "VISORLINK · ID · ".repeat(14),
             maxLines = 1,
@@ -923,7 +982,8 @@ private fun BoxScope.FrontContent(
     } else null
     Photo(mode, person, name, pal, em, traits.tilt.toFloat(), p, lens = lensColor)
 
-    if (mode == IdMode.PROTOGEN) LedVisor(d.led, pal, em, p)
+    // У VL-карт LED-визора нет — композиция _VlFront (F vl_series_art.dart:927-1003) его не рисует
+    if (mode == IdMode.PROTOGEN && !vl) LedVisor(d.led, pal, em, p)
 
     Fields(card, name, person.username ?: "user", registered, formatCardDate(card.issuedAt), pal, em, p)
 
@@ -942,42 +1002,44 @@ private fun BoxScope.FrontContent(
                 tone = pal.tone,
                 em = em,
                 tilt = tilt,
+                phase = variant.phase,
             )
         }
     }
 
     when (mode) {
         IdMode.STANDARD -> {
-            // Подпись
-            Column(Modifier.at(12.4f, 13.4f, em).width(em * 10.5f).typeReveal(p.type(5))) {
-                Text(
-                    stringResource(R.string.idcard_field_signature).uppercase(),
-                    style = TextStyle(fontFamily = CardInter, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.06f, density), color = pal.muted),
-                )
-                SignatureCanvas(strokes, if (pal.tone == CardTone.DARK) hsl(210f, 80f, 80f) else hsl(226f, 62f, 30f), alignStart = false, Modifier.fillMaxWidth().height(em * 3f))
-            }
-            // «Призрачное» фото
-            person.avatarUrl?.let { url ->
-                Box(
-                    Modifier
-                        .at(EM_W - 6.4f - 3.4f, EM_H - 1.3f - 3.4f * 4f / 3f, em)
-                        .size(em * 3.4f, em * 3.4f * 4f / 3f)
-                        .graphicsLayer {
-                            alpha = 0.22f * p.develop
-                            blendMode = if (pal.tone == CardTone.DARK) BlendMode.Screen else BlendMode.Multiply
-                            compositingStrategy = CompositingStrategy.Offscreen
-                        }
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(Brush.radialGradient(0f to Color.Black, 0.55f to Color.Black, 1f to Color.Transparent, radius = min(size.width, size.height) / 2f), blendMode = BlendMode.DstIn)
-                        },
-                ) {
-                    AsyncImage(
-                        model = url, contentDescription = null, contentScale = ContentScale.Crop,
-                        // grayscale(1) contrast(1.3)
-                        colorFilter = ColorFilter.colorMatrix(saturationContrast(0f, 1.3f)),
-                        modifier = Modifier.fillMaxSize(),
+            // Подпись и «призрачное» фото — только у карт без VL-рисунка (F _VlFront их не рисует)
+            if (!vl) {
+                Column(Modifier.at(12.4f, 13.4f, em).width(em * 10.5f).typeReveal(p.type(5))) {
+                    Text(
+                        stringResource(R.string.idcard_field_signature).uppercase(),
+                        style = TextStyle(fontFamily = CardInter, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.06f, density), color = pal.muted),
                     )
+                    SignatureCanvas(strokes, if (pal.tone == CardTone.DARK) hsl(210f, 80f, 80f) else hsl(226f, 62f, 30f), alignStart = false, Modifier.fillMaxWidth().height(em * 3f))
+                }
+                person.avatarUrl?.let { url ->
+                    Box(
+                        Modifier
+                            .at(EM_W - 6.4f - 3.4f, EM_H - 1.3f - 3.4f * 4f / 3f, em)
+                            .size(em * 3.4f, em * 3.4f * 4f / 3f)
+                            .graphicsLayer {
+                                alpha = 0.22f * p.develop
+                                blendMode = if (pal.tone == CardTone.DARK) BlendMode.Screen else BlendMode.Multiply
+                                compositingStrategy = CompositingStrategy.Offscreen
+                            }
+                            .drawWithContent {
+                                drawContent()
+                                drawRect(Brush.radialGradient(0f to Color.Black, 0.55f to Color.Black, 1f to Color.Transparent, radius = min(size.width, size.height) / 2f), blendMode = BlendMode.DstIn)
+                            },
+                    ) {
+                        AsyncImage(
+                            model = url, contentDescription = null, contentScale = ContentScale.Crop,
+                            // grayscale(1) contrast(1.3)
+                            colorFilter = ColorFilter.colorMatrix(saturationContrast(0f, 1.3f)),
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
                 }
             }
             SerialText(card.serial, pal, em, p)
@@ -985,31 +1047,37 @@ private fun BoxScope.FrontContent(
 
         IdMode.BEAST -> SerialText(card.serial, pal, em, p)
 
-        IdMode.PROTOGEN -> Text(
-            "SYS.OK ▮▮▮▮▯ // VLK.REG // ${card.serial.drop(3)}",
-            maxLines = 1,
-            softWrap = false,
-            style = TextStyle(fontFamily = CardMono, fontWeight = FontWeight.Medium, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.1f, density), color = pal.muted),
-            modifier = Modifier.at(12.2f, EM_H - 1f - 0.7f, em).graphicsLayer { alpha = 0.85f }.typeReveal(p.serial),
-        )
+        IdMode.PROTOGEN -> if (!vl) {
+            Text(
+                "SYS.OK ▮▮▮▮▯ // VLK.REG // ${card.serial.drop(3)}",
+                maxLines = 1,
+                softWrap = false,
+                style = TextStyle(fontFamily = CardMono, fontWeight = FontWeight.Medium, fontSize = emSp(em, 0.5f, density), letterSpacing = emSp(em, 0.1f, density), color = pal.muted),
+                modifier = Modifier.at(12.2f, EM_H - 1f - 0.7f, em).graphicsLayer { alpha = 0.85f }.typeReveal(p.serial),
+            )
+        }
     }
 
-    // Штамп с датой регистрации
-    val stampLabel = stringResource(if (mode == IdMode.PROTOGEN) R.string.idcard_stamp_qc else R.string.idcard_stamp).uppercase()
-    val stampWord = stringResource(R.string.idcard_stamp).uppercase()
-    val ring = if (mode == IdMode.BEAST) "VISORLINK ✦ $stampWord ✦ " else "VISORLINK ★ $stampWord ★ "
-    val shape = stampShape(mode, d.stampStyle, small = false)
-    val (sx, sy) = when (shape) {
-        StampShape.ROUND -> 7.5f to 12.9f
-        StampShape.OVAL, StampShape.RECT -> 6.6f to 14.4f
-        StampShape.HEX -> 13.4f to 15.5f
+    if (!vl) {
+        // Штамп с датой регистрации (у VL-карт штампов нет)
+        val stampLabel = stringResource(if (mode == IdMode.PROTOGEN) R.string.idcard_stamp_qc else R.string.idcard_stamp).uppercase()
+        val stampWord = stringResource(R.string.idcard_stamp).uppercase()
+        val ring = if (mode == IdMode.BEAST) "VISORLINK ✦ $stampWord ✦ " else "VISORLINK ★ $stampWord ★ "
+        val shape = stampShape(mode, d.stampStyle, small = false)
+        val (sx, sy) = when (shape) {
+            StampShape.ROUND -> 7.5f to 12.9f
+            StampShape.OVAL, StampShape.RECT -> 6.6f to 14.4f
+            StampShape.HEX -> 13.4f to 15.5f
+        }
+        Stamp(shape, mode, StampText(ring, stampLabel, registered), pal, d, em, sx, sy, d.stampRot.toFloat(), p, glow = mode == IdMode.PROTOGEN)
     }
-    Stamp(shape, mode, StampText(ring, stampLabel, registered), pal, d, em, sx, sy, d.stampRot.toFloat(), p, glow = mode == IdMode.PROTOGEN)
 
-    // Голограмма — всегда в правом нижнем углу, никогда поверх фото
+    // Голограмма — всегда в правом нижнем углу, никогда поверх фото.
+    // У VL-карт — всегда 1.3/1.3 и без поворота (F _VlFront:976-986)
     if (traits.foil != IdFoil.NONE) {
-        val tiltSpot = d.holoSpot == IdCardGenerator.HoloSpot.CORNER_TILT
+        val tiltSpot = d.holoSpot == IdCardGenerator.HoloSpot.CORNER_TILT && !vl
         val (right, bottom) = when {
+            vl -> 1.3f to 1.3f
             mode == IdMode.PROTOGEN && tiltSpot -> 1.8f to 2.1f
             mode == IdMode.PROTOGEN -> 1.5f to 1.9f
             tiltSpot -> 1.6f to 1.6f
@@ -1045,8 +1113,8 @@ private fun BoxScope.FrontContent(
         )
     }
 
-    // Линия цвета профиля
-    if (accent != null) {
+    // Линия цвета профиля (у VL-карт её нет)
+    if (accent != null && !vl) {
         if (mode == IdMode.PROTOGEN) {
             Box(Modifier.at(1.6f, 2.2f, em).size(em * 5.5f, em * 0.12f).background(accent))
         } else {
@@ -1126,7 +1194,7 @@ private fun Header(mode: IdMode, pal: CardPalette, em: Dp, p: IssueProgress) {
             style = if (mode == IdMode.PROTOGEN) {
                 TextStyle(fontFamily = CardMono, fontWeight = FontWeight.Medium, fontSize = emSp(em, 1.15f, density), letterSpacing = emSp(em, 0.276f, density), color = color, shadow = Shadow(color.copy(alpha = 0.7f), blurRadius = with(density) { (em * 0.6f).toPx() }))
             } else {
-                TextStyle(fontFamily = CardBrand, fontWeight = FontWeight.Bold, fontSize = emSp(em, 1.15f, density), letterSpacing = emSp(em, 0.207f, density), color = color)
+                TextStyle(fontFamily = CardBrand, fontWeight = FontWeight.SemiBold, fontSize = emSp(em, 1.15f, density), letterSpacing = emSp(em, 0.207f, density), color = color)
             },
         )
         Text(
@@ -1162,6 +1230,70 @@ private fun Header(mode: IdMode, pal: CardPalette, em: Dp, p: IssueProgress) {
     }
 }
 
+/**
+ * Шапка VL-карты (порт F `_VlFront:933-968`): бренд палитрой лица, нижняя линия 1px,
+ * бейдж режима с рамкой `ink 60 %` — вместо общего [Header] с цветной полосой.
+ */
+@Composable
+private fun VlHeader(mode: IdMode, pal: CardPalette, em: Dp, p: IssueProgress) {
+    val density = LocalDensity.current
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(em * 2.7f)
+            .graphicsLayer { alpha = p.head }
+            .drawBehind {
+                // Нижняя линия 1px цвета pal.line (F: BorderSide(bottom, pal.line, 1))
+                drawLine(
+                    pal.line,
+                    Offset(0f, size.height - 0.5f * density.density),
+                    Offset(size.width, size.height - 0.5f * density.density),
+                    strokeWidth = 1f * density.density,
+                )
+            }
+            .padding(horizontal = em * 1.2f),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(em * 0.6f),
+    ) {
+        Text(
+            "VISORLINK",
+            maxLines = 1,
+            style = TextStyle(
+                fontFamily = CardBrand, fontWeight = FontWeight.SemiBold,
+                fontSize = emSp(em, 1.15f, density), letterSpacing = emSp(em, 0.345f, density), color = pal.ink,
+            ),
+        )
+        Text(
+            stringResource(R.string.idcard_title).uppercase(),
+            maxLines = 1,
+            style = TextStyle(
+                fontFamily = CardInter, fontWeight = FontWeight.SemiBold,
+                fontSize = emSp(em, 0.62f, density), letterSpacing = emSp(em, 0.087f, density), color = pal.muted,
+            ),
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (mode != IdMode.STANDARD) {
+            val badgeShape = IdCardMaterials.corner(em * 99f)
+            Row(
+                Modifier
+                    .border(1.dp, pal.ink.copy(alpha = 0.6f), badgeShape)
+                    .padding(horizontal = em * 0.6f, vertical = em * 0.25f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(em * 0.35f),
+            ) {
+                Canvas(Modifier.size(em * 1.3f)) { drawModeGlyph(mode, pal.ink) }
+                Text(
+                    modeLabel(mode).uppercase(),
+                    style = TextStyle(
+                        fontFamily = CardMono, fontWeight = FontWeight.Medium,
+                        fontSize = emSp(em, 0.6f, density), letterSpacing = emSp(em, 0.072f, density), color = pal.ink,
+                    ),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPalette, em: Dp, tiltDeg: Float, p: IssueProgress, lens: Color? = null) {
     val density = LocalDensity.current
@@ -1170,12 +1302,23 @@ private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPal
         else -> Triple(1.2f, 3.8f, 9.8f)
     }
     val h = w * 4f / 3f
+    // VL: скругление 3.6em во всех режимах (у Beast арки нет), у Protogen — многоугольник ∩ скругление
+    // (F vl_id_card.dart:1390-1397); обычные карты: Standard 0.35em, Beast — арка, Protogen — полигон
+    val vl = lens != null
     val shape: Shape = when (mode) {
-        IdMode.STANDARD -> IdCardMaterials.corner(em * 0.35f)
-        IdMode.BEAST -> IdCardMaterials.corners(topStart = em * 4.9f, topEnd = em * 4.9f, bottomEnd = em * 0.45f, bottomStart = em * 0.45f)
-        IdMode.PROTOGEN -> GenericShape { s, _ ->
-            moveTo(0f, 0f); lineTo(s.width * 0.84f, 0f); lineTo(s.width, s.height * 0.09f)
-            lineTo(s.width, s.height); lineTo(s.width * 0.16f, s.height); lineTo(0f, s.height * 0.91f); close()
+        IdMode.STANDARD -> IdCardMaterials.corner(em * (if (vl) 3.6f else 0.35f))
+        IdMode.BEAST -> if (vl) {
+            IdCardMaterials.corner(em * 3.6f)
+        } else {
+            IdCardMaterials.corners(topStart = em * 4.9f, topEnd = em * 4.9f, bottomEnd = em * 0.45f, bottomStart = em * 0.45f)
+        }
+        IdMode.PROTOGEN -> if (vl) {
+            vlProtogenPhotoShape(em * 3.6f)
+        } else {
+            GenericShape { s, _ ->
+                moveTo(0f, 0f); lineTo(s.width * 0.84f, 0f); lineTo(s.width, s.height * 0.09f)
+                lineTo(s.width, s.height); lineTo(s.width * 0.16f, s.height); lineTo(0f, s.height * 0.91f); close()
+            }
         }
     }
     Box(Modifier.at(left, top, em).size(em * w, em * h).graphicsLayer { rotationZ = tiltDeg }) {
@@ -1183,15 +1326,35 @@ private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPal
             val ring = 0.48f
             Canvas(Modifier.matchParentSize()) {
                 val emPx = em.toPx()
-                drawRoundRect(
-                    color = lens.copy(alpha = 0.7f * p.develop),
-                    topLeft = Offset(-emPx * ring / 2, -emPx * ring / 2),
-                    size = Size(size.width + emPx * ring, size.height + emPx * ring),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius((em * (0.35f + ring / 2)).toPx()),
-                    style = Stroke(width = (em * ring).toPx())
-                )
+                // Кольцо — во всех режимах; у Protogen его срезает полигон фото (F _VlLensPainter:1023-1031)
+                val ringStroke: DrawScope.() -> Unit = {
+                    drawRoundRect(
+                        color = lens.copy(alpha = 0.7f * p.develop),
+                        topLeft = Offset(-emPx * ring / 2, -emPx * ring / 2),
+                        size = Size(size.width + emPx * ring, size.height + emPx * ring),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius((em * (3.6f + ring / 2)).toPx()),
+                        style = Stroke(width = (em * ring).toPx()),
+                    )
+                }
+                if (mode == IdMode.PROTOGEN) {
+                    clipPath(protogenPhotoPath(size)) { ringStroke() }
+                } else {
+                    ringStroke()
+                }
+                // Лампочка: подложка + внешнее свечение σ≈0.9em + ядро
                 val lamp = Offset(size.width - emPx * 0.1f, emPx * 0.1f)
                 drawCircle(pal.photoBg, radius = (em * (0.45f + 0.18f)).toPx(), center = lamp)
+                drawIntoCanvas { canvas ->
+                    val paint = android.graphics.Paint().apply {
+                        isAntiAlias = true
+                        color = lens.copy(alpha = p.develop).toArgb()
+                        maskFilter = android.graphics.BlurMaskFilter(
+                            (emPx * 0.9f) * 0.57735f + 0.5f,
+                            android.graphics.BlurMaskFilter.Blur.OUTER,
+                        )
+                    }
+                    canvas.nativeCanvas.drawCircle(lamp.x, lamp.y, (em * 0.45f).toPx(), paint)
+                }
                 drawCircle(lens.copy(alpha = p.develop), radius = (em * 0.45f).toPx(), center = lamp)
             }
         }
@@ -1199,8 +1362,8 @@ private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPal
             Modifier
                 .fillMaxSize()
                 .then(
-                    if (mode == IdMode.BEAST) Modifier.drawBehind {
-                        // Арочная рамка: два кольца цвета полосы
+                    if (mode == IdMode.BEAST && !vl) Modifier.drawBehind {
+                        // Арочная рамка: два кольца цвета полосы (у VL-карт арки нет)
                         val o = shape.createOutline(size, layoutDirection, this)
                         val path = Path().apply { addOutline(o) }
                         drawPath(path, mix(pal.band, 16f, null), style = Stroke((em * 0.68f).toPx()))
@@ -1209,7 +1372,13 @@ private fun Photo(mode: IdMode, person: IdCardPerson, name: String, pal: CardPal
                 )
                 .clip(shape)
                 .background(pal.photoBg)
-                .then(if (mode == IdMode.STANDARD) Modifier.border(1.dp, pal.edge, shape) else Modifier),
+                .then(
+                    when {
+                        // Standard: рамка по скруглению; VL: inset 1px var(--idc-edge) (F vl_id_card.dart:1436-1438)
+                        mode == IdMode.STANDARD || vl -> Modifier.border(1.dp, pal.edge, shape)
+                        else -> Modifier
+                    }
+                ),
             contentAlignment = Alignment.Center,
         ) {
             val develop = p.develop
@@ -1506,6 +1675,7 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
         }
     }
     val brand = remember(context) { ResourcesCompat.getFont(context, R.font.space_grotesk_semibold) }
+    val interBold = remember(context) { ResourcesCompat.getFont(context, R.font.inter_bold) }
     Canvas(modifier.size(em * sizeEm)) {
         val s = size.width / 100f
         val clip = Path().apply { addPath(mask) }.also { it.transform(androidx.compose.ui.graphics.Matrix().apply { scale(s, s) }) }
@@ -1523,7 +1693,7 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
             val sweep = 1f - p.holoSweep
             val rainbowOrigin = Offset(-size.width + (-fx * 0.16f + 0.3f * sweep) * box.width, -size.height + (-fy * 0.13f + 0.22f * sweep) * box.height)
             val (stops, alpha) = when {
-                root -> IdCardMaterials.RootRainbow to 0.78f
+                root -> IdCardMaterials.RootRainbow to 0.62f
                 neko -> IdCardMaterials.NekoRainbow to 0.7f
                 else -> when (traits.foil) {
                     IdFoil.AURORA -> IdCardMaterials.RainbowAurora to 0.85f
@@ -1549,7 +1719,7 @@ private fun Holo(mode: IdMode, traits: IdCardTraits, shape: IdCardGenerator.Holo
                 when {
                     root -> with(RootArt) { drawHoloEmblem() }
                     neko -> with(NekoArt) { drawHoloEmblem() }
-                    else -> drawHoloEmblem(mode, brand)
+                    else -> drawHoloEmblem(mode, brand ?: interBold)
                 }
             }
         }
@@ -1629,7 +1799,8 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
             .heightIn(min = em * 4.4f)
             .drawBehind {
                 val r = if (protogen) 0f else (em * 0.5f).toPx()
-                drawRoundRect(pal.line, cornerRadius = androidx.compose.ui.geometry.CornerRadius(r), style = Stroke(2f))
+                // Рамка 1 логический px (F: Border.all(width: 1), vl_id_card.dart:2280)
+                drawRoundRect(pal.line, cornerRadius = androidx.compose.ui.geometry.CornerRadius(r), style = Stroke(1f * density.density))
             },
     ) {
         Column(
@@ -1648,7 +1819,14 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
                 style = TextStyle(
                     fontFamily = CardInter, fontWeight = FontWeight.Bold, fontSize = emSp(em, 0.92f, density), letterSpacing = emSp(em, 0.055f, density),
                     color = editionColor ?: pal.ink,
-                ).let { if (edition == IdEdition.LEGENDARY) it.copy(brush = Brush.linearGradient(IdCardMaterials.Legendary)) else it },
+                ).let {
+                    // LEGENDARY — золотой градиент, UNIQUE — радужная фольга (F vl_id_card.dart:2293-2299)
+                    when (edition) {
+                        IdEdition.LEGENDARY -> it.copy(brush = Brush.linearGradient(IdCardMaterials.Legendary))
+                        IdEdition.UNIQUE -> it.copy(brush = Brush.linearGradient(IdCardMaterials.UniqueFoil))
+                        else -> it
+                    }
+                },
             )
             // Надпись кастомного скина (§2.3): бренд 600 0.62em, 0.04em, ink, свечение neon 45 %, перенос по любым символам
             card.custom?.labelText?.let { label ->
@@ -1694,7 +1872,14 @@ private fun BoxScope.BackContent(card: IdCard, person: IdCardPerson, name: Strin
                 .drawBehind {
                     if (protogen) {
                         drawRect(mix(pal.neon, 7f, IdCardMaterials.ProtogenStrip))
-                        drawRect(pal.line, style = Stroke(2f))
+                        // Рамка ключа: rect.deflate(1) + stroke 2 логических px (F vl_id_card.dart:2446-2449)
+                        val d = density.density
+                        drawRect(
+                            pal.line,
+                            topLeft = Offset(d, d),
+                            size = Size(size.width - 2 * d, size.height - 2 * d),
+                            style = Stroke(2f * d),
+                        )
                     } else {
                         drawRect(stripes(-35f, IdCardMaterials.SignaturePaper, IdCardMaterials.SignaturePaper2, (em * 0.7f).toPx()))
                     }
@@ -1751,7 +1936,7 @@ internal fun editionName(e: IdEdition) = stringResource(
         IdEdition.RARE -> R.string.idcard_edition_rare
         IdEdition.EPIC -> R.string.idcard_edition_epic
         IdEdition.LEGENDARY -> R.string.idcard_edition_legendary
-        IdEdition.UNIQUE -> R.string.surprise_gift_card_kicker
+        IdEdition.UNIQUE -> R.string.idcard_edition_unique
     },
 )
 

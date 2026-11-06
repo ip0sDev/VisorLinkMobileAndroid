@@ -94,6 +94,9 @@ class MainActivity : AppCompatActivity() {
             val themeViewModel: ThemeViewModel = koinViewModel()
             val authViewModel: AuthViewModel   = koinViewModel()
 
+            // Общий HazeState для backdrop-блюра шапок (HazeInput.Sources на Android < 37.2)
+            val vlHazeState = androidx.compose.runtime.remember { dev.chrisbanes.haze.HazeState() }
+
             val appTheme    by themeViewModel.appTheme.collectAsState()
             val themeMode   by themeViewModel.themeMode.collectAsState()
             val colorPreset by themeViewModel.colorPreset.collectAsState()
@@ -179,6 +182,7 @@ class MainActivity : AppCompatActivity() {
               androidx.compose.runtime.CompositionLocalProvider(
                   org.visorlink.app.ui.theme.LocalViewerTheme provides shownTheme,
                   org.visorlink.app.ui.idcard.LocalIdModeState provides idModeState,
+                  org.visorlink.app.ui.components.LocalVlHazeState provides vlHazeState,
               ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {

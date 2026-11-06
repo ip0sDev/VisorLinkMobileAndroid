@@ -325,16 +325,32 @@ internal fun hhmm(ts: Long): String = SimpleDateFormat("HH:mm", Locale.getDefaul
 @Composable
 fun SessionCheckScreen() {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     Box(Modifier.fillMaxSize().background(cs.surface), contentAlignment = Alignment.Center) {
         VlAmbientGlow()
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            CircularProgressIndicator(color = cs.primary)
-            Text(
-                stringResource(R.string.tfa_lock_checking_session),
-                style = MaterialTheme.typography.bodyMedium,
-                color = cs.onSurfaceVariant,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
+            // Forge: заставка на LED-табло, как во Flutter (tfa_screen.dart:443). Она зацикливается,
+            // пока ждём, — экран уходит, как только проверка закончилась
+            if (tokens.led != null) {
+                org.visorlink.app.ui.components.led.VlLedScreen(radius = 20.dp, padding = PaddingValues(16.dp)) {
+                    org.visorlink.app.ui.components.led.VlLedBoot()
+                }
+                org.visorlink.app.ui.components.led.VlLedProgress()
+                Text(
+                    stringResource(R.string.tfa_lock_checking_session),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            } else {
+                CircularProgressIndicator(color = cs.primary)
+                Text(
+                    stringResource(R.string.tfa_lock_checking_session),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = cs.onSurfaceVariant,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
         }
     }
 }

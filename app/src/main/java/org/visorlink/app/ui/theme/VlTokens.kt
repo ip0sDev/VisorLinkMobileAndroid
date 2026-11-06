@@ -413,9 +413,69 @@ fun <T> VlMotionTokens.motionSpec(): androidx.compose.animation.core.FiniteAnima
     } else {
         androidx.compose.animation.core.tween(
             durationMillis = durationMs,
-            easing = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f),
+            easing = VlCurves.Key,
         )
     }
+
+/** Кривая появления темы: пружина Biolume с перелётом ≈3 % или ход клавиши Forge. */
+val VlMotionTokens.enterEasing: androidx.compose.animation.core.Easing
+    get() = if (useSpring) VlCurves.Spring else VlCurves.Key
+
+// ── Шкала длительностей и кривых (порт Flutter `VlDurations`/`VlCurves`, vl_tokens.dart:173-220) ──
+
+/**
+ * Шкала длительностей — общая с вебом (visorlink TODO §13.3): выбор владельца, темп ×1.2.
+ */
+object VlDurations {
+    /** Отклик: цвет, мелкие индикаторы. */
+    const val D1 = 108
+
+    /** Уходы, смена значков и цифр. */
+    const val D2 = 192
+
+    /** Мелкие появления: пузырь, плашка, чип. */
+    const val D3 = 264
+
+    /** Окна, шторки, экраны. */
+    const val D4 = 360
+
+    /** Крупные сцены. */
+    const val D5 = 504
+
+    /** Ход клавиши Forge — темп не масштабирует. */
+    const val Key = 160
+}
+
+/**
+ * Кривые движения: появление — пружина ([Spring]) или клавиша ([Key]), уход — с ускорением ([Exit]).
+ */
+object VlCurves {
+    /** Пружина Biolume §6.2 (damping 0.75, stiffness 400, масса 1) как кривая: перелёт ≈2.8 %. */
+    val Spring = VlSpringEasing
+
+    /** Уход: разгон и обрыв — быстрее входа и без торможения в конце. */
+    val Exit = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
+    /** Перемещение уже видимого: смена позиции, размера. */
+    val Standard = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+    /** Ход клавиши: мгновенный старт, долгое торможение. */
+    val Key = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+}
+
+/** Пружина Biolume §6.2 (damping 0.75, stiffness 400) как Easing: 0.4 с физики ужаты в [0, 1]. */
+object VlSpringEasing : androidx.compose.animation.core.Easing {
+    private const val ZETA = 0.75f
+    private const val OMEGA = 20f
+    private const val SPAN = 0.4f
+
+    override fun transform(t: Float): Float {
+        val wd = OMEGA * kotlin.math.sqrt(1f - ZETA * ZETA)
+        val s = t * SPAN
+        return 1f - kotlin.math.exp(-ZETA * OMEGA * s) *
+            (kotlin.math.cos(wd * s) + ZETA * OMEGA / wd * kotlin.math.sin(wd * s))
+    }
+}
 
 private val FallbackShapes = VlShapeTokens(
     button = RoundedCornerShape(16.dp),

@@ -169,6 +169,16 @@ internal object NekoArt {
     }
 }
 
+/**
+ * Шейдер, заданный в координатах карты, — в координатах рисунка 856×540 (порт Flutter
+ * `_artShader`, neko_art.dart:152-155): заливка идёт под `scale(w/ART_W)`, поэтому box/origin
+ * заранее умножаются на k — иначе радуга сжимается в w/856 раз.
+ */
+internal fun DrawScope.artRepeatingShader(stops: List<Pair<Float, Color>>, box: Size, origin: Offset): Brush {
+    val k = ART_W / size.width
+    return cssRepeating(118f, stops, Size(box.width * k, box.height * k), origin * k)
+}
+
 /** Защитная сетка под печатью: переливается и чуть ярчает при наклоне. */
 internal fun DrawScope.drawNekoLattice(tilt: CardTiltState, light: Boolean) {
     val w = size.width
@@ -178,7 +188,7 @@ internal fun DrawScope.drawNekoLattice(tilt: CardTiltState, light: Boolean) {
     val mag = min(1f, hypot(fx, fy))
     val box = Size(w * 2.4f, h * 2.4f)
     val origin = Offset(-w * 0.7f - fx * 0.22f * box.width, -h * 0.7f - fy * 0.18f * box.height)
-    val brush = cssRepeating(118f, IdCardMaterials.NekoRainbow, box, origin)
+    val brush = artRepeatingShader(IdCardMaterials.NekoRainbow, box, origin)
     val alpha = (if (light) 0.2f else 0.12f) + 0.16f * mag
     scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
         drawPath(NekoArt.latticePaws, brush, alpha = alpha)
@@ -193,7 +203,7 @@ internal fun DrawScope.drawNekoReveal(fx: Float, fy: Float, opacity: Float, ligh
     val h = size.height
     val box = Size(w * 2.2f, h * 2.2f)
     val origin = Offset(-w * 0.6f - fx * 0.16f * box.width, -h * 0.6f - fy * 0.13f * box.height)
-    val brush = cssRepeating(118f, IdCardMaterials.NekoReveal, box, origin)
+    val brush = artRepeatingShader(IdCardMaterials.NekoReveal, box, origin)
     val fill = opacity * (if (light) 0.4f else 0.3f)
     scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
         // Луна — главная фольга карты: видна всегда, под углом разгорается и светит ореолом

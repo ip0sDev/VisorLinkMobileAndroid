@@ -119,6 +119,8 @@ val appModule = module {
     single { StickerPackRepository(get(), androidContext()) }
     single { BotRepository(get()) }
     single { LegalRepository(get(), androidContext(), get()) }
+    single { org.visorlink.app.data.repository.ChatFoldersRepository(get()) }
+    single { org.visorlink.app.data.repository.ScheduledRepository(get()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
@@ -171,7 +173,8 @@ val appModule = module {
             context = androidApplication(),
             sidebarTypingManager = get(),
             networkMonitor = get(),
-            blockRepository = get()
+            blockRepository = get(),
+            chatFoldersRepository = get()
         )
     }
     viewModel { MusicViewModel(get(), get()) }
@@ -193,7 +196,8 @@ val appModule = module {
             networkMonitor = get(),
             usageRankManager = get(),
             driveAuth = get(),
-            blockRepository = get()
+            blockRepository = get(),
+            scheduledRepository = get()
         )
     }
 

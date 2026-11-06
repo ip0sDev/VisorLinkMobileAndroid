@@ -80,6 +80,7 @@ fun MainScreen(
     onLoggedOut: () -> Unit = {},
     onOpenStickers: () -> Unit = {},
     onOpenSignal: () -> Unit = {},
+    onOpenFolders: () -> Unit = {},
     mainViewModel: MainViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -204,6 +205,7 @@ fun MainScreen(
                         onFindChannel = onFindChannel,
                         onOpenNotifications = onOpenNotifications,
                         onOpenFeed = { if (discoverEnabled) selectedTab = 1 },
+                        onOpenFolders = onOpenFolders,
                         isActive = selectedTab == 0
                     )
                 }
@@ -270,14 +272,15 @@ fun MainScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Мини-плеер сам наливается из-за навбара и выливается обратно,
-                        // поэтому внешний AnimatedVisibility ему не нужен
+                        // поэтому внешний AnimatedVisibility ему не нужен.
+                        // Как во Flutter: док виден на любой вкладке (main_screen.dart:214-215),
+                        // компонент сам скрывается, когда трека нет
                         AudioPlaybackDockBar(
                             musicPlayback = musicPlayback,
                             onTogglePlayPause = { musicPlayerManager.togglePlayPause() },
                             onClose = { musicPlayerManager.dismiss() },
                             onOpenFullscreen = { musicPlayerManager.openFullscreenPlayer() },
                             anchor = DockAnchor.Bottom,
-                            visible = selectedTab == 3,
                             onSeek = { musicPlayerManager.seekTo(it) },
                             onNext = { musicPlayerManager.playNext() }
                         )

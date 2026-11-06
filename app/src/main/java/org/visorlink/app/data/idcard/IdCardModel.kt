@@ -198,7 +198,10 @@ data class IdCard(
 
 /** `idCards/{uid}.publicCard` — визитка с ID-картой по ссылке `https://visorlink.org/card/{slug}`. */
 data class PublicCardRef(val slug: String, val skinId: String?, val updatedAt: Long?) {
-    val url: String get() = "$PUBLIC_CARD_BASE${java.net.URLEncoder.encode(slug, "UTF-8")}"
+    // Как Uri.encodeQueryComponent во Flutter: `!~*'()` не кодируются, пробел → +
+    val url: String get() = PUBLIC_CARD_BASE + java.net.URLEncoder.encode(slug, "UTF-8")
+        .replace("%21", "!").replace("%27", "'").replace("%28", "(")
+        .replace("%29", ")").replace("%2A", "*").replace("%7E", "~")
 
     companion object {
         const val PUBLIC_CARD_BASE = "https://visorlink.org/card/"

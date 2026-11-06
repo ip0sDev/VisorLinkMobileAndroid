@@ -287,7 +287,8 @@ fun VisorLinkNavGraph(
                 // Профиль во вкладке навбара (enable_profile_navbar) — как у экрана Screen.Profile
                 onLoggedOut = { authViewModel.logout() },
                 onOpenStickers = { navController.navigate(Screen.Stickers.route) },
-                onOpenSignal = { navController.navigate(Screen.Signal.route) }
+                onOpenSignal = { navController.navigate(Screen.Signal.route) },
+                onOpenFolders = { navController.navigate(Screen.ChatFolders.route) }
             )
         }
 

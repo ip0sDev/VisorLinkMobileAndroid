@@ -20,7 +20,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val KEY_NOTIF = "notifications_enabled"
     private val KEY_LANGUAGE = "app_language"
     private val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
-    private val KEY_COMPACT_LIST = "compact_chat_list"
     private val KEY_DISCOVER_ENABLED = "discover_enabled"
     private val KEY_MUSIC_ENABLED = "music_enabled"
     private val KEY_MUSIC_ONBOARDING_SHOWN = "music_onboarding_shown"
@@ -51,8 +50,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val _dynamicChatInput = MutableStateFlow(prefs.getBoolean(KEY_DYNAMIC_INPUT, true))
     val dynamicChatInput: StateFlow<Boolean> = _dynamicChatInput.asStateFlow()
 
-    private val _compactChatList = MutableStateFlow(prefs.getBoolean(KEY_COMPACT_LIST, true))
-    val compactChatList: StateFlow<Boolean> = _compactChatList.asStateFlow()
 
     private val _discoverEnabled = MutableStateFlow(prefs.getBoolean(KEY_DISCOVER_ENABLED, true))
     val discoverEnabled: StateFlow<Boolean> = _discoverEnabled.asStateFlow()
@@ -89,7 +86,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
             KEY_HAPTIC -> _hapticEnabled.value = sharedPreferences.getBoolean(KEY_HAPTIC, true)
             KEY_NOTIF -> _notificationsEnabled.value = sharedPreferences.getBoolean(KEY_NOTIF, true)
             KEY_DYNAMIC_INPUT -> _dynamicChatInput.value = sharedPreferences.getBoolean(KEY_DYNAMIC_INPUT, true)
-            KEY_COMPACT_LIST -> _compactChatList.value = sharedPreferences.getBoolean(KEY_COMPACT_LIST, true)
             KEY_DISCOVER_ENABLED -> _discoverEnabled.value = sharedPreferences.getBoolean(KEY_DISCOVER_ENABLED, true)
             KEY_MUSIC_ENABLED -> _musicEnabled.value = sharedPreferences.getBoolean(KEY_MUSIC_ENABLED, true)
             KEY_MUSIC_ONBOARDING_SHOWN -> _showMusicOnboarding.value = !sharedPreferences.getBoolean(KEY_MUSIC_ONBOARDING_SHOWN, false)
@@ -108,7 +104,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     fun setHaptic(enabled: Boolean) = prefs.edit().putBoolean(KEY_HAPTIC, enabled).apply()
     fun setNotifications(enabled: Boolean) = prefs.edit().putBoolean(KEY_NOTIF, enabled).apply()
     fun setDynamicChatInput(enabled: Boolean) = prefs.edit().putBoolean(KEY_DYNAMIC_INPUT, enabled).apply()
-    fun setCompactChatList(enabled: Boolean) = prefs.edit().putBoolean(KEY_COMPACT_LIST, enabled).apply()
     fun setDiscoverEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_DISCOVER_ENABLED, enabled).apply()
     fun setMusicEnabled(enabled: Boolean) = prefs.edit().putBoolean(KEY_MUSIC_ENABLED, enabled).apply()
     fun setShowDebugIds(enabled: Boolean) {

@@ -31,6 +31,7 @@ import org.visorlink.app.data.model.AppNotification
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
+import org.visorlink.app.ui.components.vlHazeSource
 import org.visorlink.app.ui.components.VlBarBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.VlTopAppBarButton
@@ -63,6 +64,7 @@ fun ChatListScreen(
     onFindChannel: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenFeed: () -> Unit,
+    onOpenFolders: () -> Unit = {},
     isActive: Boolean = true,
     viewModel: ChatListViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
@@ -78,9 +80,12 @@ fun ChatListScreen(
     val typingMap by viewModel.typingMap.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val activeFolderId by viewModel.activeFolderId.collectAsStateWithLifecycle()
+    val unreadByFolder by viewModel.unreadByFolder.collectAsStateWithLifecycle()
+    val totalFolderUnread by viewModel.totalUnread.collectAsStateWithLifecycle()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
-    val compactList by themeViewModel.compactChatList.collectAsStateWithLifecycle()
 
     val haptic = rememberHaptic()
     val context = LocalContext.current
@@ -219,6 +224,8 @@ fun ChatListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                // Источник backdrop-блюра шапки: фон + свечение + список, заезжающий под бар
+                .vlHazeSource()
         ) {
             VlAmbientGlow()
 
@@ -240,7 +247,7 @@ fun ChatListScreen(
                                 unread = 0,
                                 online = isOnline,
                                 sync = syncState,
-                                compact = compactList,
+                                compact = false,
                                 gift = ionGiftAvailable,
                                 onGift = { showIonReveal = true },
                                 modifier = Modifier
@@ -251,6 +258,19 @@ fun ChatListScreen(
                             org.visorlink.app.ui.idcard.IonGiftBanner(
                                 uid = viewModel.currentUid,
                                 onOpenReveal = { showIonReveal = true }
+                            )
+                        }
+                        if (currentUser?.isPro == true && (folders.isNotEmpty() || activeFolderId != null)) {
+                            org.visorlink.app.ui.components.chatlist.FolderTabs(
+                                folders = folders,
+                                activeFolderId = activeFolderId,
+                                unreadByFolder = unreadByFolder,
+                                totalUnread = totalFolderUnread,
+                                onSelect = { viewModel.selectFolder(it) },
+                                onManage = onOpenFolders,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
                             )
                         }
                         ChatListEmptyState(
@@ -278,7 +298,7 @@ fun ChatListScreen(
                                     unread = totalUnread,
                                     online = isOnline,
                                     sync = syncState,
-                                    compact = compactList,
+                                    compact = false,
                                     gift = ionGiftAvailable,
                                     onGift = { showIonReveal = true },
                                     modifier = Modifier
@@ -294,95 +314,21 @@ fun ChatListScreen(
                                 )
                             }
                         }
-                        if (compactList) {
-                            // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
-                            item(key = "compact_chats_card") {
-                                val cs = MaterialTheme.colorScheme
-                                val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
-
-                                Column(
+                        if (currentUser?.isPro == true && (folders.isNotEmpty() || activeFolderId != null)) {
+                            item(key = "chat_folder_tabs") {
+                                org.visorlink.app.ui.components.chatlist.FolderTabs(
+                                    folders = folders,
+                                    activeFolderId = activeFolderId,
+                                    unreadByFolder = unreadByFolder,
+                                    totalUnread = totalFolderUnread,
+                                    onSelect = { viewModel.selectFolder(it) },
+                                    onManage = onOpenFolders,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 12.dp)
-                                        .padding(bottom = 12.dp)
-                                        .background(cs.surfaceContainerLow, shape)
-                                        .clip(shape)
-                                ) {
-                                    // 📌 SAVED MESSAGES (первая строка компактного блока)
-                                    val savedChat = viewModel.savedMessagesEntry
-                                    ChatListItemCompact(
-                                        chat = savedChat,
-                                        chatType = ChatType.DIRECT,
-                                        currentUid = viewModel.currentUid,
-                                        otherProfile = null,
-                                        draftText = drafts[savedChat.id],
-                                        isSavedMessages = true,
-                                        onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
-                                    )
-
-                                    if (entries.isNotEmpty()) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                            thickness = 0.5.dp,
-                                            color = cs.outlineVariant.copy(alpha = 0.4f)
-                                        )
-                                    }
-
-                                    // 📌 ВСЕ ОСТАЛЬНЫЕ ЧАТЫ (и строка «Приглашения» по дате)
-                                    entries.forEachIndexed { index, chat ->
-                                        if (viewModel.isInvitesEntry(chat)) {
-                                            ChatListItemCompact(
-                                                chat = chat,
-                                                chatType = ChatType.DIRECT,
-                                                currentUid = viewModel.currentUid,
-                                                otherProfile = null,
-                                                draftText = null,
-                                                unreadCount = invites.size,
-                                                isInvites = true,
-                                                previewOverride = invitesPreview,
-                                                onClick = onOpenNotifications
-                                            )
-                                            if (index < entries.size - 1) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                                    thickness = 0.5.dp,
-                                                    color = cs.outlineVariant.copy(alpha = 0.4f)
-                                                )
-                                            }
-                                            return@forEachIndexed
-                                        }
-                                        val chatType = chat.chatType()
-                                        val otherUid = when (chatType) {
-                                            ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
-                                            else -> chat.id
-                                        }
-
-                                        ChatListItemCompact(
-                                            chat = chat,
-                                            chatType = chatType,
-                                            currentUid = viewModel.currentUid,
-                                            otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
-                                            draftText = drafts[chat.id],
-                                            unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
-                                            isTyping = typingMap[chat.id] == true,
-                                            onClick = {
-                                                if (chat.isForumActive) onOpenTopicList(chat.id)
-                                                else onOpenChat(chat.id, otherUid)
-                                            }
-                                        )
-
-                                        if (index < entries.size - 1) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                                thickness = 0.5.dp,
-                                                color = cs.outlineVariant.copy(alpha = 0.4f)
-                                            )
-                                        }
-                                    }
-                                }
+                                        .padding(vertical = 4.dp)
+                                )
                             }
-                        } else {
-                            // ── ОБЫЧНЫЙ РЕЖИМ (Отдельные карточки с отступами) ────────────────────────
+                        }
                             // 📌 SAVED MESSAGES
                             item(key = "saved_messages") {
                                 val savedChat = viewModel.savedMessagesEntry
@@ -397,7 +343,6 @@ fun ChatListScreen(
                                         draftText = drafts[savedChat.id],
                                         unreadCount = 0,
                                         isSavedMessages = true,
-                                        isCompactList = false,
                                         isTyping = false,
                                         onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
                                     )
@@ -420,7 +365,6 @@ fun ChatListScreen(
                                             otherProfile = null,
                                             draftText = null,
                                             unreadCount = invites.size,
-                                            isCompactList = compactList,
                                             isInvites = true,
                                             previewOverride = invitesPreview,
                                             onClick = onOpenNotifications
@@ -444,7 +388,6 @@ fun ChatListScreen(
                                         otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
                                         draftText = drafts[chat.id],
                                         unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
-                                        isCompactList = compactList,
                                         isTyping = typingMap[chat.id] == true,
                                         onClick = {
                                             if (chat.isForumActive) onOpenTopicList(chat.id)
@@ -453,7 +396,6 @@ fun ChatListScreen(
                                     )
                                 }
                             }
-                        }
                     }
                 }
             }

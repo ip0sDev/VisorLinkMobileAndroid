@@ -343,13 +343,19 @@ private fun NeumorphicLiquidNavBarContent(
         }
     }
 
+    // Матовый навбар: backdrop-блюр контента под панелью + полупрозрачный тон
+    val matte = isVlMatte()
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(64.dp)
             .vlInset(tokens.structure, barShape)
             .clip(barShape)
-            .background(cs.surfaceContainerLow)
+            .vlBackdropBlur()
+            .background(
+                if (matte) cs.surfaceContainerLow.copy(alpha = if (tokens.isDark) 0.75f else 0.85f)
+                else cs.surfaceContainerLow
+            )
             .vlHairline(cs.outlineVariant.copy(alpha = 0.5f), barShape)
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .onGloballyPositioned { coords ->

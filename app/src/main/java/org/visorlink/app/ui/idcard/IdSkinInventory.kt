@@ -28,6 +28,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.WorkspacePremium
+import androidx.compose.material.icons.rounded.Download
+import org.visorlink.app.data.idcard.IdEdition
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Lock
@@ -109,10 +113,13 @@ fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Mod
     val haptics = rememberCardHaptics()
 
     var rolling by remember { mutableStateOf(false) }
+    var rollingPremium by remember { mutableStateOf(false) }
     var confirmRoll by remember { mutableStateOf(false) }
+    var confirmPremium by remember { mutableStateOf(false) }
     var openId by remember { mutableStateOf<String?>(null) }
     var confirmSlot by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
+    var claimingPro by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<Throwable?>(null) }
     var unlocked by remember { mutableIntStateOf(0) }
 
@@ -143,6 +150,23 @@ fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Mod
     val wearer = card.wearer(profile)
     val person = profile.idCardPerson()
     val open = items.firstOrNull { it.id == openId }
+    val proCardsMissing = isPro && (raw.none { it.id == "vl-pro-aurum" } || raw.none { it.id == "vl-pro-noir" } || items.count { it.pro } < 2)
+
+    fun claimPro() {
+        if (busy || claimingPro) return
+        claimingPro = true
+        error = null
+        scope.launch {
+            try {
+                repo.claimProCards()
+                haptics.success()
+            } catch (e: Exception) {
+                error = e
+            } finally {
+                claimingPro = false
+            }
+        }
+    }
 
     fun buySlot() {
         if (busy) return
@@ -174,6 +198,22 @@ fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Mod
             onGo = { confirmRoll = false; rolling = true },
         )
 
+        PremiumRollPanel(
+            full = free <= 0,
+            canPay = bits >= IdSkinRules.PREMIUM_ROLL_COST_BITS,
+            confirming = confirmPremium,
+            onAsk = { confirmPremium = true },
+            onCancel = { confirmPremium = false },
+            onGo = { confirmPremium = false; rollingPremium = true },
+        )
+
+        if (proCardsMissing) {
+            ProCardsPanel(
+                busy = claimingPro,
+                onClaim = ::claimPro,
+            )
+        }
+
         if (loading && items.isEmpty()) {
             MutedText(stringResource(R.string.idcard_tab_loading))
         } else {
@@ -201,6 +241,9 @@ fun IdSkinInventory(card: IdCard, profile: UserProfile, modifier: Modifier = Mod
 
     if (rolling) {
         IdSkinRoll(wearer = wearer, person = person, onClose = { rolling = false })
+    }
+    if (rollingPremium) {
+        IdSkinRoll(wearer = wearer, person = person, premium = true, onClose = { rollingPremium = false })
     }
     open?.let { skin ->
         IdSkinSheet(skin = skin, isEquipped = skin.id == equippedId, wearer = wearer, person = person, onClose = { openId = null })
@@ -632,5 +675,99 @@ private fun MaxedTile(modifier: Modifier) {
             color = cs.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+
+/** Легендарная прокрутка: тираж «редкий» и выше, 2 000 Bits, без недельного лимита. */
+@Composable
+private fun PremiumRollPanel(
+    full: Boolean,
+    canPay: Boolean,
+    confirming: Boolean,
+    onAsk: () -> Unit,
+    onCancel: () -> Unit,
+    onGo: () -> Unit,
+) {
+    val legendary = IdCardMaterials.edition(IdEdition.LEGENDARY)
+    val cost = IdSkinRules.PREMIUM_ROLL_COST_BITS
+
+    VlSurface(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        if (confirming) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PanelText(
+                    stringResource(R.string.idskin_premium_confirm_title),
+                    stringResource(R.string.idskin_premium_confirm_text, cost)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SkinActionButton(stringResource(R.string.action_cancel), onCancel, primary = false)
+                    SkinActionButton(stringResource(R.string.idskin_roll_go), onGo, icon = Icons.Rounded.AutoAwesome)
+                }
+            }
+        } else {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Rounded.AutoAwesome, null, tint = legendary, modifier = Modifier.size(18.dp))
+                    PanelText(
+                        stringResource(R.string.idskin_premium_title),
+                        when {
+                            full -> stringResource(R.string.idskin_roll_full)
+                            !canPay -> stringResource(R.string.idcard_tab_err_bits, cost)
+                            else -> stringResource(R.string.idskin_premium_desc)
+                        },
+                        Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    SkinActionButton(
+                        "${stringResource(R.string.idskin_roll_btn)} · %,d Bits".format(cost),
+                        onAsk,
+                        enabled = !full && canPay,
+                        icon = Icons.Default.Casino
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** PRO-карты Aurum и Noir: забрать недостающие (только с активным PRO). */
+@Composable
+private fun ProCardsPanel(
+    busy: Boolean,
+    onClaim: () -> Unit,
+) {
+    VlSurface(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Rounded.WorkspacePremium, null, tint = Color(0xFFC8962E), modifier = Modifier.size(24.dp))
+            PanelText(
+                stringResource(R.string.idskin_pro_title),
+                stringResource(R.string.idskin_pro_desc),
+                Modifier.weight(1f)
+            )
+            SkinActionButton(
+                stringResource(R.string.idskin_pro_claim),
+                onClaim,
+                enabled = !busy,
+                icon = Icons.Rounded.Download
+            )
+        }
     }
 }

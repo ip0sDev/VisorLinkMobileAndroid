@@ -42,6 +42,7 @@ import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.VlSegmentedControl
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.vlHazeSource
 import org.visorlink.app.ui.components.chat.ReportContentDialog
 import org.visorlink.app.ui.components.feed.CuratedChannelCard
 import org.visorlink.app.ui.components.feed.FeedPostAction
@@ -128,7 +129,8 @@ fun FeedScreen(
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // Источник backdrop-блюра нижней панели навигации
+        Box(Modifier.fillMaxSize().padding(padding).vlHazeSource()) {
             VlAmbientGlow()
 
             Column(Modifier.fillMaxSize()) {

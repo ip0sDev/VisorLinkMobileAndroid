@@ -325,7 +325,6 @@ class ThemeScreenshotTest(
                 otherProfile = UserProfile(uid = "u4", displayName = "Компактный режим", username = "compact"),
                 draftText = null,
                 unreadCount = 12,
-                isCompactList = true,
                 onClick = {},
             )
         }

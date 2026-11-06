@@ -26,6 +26,7 @@ class ChatListViewModel(
     private val sidebarTypingManager: org.visorlink.app.utils.SidebarTypingManager? = null,
     private val networkMonitor: NetworkMonitor? = null,
     private val blockRepository: org.visorlink.app.data.repository.BlockRepository? = null,
+    private val chatFoldersRepository: org.visorlink.app.data.repository.ChatFoldersRepository? = null,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = networkMonitor?.isOnline
@@ -52,9 +53,53 @@ class ChatListViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Чаты со строкой «Приглашения», вставленной по дате последнего приглашения. */
-    val listEntries: StateFlow<List<Chat>> = combine(chats, invites) { list, inv ->
-        withEntryByDate(list, invitesEntry(currentUid, inv))
+    private val prefs = context?.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE)
+
+    private val _activeFolderId = MutableStateFlow<String?>(prefs?.getString("vl_active_folder", null))
+    val activeFolderId: StateFlow<String?> = _activeFolderId.asStateFlow()
+
+    val folders: StateFlow<List<ChatFolder>> = if (chatFoldersRepository != null && currentUid.isNotEmpty()) {
+        combine(chatFoldersRepository.foldersFlow(currentUid), currentUser) { folderList, user ->
+            if (user?.isPro == true) folderList else emptyList()
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    } else {
+        MutableStateFlow<List<ChatFolder>>(emptyList()).asStateFlow()
+    }
+
+    val unreadByFolder: StateFlow<Map<String, Int>> = combine(chats, folders) { list, folderList ->
+        folderList.associate { folder ->
+            val count = list.filter { chatInFolder(it, folder, it.unreadCountFor(currentUid)) }
+                .sumOf { it.unreadCountFor(currentUid) }
+            folder.id to count
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    val totalUnread: StateFlow<Int> = chats.map { list ->
+        list.sumOf { it.unreadCountFor(currentUid) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    fun selectFolder(folderId: String?) {
+        _activeFolderId.value = folderId
+        prefs?.edit()?.let {
+            if (folderId == null) it.remove("vl_active_folder") else it.putString("vl_active_folder", folderId)
+            it.apply()
+        }
+    }
+
+    val listEntries: StateFlow<List<Chat>> = combine(chats, invites, folders, activeFolderId) { list, inv, folderList, activeId ->
+        val filteredChats = if (activeId == null) {
+            list
+        } else {
+            val folder = folderList.firstOrNull { it.id == activeId }
+            if (folder == null) list else list.filter { chatInFolder(it, folder, it.unreadCountFor(currentUid)) }
+        }
+        withEntryByDate(filteredChats, invitesEntry(currentUid, inv))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+
+
+
+
 
     fun isInvitesEntry(chat: Chat): Boolean = chat.id == invitesEntryId(currentUid)
 

@@ -1020,9 +1020,55 @@
     <string name="idcard_edition_rare">Редкий</string>
     <string name="idcard_edition_epic">Эпический</string>
     <string name="idcard_edition_legendary">Легендарный</string>
+    <string name="idcard_edition_unique">Уникальный</string>
     <string name="idcard_finish_base">Стандартный пластик</string>
     <string name="idcard_finish_pearl">Перламутр</string>
     <string name="idcard_finish_metallic">Металлик</string>
+
+    <!-- Мои боты -->
+    <string name="bots_title">Мои боты</string>
+    <string name="bots_subtitle">Управление API-ботами</string>
+    <string name="bots_create">Создать бота</string>
+    <string name="bots_empty">У вас пока нет ботов</string>
+    <string name="bots_error_generic">Не удалось выполнить. Попробуйте позже</string>
+    <string name="bots_token_title_new">Бот создан</string>
+    <string name="bots_token_title_regenerated">Новый токен</string>
+    <string name="bots_token_warning">Сохраните токен сейчас: больше он показан не будет. Не передавайте его никому.</string>
+    <string name="bots_copy">Копировать</string>
+    <string name="bots_copied">Скопировано</string>
+    <string name="bots_done">Готово</string>
+    <string name="bots_regenerate">Перевыпустить токен</string>
+    <string name="bots_delete">Удалить</string>
+    <string name="bots_confirm_regenerate_title">Перевыпустить токен?</string>
+    <string name="bots_confirm_regenerate_body">Старый токен перестанет работать сразу.</string>
+    <string name="bots_confirm_delete_title">Удалить бота?</string>
+    <string name="bots_confirm_delete_body">Бот @%1$s будет удалён навсегда, его ник освободится.</string>
+    <string name="bots_confirm_reset_title">Сбросить верификацию?</string>
+    <string name="bots_confirm_reset_body">После изменения профиля бот снова станет неверифицированным.</string>
+    <string name="bots_continue">Продолжить</string>
+    <string name="bots_form_title_new">Новый бот</string>
+    <string name="bots_form_title_edit">Бот @%1$s</string>
+    <string name="bots_form_name">Имя бота</string>
+    <string name="bots_form_username">Ник (без @)</string>
+    <string name="bots_form_change_avatar">Сменить аватар</string>
+    <string name="bots_form_avatar_file">Аватар: %1$s</string>
+    <string name="bots_form_receive">Принимать сообщения</string>
+    <string name="bots_form_receive_sub">Текст пользователей уходит на вебхук</string>
+    <string name="bots_form_webhook">Webhook URL</string>
+    <string name="bots_form_secret">Секрет вебхука (HMAC)</string>
+    <string name="bots_form_secret_keep">Оставьте пустым, чтобы не менять</string>
+    <string name="bots_form_secret_optional">необязательно</string>
+    <string name="bots_form_save">Сохранить</string>
+    <string name="bots_form_error">Не удалось сохранить</string>
+    <string name="bots_cancel">Отмена</string>
+    <string name="bots_username_error_length">Ник — от 3 до 24 символов</string>
+    <string name="bots_username_error_chars">Только латиница, цифры и _</string>
+    <string name="bots_tag_receiving">📥 ПРИЁМ СООБЩЕНИЙ</string>
+    <string name="bots_tag_send_only">📤 ТОЛЬКО ОТПРАВКА</string>
+    <string name="bots_tag_banned">ЗАБАНЕН</string>
+    <string name="bots_uid_label">UID: %1$s</string>
+    <string name="bots_webhook_error">⚠️ Ошибка вебхука: %1$s</string>
+    <string name="bots_edit">Изменить</string>
     <string name="idcard_finish_obsidian">Обсидиан</string>
     <string name="idcard_finish_gold">Золото</string>
     <string name="idcard_foil_none">Без голограммы</string>
@@ -1504,4 +1550,16 @@
     <string name="idskin_err_pro_required">Нужен активный PRO.</string>
     <string name="idskin_err_pro_claimed">PRO-карты уже в инвентаре.</string>
 
+<!-- Chat Folders -->
+    <string name="settings_chat_folders_title">Папки чатов</string>
+    <string name="settings_chat_folders_desc">Вкладки и правила фильтрации диалогов</string>
+
+    <!-- Legendary Roll & PRO Cards -->
+    <string name="idskin_premium_title">Легендарная прокрутка</string>
+    <string name="idskin_premium_desc">Тираж «редкий» и выше. Без недельного лимита, обычную прокрутку не сбивает.</string>
+    <string name="idskin_premium_confirm_title">Крутить легендарную?</string>
+    <string name="idskin_premium_confirm_text">Спишется %1$d Bits. Выпадет скин тиража «редкий» или выше, он займёт слот.</string>
+    <string name="idskin_pro_title">PRO-карты</string>
+    <string name="idskin_pro_desc">Две карты в стиле PRO — Aurum и Noir. Бесплатно, слотов не занимают; носятся, пока активен PRO.</string>
+    <string name="idskin_pro_claim">Забрать</string>
 </resources>

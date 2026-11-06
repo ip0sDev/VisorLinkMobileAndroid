@@ -127,6 +127,9 @@ dependencies {
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.text)
+    // Backdrop blur для шапок (Compose 1.13 даёт только surface-блюр, backdrop — Haze)
+    implementation(libs.haze)
+    implementation(libs.haze.blur)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 

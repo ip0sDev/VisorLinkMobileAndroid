@@ -45,6 +45,7 @@ import org.visorlink.app.ui.components.CachedImage
 import org.visorlink.app.ui.components.NeumorphicLiquidSegmentedControl
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.vlHazeSource
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.liquidPopIn
@@ -151,10 +152,12 @@ fun MusicLibraryScreen(
                 }
             }
         ) { innerPadding ->
+            // Источник backdrop-блюра нижней панели навигации
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
+                    .vlHazeSource()
             ) {
                 val selectedPlaylist = uiState.selectedPlaylist
                 if (selectedPlaylist != null) {

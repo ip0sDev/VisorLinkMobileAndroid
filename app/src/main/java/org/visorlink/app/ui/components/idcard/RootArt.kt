@@ -181,7 +181,7 @@ internal fun DrawScope.drawRootLattice(tilt: CardTiltState, light: Boolean) {
     val mag = min(1f, hypot(fx, fy))
     val box = Size(w * 2.4f, h * 2.4f)
     val origin = Offset(-w * 0.7f - fx * 0.22f * box.width, -h * 0.7f - fy * 0.18f * box.height)
-    val brush = cssRepeating(118f, IdCardMaterials.RootRainbow, box, origin)
+    val brush = artRepeatingShader(IdCardMaterials.RootRainbow, box, origin)
     val alpha = (if (light) 0.2f else 0.13f) + 0.16f * mag
     scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
         drawPath(RootArt.latticeCrowns, brush, alpha = alpha)
@@ -195,7 +195,7 @@ internal fun DrawScope.drawRootReveal(fx: Float, fy: Float, opacity: Float, ligh
     val h = size.height
     val box = Size(w * 2.2f, h * 2.2f)
     val origin = Offset(-w * 0.6f - fx * 0.16f * box.width, -h * 0.6f - fy * 0.13f * box.height)
-    val brush = cssRepeating(118f, IdCardMaterials.RootReveal, box, origin)
+    val brush = artRepeatingShader(IdCardMaterials.RootReveal, box, origin)
     val fill = opacity * (if (light) 0.42f else 0.34f)
     scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
         val glow = 0.35f + 0.55f * opacity

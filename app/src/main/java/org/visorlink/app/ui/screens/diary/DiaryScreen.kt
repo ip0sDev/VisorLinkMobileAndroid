@@ -24,6 +24,7 @@ import org.visorlink.app.R
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.vlHazeSource
 import org.visorlink.app.ui.components.diary.*
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
@@ -149,7 +150,8 @@ fun DiaryScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // Источник backdrop-блюра нижней панели навигации
+        Box(Modifier.fillMaxSize().padding(padding).vlHazeSource()) {
             VlAmbientGlow()
 
             val filteredEntries = remember(uiState.entries, uiState.selectedDate) {

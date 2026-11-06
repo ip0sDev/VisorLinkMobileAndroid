@@ -87,6 +87,7 @@ fun SettingsScreen(
     onOpenStorageManager: () -> Unit = {},
     onOpenStatus: () -> Unit = {},
     onOpenSessions: () -> Unit = {},
+    onOpenBots: () -> Unit = {},
     onOpenCustomization: () -> Unit = {},
     onOpenIdCard: () -> Unit = {},
     onOpenAegisDebug: () -> Unit = {},
@@ -95,6 +96,7 @@ fun SettingsScreen(
     onNavigateToAppCheckDiagnostic: () -> Unit = {},
     onOpenPro: () -> Unit = {},
     onOpenSignal: () -> Unit = {},
+    onOpenFolders: () -> Unit = {},
     themeViewModel: ThemeViewModel = koinViewModel(),
     userRepository: UserRepository = koinInject(),
     authRepository: AuthRepository = koinInject(),
@@ -109,7 +111,6 @@ fun SettingsScreen(
     val notifEnabled by themeViewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val currentLang by themeViewModel.language.collectAsStateWithLifecycle()
     val dynamicInput by themeViewModel.dynamicChatInput.collectAsStateWithLifecycle()
-    val compactChatList by themeViewModel.compactChatList.collectAsStateWithLifecycle()
     val showDebugIds by themeViewModel.showDebugIds.collectAsStateWithLifecycle()
 
     val profileFlow = remember(userRepository) { userRepository.currentUserFlow() }
@@ -169,7 +170,6 @@ fun SettingsScreen(
     val colorNotif = VlCategoryTint.Amber
     val colorVibro = VlCategoryTint.Pink
     val colorDynInput = VlCategoryTint.Emerald
-    val colorCompact = VlCategoryTint.Blue
     val colorStealth = VlCategoryTint.Violet
     val colorStealthPin = VlCategoryTint.Indigo
     val colorStealthBiometric = VlCategoryTint.Teal
@@ -199,7 +199,8 @@ fun SettingsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        VlAmbientGlow()
+        // Источник backdrop-блюра шапки: свечение за баром
+        VlAmbientGlow(modifier = Modifier.fillMaxSize().vlHazeSource())
         Scaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
@@ -224,6 +225,8 @@ fun SettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    // Список настроек заезжает под бар — источник его backdrop-блюра
+                    .vlHazeSource()
                     .progressiveEdgeBlur(
                         topBlur = 10.dp,
                         bottomBlur = 10.dp,
@@ -526,10 +529,19 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_management),
                     modifier = Modifier.liquidPillCardSlideOut(index = 7)
                 ) {
+                    VlSettingsItem(
+                        icon = Icons.Rounded.Folder,
+                        iconColor = VlCategoryTint.Blue,
+                        title = stringResource(R.string.settings_chat_folders_title),
+                        subtitle = stringResource(R.string.settings_chat_folders_desc),
+                        onClick = {
+                            haptic.perform(HapticType.CLICK, hapticEnabled)
+                            onOpenFolders()
+                        }
+                    )
                     VlSettingsItem(icon = Icons.Rounded.NotificationsActive, iconColor = colorNotif, title = stringResource(R.string.settings_push_title), trailing = { VlSwitch(checked = notifEnabled, onCheckedChange = { themeViewModel.setNotifications(it) }) })
                     VlSettingsItem(icon = Icons.Rounded.Vibration, iconColor = colorVibro, title = stringResource(R.string.settings_haptic_title), trailing = { VlSwitch(checked = hapticEnabled, onCheckedChange = { themeViewModel.setHaptic(it) }) })
                     VlSettingsItem(icon = Icons.Rounded.SwipeUp, iconColor = colorDynInput, title = "Динамическое поле ввода", trailing = { VlSwitch(checked = dynamicInput, onCheckedChange = { themeViewModel.setDynamicChatInput(it) }) })
-                    VlSettingsItem(icon = Icons.Rounded.ViewAgenda, iconColor = colorCompact, title = "Компактный список чатов", trailing = { VlSwitch(checked = compactChatList, onCheckedChange = { themeViewModel.setCompactChatList(it) }) })
                     VlSettingsItem(icon = Icons.Rounded.Explore, iconColor = VlCategoryTint.Emerald, title = "Discover (Лента)", subtitle = "Показывать вкладку с глобальной лентой", trailing = { VlSwitch(checked = themeViewModel.discoverEnabled.collectAsStateWithLifecycle().value, onCheckedChange = { themeViewModel.setDiscoverEnabled(it) }) })
                     val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
                     VlSettingsItem(
@@ -667,6 +679,14 @@ fun SettingsScreen(
                 ) {
                     TwoFactorItems(profile, security)
                     VlSettingsItem(icon = Icons.Rounded.Devices, iconColor = VlCategoryTint.Emerald, title = stringResource(R.string.settings_sessions_title), subtitle = stringResource(R.string.settings_sessions_sub), onClick = onOpenSessions)
+                }
+
+                // «Мои боты» — как во Flutter (settings_screen.dart:995-1004)
+                VlSettingsSection(
+                    title = stringResource(R.string.bots_title),
+                    modifier = Modifier.liquidPillCardSlideOut(index = 12)
+                ) {
+                    VlSettingsItem(icon = Icons.Rounded.SmartToy, iconColor = VlCategoryTint.Violet, title = stringResource(R.string.bots_title), subtitle = stringResource(R.string.bots_subtitle), onClick = onOpenBots)
                 }
 
                 VlSettingsSection(

@@ -64,6 +64,10 @@ object IdCardMaterials {
     val GoldEdge = Color(0xD9FFECB4)
     val GoldInner = Color(0x59C9962F)
     val Legendary = listOf(Color(0xFFB8862A), Color(0xFFFFE9A8), Color(0xFFC9962F), Color(0xFFFFF1C4))
+    /** Радужный градиент названия уникального тиража (F id_card_materials.dart:47 `uniqueFoil`). */
+    val UniqueFoil = listOf(
+        Color(0xFFFF7AD9), Color(0xFFFFD36B), Color(0xFF7BFFB2), Color(0xFF6BD7FF), Color(0xFFB58CFF),
+    )
 
     // ── Потёртость на светлом пластике ──
     val WearShadowLight = Color(0xFF6E5A3C)
@@ -92,7 +96,7 @@ object IdCardMaterials {
         IdEdition.RARE -> hsl(212f, 88f, 64f)
         IdEdition.EPIC -> hsl(276f, 80f, 70f)
         IdEdition.LEGENDARY -> hsl(42f, 95f, 58f)
-        IdEdition.UNIQUE -> hsl(340f, 95f, 65f)
+        IdEdition.UNIQUE -> hsl(318f, 95f, 72f)
     }
 
     /** `--ed-soft`: подложка значка тиража и лучей раскрытия. */

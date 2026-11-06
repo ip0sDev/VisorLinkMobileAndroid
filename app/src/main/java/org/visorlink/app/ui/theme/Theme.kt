@@ -274,7 +274,8 @@ fun VisorLinkTheme(
     setStatusBarColor: Boolean = true,
     /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
     typographyOverride: androidx.compose.material3.Typography? = null,
-    /** Плавная смена палитры (~200 мс) — когда тема меняется по режиму (вход в чат и выход). */
+    /** Устарел и игнорируется: палитру не анимируем, переход делает ThemeCrossfade. */
+    @Suppress("unused")
     animateColors: Boolean = false,
     /**
      * Цвет профиля PRO — акцент всего интерфейса ([ProAccent], веб `ProfileAccentSync`).
@@ -326,10 +327,10 @@ fun VisorLinkTheme(
 
         AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!, darkTheme)
     }
-    // Цвета перетекают только внутри одного стиля (акцент и т. п.). При смене самой темы
-    // (Biolume ↔ Forge, светлая ↔ тёмная) — сразу целевые: переход делает растворение снимка
-    // (ThemeCrossfade), а анимация поверх давала кадры «формы Biolume, цвета Forge».
-    val colorScheme = if (animateColors) key(appTheme, darkTheme) { animateColorScheme(targetScheme) } else targetScheme
+    // Палитра всегда целевая: переход делает растворение снимка (ThemeCrossfade 420 мс),
+    // а анимация цветов поверх давала кадры «формы Biolume, цвета Forge» — во Flutter палитру
+    // не анимируют вовсе (F vl_tokens.dart:354).
+    val colorScheme = targetScheme
 
     val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme, biolumePro, forgeV2, proAccent) {
         when (appTheme) {
@@ -345,10 +346,9 @@ fun VisorLinkTheme(
                 bubbles = biolumeBubbles(darkTheme, colorScheme.primary),
                 data = BiolumeDataTypography,
                 reduceMotion = reduceMotion,
-                led = if (proAccent != null) VlLedTokens(
-                    color = proAccent,
-                    screen = if (darkTheme) Biolume.AbyssBackground else Biolume.TidepoolContainerLowest
-                ) else null,
+                // Во Flutter у Biolume/M3E led == null всегда: LED-точки в Biolume
+                // при PRO-акценте лишние (F visorlink_theme.dart)
+                led = null,
             )
 
             AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> VlTokens(
@@ -392,10 +392,7 @@ fun VisorLinkTheme(
                 ),
                 data = Material3DataTypography,
                 reduceMotion = reduceMotion,
-                led = if (proAccent != null) VlLedTokens(
-                    color = proAccent,
-                    screen = if (darkTheme) Color(0xFF141218) else Color(0xFFF3EDF7)
-                ) else null,
+                led = null,
             )
         }
     }
@@ -439,33 +436,5 @@ fun VisorLinkTheme(
 
 // ── Плавная смена палитры ────────────────────────────────────────────────────
 
-/**
- * Палитра, перетекающая к [target] за 200 мс (веб: view-transition 200 ms при смене
- * Biolume ↔ Forge у входа в чат). Анимируются все роли ColorScheme.
- */
-@Composable
-private fun animateColorScheme(target: ColorScheme): ColorScheme {
-    @Composable
-    fun a(c: Color): Color = animateColorAsState(c, tween(200), label = "scheme").value
-    return target.copy(
-        primary = a(target.primary), onPrimary = a(target.onPrimary),
-        primaryContainer = a(target.primaryContainer), onPrimaryContainer = a(target.onPrimaryContainer),
-        inversePrimary = a(target.inversePrimary),
-        secondary = a(target.secondary), onSecondary = a(target.onSecondary),
-        secondaryContainer = a(target.secondaryContainer), onSecondaryContainer = a(target.onSecondaryContainer),
-        tertiary = a(target.tertiary), onTertiary = a(target.onTertiary),
-        tertiaryContainer = a(target.tertiaryContainer), onTertiaryContainer = a(target.onTertiaryContainer),
-        background = a(target.background), onBackground = a(target.onBackground),
-        surface = a(target.surface), onSurface = a(target.onSurface),
-        surfaceVariant = a(target.surfaceVariant), onSurfaceVariant = a(target.onSurfaceVariant),
-        surfaceTint = a(target.surfaceTint),
-        inverseSurface = a(target.inverseSurface), inverseOnSurface = a(target.inverseOnSurface),
-        error = a(target.error), onError = a(target.onError),
-        errorContainer = a(target.errorContainer), onErrorContainer = a(target.onErrorContainer),
-        outline = a(target.outline), outlineVariant = a(target.outlineVariant), scrim = a(target.scrim),
-        surfaceBright = a(target.surfaceBright), surfaceDim = a(target.surfaceDim),
-        surfaceContainer = a(target.surfaceContainer), surfaceContainerHigh = a(target.surfaceContainerHigh),
-        surfaceContainerHighest = a(target.surfaceContainerHighest), surfaceContainerLow = a(target.surfaceContainerLow),
-        surfaceContainerLowest = a(target.surfaceContainerLowest),
-    )
-}
+// Анимация палитры удалена: во Flutter палитру не анимируют вовсе (F vl_tokens.dart:354) —
+// переход темы целиком делает растворение снимка (ThemeCrossfade 420 мс).

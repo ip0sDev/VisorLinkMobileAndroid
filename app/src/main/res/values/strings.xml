@@ -1018,9 +1018,55 @@
     <string name="idcard_edition_rare">Rare</string>
     <string name="idcard_edition_epic">Epic</string>
     <string name="idcard_edition_legendary">Legendary</string>
+    <string name="idcard_edition_unique">Unique</string>
     <string name="idcard_finish_base">Standard plastic</string>
     <string name="idcard_finish_pearl">Pearl</string>
     <string name="idcard_finish_metallic">Metallic</string>
+
+    <!-- My bots -->
+    <string name="bots_title">My bots</string>
+    <string name="bots_subtitle">Manage API bots</string>
+    <string name="bots_create">Create bot</string>
+    <string name="bots_empty">You have no bots yet</string>
+    <string name="bots_error_generic">Something failed. Try again later</string>
+    <string name="bots_token_title_new">Bot created</string>
+    <string name="bots_token_title_regenerated">New token</string>
+    <string name="bots_token_warning">Save the token now: it will never be shown again. Do not share it with anyone.</string>
+    <string name="bots_copy">Copy</string>
+    <string name="bots_copied">Copied</string>
+    <string name="bots_done">Done</string>
+    <string name="bots_regenerate">Regenerate token</string>
+    <string name="bots_delete">Delete</string>
+    <string name="bots_confirm_regenerate_title">Regenerate token?</string>
+    <string name="bots_confirm_regenerate_body">The old token will stop working immediately.</string>
+    <string name="bots_confirm_delete_title">Delete bot?</string>
+    <string name="bots_confirm_delete_body">Bot @%1$s will be deleted forever, its username will become available.</string>
+    <string name="bots_confirm_reset_title">Reset verification?</string>
+    <string name="bots_confirm_reset_body">After editing the profile the bot will become unverified again.</string>
+    <string name="bots_continue">Continue</string>
+    <string name="bots_form_title_new">New bot</string>
+    <string name="bots_form_title_edit">Bot @%1$s</string>
+    <string name="bots_form_name">Bot name</string>
+    <string name="bots_form_username">Username (no @)</string>
+    <string name="bots_form_change_avatar">Change avatar</string>
+    <string name="bots_form_avatar_file">Avatar: %1$s</string>
+    <string name="bots_form_receive">Receive messages</string>
+    <string name="bots_form_receive_sub">User text goes to the webhook</string>
+    <string name="bots_form_webhook">Webhook URL</string>
+    <string name="bots_form_secret">Webhook secret (HMAC)</string>
+    <string name="bots_form_secret_keep">Leave empty to keep the current one</string>
+    <string name="bots_form_secret_optional">optional</string>
+    <string name="bots_form_save">Save</string>
+    <string name="bots_form_error">Failed to save</string>
+    <string name="bots_cancel">Cancel</string>
+    <string name="bots_username_error_length">Username must be 3–24 characters</string>
+    <string name="bots_username_error_chars">Only letters, digits and _</string>
+    <string name="bots_tag_receiving">📥 RECEIVING</string>
+    <string name="bots_tag_send_only">📤 SEND ONLY</string>
+    <string name="bots_tag_banned">BANNED</string>
+    <string name="bots_uid_label">UID: %1$s</string>
+    <string name="bots_webhook_error">⚠️ Webhook error: %1$s</string>
+    <string name="bots_edit">Edit</string>
     <string name="idcard_finish_obsidian">Obsidian</string>
     <string name="idcard_finish_gold">Gold</string>
     <string name="idcard_foil_none">No hologram</string>
@@ -1498,4 +1544,16 @@
     <string name="idskin_err_pro_required">An active PRO is required.</string>
     <string name="idskin_err_pro_claimed">PRO cards are already in your inventory.</string>
 
+<!-- Chat Folders -->
+    <string name="settings_chat_folders_title">Chat folders</string>
+    <string name="settings_chat_folders_desc">Tabs and filter rules for conversations</string>
+
+    <!-- Legendary Roll & PRO Cards -->
+    <string name="idskin_premium_title">Legendary roll</string>
+    <string name="idskin_premium_desc">Rare edition or better. No weekly limit and doesn\'t reset your regular roll.</string>
+    <string name="idskin_premium_confirm_title">Do a legendary roll?</string>
+    <string name="idskin_premium_confirm_text">%1$d Bits will be charged. You\'ll get a rare or better skin; it takes a slot.</string>
+    <string name="idskin_pro_title">PRO cards</string>
+    <string name="idskin_pro_desc">Two PRO-style cards — Aurum and Noir. Free, take no slots; wearable while PRO is active.</string>
+    <string name="idskin_pro_claim">Claim</string>
 </resources>

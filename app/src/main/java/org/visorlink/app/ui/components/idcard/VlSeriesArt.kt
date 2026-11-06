@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -276,6 +277,7 @@ internal fun VlDisplay(
     tone: CardTone,
     em: Dp,
     tilt: CardTiltState,
+    phase: Float = 0f,
     modifier: Modifier = Modifier
 ) {
     val unitText = "$text   "
@@ -290,11 +292,19 @@ internal fun VlDisplay(
     val mouth = remember { gridDots(MOUTH_ROW, 19, 6) }
     val smile = remember { gridDots(SMILE_ROWS, 18, 5) }
 
+    // «Убрать анимации» системы — мордочка и строка стоят (F _VlDisplay:276-281)
+    val context = LocalContext.current
+    val calm = remember(context) {
+        android.provider.Settings.Global.getFloat(
+            context.contentResolver, android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f,
+        ) == 0f
+    }
+
     val transition = rememberInfiniteTransition(label = "vl_led_ticker")
     val ticker = if (face) {
         transition.animateFloat(0f, 1f, infiniteRepeatable(tween(4800, easing = LinearEasing), RepeatMode.Restart), label = "face")
     } else {
-        val dur = max(1000, cols * 110)
+        val dur = (cols * 110).coerceAtLeast(1)
         transition.animateFloat(0f, 1f, infiniteRepeatable(tween(dur, easing = LinearEasing), RepeatMode.Restart), label = "text")
     }
 
@@ -343,8 +353,9 @@ internal fun VlDisplay(
             }
 
             // Зажжённые точки
+            val tickerVal = if (calm) 0f else ticker.value
             val lit: List<Offset> = if (face) {
-                val t = ticker.value
+                val t = tickerVal
                 val blink = if (t in 0.92f..0.98f) 0.12f else 1.0f
                 val dx = if (tilt.interactive) (tilt.fx * 3f).roundToInt().coerceIn(-2, 2) else 0
                 val dy = if (tilt.interactive) (-tilt.fy * 2f).roundToInt().coerceIn(-1, 1) else 0
@@ -354,7 +365,8 @@ internal fun VlDisplay(
                     eyes.map { e -> Offset(e.x + dx, 1f + 2.5f + (e.y - 3.5f) * blink + dy) } + mouth
                 }
             } else {
-                val shift = ticker.value * cols
+                // Стартовая фаза из seed: карты «мигают» вразнобой (F: ctrl.value = phase % 1)
+                val shift = (tickerVal + phase % 1f) * cols
                 textDots.map { d -> Offset(d.x - shift, d.y) }
             }
 
@@ -413,10 +425,7 @@ internal fun DrawScope.drawVlBackdrop(pattern: IdPattern, rot: Float) {
             )
         }
         IdPattern.VL_PULSE -> {
-            drawCircle(
-                Brush.radialGradient(listOf(rgba(255, 61, 154, 0.1f), Color.Transparent), center = Offset(w * 0.55f, h * 0.66f), radius = w * 0.6f),
-                radius = w * 0.6f, center = Offset(w * 0.55f, h * 0.66f)
-            )
+            drawVlGlow(Offset(w * 0.55f, h * 0.66f), w * 0.6f, h * 0.7f, rgba(255, 61, 154, 0.1f), 0.7f)
         }
         IdPattern.VL_PRISM -> {
             val emPx = w / 36f
@@ -458,21 +467,55 @@ internal fun DrawScope.drawVlBackdrop(pattern: IdPattern, rot: Float) {
             drawRect(
                 Brush.verticalGradient(listOf(rgba(255, 255, 255, 0.5f), Color.Transparent), startY = 0f, endY = h * 0.26f)
             )
+            // Inset-полосы: 0…0.62em (.35) поверх 0…0.85em (.2) (F vl_series_art.dart:483-485)
+            val emPx = w / EM_W_ART
+            drawVlInsetBand(emPx * 0.85f, rgba(168, 122, 34, 0.2f))
+            drawVlInsetBand(emPx * 0.62f, rgba(168, 122, 34, 0.35f))
         }
         IdPattern.VL_PRO_NOIR -> {
             // Тиснение: сетка ромбов ±45°
-            val emPx = w / 36f
+            val emPx = w / EM_W_ART
             val step = emPx * 1.4f
             val stripeColor = rgba(226, 182, 90, 0.07f)
-            drawStripes(45f, step, 1.2f, stripeColor)
-            drawStripes(-45f, step, 1.2f, stripeColor)
-            drawCircle(
-                Brush.radialGradient(listOf(rgba(255, 255, 255, 0.05f), Color.Transparent), center = Offset(w * 0.5f, 0f), radius = w * 0.8f),
-                radius = w * 0.8f, center = Offset(w * 0.5f, 0f)
-            )
+            drawStripes(45f, step, 1.dp.toPx(), stripeColor)
+            drawStripes(-45f, step, 1.dp.toPx(), stripeColor)
+            drawVlGlow(Offset(w * 0.5f, 0f), w * 1.2f, h * 0.9f, rgba(255, 255, 255, 0.05f), 0.6f)
+            drawVlInsetBand(emPx * 0.66f, rgba(226, 182, 90, 0.4f))
         }
-        else -> Unit
+        else -> {
+            drawVlGlow(Offset(w * 0.5f, h * 0.5f), w * 0.7f, h * 0.6f, rgba(255, 255, 255, 0.03f), 0.7f)
+        }
     }
+}
+
+/** Ширина/высота лица карты в ART-координатах (36 × 22.5 em). */
+internal const val EM_W_ART = 36f
+
+/** Эллиптическое свечение (порт Flutter `_glow`, vl_series_art.dart:570-576). */
+internal fun DrawScope.drawVlGlow(c: Offset, rx: Float, ry: Float, color: Color, stop: Float) {
+    scale(1f, ry / rx, pivot = c) {
+        drawCircle(
+            Brush.radialGradient(
+                0f to color,
+                stop.coerceIn(0.01f, 1f) to Color.Transparent,
+                center = c, radius = rx,
+            ),
+            radius = rx, center = c
+        )
+    }
+}
+
+/** Полоса вдоль края лица: `box-shadow: inset 0 0 0 <width> <color>` у .vl-back (F vl_series_art.dart:500-503). */
+internal fun DrawScope.drawVlInsetBand(width: Float, color: Color) {
+    val rect = Rect(0f, 0f, size.width, size.height)
+    val band = Path().apply {
+        op(
+            Path().apply { addRect(rect) },
+            Path().apply { addRect(rect.deflate(width)) },
+            PathOperation.Difference,
+        )
+    }
+    drawPath(band, color)
 }
 
 private fun DrawScope.drawStripes(angleDeg: Float, period: Float, strokeWidth: Float, color: Color) {
@@ -495,6 +538,43 @@ private fun DrawScope.drawStripes(angleDeg: Float, period: Float, strokeWidth: F
 
 // ── Эффекты при наклоне ──
 
+/**
+ * Подложка PRO, зависящая от наклона (порт Flutter `_VlProBackPainter`, vl_series_art.dart:533-567):
+ * Aurum — золотое свечение уходит против наклона, Noir — золотой отблеск бежит по бархату под углом.
+ */
+internal fun DrawScope.drawVlProBack(pattern: IdPattern, tilt: CardTiltState) {
+    val w = size.width
+    val h = size.height
+    val fx = tilt.fx
+    val fy = tilt.fy
+    val mag = if (tilt.interactive) min(1f, hypot(fx, fy)) else 0f
+    if (pattern == IdPattern.VL_PRO_AURUM) {
+        // .vl-bloom.vl-gold: inset −10%, 40%×36% at 55% 62% и 22%×20% at 84% 80%
+        val a = 0.3f + 0.6f * mag
+        translate(-fx * 0.07f * w * 1.2f, fy * 0.05f * h * 1.2f) {
+            drawVlGlow(Offset(w * 0.56f, h * 0.644f), 0.48f * w, 0.432f * h, rgba(255, 206, 110, 0.5f * a), 0.7f)
+            drawVlGlow(Offset(w * 0.908f, h * 0.86f), 0.264f * w, 0.24f * h, rgba(255, 236, 190, 0.6f * a), 0.7f)
+        }
+    } else {
+        // .vl-gold-sheen: полоса 200% сдвигается вслед за наклоном
+        val opacity = if (tilt.interactive) (mag * 1.5f - 0.05f).coerceIn(0.14f, 1f) else 0.14f
+        val box = Size(w * 2f, h * 2f)
+        val origin = Offset(-w * 0.5f - fx * 0.16f * box.width, -h * 0.5f - fy * 0.13f * box.height)
+        drawRect(
+            cssLinear(
+                120f,
+                listOf(
+                    0f to Color.Transparent, 0.36f to Color.Transparent,
+                    0.45f to rgba(226, 182, 90, 0.16f), 0.5f to rgba(255, 236, 190, 0.26f),
+                    0.55f to rgba(226, 182, 90, 0.14f), 0.64f to Color.Transparent, 1f to Color.Transparent,
+                ),
+                box, origin,
+            ),
+            alpha = opacity,
+        )
+    }
+}
+
 private val RAINBOW_PULSE = listOf(0.0f to Color(0xFFFF3D9A), 0.04f to Color(0xFFFF9BD0), 0.09f to Color(0xFF3DF2FF), 0.14f to Color(0xFFFF3D9A))
 private val RAINBOW_PRISM = listOf(
     0.0f to Color(0xFFFF4F7B), 0.04f to Color(0xFFFFB347), 0.08f to Color(0xFF7BE495),
@@ -504,100 +584,244 @@ private val RAINBOW_PRISM = listOf(
 internal fun DrawScope.drawVlFx(pattern: IdPattern, tilt: CardTiltState, rot: Float) {
     val w = size.width
     val h = size.height
-    val emPx = w / 36f
+    val emPx = w / EM_W_ART
     val fx = tilt.fx
     val fy = tilt.fy
     val mag = if (tilt.interactive) min(1f, hypot(fx, fy)) else 0f
 
     when (pattern) {
         IdPattern.VL_ION, IdPattern.VL_BUDDY -> {
+            // Свечение из-под LED уходит против наклона (F vl_series_art.dart:624-632)
             val a = 0.3f + 0.6f * mag
-            val warm = pattern == IdPattern.VL_ION
-            val color = if (warm) rgba(255, 90, 31, 0.34f * a) else rgba(61, 242, 255, 0.3f * a)
             translate(-fx * 0.07f * w * 1.2f, fy * 0.05f * h * 1.2f) {
-                drawCircle(
-                    Brush.radialGradient(listOf(color, Color.Transparent), center = Offset(w * 0.5f, h * 0.692f), radius = 0.408f * w),
-                    radius = 0.408f * w, center = Offset(w * 0.5f, h * 0.692f)
+                val warm = pattern == IdPattern.VL_ION
+                drawVlGlow(
+                    Offset(w * 0.5f, h * 0.692f), 0.408f * w, 0.36f * h,
+                    if (warm) rgba(255, 90, 31, 0.34f * a) else rgba(61, 242, 255, 0.3f * a), 0.7f,
                 )
+                // У Ion — второй тёплый ореол
+                if (warm) drawVlGlow(Offset(w * 0.812f, h * 0.812f), 0.216f * w, 0.192f * h, rgba(255, 170, 120, 0.28f * a), 0.7f)
             }
         }
         IdPattern.VL_BLACKOUT -> {
-            // Точёный металл: луч по кромке
+            // Точёный металл: конусные блики вращаются при наклоне (F vl_series_art.dart:633-661)
+            val emC = Offset(28f * emPx, 14f * emPx)
+            val r = 23f * emPx
+            val rotDeg = if (tilt.interactive) fx * 28f + fy * 10f else 0f
+            val rect = Rect(0f, 0f, w, h)
+            // Конус 40° с TileMode.repeated: останавливаемые позиции растягиваются на полные 360°
+            val cone = listOf(
+                0f to Color.Transparent, 5f / 40f to Color.Transparent,
+                9f / 40f to rgba(150, 240, 255, 0.2f), 13f / 40f to rgba(255, 255, 255, 0.02f),
+                22f / 40f to rgba(255, 255, 255, 0.02f), 26f / 40f to rgba(255, 61, 154, 0.12f),
+                30f / 40f to Color.Transparent, 40f / 40f to Color.Transparent,
+            )
+            val stops = buildList {
+                val period = 40f / 360f
+                var k = 0
+                while (k * period <= 1f) {
+                    val base = k * period
+                    for ((pos, col) in cone) {
+                        val p = base + pos * period
+                        if (p <= 1f) add(p to col)
+                    }
+                    k++
+                }
+            }
+            drawIntoCanvas { canvas ->
+                val layerPaint = Paint().apply { color = Color.Black.copy(alpha = 0.3f + 0.5f * mag) }
+                canvas.saveLayer(rect, layerPaint)
+            }
+            rotate(rotDeg, pivot = emC) {
+                drawRect(Brush.sweepGradient(*stops.toTypedArray(), center = emC))
+            }
+            // Маска dstIn: блик живёт внутри круга r√2 вокруг (28em, 14em)
+            drawRect(
+                Brush.radialGradient(0.12f to Color.Black, 0.62f to Color.Transparent, center = emC, radius = r * 1.4142f),
+                topLeft = Offset.Zero, size = Size(w, h), blendMode = BlendMode.DstIn,
+            )
+            drawIntoCanvas { canvas -> canvas.restore() }
+            // По верхней кромке бежит голубо-розовый свет
             val edge = (mag * 1.7f - 0.2f).coerceIn(0f, 1f)
             if (edge > 0f) {
-                drawLine(
-                    Brush.horizontalGradient(listOf(Color.Transparent, rgba(61, 242, 255, edge), rgba(255, 61, 154, edge), Color.Transparent)),
-                    start = Offset(0f, 1f), end = Offset(w, 1f), strokeWidth = emPx * 0.2f
+                val line = Rect(0f, 0f, w, emPx * 0.16f)
+                // Гало: вертикальный градиент в полосе, раздутой на 0.5em
+                drawRect(
+                    Brush.verticalGradient(listOf(rgba(61, 242, 255, 0.25f * edge), Color.Transparent), startY = 0f, endY = emPx * 0.7f),
+                    topLeft = Offset(0f, 0f), size = Size(w, (emPx * 0.66f).coerceAtMost(h)),
+                )
+                drawRect(
+                    Brush.horizontalGradient(
+                        0f to Color.Transparent, 0.3f to rgba(61, 242, 255, edge),
+                        0.7f to rgba(255, 61, 154, edge), 1f to Color.Transparent,
+                    ),
+                    topLeft = Offset(0f, 0f), size = Size(w, line.height),
                 )
             }
         }
         IdPattern.VL_PRO_AURUM, IdPattern.VL_PRO_NOIR -> {
+            // Золотой edge-light: линия + гало (F vl_series_art.dart:662-670)
             val edge = (mag * 1.7f - 0.2f).coerceIn(0f, 1f)
             if (edge > 0f) {
-                drawLine(
-                    Brush.horizontalGradient(listOf(Color.Transparent, rgba(255, 227, 163, edge), rgba(200, 150, 46, edge), Color.Transparent)),
-                    start = Offset(0f, 1f), end = Offset(w, 1f), strokeWidth = emPx * 0.2f
+                drawRect(
+                    Brush.verticalGradient(listOf(rgba(226, 182, 90, 0.55f * edge), Color.Transparent), startY = 0f, endY = emPx * 0.7f),
+                    topLeft = Offset(0f, 0f), size = Size(w, (emPx * 0.66f).coerceAtMost(h)),
+                )
+                drawRect(
+                    Brush.horizontalGradient(
+                        0f to Color.Transparent, 0.3f to rgba(255, 227, 163, edge),
+                        0.7f to rgba(200, 150, 46, edge), 1f to Color.Transparent,
+                    ),
+                    topLeft = Offset(0f, 0f), size = Size(w, emPx * 0.16f),
                 )
             }
         }
         IdPattern.VL_PULSE -> {
             val box = Size(w * 2.2f, h * 2.2f)
             val origin = Offset(-w * 0.6f - fx * 0.16f * box.width, -h * 0.6f - fy * 0.13f * box.height)
-            val brush = cssRepeating(118f, RAINBOW_PULSE, box, origin)
+            // Шейдер в ART-координатах: маска рисуется прямо с ним, без saveLayer/SrcIn
+            val brush = artRepeatingShader(RAINBOW_PULSE, box, origin)
             val opacity = if (tilt.interactive) (mag * 1.5f - 0.05f).coerceIn(0.14f, 1f) else 0.14f
-
             scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
-                // ЭКГ и концентрические окружности
-                val ecg = svgPath("M300 46H470L486 46L500 18L520 74L538 30L550 46H640L656 46L668 26L684 62L694 46H856")
-                drawPath(ecg, brush, alpha = opacity, style = Stroke(3f, cap = StrokeCap.Round))
-                for (i in 0 until 5) {
-                    val r = 120f + i * 46f
-                    drawCircle(brush, radius = r, center = Offset(495f, 358f), alpha = opacity * 0.7f, style = Stroke(2f))
-                }
+                drawPath(PulseMask, brush, alpha = opacity, style = Stroke(3f, cap = StrokeCap.Round))
             }
         }
         IdPattern.VL_PRISM -> {
             val box = Size(w * 2.2f, h * 2.2f)
             val origin = Offset(-w * 0.6f - fx * 0.16f * box.width, -h * 0.6f - fy * 0.13f * box.height)
-            val brush = cssRepeating(118f, RAINBOW_PRISM, box, origin)
-            val opacity = 0.32f + 0.6f * mag
-
+            val brush = artRepeatingShader(RAINBOW_PRISM, box, origin)
             scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
-                val fan = Path()
-                val dx = 196f
-                val step = 27f
-                val sw = 15f
-                val x0 = 340f
-                for (i in 0 until 7) {
-                    val x = x0 + i * step
-                    fan.moveTo(x, 0f)
-                    fan.lineTo(x + sw, 0f)
-                    fan.lineTo(x + sw - dx, ART_H)
-                    fan.lineTo(x - dx, ART_H)
-                    fan.close()
-                }
-                drawPath(fan, brush, alpha = opacity)
+                drawPath(FanMask, brush, alpha = 0.32f + 0.6f * mag)
             }
         }
         IdPattern.VL_LUMEN -> {
-            // Фонарик: свет проявляет солнечную систему
+            // «Фонарик»: диск света проявляет скрытую солнечную систему (F vl_series_art.dart:681-701).
+            // Пятна света — радиальный градиент в ART-координатах (периоды компенсированы k)
             val idle = !tilt.interactive || mag < 0.03f
-            val spotX = if (idle) 0.7f else (0.5f + fx * 0.6f).coerceIn(0f, 1f)
-            val spotY = if (idle) 0.4f else (0.5f - fy * 0.6f).coerceIn(0f, 1f)
-            val spotR = 18f * emPx * 1.414f
-            val spotCenter = Offset(spotX * w, spotY * h)
-
+            val cx = if (idle) 0.7f else (0.5f + fx * 0.6f).coerceIn(0f, 1f)
+            val cy = if (idle) 0.4f else (0.5f - fy * 0.6f).coerceIn(0f, 1f)
+            val k = ART_W / w
+            val spot = Brush.radialGradient(
+                0f to Color(0xFFFFF1C4),
+                0.16f to Color(0xFFFFB23D),
+                0.34f to Color(0xFFFF4F6B),
+                0.52f to rgba(255, 79, 107, 0f),
+                center = Offset(cx * ART_W, cy * ART_H),
+                radius = 18f * emPx * 1.4142f * k,
+            )
             scale(w / ART_W, h / ART_H, pivot = Offset.Zero) {
-                val cx = 430f
-                val cy = 270f
-                drawCircle(Color(0xFFFFB23D).copy(alpha = if (idle) 0.25f else 0.5f), radius = 62f, center = Offset(cx, cy))
-                for (r in listOf(210f, 262f, 330f, 410f)) {
-                    drawCircle(Color(0xFFFFB23D).copy(alpha = if (idle) 0.15f else 0.35f), radius = r, center = Offset(cx, cy), style = Stroke(1.8f))
-                }
+                drawPath(LumenMask, spot, alpha = if (idle) 0.5f else 1f)
             }
         }
         else -> Unit
     }
+}
+
+/** ЭКГ + пунктирные концентрические дуги (F _buildPulseMask, vl_series_art.dart:706-724). */
+private val PulseMask: Path by lazy {
+    val p = svgPath("M300 46H470L486 46L500 18L520 74L538 30L550 46H640L656 46L668 26L684 62L694 46H856")
+    for (i in 0 until 5) {
+        val r = 120f + i * 46f
+        val circle = Path().apply { addOval(Rect(Offset(495f, 358f), r)) }
+        val on = r * 0.9f
+        val off = r * 0.55f
+        val measure = PathMeasure().apply { setPath(circle, false) }
+        val len = measure.length
+        var pos = -((i * 40f) % (on + off)) // dashoffset сдвигает рисунок назад
+        while (pos < len) {
+            val a = max(0f, pos)
+            val b = min(len, pos + on)
+            if (b > a) {
+                val seg = Path()
+                measure.getSegment(a, b, seg, true)
+                p.addPath(seg)
+            }
+            pos += on + off
+        }
+    }
+    p
+}
+
+/** Веа Prism (F _buildFanMask, vl_series_art.dart:726-739). */
+private val FanMask: Path by lazy {
+    val p = Path()
+    val dx = 196f
+    val step = 27f
+    val sw = 15f
+    val x0 = 340f
+    for (i in 0 until 7) {
+        val x = x0 + i * step
+        p.moveTo(x, 0f)
+        p.lineTo(x + sw, 0f)
+        p.lineTo(x + sw - dx, ART_H)
+        p.lineTo(x - dx, ART_H)
+        p.close()
+    }
+    p
+}
+
+/** Скрытая солнечная система Lumen: диск, лучи, пунктирные орбиты, планеты (F _buildLumenMask:742-770). */
+private val LumenMask: Path by lazy {
+    val cx = 430f
+    val cy = 270f
+    val p = Path().apply { addOval(Rect(Offset(cx, cy), 62f)) }
+    val stroke = Path()
+    for (i in 0 until 48) {
+        val a = i / 48f * PI.toFloat() * 2f
+        val r0 = if (i % 2 == 1) 100f else 92f
+        val r1 = if (i % 4 == 0) 170f else 140f
+        stroke.moveTo(cx + r0 * cos(a), cy + r0 * sin(a))
+        stroke.lineTo(cx + r1 * cos(a), cy + r1 * sin(a))
+    }
+    val orbits = listOf(210f, 262f, 330f, 410f)
+    for ((i, r) in orbits.withIndex()) {
+        val circle = Path().apply { addOval(Rect(Offset(cx, cy), r)) }
+        val on = if (i % 2 == 1) 3f else r * 1.1f
+        val off = if (i % 2 == 1) 9f else r * 0.4f
+        val measure = PathMeasure().apply { setPath(circle, false) }
+        val len = measure.length
+        var pos = 0f
+        while (pos < len) {
+            val seg = Path()
+            measure.getSegment(pos, min(len, pos + on), seg, true)
+            stroke.addPath(seg)
+            pos += on + off
+        }
+    }
+    val stroked = strokeToFill(stroke, 2.2f)
+    val planets = listOf(
+        Triple(0.5f, 210f, 9f), Triple(2.2f, 262f, 6f), Triple(3.9f, 330f, 12f),
+        Triple(5.3f, 410f, 7f), Triple(1.3f, 330f, 4f),
+    )
+    for ((a, r, pr) in planets) {
+        p.addOval(Rect(Offset(cx + r * cos(a), cy + r * sin(a)), pr))
+    }
+    Path().apply { op(p, stroked, PathOperation.Union) }
+}
+
+/** Контур обводки как заливка: тонкие пути → «капсулы» нужной толщины (F _strokeToFill:773-786). */
+private fun strokeToFill(src: Path, width: Float): Path {
+    val out = Path()
+    val measure = PathMeasure().apply { setPath(src, false) }
+    val len = measure.length
+    val step = 4f
+    var d = 0f
+    while (d < len) {
+        val p = measure.getPosition(d)
+        val tangent = measure.getTangent(d)
+        val p2 = measure.getPosition(min(len, d + step))
+        if (tangent != Offset.Unspecified) {
+            val nx = -tangent.y * (width / 2f)
+            val ny = tangent.x * (width / 2f)
+            out.moveTo(p.x + nx, p.y + ny)
+            out.lineTo(p2.x + nx, p2.y + ny)
+            out.lineTo(p2.x - nx, p2.y - ny)
+            out.lineTo(p.x - nx, p.y - ny)
+            out.close()
+        }
+        d += step
+    }
+    return out
 }
 
 // ── Голограммы серии VL ──
@@ -739,6 +963,20 @@ internal fun DrawScope.paintVlHolo(
             drawRect(
                 cssRepeating(118f, st.rainbow, box, rainbowOrigin),
                 alpha = alpha * st.rainbowAlpha
+            )
+            // Бегущий блик 115° (F vl_series_art.dart:1059-1062): у Blackout — cyan
+            val glintOrigin = Offset(-100f - fx * 0.34f * box.width, -100f + fy * 0.26f * box.height)
+            val glintColor = if (pattern == IdPattern.VL_BLACKOUT) rgba(160, 255, 255, 0.85f) else Color.White.copy(alpha = 0.8f)
+            drawRect(
+                cssLinear(
+                    115f,
+                    listOf(
+                        0f to Color.Transparent, 0.44f to Color.Transparent, 0.5f to glintColor,
+                        0.56f to Color.Transparent, 1f to Color.Transparent,
+                    ),
+                    box, glintOrigin,
+                ),
+                alpha = alpha,
             )
 
             val emblem = vlEmblem(pattern)

@@ -198,6 +198,8 @@ fun ProfileScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
+                        // Источник backdrop-блюра нижней панели навигации
+                        .vlHazeSource()
                         .verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {

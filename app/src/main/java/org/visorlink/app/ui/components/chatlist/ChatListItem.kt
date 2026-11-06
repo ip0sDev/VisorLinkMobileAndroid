@@ -88,7 +88,6 @@ fun ChatListItem(
     draftText: String?,
     unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
-    isCompactList: Boolean = false,
     isTyping: Boolean = false,
     /** Строка «Приглашения»: своя иконка и заголовок, вместо последнего сообщения — [previewOverride]. */
     isInvites: Boolean = false,
@@ -120,7 +119,7 @@ fun ChatListItem(
     }
 
     val depth = when {
-        !tokens.structure.enabled || isCompactList -> VlDepth.Flat
+        !tokens.structure.enabled -> VlDepth.Flat
         tokens.structure.keycap && isPressed -> VlDepth.Inset
         else -> VlDepth.Raised
     }
@@ -150,10 +149,10 @@ fun ChatListItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .padding(vertical = if (!isCompactList) 6.dp else 0.dp)
+            .padding(vertical = 6.dp)
             .scale(itemScale)
             .then(
-                if (tokens.structure.enabled && !isCompactList) {
+                if (tokens.structure.enabled) {
                     Modifier.vlStructure(tokens.structure, depth, shape)
                 } else if (tokens.structure.enabled) {
                     Modifier.vlHairline(cs.outlineVariant, shape)
@@ -176,7 +175,7 @@ fun ChatListItem(
                         Modifier.background(Brush.verticalGradient(listOf(gTop, gBottom)))
                     } else Modifier
                 )
-                .padding(horizontal = 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {
@@ -336,207 +335,6 @@ fun ChatListItem(
                         Spacer(Modifier.width(8.dp))
                         ChatUnreadBadge(count = unreadCount)
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ChatListItemCompact(
-    chat: Chat,
-    chatType: ChatType,
-    currentUid: String,
-    otherProfile: UserProfile?,
-    draftText: String?,
-    unreadCount: Int = 0,
-    isSavedMessages: Boolean = false,
-    isTyping: Boolean = false,
-    /** Строка «Приглашения» — см. [ChatListItem]. */
-    isInvites: Boolean = false,
-    previewOverride: String? = null,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val bgHighlight = if (isPressed) MaterialTheme.colorScheme.onSurface.copy(0.05f) else Color.Transparent
-
-    val titleColor = MaterialTheme.colorScheme.onSurface
-    val subColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val cs = MaterialTheme.colorScheme
-
-    val isOwnLast = !isSavedMessages && !isInvites && (chat.lastMessageSenderId == currentUid ||
-            chat.lastMessageInfo()?.senderId == currentUid)
-    val isRead = remember(chat, currentUid) {
-        isLastMessageRead(chat, currentUid)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bgHighlight)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.size(54.dp)) {
-            if (isInvites) {
-                InvitesIcon(size = 54.dp)
-            } else if (isSavedMessages) {
-                SavedMessagesIcon(size = 54.dp)
-            } else {
-                when (chatType) {
-                    ChatType.DIRECT, ChatType.EMERGENCY -> {
-                        val otherUsername = chat.otherUsername(currentUid)
-                        val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
-                        AvatarWithPresence(
-                            avatarUrl = otherProfile?.avatarUrl,
-                            displayName = chat.otherDisplayName(currentUid),
-                            isOnline = otherProfile?.online ?: false,
-                            size = 54.dp,
-                            isFaultyWireBot = isFaulty
-                        )
-                    }
-                    ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
-                        avatarUrl = chat.avatarUrl,
-                        name = chat.name,
-                        isChannel = chatType == ChatType.CHANNEL,
-                        size = 54.dp
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (chatType == ChatType.EMERGENCY) {
-                        Text("🛡️", fontSize = 12.sp)
-                    } else if (chatType != ChatType.DIRECT && !isSavedMessages) {
-                        Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
-                    }
-                    val otherUsername = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) chat.otherUsername(currentUid) else ""
-                    val isOfficial = chatType == ChatType.DIRECT && (
-                        otherProfile?.botBadge == "official" ||
-                        otherProfile?.uid == "bot_faultywire" ||
-                        otherUsername == "faultywire"
-                    )
-                    Text(
-                        text = when {
-                            isInvites -> stringResource(R.string.notifications_title)
-                            isSavedMessages -> stringResource(R.string.saved_messages_title)
-                            chatType == ChatType.EMERGENCY -> {
-                                val name = chat.otherDisplayName(currentUid).ifEmpty { chat.name }
-                                "$name [SOS]"
-                            }
-                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
-                            else -> chat.name
-                        },
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = titleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (isOfficial) {
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = "Official Bot",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                }
-                chat.lastMessageAt?.let {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        formatTime(it.toDate()),
-                        style = MaterialTheme.typography.labelSmall.terminalData(),
-                        color = subColor,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    val tokens = VlTheme.tokens
-                    if (isTyping) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(if (tokens.led != null) 8.dp else 4.dp)
-                        ) {
-                            if (tokens.led != null) {
-                                VlLedTyping()
-                            } else {
-                                Text(text = "✍️", fontSize = 12.sp)
-                            }
-                            Text(
-                                text = stringResource(R.string.chat_typing),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = tokens.led?.color ?: cs.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    } else if (!draftText.isNullOrEmpty()) {
-                        Row {
-                            Text(
-                                stringResource(R.string.chatlist_draft_prefix),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = draftText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = subColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (isOwnLast) {
-                                MessageStatusIcon(isRead = isRead)
-                                Spacer(Modifier.width(5.dp))
-                            }
-                            val tradePreview = stringResource(R.string.preview_id_trade)
-                            val messageText = remember(chat.lastMessage, tradePreview) {
-                                if (org.visorlink.app.data.model.isIdTradePreview(chat.lastMessage)) tradePreview
-                                else org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
-                            }
-                            Text(
-                                text = previewOverride
-                                    ?: if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = subColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                        }
-                    }
-                }
-                if (unreadCount > 0) {
-                    Spacer(Modifier.width(8.dp))
-                    ChatUnreadBadge(count = unreadCount)
                 }
             }
         }

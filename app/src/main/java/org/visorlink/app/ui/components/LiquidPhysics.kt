@@ -330,20 +330,18 @@ fun rememberLiquidPopProgress(
 }
 
 /**
- * Желейное всплывание попапа. На перелёте пружины ([progress] > 1) разводит оси
- * в разные стороны — именно это отличает «каплю» от обычного scale-in.
+ * Всплывание попапа (порт Flutter `vlDialogTransition`, `vl_overlays.dart:57-75`):
+ * scale 0.9→1 ходом темы, translateY 14→0, fade завершается на 45 % хода (easeOut).
  */
 fun Modifier.liquidPopIn(
     progress: Float,
     origin: TransformOrigin = TransformOrigin.Center
 ): Modifier = this.graphicsLayer {
     transformOrigin = origin
-    val base = 0.84f + 0.16f * progress
-    // Перелёт пружины превращается в лёгкое желе: шире по X, ниже по Y
-    val overshoot = (progress - 1f).coerceIn(-0.5f, 0.5f)
-    scaleX = base + overshoot * 0.07f
-    scaleY = base - overshoot * 0.07f
-    alpha = (progress * 1.4f).coerceIn(0f, 1f)
+    scaleX = 0.9f + 0.1f * progress
+    scaleY = 0.9f + 0.1f * progress
+    translationY = 14.dp.toPx() * (1f - progress)
+    alpha = androidx.compose.animation.core.EaseOut.transform((progress / 0.45f).coerceIn(0f, 1f))
 }
 
 /**

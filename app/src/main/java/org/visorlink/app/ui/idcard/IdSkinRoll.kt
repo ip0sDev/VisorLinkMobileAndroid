@@ -109,6 +109,7 @@ internal fun IdSkinRoll(
     wearer: IdSkinWearer,
     person: IdCardPerson,
     onClose: () -> Unit,
+    premium: Boolean = false,
     /** Лента и сдвиг остановки; в скриншот-тестах — с фиксированным seed. */
     random: Random = Random.Default,
 ) {
@@ -123,7 +124,7 @@ internal fun IdSkinRoll(
     LaunchedEffect(Unit) {
         haptics.rollStart()
         try {
-            val s = repo.rollSkin()
+            val s = if (premium) repo.rollPremiumSkin() else repo.rollSkin()
             skin = s
             if (reduce) {
                 phase = RollPhase.REVEAL

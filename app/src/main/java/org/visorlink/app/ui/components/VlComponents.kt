@@ -31,10 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -66,6 +69,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.text.TextStyle
@@ -207,8 +211,7 @@ fun VlGlassPanel(
     Surface(
         modifier = modifier,
         shape = shape,
-        color = cs.surface.copy(alpha = if (simplifiedGraphics) 1f else 0.7f),
-        tonalElevation = 2.dp
+        color = cs.surface.copy(alpha = if (simplifiedGraphics) 1f else 0.7f)
     ) {
         content()
     }
@@ -234,6 +237,7 @@ fun VlButton(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
+    val tt = MaterialTheme.typography
     val tokens = VlTheme.tokens
 
     val interactionSource = remember { MutableInteractionSource() }
@@ -246,58 +250,122 @@ fun VlButton(
     val shape: Shape = if (isPressed) tokens.shapes.buttonPressed else tokens.shapes.button
     val keycap = tokens.structure.keycap
     val restGlow = keycap && tokens.signal.buttonRestAlpha > 0f
-    val depth = when {
-        tokens.structure.enabled && enabled -> if (isPressed) VlDepth.Inset else VlDepth.Raised
-        else -> VlDepth.Flat
-    }
+    val m3 = !tokens.structure.enabled
+    // Клавиша Forge поднимается/утапливается; Biolume/M3E — всегда плоская (F vl_button.dart:57)
+    val keycapDepth = if (isPressed) VlDepth.Inset else VlDepth.Raised
 
-    Button(
-        onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
+    // M3E: лёгкое сжатие при нажатии (F vl_button.dart:38-40)
+    val scaleTarget = if (isPressed && tokens.motion.pressStyle == VlPressStyle.SCALE) tokens.motion.pressScale else 1f
+    val scale by animateFloatAsState(scaleTarget, tokens.motion.motionSpec<Float>(), label = "vlbutton_scale")
+
+    val fill = if (enabled) container else cs.onSurface.copy(alpha = 0.12f)
+    val fg = if (enabled) onContainer else cs.onSurface.copy(alpha = 0.38f)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(56.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            // Тень покоя: чёрная 18%, offset (0,1); Biolume blur 4, M3E blur 2 (F vl_button.dart:48-50)
+            .drawBehind {
+                if ((m3 || tokens.isBiolume) && enabled && !isPressed) {
+                    val ds = this
+                    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, ds)) }
+                    drawSoftShadow(
+                        path = path,
+                        color = Color.Black.copy(alpha = 0.18f),
+                        blurPx = (if (m3) 2.dp else 4.dp).toPx(),
+                        dx = 0f,
+                        dy = 1.dp.toPx(),
+                    )
+                }
+            }
             .vlSignalGlow(
                 tokens = tokens.signal,
                 color = container,
                 shape = shape,
-                active = enabled && (isPressed || (!isDestructive && restGlow)),
+                active = enabled && (isPressed || restGlow),
                 alphaOverride = if (isPressed) null else tokens.signal.buttonRestAlpha,
                 counted = isPressed,
             )
             .vlSignalBorder(
                 tokens = tokens.signal,
-                color = container,
+                color = onContainer,
                 shape = shape,
                 active = enabled && isFocused,
             )
             .then(
-                if (tokens.structure.enabled) {
-                    Modifier.vlStructure(tokens.structure, depth, shape)
+                if (keycap && enabled) {
+                    Modifier.vlStructure(tokens.structure, keycapDepth, shape)
                 } else {
                     Modifier
                 }
             )
-            .then(
-                if (keycap && enabled && !isPressed) {
-                    Modifier.vlKeycapBackground(tokens.structure, container, shape = shape, depth = depth)
-                } else {
-                    Modifier
-                }
-            ),
-        enabled = enabled,
-        shape = shape,
-        interactionSource = interactionSource,
-        elevation = when {
-            tokens.isBiolume -> ButtonDefaults.buttonElevation(defaultElevation = 2.dp, pressedElevation = 0.dp)
-            tokens.structure.enabled -> ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp)
-            else -> ButtonDefaults.buttonElevation()
+            .vlKeycapBackground(
+                tokens.structure,
+                fill,
+                shape,
+                if (keycap && enabled) keycapDepth else VlDepth.Flat,
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = enabled,
+            ) {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                onClick()
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(
+            LocalContentColor provides fg,
+            LocalTextStyle provides (tt.labelLarge ?: TextStyle.Default).copy(color = fg, fontWeight = FontWeight.Bold),
+        ) {
+            content()
+        }
+    }
+}
+
+// ── VlEntrance ───────────────────────────────────────────────────────────────
+
+/**
+ * Появление с задержкой: въезд снизу на [offsetDp] + fade + лёгкий scale
+ * (порт Flutter `VlEntrance`, `vl_motion.dart:293-350`). При reduce-motion —
+ * контент без анимации.
+ */
+@Composable
+fun VlEntrance(
+    modifier: Modifier = Modifier,
+    delayMs: Int = 0,
+    offsetDp: Dp = 18.dp,
+    durationMs: Int = 300,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    val tokens = VlTheme.tokens
+    if (!enabled || tokens.reduceMotion) {
+        Box(modifier) { content() }
+        return
+    }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val offsetPx = with(density) { offsetDp.toPx() }
+    // Ход въезда стартует после задержки; fade занимает 70 % оставшегося пути
+    val move = remember { Animatable(0f) }
+    val fade = remember { Animatable(0f) }
+    LaunchedEffect(enabled) {
+        move.animateTo(1f, tween(durationMs, delayMillis = delayMs, easing = EaseOutCubic))
+        if (fade.value < 1f) fade.snapTo(1f)
+    }
+    LaunchedEffect(enabled) {
+        fade.animateTo(1f, tween((durationMs * 0.7f).toInt(), delayMillis = delayMs, easing = EaseOut))
+    }
+    Box(
+        modifier = modifier.graphicsLayer {
+            translationY = (1f - move.value) * offsetPx
+            scaleX = 0.97f + 0.03f * move.value
+            scaleY = 0.97f + 0.03f * move.value
+            alpha = fade.value
         },
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (keycap && enabled && !isPressed) Color.Transparent else container,
-            contentColor = onContainer,
-            disabledContainerColor = cs.onSurface.copy(alpha = 0.12f),
-            disabledContentColor = cs.onSurface.copy(alpha = 0.38f),
-        )
     ) {
         content()
     }
@@ -327,30 +395,8 @@ fun VlSwitch(
     val trackShape = sw.track ?: tokens.shapes.pill
     val thumbShape = sw.thumb ?: tokens.shapes.indicator
 
-    val trackJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.65f)
-    val thumbStretch = remember { Animatable(0f) }
-
-    // Первый запуск — не переключение: без этого каждый тумблер экрана вздрагивал при открытии
-    val switchInitial = remember { booleanArrayOf(true) }
-    LaunchedEffect(checked) {
-        val skipPulse = switchInitial[0]
-        switchInitial[0] = false
-        if (skipPulse) {
-            thumbStretch.snapTo(0f)
-        } else {
-            trackJelly.pulse(0.08f)
-            // Фаза полёта: быстрое растяжение бегунка в каплю вдоль оси X
-            thumbStretch.animateTo(0.26f, tween(65, easing = FastOutSlowInEasing))
-            // Пружинный отскок с перелётом в сжатие (squash) и мягкой стабилизацией
-            thumbStretch.animateTo(
-                targetValue = 0f,
-                animationSpec = spring(
-                    dampingRatio = 0.52f,
-                    stiffness = 300f
-                )
-            )
-        }
-    }
+    val interactionSource = remember { MutableInteractionSource() }
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     val structure = tokens.structure
     // M3E (структура выключена) рисуется по спецификации M3 Switch: включённый —
@@ -365,9 +411,12 @@ fun VlSwitch(
     // Зазор до края трека одинаковый со всех сторон: (высота трека − высота бегунка) / 2
     val inset = (trackHeight - sw.thumbHeight) / 2
 
+    // Ход бегунка как во Flutter: пружинным темам — easeOutBack 220 мс, Forge — ход клавиши 160 мс
+    val moveDuration = if (tokens.motion.useSpring) 220 else tokens.motion.durationMs
+    val moveEasing = if (tokens.motion.useSpring) EaseOutBack else VlCurves.Key
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) trackWidth - sw.thumbWidth - inset else (trackHeight - thumbHeightTarget) / 2,
-        animationSpec = spring(dampingRatio = 0.60f, stiffness = 340f),
+        animationSpec = tween(durationMillis = moveDuration, easing = moveEasing),
         label = "vlswitch_thumb",
     )
     val thumbColor by animateColorAsState(
@@ -383,7 +432,6 @@ fun VlSwitch(
 
     Box(
         modifier = modifier
-            .liquidJelly(trackJelly)
             .size(width = trackWidth, height = trackHeight)
             .clip(trackShape)
             .background(
@@ -391,7 +439,6 @@ fun VlSwitch(
                     checked && sw.trackOnColor != null -> sw.trackOnColor!!
                     m3Style && checked -> cs.primary
                     m3Style -> cs.surfaceContainerHighest
-                    checked && sw.litTrack -> cs.primary.copy(alpha = 0.28f).compositeOver(cs.surfaceContainer)
                     checked -> cs.primaryContainer
                     else -> cs.surfaceContainer
                 },
@@ -399,18 +446,20 @@ fun VlSwitch(
             )
             .vlInset(structure, trackShape)
             .then(
-                when {
-                    m3Style && !checked -> Modifier.border(2.dp, cs.outline, trackShape)
-                    checked && sw.litTrack -> Modifier.border(1.dp, cs.primary.copy(alpha = 0.6f), trackShape)
-                    else -> Modifier
-                }
+                if (m3Style && !checked) Modifier.border(2.dp, cs.outline, trackShape) else Modifier
+            )
+            // Фокус-контур на треке (F vl_controls.dart:60 signalBorder)
+            .vlSignalBorder(
+                tokens = tokens.signal,
+                color = cs.primary,
+                shape = trackShape,
+                active = isFocused,
             )
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
+                interactionSource = interactionSource,
                 indication = null,
             ) {
                 haptic.perform(HapticType.SELECTION, hapticEnabled)
-                trackJelly.press(0.06f)
                 onCheckedChange(!checked)
             },
         contentAlignment = Alignment.CenterStart,
@@ -449,11 +498,6 @@ fun VlSwitch(
             modifier = Modifier
                 .offset(x = thumbOffset)
                 .size(width = thumbWidth, height = thumbHeight)
-                .graphicsLayer {
-                    val s = thumbStretch.value
-                    scaleX = 1f + s
-                    scaleY = 1f - (s * 0.55f)
-                }
                 .vlSignalGlow(
                     tokens = tokens.signal,
                     color = thumbColor,
@@ -501,8 +545,16 @@ fun VlSegmentedControl(
         Row(Modifier.fillMaxWidth()) {
             labels.forEachIndexed { i, label ->
                 val isSelected = selectedIndex == i
+                val itemSource = remember { MutableInteractionSource() }
+                val itemFocused by itemSource.collectIsFocusedAsState()
+                // Смена фона — линейный tween хода темы, без пружинного перелёта (F AnimatedContainer)
+                val bgDuration = if (tokens.motion.useSpring) 220 else tokens.motion.durationMs
                 val targetBg = if (isSelected) tokens.selectionFill else Color.Transparent
-                val bgColor by animateColorAsState(targetBg, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_bg")
+                val bgColor by animateColorAsState(
+                    targetBg,
+                    tween(durationMillis = bgDuration, easing = LinearEasing),
+                    label = "seg_bg",
+                )
                 val textColor by animateColorAsState(
                     if (isSelected) cs.primary else cs.onSurfaceVariant, VlTheme.tokens.motion.motionSpec<Color>(), label = "seg_txt"
                 )
@@ -518,16 +570,23 @@ fun VlSegmentedControl(
                                 Modifier
                             }
                         )
+                        // Фокус-контур выбранного сегмента (F vl_controls.dart:172)
+                        .vlSignalBorder(
+                            tokens = tokens.signal,
+                            color = cs.primary,
+                            shape = itemShape,
+                            active = itemFocused,
+                        )
                         .clickable(
                             enabled = enabled,
-                            interactionSource = remember { MutableInteractionSource() }, indication = null
+                            interactionSource = itemSource, indication = null
                         ) {
                             if (i != selectedIndex) {
                                 haptic.perform(HapticType.SELECTION, hapticEnabled)
                             }
                             onSelected(i)
                         }
-                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                        .padding(vertical = 12.dp, horizontal = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     // Forge: у выбранной клавиши горит светодиод
@@ -555,7 +614,7 @@ fun VlSegmentedControl(
 
 // ── VlIconTray ───────────────────────────────────────────────────────────
 
-/** §4.1: иконка-кнопка «нажимает» → в Biolume приподнята. */
+/** §4.1: иконка-кнопка «нажимает» → в Biolume утапливается (F vl_surface.dart:143-174). */
 @Composable
 fun VlIconTray(
     icon: ImageVector,
@@ -564,6 +623,7 @@ fun VlIconTray(
     selected: Boolean = false,
     isError: Boolean = false,
     iconColor: Color? = null,
+    onClick: (() -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
@@ -571,21 +631,39 @@ fun VlIconTray(
     val size = 40.dp
     val shape = tokens.shapes.indicator
 
-    val depth = if (tokens.structure.enabled) VlDepth.Raised else VlDepth.Flat
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+
+    val depth = when {
+        !tokens.structure.enabled -> VlDepth.Flat
+        onClick != null && isPressed -> VlDepth.Inset
+        else -> VlDepth.Raised
+    }
     val trayFill = if (tokens.structure.enabled) cs.surfaceContainer else cs.surfaceContainerHigh
-    Box(
-        modifier = modifier
-            .size(size)
-            .vlStructure(
-                tokens = tokens.structure,
-                depth = depth,
-                shape = shape,
-            )
-            .clip(shape)
-            .vlKeycapBackground(tokens.structure, trayFill, shape, depth),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(icon, contentDescription = contentDescription, tint = color, modifier = Modifier.size(20.dp))
+    val tray: @Composable () -> Unit = {
+        Box(
+            modifier = Modifier
+                .size(size)
+                .vlStructure(
+                    tokens = tokens.structure,
+                    depth = depth,
+                    shape = shape,
+                )
+                .clip(shape)
+                .vlKeycapBackground(tokens.structure, trayFill, shape, depth),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = contentDescription, tint = color, modifier = Modifier.size(20.dp))
+        }
+    }
+    if (onClick == null) {
+        Box(modifier = modifier) { tray() }
+    } else {
+        Box(
+            modifier = modifier
+                .clip(shape)
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
+        ) { tray() }
     }
 }
 
@@ -733,16 +811,23 @@ fun VlSettingsItem(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
-    val iconShape = VlTheme.tokens.shapes.rounded(14.dp)
+    val tokens = VlTheme.tokens
+    val iconShape = tokens.shapes.rounded(14.dp)
 
     val color = iconColor ?: if (isDestructive) cs.error else cs.primary
 
-    Surface(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
+            // Нажатая/фокусная строка подсвечивается заливкой, без ряби (F vl_settings.dart:124)
+            .background(if (isPressed || isFocused) cs.onSurface.copy(alpha = 0.06f) else Color.Transparent)
             .combinedClickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = LocalIndication.current,
+                interactionSource = interactionSource,
+                indication = null,
                 enabled = onClick != null || onLongClick != null,
                 onClick = { if (onClick != null) { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() } },
                 onLongClick = onLongClick?.let { action ->
@@ -752,7 +837,6 @@ fun VlSettingsItem(
                     }
                 },
             ),
-        color = Color.Transparent,
     ) {
         Row(
             Modifier
@@ -760,12 +844,25 @@ fun VlSettingsItem(
                 .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            VlGlyph(
-                icon = icon,
-                color = iconColor,
-                destructive = isDestructive,
-                size = 42.dp
-            )
+            // Forge: градиентный значок; Biolume/M3E — иконка в плашке 42×42 (F vl_settings.dart:130-136)
+            if (tokens.isForge) {
+                VlGlyph(
+                    icon = icon,
+                    color = iconColor,
+                    destructive = isDestructive,
+                    size = 42.dp
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(iconShape)
+                        .background(color.copy(alpha = 0.16f), iconShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                }
+            }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = if (isDestructive) color else cs.onSurface)
@@ -796,30 +893,29 @@ fun VlOptionRow(
 ) {
     val haptic = rememberHaptic()
     val cs = MaterialTheme.colorScheme
-    val iconShape = VlTheme.tokens.shapes.rounded(14.dp)
+    val tokens = VlTheme.tokens
+    val iconShape = tokens.shapes.rounded(14.dp)
 
     // Концентричность: строка отступает от края секции на 8dp, поэтому её радиус =
     // радиус секции (32 в «жидком» режиме, 24 иначе) минус этот отступ
-    val rowShape: Shape = VlTheme.tokens.shapes.rounded(24.dp)
+    val rowShape: Shape = tokens.shapes.rounded(24.dp)
 
-    val rowJelly = rememberLiquidJellyState(softness = 0.06f, damping = 0.68f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
-    val targetBgColor = if (selected) {
-        cs.primary.copy(alpha = 0.15f)
-    } else {
-        Color.Transparent
+    // Фон мгновенный: выбранная — primary 15 %, нажатая — onSurface 5 % (F vl_settings.dart:184)
+    val bgColor = when {
+        selected -> cs.primary.copy(alpha = 0.15f)
+        isPressed -> cs.onSurface.copy(alpha = 0.05f)
+        else -> Color.Transparent
     }
-    val animatedBg by animateColorAsState(
-        targetValue = targetBgColor,
-        animationSpec = spring(dampingRatio = 0.70f, stiffness = 380f),
-        label = "option_row_bg"
-    )
 
     val rowBorder = if (selected) {
         BorderStroke(1.dp, cs.primary.copy(alpha = 0.30f))
     } else null
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             // Крайние строки группы отступают от края секции на те же 8dp, что и по бокам:
@@ -830,16 +926,22 @@ fun VlOptionRow(
                 top = if (total > 1 && index == 0) 8.dp else 3.dp,
                 bottom = if (total > 1 && index == total - 1) 8.dp else 3.dp,
             )
-            .liquidJelly(rowJelly)
             .clip(rowShape)
-            .then(if (rowBorder != null) Modifier.border(rowBorder, rowShape) else Modifier),
-        shape = rowShape,
-        onClick = {
-            haptic.perform(HapticType.CLICK, hapticEnabled)
-            rowJelly.pulse(0.06f)
-            onClick()
-        },
-        color = animatedBg,
+            .background(bgColor, rowShape)
+            .then(if (rowBorder != null) Modifier.border(rowBorder, rowShape) else Modifier)
+            .vlSignalBorder(
+                tokens = tokens.signal,
+                color = cs.primary,
+                shape = rowShape,
+                active = isFocused,
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+            ) {
+                haptic.perform(HapticType.CLICK, hapticEnabled)
+                onClick()
+            },
     ) {
         Row(
             Modifier
@@ -847,11 +949,32 @@ fun VlOptionRow(
                 .padding(horizontal = 14.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            VlGlyph(
-                icon = icon,
-                muted = !selected,
-                size = 42.dp
-            )
+            // Forge: градиентный значок; Biolume/M3E — плашка (F vl_settings.dart:191-201)
+            if (tokens.isForge) {
+                VlGlyph(
+                    icon = icon,
+                    muted = !selected,
+                    size = 42.dp
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(iconShape)
+                        .background(
+                            if (selected) cs.primary.copy(alpha = 0.22f) else cs.surfaceContainerHigh,
+                            iconShape,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        tint = if (selected) cs.primary else cs.onSurfaceVariant,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+            }
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -868,17 +991,25 @@ fun VlOptionRow(
                     )
                 }
             }
-            AnimatedVisibility(
-                visible = selected,
-                enter = scaleIn(spring(dampingRatio = 0.55f, stiffness = 340f)) + fadeIn(),
-                exit = scaleOut(spring(dampingRatio = 0.7f, stiffness = 400f)) + fadeOut()
-            ) {
-                Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = "Selected",
-                    tint = cs.primary
-                )
-            }
+            // Галочка вырастает из нуля (F vl_settings.dart:212-217: AnimatedScale easeOutBack)
+            val checkDuration = if (tokens.motion.useSpring) 220 else tokens.motion.durationMs
+            val checkEasing = if (tokens.motion.useSpring) EaseOutBack else VlCurves.Key
+            val checkScale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0f,
+                animationSpec = tween(durationMillis = checkDuration, easing = checkEasing),
+                label = "option_row_check",
+            )
+            Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = "Selected",
+                tint = cs.primary,
+                modifier = Modifier
+                    .alpha(if (checkScale > 0.01f) 1f else 0f)
+                    .graphicsLayer {
+                        scaleX = checkScale
+                        scaleY = checkScale
+                    },
+            )
         }
     }
 }

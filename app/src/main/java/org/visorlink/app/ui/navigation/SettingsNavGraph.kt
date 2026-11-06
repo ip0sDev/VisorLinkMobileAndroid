@@ -26,6 +26,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
             onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
             onOpenSessions = { navController.navigate(Screen.Sessions.route) },
+            onOpenBots = { navController.navigate(Screen.Bots.route) },
             onOpenStatus = { navController.navigate(Screen.Status.route) },
             onOpenCustomization = { navController.navigate(Screen.Customization.route) },
             onOpenIdCard = { navController.navigate(Screen.IdCardSettings.route) },
@@ -35,6 +36,7 @@ fun NavGraphBuilder.settingsNavGraph(
             onNavigateToAppCheckDiagnostic = { navController.navigate(Screen.AppCheckDiagnostic.route) },
             onOpenPro = { navController.navigate(Screen.Pro.route) },
             onOpenSignal = { navController.navigate(Screen.Signal.route) },
+            onOpenFolders = { navController.navigate(Screen.ChatFolders.route) },
             themeViewModel = themeViewModel
         )
     }
@@ -49,6 +51,13 @@ fun NavGraphBuilder.settingsNavGraph(
     composable(Screen.Signal.route) {
         org.visorlink.app.ui.screens.signal.SignalScreen(
             onNavigateBack = { navController.popBackStack() }
+        )
+    }
+
+    composable(Screen.ChatFolders.route) {
+        org.visorlink.app.ui.screens.folders.ChatFoldersScreen(
+            onBack = { navController.popBackStack() },
+            onOpenPro = { navController.navigate(Screen.Pro.route) }
         )
     }
 
@@ -91,6 +100,10 @@ fun NavGraphBuilder.settingsNavGraph(
 
     composable(Screen.Sessions.route) {
         org.visorlink.app.ui.screens.settings.SessionsScreen(onNavigateBack = { navController.popBackStack() })
+    }
+
+    composable(Screen.Bots.route) {
+        org.visorlink.app.ui.screens.settings.BotsScreen(onBack = { navController.popBackStack() })
     }
 
     composable(Screen.Status.route) {
