@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -79,19 +80,29 @@ fun StickerPickerBottomSheet(
         (configuration.screenHeightDp * 0.72f).dp.coerceIn(400.dp, 560.dp)
     }
 
+    // Материал панели рисуем сами (containerColor прозрачный): keycap-свет и рельеф
+    // поверх M3-шторки не подмешать, а её containerColor+tonalElevation давали серый тон
+    val panelColor = if (tokens.isForge) cs.surface else cs.surfaceContainerHigh
+    val sheetShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         dragHandle = null,
-        shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        // Материал как у остальных шторок приложения: в Forge — фон Clean Room,
-        // иначе серый surfaceContainerLow/High выпадал из стилистики
-        containerColor = if (tokens.isForge) cs.surface else cs.surfaceContainerHigh,
+        shape = sheetShape,
+        containerColor = Color.Transparent,
         contentWindowInsets = { WindowInsets(0) }
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(sheetShape)
+                .then(
+                    if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, sheetShape) else Modifier
+                )
+                // Keycap-свет: в Forge верх панели светлее к белому (sheen), в Biolume — плоско
+                .vlKeycapBackground(tokens.structure, panelColor, sheetShape, VlDepth.Raised)
+                .vlHairline(cs.outlineVariant.copy(alpha = 0.4f), sheetShape)
                 .height(targetHeight)
                 .navigationBarsPadding()
         ) {
