@@ -489,13 +489,22 @@ private fun StorePackCard(
     onSendSticker: (StickerItem) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val cardShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
+    val tokens = VlTheme.tokens
+    val cardShape = tokens.shapes.adapt(RoundedCornerShape(16.dp))
     var previewSticker by remember { mutableStateOf<StickerItem?>(null) }
 
     Surface(
         shape = cardShape,
-        color = cs.surfaceContainer.copy(alpha = 0.6f),
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        color = if (tokens.isForge) cs.surfaceContainerLow else cs.surfaceContainer.copy(alpha = 0.6f),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp)
+            .then(
+                if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, cardShape) else Modifier
+            )
+            .then(
+                if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.35f), cardShape) else Modifier
+            ),
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -806,8 +815,10 @@ private fun StickerGridTile(
     val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
     val tileShape = tokens.shapes.adapt(RoundedCornerShape(12.dp))
-    // Forge: «голые» плитки без коробок — ячейка проявляется только при нажатии
-    val bare = tokens.structure.hardShadow != null
+    // Forge: «голые» плитки без коробок — LED-экраны лежат прямо на панели шторки,
+    // ячейка проявляется только при нажатии (hardShadow в ForgeV2 всегда null —
+    // детект по нему не работал, оставляя серые коробки)
+    val bare = tokens.isForge
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val isLed = format == StickerFormat.LED || url.startsWith("led:") || url.startsWith("led_")
