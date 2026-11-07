@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.components
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -157,7 +159,16 @@ fun VlDialogButton(
 
     val tokens = VlTheme.tokens
     val color = if (isDestructive) cs.error else if (isPrimary) cs.primary else cs.onSurfaceVariant
-    val opacity = if (!active) 0.4f else if (isPressed) 0.55f else 1f
+    // Плавное затухание при нажатии/деактивации
+    val opacity by animateFloatAsState(
+        targetValue = when {
+            !active -> 0.4f
+            isPressed -> 0.55f
+            else -> 1f
+        },
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 400f),
+        label = "vldialogbtn_opacity",
+    )
     val shape = tokens.shapes.rounded(12.dp)
 
     Box(

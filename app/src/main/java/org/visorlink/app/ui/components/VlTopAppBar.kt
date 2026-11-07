@@ -8,6 +8,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -19,6 +21,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +53,12 @@ fun VlTopAppBarButton(
     val depth = if (tokens.structure.enabled) {
         if (isPressed && enabled) VlDepth.Inset else VlDepth.Raised
     } else VlDepth.Flat
+    // Плавное сжатие при нажатии
+    val press by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 480f),
+        label = "vltopbarbtn_press",
+    )
     // Кнопки полупрозрачные: сквозь них читается матовый бар (F vl_chrome.dart:146-148)
     val color = if (tokens.structure.enabled) {
         if (dark) cs.surfaceContainer.copy(alpha = 0.8f) else cs.surfaceContainerLow.copy(alpha = 0.9f)
@@ -59,6 +68,10 @@ fun VlTopAppBarButton(
     Box(
         modifier = modifier
             .defaultMinSize(minWidth = 36.dp, minHeight = 36.dp)
+            .graphicsLayer {
+                val s = 1f - 0.05f * press
+                scaleX = s; scaleY = s
+            }
             .then(
                 if (tokens.structure.enabled) Modifier.vlStructure(tokens.structure, depth, shape)
                 else Modifier

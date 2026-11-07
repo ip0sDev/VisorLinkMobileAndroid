@@ -2,11 +2,18 @@ package org.visorlink.app.ui.components
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazePerformanceMode
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
@@ -38,20 +45,34 @@ fun isVlMatte(): Boolean {
 /**
  * Матовый backdrop-блюр (σ16, как у Flutter `VlBackdropBlur`) для шапок и нижних панелей.
  * Ставить ПОСЛЕ `clip(shape)` и ПЕРЕД полупрозрачной заливкой-тином.
+ *
+ * Перфоманс: [HazePerformanceMode.Balanced] просаживает вход блюра (дешёвые кадры),
+ * а сам блюр включается со второго кадра — компиляция RenderEffect на кадре открытия
+ * экрана давала заметный лаг.
  */
 fun Modifier.vlBackdropBlur(): Modifier = composed {
     if (!isVlMatte()) {
         Modifier
     } else {
         val backdrop = MaterialTheme.colorScheme.background
-        hazeBlur(
-            input = HazeInput.Sources(LocalVlHazeState.current!!),
-            style = HazeBlurStyle {
-                blurEnabled(true)
-                blurRadius(16.dp)
-                noiseFactor(0f)
-                backgroundColor(backdrop)
-            },
-        )
+        var ready by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            withFrameNanos { }
+            ready = true
+        }
+        if (!ready) {
+            Modifier
+        } else {
+            hazeBlur(
+                input = HazeInput.Sources(LocalVlHazeState.current!!),
+                performanceMode = HazePerformanceMode.Balanced,
+                style = HazeBlurStyle {
+                    blurEnabled(true)
+                    blurRadius(16.dp)
+                    noiseFactor(0f)
+                    backgroundColor(backdrop)
+                },
+            )
+        }
     }
 }

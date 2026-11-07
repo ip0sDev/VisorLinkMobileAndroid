@@ -35,9 +35,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
@@ -226,6 +234,31 @@ fun VlGlassPanel(
  *
  * В MATERIAL3 поведение прежнее: скругление 16dp, без свечения и без морфинга.
  */
+/** Форма, интерполирующая скругления между двумя CornerBasedShape (морф кнопки при нажатии). */
+private class VlMorphShape(private val from: Shape, private val to: Shape, private val t: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        if (t <= 0.001f) return from.createOutline(size, layoutDirection, density)
+        if (t >= 0.999f) return to.createOutline(size, layoutDirection, density)
+        val a = from.createOutline(size, layoutDirection, density) as? Outline.Rounded
+            ?: return if (t < 0.5f) from.createOutline(size, layoutDirection, density) else to.createOutline(size, layoutDirection, density)
+        val b = to.createOutline(size, layoutDirection, density) as? Outline.Rounded
+            ?: return if (t < 0.5f) from.createOutline(size, layoutDirection, density) else to.createOutline(size, layoutDirection, density)
+        fun lerpRadius(p: CornerRadius, q: CornerRadius) = CornerRadius(
+            p.x + (q.x - p.x) * t,
+            p.y + (q.y - p.y) * t,
+        )
+        return Outline.Rounded(
+            RoundRect(
+                rect = Rect(Offset.Zero, size),
+                topLeft = lerpRadius(a.roundRect.topLeftCornerRadius, b.roundRect.topLeftCornerRadius),
+                topRight = lerpRadius(a.roundRect.topRightCornerRadius, b.roundRect.topRightCornerRadius),
+                bottomRight = lerpRadius(a.roundRect.bottomRightCornerRadius, b.roundRect.bottomRightCornerRadius),
+                bottomLeft = lerpRadius(a.roundRect.bottomLeftCornerRadius, b.roundRect.bottomLeftCornerRadius),
+            )
+        )
+    }
+}
+
 @Composable
 fun VlButton(
     onClick: () -> Unit,
@@ -247,16 +280,30 @@ fun VlButton(
     val container = if (isDestructive) cs.error else cs.primary
     val onContainer = if (isDestructive) cs.onError else cs.onPrimary
 
-    val shape: Shape = if (isPressed) tokens.shapes.buttonPressed else tokens.shapes.button
     val keycap = tokens.structure.keycap
     val restGlow = keycap && tokens.signal.buttonRestAlpha > 0f
     val m3 = !tokens.structure.enabled
-    // Клавиша Forge поднимается/утапливается; Biolume/M3E — всегда плоская (F vl_button.dart:57)
-    val keycapDepth = if (isPressed) VlDepth.Inset else VlDepth.Raised
 
-    // M3E: лёгкое сжатие при нажатии (F vl_button.dart:38-40)
-    val scaleTarget = if (isPressed && tokens.motion.pressStyle == VlPressStyle.SCALE) tokens.motion.pressScale else 1f
-    val scale by animateFloatAsState(scaleTarget, tokens.motion.motionSpec<Float>(), label = "vlbutton_scale")
+    // Плавный прогресс нажатия: морф формы stadium→buttonPressed, сжатие, свечение и тень
+    val press by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 480f),
+        label = "vlbutton_press",
+    )
+    val animatedShape = VlMorphShape(tokens.shapes.button, tokens.shapes.buttonPressed, press)
+    val keycapDepth = if (press > 0.5f) VlDepth.Inset else VlDepth.Raised
+
+    // Сжатие: M3E pressScale из токенов, в остальных темах — лёгкие 0.97
+    val pressScale = if (tokens.motion.pressStyle == VlPressStyle.SCALE) tokens.motion.pressScale else 0.97f
+    val scale = 1f - (1f - pressScale) * press
+
+    // Свечение: плавный разгон от покоя к нажатию и обратно
+    val glowA by animateFloatAsState(
+        targetValue = if (isPressed) tokens.signal.glowAlpha else tokens.signal.buttonRestAlpha,
+        animationSpec = spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "vlbutton_glow",
+    )
+    val glowActive = enabled && (isPressed || restGlow || glowA > 0.005f)
 
     val fill = if (enabled) container else cs.onSurface.copy(alpha = 0.12f)
     val fg = if (enabled) onContainer else cs.onSurface.copy(alpha = 0.38f)
@@ -267,13 +314,14 @@ fun VlButton(
             .height(56.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             // Тень покоя: чёрная 18%, offset (0,1); Biolume blur 4, M3E blur 2 (F vl_button.dart:48-50)
+            // — тает по мере нажатия
             .drawBehind {
-                if ((m3 || tokens.isBiolume) && enabled && !isPressed) {
+                if ((m3 || tokens.isBiolume) && enabled && press < 0.999f) {
                     val ds = this
-                    val path = Path().apply { addOutline(shape.createOutline(size, layoutDirection, ds)) }
+                    val path = Path().apply { addOutline(animatedShape.createOutline(size, layoutDirection, ds)) }
                     drawSoftShadow(
                         path = path,
-                        color = Color.Black.copy(alpha = 0.18f),
+                        color = Color.Black.copy(alpha = 0.18f * (1f - press)),
                         blurPx = (if (m3) 2.dp else 4.dp).toPx(),
                         dx = 0f,
                         dy = 1.dp.toPx(),
@@ -283,20 +331,20 @@ fun VlButton(
             .vlSignalGlow(
                 tokens = tokens.signal,
                 color = container,
-                shape = shape,
-                active = enabled && (isPressed || restGlow),
-                alphaOverride = if (isPressed) null else tokens.signal.buttonRestAlpha,
+                shape = animatedShape,
+                active = glowActive,
+                alphaOverride = if (isPressed) null else glowA,
                 counted = isPressed,
             )
             .vlSignalBorder(
                 tokens = tokens.signal,
                 color = onContainer,
-                shape = shape,
+                shape = animatedShape,
                 active = enabled && isFocused,
             )
             .then(
                 if (keycap && enabled) {
-                    Modifier.vlStructure(tokens.structure, keycapDepth, shape)
+                    Modifier.vlStructure(tokens.structure, keycapDepth, animatedShape)
                 } else {
                     Modifier
                 }
@@ -304,7 +352,7 @@ fun VlButton(
             .vlKeycapBackground(
                 tokens.structure,
                 fill,
-                shape,
+                animatedShape,
                 if (keycap && enabled) keycapDepth else VlDepth.Flat,
             )
             .clickable(
