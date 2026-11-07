@@ -835,10 +835,6 @@
     <string name="music_grant_permission">Grant access</string>
     <string name="music_settings_title">Music</string>
     <string name="music_settings_desc">Show Music tab in bottom navigation and integrated music player</string>
-    <string name="music_onboarding_title">Introducing Music in VisorLink!</string>
-    <string name="music_onboarding_desc">Listen to tracks right in chats, save your favorite music into the Favorites playlist, and play tracks from your device.</string>
-    <string name="music_onboarding_enable">Enable Music</string>
-    <string name="music_onboarding_disable">Not now</string>
     <string name="music_send_audio">Audio track</string>
     <string name="music_edit_metadata">Edit audio info</string>
     <string name="music_save_to_library">Save to library</string>

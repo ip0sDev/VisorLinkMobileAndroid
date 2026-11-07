@@ -837,10 +837,6 @@
     <string name="music_grant_permission">Предоставить доступ</string>
     <string name="music_settings_title">Музыка</string>
     <string name="music_settings_desc">Отображать вкладку Музыка в нижней панели и встроенный плеер</string>
-    <string name="music_onboarding_title">Встречайте Музыку в VisorLink!</string>
-    <string name="music_onboarding_desc">Слушайте треки прямо в чатах, сохраняйте любимую музыку в плейлист «Понравившиеся» и импортируйте треки с устройства.</string>
-    <string name="music_onboarding_enable">Включить музыку</string>
-    <string name="music_onboarding_disable">Не сейчас</string>
     <string name="music_send_audio">Аудиозапись</string>
     <string name="music_edit_metadata">Редактировать аудио</string>
     <string name="music_save_to_library">Сохранить в медиатеку</string>

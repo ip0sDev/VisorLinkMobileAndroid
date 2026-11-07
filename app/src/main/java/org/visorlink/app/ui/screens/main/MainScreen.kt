@@ -53,7 +53,6 @@ import org.visorlink.app.ui.screens.music.MusicViewModel
 import org.visorlink.app.ui.screens.profile.ProfileScreen
 import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
-import org.visorlink.app.ui.components.music.MusicOnboardingDialog
 import org.visorlink.app.ui.components.chat.AudioPlaybackDockBar
 import org.visorlink.app.ui.components.chat.DockAnchor
 import org.visorlink.app.ui.theme.ThemeViewModel
@@ -107,7 +106,6 @@ fun MainScreen(
     val diaryEnabled = userProfile?.diaryEnabled ?: false
     val discoverEnabled by themeViewModel.discoverEnabled.collectAsStateWithLifecycle()
     val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
-    val showMusicOnboarding by themeViewModel.showMusicOnboarding.collectAsStateWithLifecycle()
 
     val musicPlayerManager: MusicPlayerManager = koinInject()
     val musicRepository: MusicRepository = koinInject()
@@ -120,13 +118,6 @@ fun MainScreen(
 
     val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled
     val isOnline by mainViewModel.isOnline.collectAsStateWithLifecycle()
-
-    if (showMusicOnboarding) {
-        MusicOnboardingDialog(
-            onEnable = { themeViewModel.completeMusicOnboarding(true) },
-            onDisable = { themeViewModel.completeMusicOnboarding(false) }
-        )
-    }
 
     if (showFullscreenPlayer) {
         FullscreenPlayerDialog(

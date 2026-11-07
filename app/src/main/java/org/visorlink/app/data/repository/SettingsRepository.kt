@@ -22,7 +22,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val KEY_DYNAMIC_INPUT = "dynamic_chat_input"
     private val KEY_DISCOVER_ENABLED = "discover_enabled"
     private val KEY_MUSIC_ENABLED = "music_enabled"
-    private val KEY_MUSIC_ONBOARDING_SHOWN = "music_onboarding_shown"
     private val KEY_ONBOARDING_VER = "onboarding_version"
     private val KEY_DEBUG_SHOW_IDS = "debug_show_ids"
     private val CURRENT_ONBOARDING_VERSION = 1
@@ -57,9 +56,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val _musicEnabled = MutableStateFlow(prefs.getBoolean(KEY_MUSIC_ENABLED, true))
     val musicEnabled: StateFlow<Boolean> = _musicEnabled.asStateFlow()
 
-    private val _showMusicOnboarding = MutableStateFlow(!prefs.getBoolean(KEY_MUSIC_ONBOARDING_SHOWN, false))
-    val showMusicOnboarding: StateFlow<Boolean> = _showMusicOnboarding.asStateFlow()
-
     private val _showOnboarding = MutableStateFlow(prefs.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION)
     val showOnboarding: StateFlow<Boolean> = _showOnboarding.asStateFlow()
 
@@ -88,7 +84,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
             KEY_DYNAMIC_INPUT -> _dynamicChatInput.value = sharedPreferences.getBoolean(KEY_DYNAMIC_INPUT, true)
             KEY_DISCOVER_ENABLED -> _discoverEnabled.value = sharedPreferences.getBoolean(KEY_DISCOVER_ENABLED, true)
             KEY_MUSIC_ENABLED -> _musicEnabled.value = sharedPreferences.getBoolean(KEY_MUSIC_ENABLED, true)
-            KEY_MUSIC_ONBOARDING_SHOWN -> _showMusicOnboarding.value = !sharedPreferences.getBoolean(KEY_MUSIC_ONBOARDING_SHOWN, false)
             KEY_ONBOARDING_VER -> _showOnboarding.value = sharedPreferences.getInt(KEY_ONBOARDING_VER, 0) < CURRENT_ONBOARDING_VERSION
             KEY_DEBUG_SHOW_IDS -> _showDebugIds.value = sharedPreferences.getBoolean(KEY_DEBUG_SHOW_IDS, false)
             KEY_LANGUAGE -> {
@@ -109,14 +104,6 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     fun setShowDebugIds(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_DEBUG_SHOW_IDS, enabled).apply()
         _showDebugIds.value = enabled
-    }
-    fun completeMusicOnboarding(enableMusic: Boolean) {
-        prefs.edit()
-            .putBoolean(KEY_MUSIC_ONBOARDING_SHOWN, true)
-            .putBoolean(KEY_MUSIC_ENABLED, enableMusic)
-            .apply()
-        _showMusicOnboarding.value = false
-        _musicEnabled.value = enableMusic
     }
     fun completeOnboarding() = prefs.edit().putInt(KEY_ONBOARDING_VER, CURRENT_ONBOARDING_VERSION).apply()
     fun setLanguage(language: AppLanguage) {
