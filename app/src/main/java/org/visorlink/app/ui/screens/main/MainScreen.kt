@@ -80,6 +80,7 @@ fun MainScreen(
     onLoggedOut: () -> Unit = {},
     onOpenStickers: () -> Unit = {},
     onOpenSignal: () -> Unit = {},
+    onOpenSignalSteps: () -> Unit = {},
     onOpenFolders: () -> Unit = {},
     mainViewModel: MainViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
@@ -255,6 +256,7 @@ fun MainScreen(
                             NAV_TAB_SIGNAL -> if (signalTabEnabled) {
                                 org.visorlink.app.ui.screens.signal.SignalScreen(
                                     onNavigateBack = { selectedTab = 0 },
+                                    onOpenSteps = onOpenSignalSteps,
                                     asTab = true
                                 )
                             } else {

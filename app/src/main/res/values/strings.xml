@@ -1504,6 +1504,26 @@
     <string name="step_error_generic">Failed to submit the report</string>
     <string name="step_sensor_missing">A step counter is not available on this device</string>
     <string name="step_reboot_note">Steps are counted while the phone is on</string>
+    <string name="step_entry_subtitle">Link and the step counter are on duty</string>
+    <string name="step_entry_trailing">%1$s steps</string>
+
+    <!-- Link on the steps page -->
+    <string name="link_step_name">Link</string>
+    <string name="link_step_invite">Hi! I\'m Link. Enable step tracking — we\'ll earn Bits on the move. I only see the daily total, promise.</string>
+    <string name="link_step_start">Let\'s go! The first 1000 steps — the first Bits.</string>
+    <string name="link_step_go">Another %1$s steps — and +%2$d Bits! I believe in us.</string>
+    <string name="link_step_done">All daily thresholds are taken! You are a walking legend.</string>
+    <string name="link_step_counting">Counting… pace yourself!</string>
+    <string name="link_step_boost">Your streak is renewed today — each threshold pays double!</string>
+    <string name="link_step_trust">While the account is young, I count steps but don\'t pay out — the trust threshold. Soon!</string>
+    <string name="link_step_error">Something broke on the server. We\'ll try again later.</string>
+    <string name="link_step_device">I don\'t recognize this device — open the app again and I\'ll recheck.</string>
+    <string name="link_step_rebind">A new device can be linked a bit later. I\'ll wait!</string>
+    <string name="link_step_sensor">There\'s no step counter on this device… I\'m as upset as you are.</string>
+    <string name="link_step_boop1">Hey, that tickles!</string>
+    <string name="link_step_boop2">Boop received. Processing… done: you\'re great!</string>
+    <string name="link_step_boop3">Careful with the visor, it\'s brand new!</string>
+    <string name="link_step_pet">*visor shows hearts* Keep walking — and pet me more often!</string>
 
     <!-- Phase 2: Gifts & ID-Cards -->
     <string name="gift_user_title">Gift</string>

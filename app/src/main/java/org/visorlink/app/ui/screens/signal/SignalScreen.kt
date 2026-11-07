@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,6 +65,7 @@ private val monthFormatRu by lazy {
 @Composable
 fun SignalScreen(
     onNavigateBack: () -> Unit,
+    onOpenSteps: () -> Unit = {},
     asTab: Boolean = false,
     viewModel: SignalViewModel = koinViewModel()
 ) {
@@ -122,11 +124,57 @@ fun SignalScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Шаги (этап 1 активностей, флаг enable_step_activities): согласие, счёт, пороги Bits
+                    // Шаги (этап 1 активностей, флаг enable_step_activities): отдельная подстраница с Линком
                     val flagsRepository: org.visorlink.app.data.repository.FlagsRepository = org.koin.compose.koinInject()
                     val flags by flagsRepository.flags.collectAsStateWithLifecycle()
                     if (flags.stepActivities) {
-                        StepCard()
+                        val stepsVm: StepsViewModel = koinViewModel()
+                        val stepsUi by stepsVm.ui.collectAsStateWithLifecycle()
+                        VlCard(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = onOpenSteps
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.DirectionsWalk,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.step_card_title),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.step_entry_subtitle),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                if (stepsUi.enabled) {
+                                    Text(
+                                        text = stringResource(R.string.step_entry_trailing, groupDigits(stepsUi.steps)),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     StreakCard(

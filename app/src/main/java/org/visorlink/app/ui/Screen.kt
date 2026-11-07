@@ -80,6 +80,7 @@ sealed class Screen(val route: String) {
         fun createRoute(id: String? = null) = if (id != null) "diary_entry?id=$id" else "diary_entry"
     }
     object Signal : Screen("signal")
+    object SignalSteps : Screen("signal_steps")
     object Pro : Screen("pro")
     object ChatFolders : Screen("chat_folders")
 }

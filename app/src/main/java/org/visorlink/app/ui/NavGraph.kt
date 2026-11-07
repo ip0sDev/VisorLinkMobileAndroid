@@ -288,6 +288,7 @@ fun VisorLinkNavGraph(
                 onLoggedOut = { authViewModel.logout() },
                 onOpenStickers = { navController.navigate(Screen.Stickers.route) },
                 onOpenSignal = { navController.navigate(Screen.Signal.route) },
+                onOpenSignalSteps = { navController.navigate(Screen.SignalSteps.route) },
                 onOpenFolders = { navController.navigate(Screen.ChatFolders.route) }
             )
         }

@@ -50,6 +50,13 @@ fun NavGraphBuilder.settingsNavGraph(
 
     composable(Screen.Signal.route) {
         org.visorlink.app.ui.screens.signal.SignalScreen(
+            onNavigateBack = { navController.popBackStack() },
+            onOpenSteps = { navController.navigate(Screen.SignalSteps.route) }
+        )
+    }
+
+    composable(Screen.SignalSteps.route) {
+        org.visorlink.app.ui.screens.signal.SignalStepsScreen(
             onNavigateBack = { navController.popBackStack() }
         )
     }

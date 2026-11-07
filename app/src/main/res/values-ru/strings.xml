@@ -1510,6 +1510,26 @@
     <string name="step_error_generic">Не удалось отправить отчёт</string>
     <string name="step_sensor_missing">Счётчик шагов недоступен на этом устройстве</string>
     <string name="step_reboot_note">Шаги считаются, пока телефон включён</string>
+    <string name="step_entry_subtitle">Линк и счётчик шагов на посту</string>
+    <string name="step_entry_trailing">%1$s шагов</string>
+
+    <!-- Линк на странице шагов -->
+    <string name="link_step_name">Линк</string>
+    <string name="link_step_invite">Привет! Я Линк. Включи шаги — будем зарабатывать Bits на ходу. Вижу только дневной итог, честно.</string>
+    <string name="link_step_start">Пошли! Первые 1 000 шагов — первые Bits.</string>
+    <string name="link_step_go">Ещё %1$s шагов — и +%2$d Bits! Верю в нас.</string>
+    <string name="link_step_done">Все пороги дня взяты! Ты — ходячая легенда.</string>
+    <string name="link_step_counting">Считаю… темп держи!</string>
+    <string name="link_step_boost">Стрик сегодня продлён — каждый порог платит вдвое!</string>
+    <string name="link_step_trust">Пока аккаунт молодой, я считаю шаги, но не плачу — порог доверия. Скоро!</string>
+    <string name="link_step_error">На сервере что-то сломалось. Попробуем позже.</string>
+    <string name="link_step_device">Не узнаю это устройство — открой приложение снова, я перепроверю.</string>
+    <string name="link_step_rebind">Новое устройство можно привязать чуть позже. Я подожду!</string>
+    <string name="link_step_sensor">На этом устройстве нет счётчика шагов… я расстроен не меньше тебя.</string>
+    <string name="link_step_boop1">Эй, это щекотно!</string>
+    <string name="link_step_boop2">Буп принят. Обрабатываю… готово: ты молодец!</string>
+    <string name="link_step_boop3">Осторожнее с визором, он новенький!</string>
+    <string name="link_step_pet">*визор показывает сердечки* Ходи больше — и гладь почаще!</string>
 
     <!-- Phase 2: Gifts & ID-Cards -->
     <string name="gift_user_title">Подарок</string>
