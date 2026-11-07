@@ -8,7 +8,7 @@ import org.visorlink.app.BuildConfig
 import org.visorlink.app.data.model.flags.AppFlags
 import org.visorlink.app.data.model.flags.ConfigRequest
 import org.visorlink.app.data.model.flags.PairRequest
-import org.visorlink.app.data.remote.flags.AegisKeyManager
+import org.visorlink.app.data.remote.flags.HermesKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
 import com.auth0.android.jwt.JWT
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +26,7 @@ import java.util.UUID
 class FlagsRepository(
     private val context: Context,
     private val api: FlagsApi,
-    private val keyManager: AegisKeyManager
+    private val keyManager: HermesKeyManager
 ) {
     private val prefs = context.getSharedPreferences("visorlink_flags_prefs", Context.MODE_PRIVATE)
     private val _flags = MutableStateFlow(AppFlags())

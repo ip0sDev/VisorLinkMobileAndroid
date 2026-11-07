@@ -64,6 +64,7 @@ private val monthFormatRu by lazy {
 @Composable
 fun SignalScreen(
     onNavigateBack: () -> Unit,
+    asTab: Boolean = false,
     viewModel: SignalViewModel = koinViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -81,12 +82,17 @@ fun SignalScreen(
         topBar = {
             VlTopAppBar(
                 title = { Text(stringResource(R.string.signal_title)) },
-                navigationIcon = {
-                    VlTopAppBarButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.signal_back)
-                        )
+                navigationIcon = if (asTab) {
+                    // Вкладка навбара: без стрелки назад (прецедент ProfileScreen.asTab)
+                    {}
+                } else {
+                    {
+                        VlTopAppBarButton(onClick = onNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.signal_back)
+                            )
+                        }
                     }
                 }
             )
@@ -116,6 +122,13 @@ fun SignalScreen(
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
+                    // Шаги (этап 1 активностей, флаг enable_step_activities): согласие, счёт, пороги Bits
+                    val flagsRepository: org.visorlink.app.data.repository.FlagsRepository = org.koin.compose.koinInject()
+                    val flags by flagsRepository.flags.collectAsStateWithLifecycle()
+                    if (flags.stepActivities) {
+                        StepCard()
+                    }
+
                     StreakCard(
                         profile = profile,
                         stats = uiState.stats,

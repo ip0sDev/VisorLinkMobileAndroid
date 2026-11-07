@@ -1487,6 +1487,30 @@
     <string name="signal_title">Сигнал</string>
     <string name="signal_back">Назад</string>
 
+    <!-- Шаги (этап 1 активностей) -->
+    <string name="step_card_title">Шаги</string>
+    <string name="step_card_desc">Bits за шаги дня со встроенным счётчиком телефона. Без фоновых служб.</string>
+    <string name="step_enable">Включить</string>
+    <string name="step_disable">Отключить</string>
+    <string name="step_disable_title">Отключить подсчёт шагов?</string>
+    <string name="step_disable_body">История шагов удалится с сервера, подсчёт остановится.</string>
+    <string name="step_disable_confirm">Отключить и удалить</string>
+    <string name="step_consent_title">Считать шаги?</string>
+    <string name="step_consent_body">VisorLink будет читать дневной итог встроенного счётчика шагов телефона и начислять Bits за пороги дня. Хранится только общее число шагов за день — без геолокации и маршрутов. В соревнованиях шаги видны только участникам. Отключить и удалить данные можно в любой момент в «Сигнале».</string>
+    <string name="step_consent_allow">Продолжить</string>
+    <string name="step_today">шагов сегодня</string>
+    <string name="step_to_next">Ещё %1$s шагов до +%2$d Bits</string>
+    <string name="step_all_reached">Все пороги дня пройдены</string>
+    <string name="step_earned">Заработано сегодня: %1$d Bits</string>
+    <string name="step_boost_hint">+%1$d за порог: сегодня продлён стрик</string>
+    <string name="step_trust_pending">Заработок с шагов откроется через %1$d дн. (порог доверия)</string>
+    <string name="step_trust_pending_short">Заработок с шагов откроется с доверием к аккаунту</string>
+    <string name="step_error_rebind">Новое устройство можно привязать позже</string>
+    <string name="step_error_device">Не получилось подтвердить устройство. Откройте приложение и повторите.</string>
+    <string name="step_error_generic">Не удалось отправить отчёт</string>
+    <string name="step_sensor_missing">Счётчик шагов недоступен на этом устройстве</string>
+    <string name="step_reboot_note">Шаги считаются, пока телефон включён</string>
+
     <!-- Phase 2: Gifts & ID-Cards -->
     <string name="gift_user_title">Подарок</string>
     <string name="gift_action_send">Подарить</string>

@@ -372,27 +372,30 @@ fun SettingsScreen(
                         CompactProTile(profile = p, onClick = onOpenPro)
                     }
 
-                    VlSettingsSection(
-                        title = "Активность",
-                        modifier = Modifier.liquidPillCardSlideOut(index = 2)
-                    ) {
-                        VlSettingsItem(
-                            icon = org.visorlink.app.ui.components.IcSignal,
-                            iconColor = MaterialTheme.colorScheme.primary,
-                            title = "Сигнал",
-                            subtitle = if (p.streak > 0) "Серия ${p.streak} дн. • вехи, заморозки и достижения" else "Серия сообщений, вехи, заморозки и достижения",
-                            trailing = {
-                                if (p.streak > 0) {
-                                    Text(
-                                        "🔥 ${p.streak} дн.",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = VlTheme.tokens.status.warning
-                                    )
-                                }
-                            },
-                            onClick = onOpenSignal
-                        )
+                    // «Сигнал» ушёл во вкладку навбара (enable_signal_tab) — пункт в настройках не дублируем
+                    if (!flags.signalNavbar) {
+                        VlSettingsSection(
+                            title = "Активность",
+                            modifier = Modifier.liquidPillCardSlideOut(index = 2)
+                        ) {
+                            VlSettingsItem(
+                                icon = org.visorlink.app.ui.components.IcSignal,
+                                iconColor = MaterialTheme.colorScheme.primary,
+                                title = "Сигнал",
+                                subtitle = if (p.streak > 0) "Серия ${p.streak} дн. • вехи, заморозки и достижения" else "Серия сообщений, вехи, заморозки и достижения",
+                                trailing = {
+                                    if (p.streak > 0) {
+                                        Text(
+                                            "🔥 ${p.streak} дн.",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = VlTheme.tokens.status.warning
+                                        )
+                                    }
+                                },
+                                onClick = onOpenSignal
+                            )
+                        }
                     }
                 }
 

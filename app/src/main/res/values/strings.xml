@@ -1481,6 +1481,30 @@
     <string name="signal_title">Signal</string>
     <string name="signal_back">Back</string>
 
+    <!-- Steps (activity stage 1) -->
+    <string name="step_card_title">Steps</string>
+    <string name="step_card_desc">Earn Bits for daily steps with the phone\'s built-in step counter. No background services.</string>
+    <string name="step_enable">Enable</string>
+    <string name="step_disable">Disable</string>
+    <string name="step_disable_title">Disable step tracking?</string>
+    <string name="step_disable_body">Your step history will be deleted from the server and step counting will stop.</string>
+    <string name="step_disable_confirm">Disable &amp; delete</string>
+    <string name="step_consent_title">Count your steps?</string>
+    <string name="step_consent_body">VisorLink will read the daily total from your phone\'s built-in step counter and award Bits for daily thresholds. Only the daily total is stored — no location, no routes. In challenges your steps are visible to participants only. You can disable and delete the data at any time in Signal.</string>
+    <string name="step_consent_allow">Continue</string>
+    <string name="step_today">steps today</string>
+    <string name="step_to_next">Another %1$s steps to +%2$d Bits</string>
+    <string name="step_all_reached">All daily thresholds reached</string>
+    <string name="step_earned">Earned today: %1$d Bits</string>
+    <string name="step_boost_hint">+%1$d per threshold: your streak was renewed today</string>
+    <string name="step_trust_pending">Step earnings unlock in %1$d days (trust threshold)</string>
+    <string name="step_trust_pending_short">Step earnings unlock with account trust</string>
+    <string name="step_error_rebind">A new device can be linked later</string>
+    <string name="step_error_device">Device verification failed. Open the app and try again.</string>
+    <string name="step_error_generic">Failed to submit the report</string>
+    <string name="step_sensor_missing">A step counter is not available on this device</string>
+    <string name="step_reboot_note">Steps are counted while the phone is on</string>
+
     <!-- Phase 2: Gifts & ID-Cards -->
     <string name="gift_user_title">Gift</string>
     <string name="gift_action_send">Send</string>

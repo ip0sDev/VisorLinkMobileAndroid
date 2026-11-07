@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.NAV_TAB_PROFILE
+import org.visorlink.app.ui.components.NAV_TAB_SIGNAL
 import org.visorlink.app.ui.components.led.VlLedFace
 import org.visorlink.app.ui.components.led.VlLedExpression
 import org.visorlink.app.ui.theme.VlTheme
@@ -111,12 +112,14 @@ fun MainScreen(
     val musicRepository: MusicRepository = koinInject()
     val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsStateWithLifecycle()
 
-    // Профиль — вкладкой навбара вместо кнопки-аватара в шапке чатов (флаг enable_profile_navbar)
+    // Профиль — вкладкой навбара вместо кнопки-аватара в шапке чатов (флаг enable_profile_navbar).
+    // Вкладка «Сигнал» (enable_signal_tab) забирает слот у профиля: профиль возвращается к аватару в шапке.
     val flagsRepository: FlagsRepository = koinInject()
     val flags by flagsRepository.flags.collectAsStateWithLifecycle()
-    val profileTabEnabled = flags.profileNavbar
+    val signalTabEnabled = flags.signalNavbar
+    val profileTabEnabled = flags.profileNavbar && !flags.signalNavbar
 
-    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled
+    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled || signalTabEnabled
     val isOnline by mainViewModel.isOnline.collectAsStateWithLifecycle()
 
     if (showFullscreenPlayer) {
@@ -249,6 +252,14 @@ fun MainScreen(
                             } else {
                                 selectedTab = 0
                             }
+                            NAV_TAB_SIGNAL -> if (signalTabEnabled) {
+                                org.visorlink.app.ui.screens.signal.SignalScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    asTab = true
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
                         }
                     }
                 }
@@ -284,12 +295,19 @@ fun MainScreen(
                             musicEnabled = musicEnabled,
                             onOpenDiary = onOpenDiaryTab,
                             onOpenMusic = onOpenMusicTab,
-                            profileEnabled = profileTabEnabled
+                            profileEnabled = profileTabEnabled,
+                            signalEnabled = signalTabEnabled
                         )
                     }
                 }
 
-                AchievementToastHost(onOpenSignal = onOpenSignal)
+                // Тост достижения открывает «Сигнал»: вкладкой, если она включена, иначе маршрутом настроек
+                val openSignal: () -> Unit = remember(signalTabEnabled) {
+                    {
+                        if (signalTabEnabled) selectedTab = NAV_TAB_SIGNAL else onOpenSignal()
+                    }
+                }
+                AchievementToastHost(onOpenSignal = openSignal)
             }
         }
     }

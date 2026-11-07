@@ -119,6 +119,15 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             } catch (e: Exception) {
                 Log.e("VisorLinkApp", "Failed to fetch flags", e)
             }
+
+            // 3.1 Шагомер: воркер переживает перезагрузку сам; KEEP — идемпотентно.
+            // Согласие локальное (StepPrefs.enabled), флаг сервера проверяет сэмплер.
+            try {
+                val stepPrefs: org.visorlink.app.data.activity.StepPrefs = GlobalContext.get().get()
+                if (stepPrefs.enabled) {
+                    org.visorlink.app.data.activity.StepReportWorker.ensureScheduled(this@VisorLinkApp)
+                }
+            } catch (_: Exception) {}
         }
 
         // ─── Diary Reminders Observer ───

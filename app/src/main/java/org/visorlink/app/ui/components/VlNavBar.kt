@@ -82,6 +82,8 @@ fun VlNavigationBar(
     onOpenMusic: () -> Unit = {},
     /** Вкладка «Профиль» (флаг `enable_profile_navbar`) — последняя, значок ID-карты. */
     profileEnabled: Boolean = false,
+    /** Вкладка «Сигнал» (флаг `enable_signal_tab`) — значок пульса; включённый профиль прячет. */
+    signalEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -95,6 +97,7 @@ fun VlNavigationBar(
             onOpenDiary = onOpenDiary,
             onOpenMusic = onOpenMusic,
             profileEnabled = profileEnabled,
+            signalEnabled = signalEnabled,
             modifier = modifier,
         )
         return
@@ -125,6 +128,7 @@ fun VlNavigationBar(
             onOpenDiary = onOpenDiary,
             onOpenMusic = onOpenMusic,
             profileEnabled = profileEnabled,
+            signalEnabled = signalEnabled,
             barShape = barShape
         )
     }
@@ -132,6 +136,9 @@ fun VlNavigationBar(
 
 /** Номер вкладки «Профиль» в MainScreen (0 — чаты, 1 — каналы, 2 — дневник, 3 — музыка). */
 const val NAV_TAB_PROFILE = 4
+
+/** Вкладка «Сигнал» (флаг `enable_signal_tab`): стрик, шаги, достижения. Слот забирает у профиля. */
+const val NAV_TAB_SIGNAL = 5
 
 /**
  * Описание вкладки для жидкостного бара
@@ -206,6 +213,7 @@ private fun NeumorphicLiquidNavBarContent(
     onOpenDiary: () -> Unit,
     onOpenMusic: () -> Unit,
     profileEnabled: Boolean,
+    signalEnabled: Boolean,
     barShape: Shape
 ) {
     val cs = MaterialTheme.colorScheme
@@ -219,8 +227,9 @@ private fun NeumorphicLiquidNavBarContent(
     val musicLabel = stringResource(R.string.nav_tab_music)
     val diaryLabel = stringResource(R.string.diary_title)
     val profileLabel = stringResource(R.string.nav_tab_profile)
+    val signalLabel = stringResource(R.string.signal_title)
 
-    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, profileLabel, diaryEnabled, discoverEnabled, musicEnabled, profileEnabled, onOpenDiary, onOpenMusic) {
+    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, profileLabel, signalLabel, diaryEnabled, discoverEnabled, musicEnabled, profileEnabled, signalEnabled, onOpenDiary, onOpenMusic) {
         buildList {
             add(
                 VlNavTabDef(
@@ -272,6 +281,17 @@ private fun NeumorphicLiquidNavBarContent(
                         selectedIcon = Icons.Filled.Badge,
                         label = profileLabel,
                         onClick = { onTabSelected(NAV_TAB_PROFILE) }
+                    )
+                )
+            }
+            if (signalEnabled) {
+                add(
+                    VlNavTabDef(
+                        tabId = NAV_TAB_SIGNAL,
+                        icon = IcSignal,
+                        selectedIcon = IcSignal,
+                        label = signalLabel,
+                        onClick = { onTabSelected(NAV_TAB_SIGNAL) }
                     )
                 )
             }
@@ -653,6 +673,7 @@ private fun ForgeKeyDock(
     onOpenDiary: () -> Unit,
     onOpenMusic: () -> Unit,
     profileEnabled: Boolean,
+    signalEnabled: Boolean,
     modifier: Modifier = Modifier
 ) {
     val cs = MaterialTheme.colorScheme
@@ -665,8 +686,9 @@ private fun ForgeKeyDock(
     val musicLabel = stringResource(R.string.nav_tab_music)
     val diaryLabel = stringResource(R.string.diary_title)
     val profileLabel = stringResource(R.string.nav_tab_profile)
+    val signalLabel = stringResource(R.string.signal_title)
 
-    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, profileLabel, diaryEnabled, discoverEnabled, musicEnabled, profileEnabled, onOpenDiary, onOpenMusic) {
+    val navTabs = remember(chatsLabel, feedLabel, musicLabel, diaryLabel, profileLabel, signalLabel, diaryEnabled, discoverEnabled, musicEnabled, profileEnabled, signalEnabled, onOpenDiary, onOpenMusic) {
         buildList {
             add(VlNavTabDef(0, Icons.Outlined.ChatBubbleOutline, Icons.Filled.ChatBubble, chatsLabel) { onTabSelected(0) })
             if (discoverEnabled) {
@@ -680,6 +702,9 @@ private fun ForgeKeyDock(
             }
             if (profileEnabled) {
                 add(VlNavTabDef(NAV_TAB_PROFILE, Icons.Outlined.Badge, Icons.Filled.Badge, profileLabel) { onTabSelected(NAV_TAB_PROFILE) })
+            }
+            if (signalEnabled) {
+                add(VlNavTabDef(NAV_TAB_SIGNAL, IcSignal, IcSignal, signalLabel) { onTabSelected(NAV_TAB_SIGNAL) })
             }
         }
     }

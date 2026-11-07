@@ -2,7 +2,7 @@
 package org.visorlink.app.di
 
 import org.visorlink.app.data.aegis.*
-import org.visorlink.app.data.remote.flags.AegisKeyManager
+import org.visorlink.app.data.remote.flags.HermesKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
 import org.visorlink.app.data.repository.*
 import org.visorlink.app.ui.aegis.AegisLifeViewModel
@@ -78,8 +78,13 @@ val appModule = module {
             .build()
             .create(FlagsApi::class.java)
     }
-    single { AegisKeyManager() }
+    single { HermesKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
+
+    // --- Активности: шагомер (этап 1, enable_step_activities) ---
+    single { org.visorlink.app.data.activity.StepPrefs(androidContext()) }
+    single { org.visorlink.app.data.activity.ActivityRepository(get(), get(), get()) }
+    single { org.visorlink.app.data.activity.StepSampler(androidContext(), get(), get(), get()) }
 
     // --- Google Drive Storage ---
     single { org.visorlink.app.data.repository.GoogleDriveConfigRepository(get()) }
@@ -269,6 +274,12 @@ val appModule = module {
 
     viewModel { ProViewModel(get()) }
     viewModel { org.visorlink.app.ui.screens.signal.SignalViewModel(get(), get(), get(), get()) }
+    viewModel {
+        org.visorlink.app.ui.screens.signal.StepsViewModel(
+            androidContext(),
+            get(), get(), get(), get()
+        )
+    }
     viewModel { CustomizationViewModel(get()) }
     viewModel { org.visorlink.app.ui.screens.settings.IdCardSettingsViewModel(get(), get()) }
     viewModel { FlagFlipperViewModel(get()) }

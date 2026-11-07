@@ -63,6 +63,12 @@ data class AppFlags(
     /** Профиль — вкладка нижней навигации с ID-картой вместо кнопки-аватара в шапке списка чатов. */
     val profileNavbar: Boolean get() = isEnabled(PROFILE_NAVBAR)
 
+    /** «Сигнал» — вкладка нижней навигации вместо раздела в настройках; слот забирает у профиля (MainScreen). */
+    val signalNavbar: Boolean get() = isEnabled(SIGNAL_TAB)
+
+    /** Заработок Bits за шаги: карточка во «Сигнале» и сэмплирование счётчика. */
+    val stepActivities: Boolean get() = isEnabled(STEP_ACTIVITIES)
+
     /** Значение с сервера без учёта переопределений. */
     fun serverValue(key: String): Boolean =
         if (canonical(key) == AEGIS_DEBUG) AEGIS_DEBUG_ALIASES.any { serverClaims[it] == true }
@@ -108,6 +114,8 @@ data class AppFlags(
         const val FORCE_UPDATE_MIN_VERSION = "force_update_min_version"
         const val SERVICE_MODE = "service_mode_enabled"
         const val PROFILE_NAVBAR = "enable_profile_navbar"
+        const val SIGNAL_TAB = "enable_signal_tab"
+        const val STEP_ACTIVITIES = "enable_step_activities"
         const val ALTERNATIVE_OUTBOX = "enable_alternative_outbox"
 
         /** У флага отладки Aegis два имени — в Flipper показывается одно. */
@@ -121,6 +129,8 @@ data class AppFlags(
             TEST_FLAG,
             SERVICE_MODE,
             PROFILE_NAVBAR,
+            SIGNAL_TAB,
+            STEP_ACTIVITIES,
             AEGIS_DEBUG,
             ALTERNATIVE_OUTBOX
         )

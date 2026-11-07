@@ -165,6 +165,7 @@ dependencies {
     debugImplementation(libs.firebase.appcheck.debug)
 
     // ── Other ────────────────────────────────────────────────────────────────
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.play.services.auth)
     // Вход через Google: Credential Manager + Sign in with Google
