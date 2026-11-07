@@ -32,6 +32,7 @@ import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.vlHazeSource
+import org.visorlink.app.ui.components.isVlMatte
 import org.visorlink.app.ui.components.VlBarBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
 import org.visorlink.app.ui.components.VlTopAppBarButton
@@ -129,16 +130,24 @@ fun ChatListScreen(
         containerColor = Color.Transparent,
         topBar = {
             val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+            // Жидкие пульсы деформируют бар — с активным backdrop-блюром размытый фон
+            // под ним «плывёт» и шапка выглядит прыгающей, поэтому при матовом режиме
+            // бар стабилен; пульсы остаются в темах без блюра
+            val matte = isVlMatte()
             LaunchedEffect(triggerKey) {
-                if (isActive) {
+                if (isActive && !matte) {
                     topBarJelly.pulse(0.08f)
                 }
             }
             LaunchedEffectAfterFirst(syncState) {
-                topBarJelly.pulse(0.06f)
+                if (!matte) {
+                    topBarJelly.pulse(0.06f)
+                }
             }
             LaunchedEffectAfterFirst(isScrolled) {
-                topBarJelly.pulse(0.07f)
+                if (!matte) {
+                    topBarJelly.pulse(0.07f)
+                }
             }
 
             VlTopAppBar(

@@ -3,12 +3,7 @@ package org.visorlink.app.ui.components
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.unit.dp
@@ -18,53 +13,69 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.chrisbanes.haze.hazeSource
+import androidx.compose.runtime.withFrameNanos
 import org.visorlink.app.ui.theme.VlTheme
 
 /**
- * Общая [HazeState] приложения: экраны размечают контент через [vlHazeSource],
- * шапки и нижние панели читают её для backdrop-блюра ([vlBackdropBlur], `HazeInput.Sources`).
+ * Сессия backdrop-блюра приложения: общая [HazeState] + флаг готовности блюра.
  *
- * Нужна разметка источников, потому что на Android < 37.2 `HazeInput.Backdrop`
- * деградирует в Sources — без них блюрить нечего.
+ * Экраны размечают контент через [vlHazeSource], шапки и нижние панели блюрят его
+ * через [vlBackdropBlur] (`HazeInput.Sources`). Разметка источников нужна потому,
+ * что на Android < 37.2 `HazeInput.Backdrop` деградирует в Sources — без них блюрить
+ * нечего.
  */
-val LocalVlHazeState = staticCompositionLocalOf<HazeState?> { null }
+class VlHazeSession {
+    val state = HazeState()
 
-/** Контент за шапкой/панелью: список/фон экрана. Вне [LocalVlHazeState] — no-op. */
-fun Modifier.vlHazeSource(): Modifier = composed {
-    val state = LocalVlHazeState.current ?: return@composed Modifier
-    then(hazeSource(state))
+    /**
+     * Блюр включается один раз за сессию приложения (со второго кадра первого экрана):
+     * компиляция RenderEffect на кадре открытия экрана давала лаг, а пер-композишн-гейт —
+     * мигание шапки при каждом возврате на экран.
+     */
+    var blurReady = false
+        private set
+
+    fun markReady() {
+        blurReady = true
+    }
 }
 
-/** Блюр активен: Biolume/Forge, не reduce-motion и есть общий [LocalVlHazeState]. */
+val LocalVlHazeSession = staticCompositionLocalOf<VlHazeSession?> { null }
+
+/** Контент за шапкой/панелью: список/фон экрана. Вне сессии — no-op. */
+fun Modifier.vlHazeSource(): Modifier = composed {
+    val session = LocalVlHazeSession.current ?: return@composed Modifier
+    then(hazeSource(session.state))
+}
+
+/** Блюр активен: Biolume/Forge, не reduce-motion и есть [LocalVlHazeSession]. */
 @Composable
 fun isVlMatte(): Boolean {
     val tokens = VlTheme.tokens
-    return LocalVlHazeState.current != null && (tokens.isBiolume || tokens.isForge) && !tokens.reduceMotion
+    return LocalVlHazeSession.current != null && (tokens.isBiolume || tokens.isForge) && !tokens.reduceMotion
 }
 
 /**
  * Матовый backdrop-блюр (σ16, как у Flutter `VlBackdropBlur`) для шапок и нижних панелей.
  * Ставить ПОСЛЕ `clip(shape)` и ПЕРЕД полупрозрачной заливкой-тином.
  *
- * Перфоманс: [HazePerformanceMode.Balanced] просаживает вход блюра (дешёвые кадры),
- * а сам блюр включается со второго кадра — компиляция RenderEffect на кадре открытия
- * экрана давала заметный лаг.
+ * Перфоманс: [HazePerformanceMode.Balanced] просаживает вход блюра (дешёвые кадры).
  */
 fun Modifier.vlBackdropBlur(): Modifier = composed {
-    if (!isVlMatte()) {
+    val session = LocalVlHazeSession.current
+    if (!isVlMatte() || session == null) {
         Modifier
     } else {
         val backdrop = MaterialTheme.colorScheme.background
-        var ready by remember { mutableStateOf(false) }
-        LaunchedEffect(Unit) {
-            withFrameNanos { }
-            ready = true
-        }
-        if (!ready) {
+        if (!session.blurReady) {
+            LaunchedEffect(Unit) {
+                withFrameNanos { }
+                session.markReady()
+            }
             Modifier
         } else {
             hazeBlur(
-                input = HazeInput.Sources(LocalVlHazeState.current!!),
+                input = HazeInput.Sources(session.state),
                 performanceMode = HazePerformanceMode.Balanced,
                 style = HazeBlurStyle {
                     blurEnabled(true)
