@@ -117,6 +117,7 @@ val appModule = module {
     single { org.visorlink.app.ui.idcard.ChatThemeController(org.visorlink.app.ui.idcard.PrefsChatThemeMemory(androidContext())) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
+    single { org.visorlink.app.utils.StickerFrequentStore(androidContext()) }
     single { BotRepository(get()) }
     single { LegalRepository(get(), androidContext(), get()) }
     single { org.visorlink.app.data.repository.ChatFoldersRepository(get()) }
