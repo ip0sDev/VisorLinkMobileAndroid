@@ -82,7 +82,7 @@ fun SignInMethodsItems(
     }
     val google = methods.google
     VlSettingsItem(
-        icon = ImageVector.vectorResource(R.drawable.ic_google),
+        icon = org.visorlink.app.ui.components.IcGoogle,
         iconColor = VlCategoryTint.Blue,
         title = stringResource(R.string.signin_google),
         subtitle = when {
@@ -204,7 +204,7 @@ fun TwoFactorItems(profile: UserProfile?, vm: AccountSecurityViewModel) {
         }
     }
     VlSettingsItem(
-        icon = ImageVector.vectorResource(R.drawable.ic_telegram),
+        icon = org.visorlink.app.ui.components.IcTelegram,
         iconColor = VlCategoryTint.Telegram,
         title = stringResource(R.string.tfa_tg_title),
         subtitle = when {
@@ -311,7 +311,7 @@ private fun EnabledMark() {
 private fun methodIcon(m: TfaMethod): ImageVector = when (m) {
     TfaMethod.BOT -> Icons.Rounded.SmartToy
     TfaMethod.EMAIL -> Icons.Rounded.AlternateEmail
-    TfaMethod.TELEGRAM -> ImageVector.vectorResource(R.drawable.ic_telegram)
+    TfaMethod.TELEGRAM -> org.visorlink.app.ui.components.IcTelegram
 }
 
 private fun manageMethodRes(m: TfaMethod): Int = when (m) {

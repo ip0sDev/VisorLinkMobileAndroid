@@ -377,7 +377,7 @@ fun SettingsScreen(
                         modifier = Modifier.liquidPillCardSlideOut(index = 2)
                     ) {
                         VlSettingsItem(
-                            icon = Icons.Rounded.Sensors,
+                            icon = org.visorlink.app.ui.components.IcSignal,
                             iconColor = MaterialTheme.colorScheme.primary,
                             title = "Сигнал",
                             subtitle = if (p.streak > 0) "Серия ${p.streak} дн. • вехи, заморозки и достижения" else "Серия сообщений, вехи, заморозки и достижения",
@@ -695,7 +695,7 @@ fun SettingsScreen(
                 ) {
                     // telegramAccount уже с «@» (или «ID …») — в строке префикса нет
                     VlSettingsItem(
-                        icon = ImageVector.vectorResource(R.drawable.ic_telegram),
+                        icon = org.visorlink.app.ui.components.IcTelegram,
                         iconColor = VlCategoryTint.Telegram,
                         title = if (telegramLinked) stringResource(R.string.settings_tg_linked, profile?.telegramAccount ?: profile?.tg_username?.let { "@$it" }.orEmpty()) else stringResource(R.string.settings_tg_link),
                         subtitle = if (telegramLinked) stringResource(R.string.settings_tg_linked_sub) else stringResource(R.string.settings_tg_binding_subtitle),

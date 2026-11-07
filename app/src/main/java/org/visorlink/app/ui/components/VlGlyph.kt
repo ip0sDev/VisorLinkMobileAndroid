@@ -64,6 +64,8 @@ fun vlGlyphHueOf(icon: ImageVector): VlGlyphHue {
         "badge" in name || "toy" in name || "dark" in name || "bug" in name -> VlGlyphHue.VIOLET
         "lang" in name || "translat" in name || "globe" in name || "info" in name || "book" in name || "explore" in name -> VlGlyphHue.BLUE
         "send" in name || "cloud" in name || "sync" in name || "device" in name || "speed" in name || "telegram" in name -> VlGlyphHue.CYAN
+        "google" in name -> VlGlyphHue.BLUE
+        "signal" in name -> VlGlyphHue.AMBER
         "shield" in name || "secur" in name || "verif" in name || "finger" in name || "pass" in name || "lock" in name || "key" in name -> VlGlyphHue.GREEN
         "storage" in name || "audio" in name || "clean" in name || "sched" in name || "auto" in name || "agenda" in name -> VlGlyphHue.TEAL
         "toll" in name || "light" in name || "warn" in name || "admin" in name || "bright" in name || "premium" in name || "star" in name -> VlGlyphHue.AMBER
