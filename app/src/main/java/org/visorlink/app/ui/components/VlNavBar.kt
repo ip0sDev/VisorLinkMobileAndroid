@@ -697,7 +697,14 @@ private fun ForgeKeyDock(
                 .height(72.dp)
                 .vlRaised(tokens.structure, shape)
                 .clip(shape)
-                .vlKeycapBackground(tokens.structure, cs.surfaceContainerLow, shape, VlDepth.Raised)
+                // Матовое стекло: блюр контента под доком + полупрозрачный keycap
+                .vlBackdropBlur()
+                .vlKeycapBackground(
+                    tokens.structure,
+                    cs.surfaceContainerLow.copy(alpha = if (isVlMatte()) 0.72f else 1f),
+                    shape,
+                    VlDepth.Raised,
+                )
                 .vlHairline(cs.outlineVariant, shape)
                 .padding(horizontal = 10.dp),
             contentAlignment = Alignment.Center
