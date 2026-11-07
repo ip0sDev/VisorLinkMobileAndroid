@@ -84,7 +84,9 @@ fun StickerPickerBottomSheet(
         sheetState = sheetState,
         dragHandle = null,
         shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        containerColor = if (tokens.structure.enabled) cs.surfaceContainerLow else cs.surfaceContainerHigh,
+        // Материал как у остальных шторок приложения: в Forge — фон Clean Room,
+        // иначе серый surfaceContainerLow/High выпадал из стилистики
+        containerColor = if (tokens.isForge) cs.surface else cs.surfaceContainerHigh,
         contentWindowInsets = { WindowInsets(0) }
     ) {
         Box(
