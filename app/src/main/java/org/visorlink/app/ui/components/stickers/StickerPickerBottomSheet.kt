@@ -9,6 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.visorlink.app.data.model.StickerFormat
 import org.visorlink.app.data.model.StickerItem
 import org.visorlink.app.data.model.StickerPack
 import org.visorlink.app.ui.components.VlAlertDialog
@@ -68,6 +71,8 @@ fun StickerPickerBottomSheet(
     }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
     val configuration = LocalConfiguration.current
     // F vl_sticker_widgets.dart: высота = 72% экрана, зажата 400…560
     val targetHeight = remember(configuration.screenHeightDp) {
@@ -79,7 +84,7 @@ fun StickerPickerBottomSheet(
         sheetState = sheetState,
         dragHandle = null,
         shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        containerColor = if (tokens.structure.enabled) cs.surfaceContainerLow else cs.surfaceContainerHigh,
         contentWindowInsets = { WindowInsets(0) }
     ) {
         Box(
@@ -177,7 +182,7 @@ internal fun StickerPickerContent(
         ) {
             Surface(
                 shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(20.dp)),
-                color = cs.surfaceContainerHighest.copy(alpha = 0.7f),
+                color = if (tokens.isBiolume) cs.surfaceContainer else cs.surfaceContainerHigh,
                 modifier = Modifier.height(34.dp)
             ) {
                 Row(modifier = Modifier.padding(2.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -540,6 +545,8 @@ private fun StorePackCard(
             // Превью первых 6 стикеров из пака
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pack.stickers.take(6).forEach { sticker ->
+                    val isLed = sticker.effectiveFormat == StickerFormat.LED ||
+                        sticker.url.startsWith("led:") || sticker.url.startsWith("led_")
                     Box(
                         modifier = Modifier
                             .size(56.dp)
@@ -551,13 +558,21 @@ private fun StorePackCard(
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        VlSticker(
-                            url = sticker.url,
-                            format = sticker.effectiveFormat,
-                            previewUrl = sticker.previewUrl,
-                            contentDescription = sticker.emoji,
-                            modifier = Modifier.size(46.dp),
-                        )
+                        if (isLed) {
+                            org.visorlink.app.ui.components.chat.InteractiveLedSticker(
+                                expression = org.visorlink.app.ui.components.led.VlLedExpression.fromUrl(sticker.url),
+                                size = 52.dp,
+                                interactive = false,
+                            )
+                        } else {
+                            VlSticker(
+                                url = sticker.url,
+                                format = sticker.effectiveFormat,
+                                previewUrl = sticker.previewUrl,
+                                contentDescription = sticker.emoji,
+                                modifier = Modifier.size(46.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -622,6 +637,13 @@ private fun PackTabBar(
                 val first = pack.stickers.firstOrNull()
                 if (first == null) {
                     Text(pack.emoji, fontSize = 16.sp)
+                } else if (first.effectiveFormat == StickerFormat.LED || first.url.startsWith("led:") || first.url.startsWith("led_")) {
+                    // LED-стикер сам сайзится от ширины — фиксированный бокс VlSticker обрезался бы
+                    org.visorlink.app.ui.components.chat.InteractiveLedSticker(
+                        expression = org.visorlink.app.ui.components.led.VlLedExpression.fromUrl(first.url),
+                        size = 26.dp,
+                        interactive = false,
+                    )
                 } else {
                     VlSticker(
                         url = first.previewUrl ?: first.url,
@@ -643,19 +665,32 @@ private fun PackTabThumb(
     content: @Composable () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
-    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
+    val tokens = VlTheme.tokens
+    val shape = tokens.shapes.adapt(RoundedCornerShape(12.dp))
+    // Forge: приподнятая клавиша; Biolume/M3E — прозрачная пилюля с подсветкой выбора
+    val structure = tokens.structure.enabled
     Box(
         modifier = Modifier
             .padding(horizontal = 3.dp, vertical = 5.dp)
             .size(36.dp, 34.dp)
+            .then(if (structure) Modifier.vlRaised(tokens.structure, shape) else Modifier)
             .clip(shape)
             .background(
-                if (isSelected) cs.primary.copy(alpha = 0.22f) else cs.surfaceContainerHigh.copy(alpha = 0.4f),
+                when {
+                    isSelected && tokens.isBiolume -> cs.primary.copy(alpha = 0.18f)
+                    isSelected -> cs.primaryContainer
+                    tokens.isBiolume -> cs.surfaceContainer.copy(alpha = 0.5f)
+                    else -> cs.surfaceContainerLow
+                },
                 shape,
             )
             .then(
-                if (isSelected) Modifier.border(1.5.dp, cs.primary.copy(alpha = 0.5f), shape)
-                else Modifier
+                when {
+                    isSelected && structure -> Modifier.vlHairline(cs.primary.copy(alpha = 0.45f), shape)
+                    structure -> Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.25f), shape)
+                    isSelected -> Modifier.border(1.5.dp, cs.primary.copy(alpha = 0.5f), shape)
+                    else -> Modifier
+                }
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -670,12 +705,18 @@ private fun PackTabThumb(
 @Composable
 private fun TabPill(text: String, selected: Boolean, onTap: () -> Unit) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
-    val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(18.dp))
+    val shape = tokens.shapes.adapt(RoundedCornerShape(18.dp))
     Box(
         modifier = Modifier
             .clip(shape)
-            .background(if (selected) cs.primary.copy(alpha = 0.22f) else androidx.compose.ui.graphics.Color.Transparent, shape)
+            .background(
+                if (selected) {
+                    if (tokens.isBiolume) cs.primary.copy(alpha = 0.22f) else cs.primaryContainer
+                } else androidx.compose.ui.graphics.Color.Transparent,
+                shape,
+            )
             .clickable {
                 haptic.perform(HapticType.SELECTION, true)
                 onTap()
@@ -762,28 +803,51 @@ private fun StickerGridTile(
     onLongPress: (() -> Unit)?,
 ) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
-    val tileShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(12.dp))
-    Box(
+    val tileShape = tokens.shapes.adapt(RoundedCornerShape(12.dp))
+    // Forge: «голые» плитки без коробок — ячейка проявляется только при нажатии
+    val bare = tokens.structure.hardShadow != null
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isLed = format == StickerFormat.LED || url.startsWith("led:") || url.startsWith("led_")
+
+    BoxWithConstraints(
         modifier = Modifier
             .padding(2.dp)
             .aspectRatio(1f)
             .clip(tileShape)
-            .background(cs.surfaceContainerHighest.copy(alpha = 0.4f), tileShape)
+            .then(
+                if (bare) Modifier else Modifier.background(cs.surfaceContainerHighest.copy(alpha = 0.4f), tileShape)
+            )
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = { haptic.perform(HapticType.CLICK, true); onTap() },
                 onLongClick = { onLongPress?.invoke() },
+            )
+            .then(
+                if (bare && isPressed) Modifier.background(cs.primary.copy(alpha = 0.12f), tileShape) else Modifier
             ),
         contentAlignment = Alignment.Center,
     ) {
-        // В ленте и сетках — лёгкие постеры без лагов (76% плитки, как во Flutter)
-        VlSticker(
-            url = url,
-            format = format,
-            previewUrl = previewUrl,
-            contentDescription = emojiFallback,
-            modifier = Modifier.fillMaxSize(0.76f),
-        )
+        if (isLed) {
+            // LED-стикер сам сайзится от ширины — иначе фиксированный бокс 140dp обрезался бы
+            org.visorlink.app.ui.components.chat.InteractiveLedSticker(
+                expression = org.visorlink.app.ui.components.led.VlLedExpression.fromUrl(url),
+                size = maxWidth * 0.92f,
+                interactive = false,
+            )
+        } else {
+            // В ленте и сетках — лёгкие постеры без лагов (76% плитки, как во Flutter)
+            VlSticker(
+                url = url,
+                format = format,
+                previewUrl = previewUrl,
+                contentDescription = emojiFallback,
+                modifier = Modifier.fillMaxSize(0.76f),
+            )
+        }
     }
 }
 
