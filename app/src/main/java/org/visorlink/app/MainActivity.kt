@@ -94,8 +94,6 @@ class MainActivity : AppCompatActivity() {
         
         requestNotificationPermissionIfNeeded()
 
-        // Вызываем нашу проверку официального клиента
-        verifyAppCheckStatus()
 
         setContent {
             val themeViewModel: ThemeViewModel = koinViewModel()
@@ -336,27 +334,6 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         org.visorlink.app.utils.ActiveChatTracker.isAppInForeground = false
-    }
-
-    // --- НОВАЯ ФУНКЦИЯ ДЛЯ APP CHECK ---
-    private fun verifyAppCheckStatus() {
-        // Если юзер не авторизован, функцию дергать бессмысленно (она всё равно требует auth)
-        if (FirebaseAuth.getInstance().currentUser == null) return
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                Log.d("VisorLink", "Verifying official client status via Cloud Functions...")
-
-                functions.getHttpsCallable("verifyOfficialClient")
-                    .call()
-                    .await()
-
-                Log.d("VisorLink", "Official client status verified successfully!")
-            } catch (e: Exception) {
-                // Если AppCheck не пропустит или функция упадет, логируем ошибку
-                Log.e("VisorLink", "App Check verification failed: ${e.message}", e)
-            }
-        }
     }
 
     private companion object {

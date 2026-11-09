@@ -14,6 +14,11 @@
     <string name="appcheck_insecure_desc">Проверка не пройдена. Возможные причины: Root-права, разблокированный загрузчик, эмулятор, или неофициальная сборка приложения.</string>
     <string name="appcheck_checking">Проверка...</string>
     <string name="appcheck_technical_details">Технические детали</string>
+        <string name="appcheck_precheck_title">Проверка безопасности клиента</string>
+    <string name="appcheck_precheck_desc">Проверка целостности устройства и подлинности приложения…</string>
+    <string name="appcheck_precheck_failed_title">Предупреждение безопасности</string>
+    <string name="appcheck_precheck_failed_desc">Сборка не прошла проверку Firebase App Check. Возможно, вы используете неофициальную сборку или несертифицированное устройство.</string>
+    <string name="appcheck_action_continue_anyway">Продолжить на свой риск</string>
     <string name="appcheck_retry">Повторить проверку</string>
     <string name="action_back">Назад</string>
     <string name="action_save">Сохранить</string>

@@ -159,7 +159,7 @@ val appModule = module {
     single { org.visorlink.app.utils.FcmManager(androidContext(), get(), get(), get()) }
     single { org.visorlink.app.utils.UsageRankManager(androidContext()) }
 
-    viewModel { AppCheckViewModel() }
+    viewModel { AppCheckViewModel(androidApplication()) }
 
     viewModel { AuthViewModel(get(), get(), get(), get(), get(), androidApplication(), get()) }
     viewModel {

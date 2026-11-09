@@ -94,7 +94,7 @@ fun AppCheckDiagnosticScreen(
                                     Text(stringResource(R.string.appcheck_insecure_desc), style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
-                            is AppCheckManager.State.Idle -> {
+                            is AppCheckManager.State.Idle, is AppCheckManager.State.Checking -> {
                                 CircularProgressIndicator(modifier = Modifier.size(32.dp))
                                 Text(stringResource(R.string.appcheck_checking), style = MaterialTheme.typography.titleLarge)
                             }

@@ -14,6 +14,11 @@
     <string name="appcheck_insecure_desc">Verification failed. Possible reasons: Root, unlocked bootloader, emulator, or unofficial app build.</string>
     <string name="appcheck_checking">Checking...</string>
     <string name="appcheck_technical_details">Technical details</string>
+        <string name="appcheck_precheck_title">Client Security Check</string>
+    <string name="appcheck_precheck_desc">Checking device integrity and verifying official client…</string>
+    <string name="appcheck_precheck_failed_title">Security Check Warning</string>
+    <string name="appcheck_precheck_failed_desc">This build could not be verified by Firebase App Check. You may be running an unofficial client or an uncertified device.</string>
+    <string name="appcheck_action_continue_anyway">Continue at Own Risk</string>
     <string name="appcheck_retry">Retry Check</string>
     <string name="action_back">Back</string>
     <string name="action_save">Save</string>

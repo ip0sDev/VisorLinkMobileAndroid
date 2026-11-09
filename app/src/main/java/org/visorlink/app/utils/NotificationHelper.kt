@@ -290,10 +290,13 @@ object NotificationHelper {
 
     fun clearNotification(context: Context, chatId: String) {
         try {
+            val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
+            if (!activeChatsPrefs.contains(chatId)) {
+                return
+            }
             val prefs = getFcmPrefs(context)
             prefs.remove("unread_msgs_$chatId")
 
-            val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
             activeChatsPrefs.edit().remove(chatId).apply()
 
             val notificationManager = NotificationManagerCompat.from(context)
