@@ -72,9 +72,13 @@ object AppImageLoader {
             // Принудительно кешируем даже ответы без Cache-Control (Firebase Storage)
             .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
-                response.newBuilder()
-                    .header("Cache-Control", "public, max-age=2592000") // 30 дней
-                    .build()
+                if (response.isSuccessful) {
+                    response.newBuilder()
+                        .header("Cache-Control", "public, max-age=2592000") // 30 дней
+                        .build()
+                } else {
+                    response
+                }
             }
             .build()
 

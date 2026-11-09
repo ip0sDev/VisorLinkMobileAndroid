@@ -106,10 +106,25 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                     Log.i("VisorLinkApp", "AppCheck initialized with DebugAppCheckProviderFactory")
                 } catch (e: Exception) {
                     Log.w("VisorLinkApp", "DebugAppCheckProviderFactory failed, fallback to PlayIntegrity", e)
-                    Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+                    try {
+                        Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+                    } catch (piEx: Exception) {
+                        Log.w("VisorLinkApp", "PlayIntegrity fallback failed: ${piEx.message}")
+                    }
                 }
             } else {
-                Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+                try {
+                    val availability = com.google.android.gms.common.GoogleApiAvailability.getInstance()
+                    val resultCode = availability.isGooglePlayServicesAvailable(this)
+                    if (resultCode == com.google.android.gms.common.ConnectionResult.SUCCESS) {
+                        Firebase.appCheck.installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+                        Log.i("VisorLinkApp", "AppCheck initialized with PlayIntegrityAppCheckProviderFactory")
+                    } else {
+                        Log.w("VisorLinkApp", "Play services not available ($resultCode), skipping PlayIntegrity AppCheck")
+                    }
+                } catch (e: Exception) {
+                    Log.w("VisorLinkApp", "PlayIntegrity init error, proceeding without provider: ${e.message}")
+                }
             }
         } catch (e: Exception) {
             Log.e("VisorLinkApp", "Failed to init AppCheck", e)
