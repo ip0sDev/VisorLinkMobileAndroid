@@ -24,6 +24,7 @@ import org.visorlink.app.data.model.FeedPost
 import org.visorlink.app.data.model.FeedPosts
 import org.visorlink.app.data.model.Message
 import org.visorlink.app.data.model.toChatOrNull
+import org.visorlink.app.data.model.toMessageOrNull
 import org.visorlink.app.data.remote.FirestoreCollections
 
 /** Подписки: все мои каналы (для «Подписан» в каталоге) и посты самых свежих из них. */
@@ -115,9 +116,4 @@ class FeedRepository(
         }
     }
 
-    private fun DocumentSnapshot.toMessageOrNull(): Message? = try {
-        toObject(Message::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = this.id)
-    } catch (_: Exception) {
-        null
-    }
 }

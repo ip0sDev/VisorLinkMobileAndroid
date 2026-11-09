@@ -334,29 +334,50 @@ fun isLastMessageRead(chat: Chat, currentUserId: String): Boolean {
 }
 
 fun DocumentSnapshot.toChatOrNull(): Chat? {
+    if (!exists()) return null
     try {
-        val chat = this.toObject(Chat::class.java)?.copy(id = this.id)
-        val sMap = this.get("settings") as? Map<*, *>
-        val forumFromMap = (sMap?.get("isForum") as? Boolean)
-            ?: (sMap?.get("is_forum") as? Boolean)
-            ?: false
-        val forumFromRoot = this.getBoolean("isForum")
-            ?: this.getBoolean("is_forum")
-            ?: false
-        val isForum = forumFromMap || forumFromRoot || (chat?.isForumActive == true)
+        val d = data ?: return null
 
-        val baseSettings = chat?.settings ?: ChatSettings()
-        val finalSettings = baseSettings.copy(
-            joinByLink = (sMap?.get("joinByLink") as? Boolean) ?: baseSettings.joinByLink,
-            joinByTag = (sMap?.get("joinByTag") as? Boolean) ?: baseSettings.joinByTag,
-            allowReactions = (sMap?.get("allowReactions") as? Boolean) ?: baseSettings.allowReactions,
-            allowComments = (sMap?.get("allowComments") as? Boolean) ?: baseSettings.allowComments,
-            inviteLink = (sMap?.get("inviteLink") as? String) ?: baseSettings.inviteLink,
+        val type = d["type"] as? String ?: "direct"
+        val participants = (d["participants"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+        @Suppress("UNCHECKED_CAST")
+        val rawPData = d["participantData"] as? Map<String, Any?>
+        val participantData: Map<String, Map<String, String>> = rawPData?.mapNotNull { (uid, pVal) ->
+            if (pVal !is Map<*, *>) return@mapNotNull null
+            val innerMap = pVal.entries.mapNotNull { (k, v) ->
+                val strK = k as? String ?: return@mapNotNull null
+                val strV = v?.toString() ?: ""
+                strK to strV
+            }.toMap()
+            uid to innerMap
+        }?.toMap() ?: emptyMap()
+
+        val name = d["name"] as? String ?: ""
+        val tag = d["tag"] as? String ?: ""
+        val description = d["description"] as? String ?: ""
+        val avatarUrl = d["avatarUrl"] as? String
+        val createdBy = d["createdBy"] as? String ?: ""
+        val memberCount = (d["memberCount"] as? Number)?.toInt() ?: 0
+        val memberIds = (d["memberIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+        val sMap = d["settings"] as? Map<*, *>
+        val forumFromMap = (sMap?.get("isForum") as? Boolean) ?: (sMap?.get("is_forum") as? Boolean) ?: false
+        val forumFromRoot = (d["isForum"] as? Boolean) ?: (d["is_forum"] as? Boolean) ?: false
+        val isForum = forumFromMap || forumFromRoot
+
+        val finalSettings = ChatSettings(
+            joinByLink = (sMap?.get("joinByLink") as? Boolean) ?: false,
+            joinByTag = (sMap?.get("joinByTag") as? Boolean) ?: false,
+            allowReactions = (sMap?.get("allowReactions") as? Boolean) ?: true,
+            allowComments = (sMap?.get("allowComments") as? Boolean) ?: true,
+            inviteLink = (sMap?.get("inviteLink") as? String) ?: "",
             isForum = isForum,
-            is_forum = isForum
+            is_forum = isForum,
+            noForwards = (sMap?.get("noForwards") as? Boolean) ?: false
         )
 
-        val rawUnread = this.get("unreadCount")
+        val rawUnread = d["unreadCount"]
         val unreadMap: Map<String, Int> = when (rawUnread) {
             is Map<*, *> -> rawUnread.entries.mapNotNull { (k, v) ->
                 val uid = k as? String ?: return@mapNotNull null
@@ -368,25 +389,43 @@ fun DocumentSnapshot.toChatOrNull(): Chat? {
                 uid to count
             }.toMap()
             is Number -> mapOf("" to rawUnread.toInt())
-            else -> chat?.unreadCount ?: emptyMap()
+            else -> emptyMap()
         }
 
-        val lastSeq = chat?.lastSeq ?: (this.getLong("lastSeq") ?: 0L)
-        val lastSenderId = chat?.lastMessageSenderId ?: this.getString("lastMessageSenderId")
-        val lastMsg = chat?.lastMessage ?: this.get("lastMessage")
+        val lastSeq = (d["lastSeq"] as? Number)?.toLong() ?: 0L
+        val lastSenderId = d["lastMessageSenderId"] as? String
+        val lastMsg = d["lastMessage"]
+        val lastMessageAt = d["lastMessageAt"] as? Timestamp
+        val createdAt = d["createdAt"] as? Timestamp
 
-        return (chat ?: Chat(id = this.id)).copy(
+        @Suppress("UNCHECKED_CAST")
+        val groupId = d["groupId"] as? Map<String, Any?>
+
+        return Chat(
             id = this.id,
+            type = type,
+            participants = participants,
+            participantData = participantData,
+            name = name,
+            tag = tag,
+            description = description,
+            avatarUrl = avatarUrl,
+            createdBy = createdBy,
+            memberCount = memberCount,
+            memberIds = memberIds,
             isForum = isForum,
             is_forum = isForum,
             settings = finalSettings,
-            unreadCount = unreadMap,
-            lastSeq = lastSeq,
+            lastMessage = lastMsg,
             lastMessageSenderId = lastSenderId,
-            lastMessage = lastMsg
+            lastSeq = lastSeq,
+            lastMessageAt = lastMessageAt,
+            createdAt = createdAt,
+            unreadCount = unreadMap,
+            groupId = groupId
         )
     } catch (e: Exception) {
-        android.util.Log.e("ChatParser", "Error parsing chat doc $id", e)
+        android.util.Log.e("ChatParser", "Error parsing chat doc $id: ${e.message}", e)
         return null
     }
 }
@@ -776,6 +815,196 @@ data class Message(
 
     val senderUid: String get() = senderId
     val senderName: String get() = senderUsername
+}
+
+fun DocumentSnapshot.toMessageOrNull(): Message? {
+    if (!exists()) return null
+    try {
+        val d = data ?: return null
+
+        val senderId = d["senderId"] as? String ?: ""
+        val senderUsername = d["senderUsername"] as? String ?: ""
+        val type = d["type"] as? String ?: MessageType.TEXT
+        val text = d["text"] as? String
+        val caption = d["caption"] as? String
+        val url = d["url"] as? String
+        val fileName = d["fileName"] as? String
+        val duration = (d["duration"] as? Number)?.toInt()
+        val seq = (d["seq"] as? Number)?.toLong()
+        val createdAt = d["createdAt"] as? Timestamp
+        val deleted = (d["deleted"] as? Boolean) ?: false
+        val deletedAt = d["deletedAt"] as? Timestamp
+        val spoiler = (d["spoiler"] as? Boolean) ?: false
+        val commentsEnabled = d["commentsEnabled"] as? Boolean
+        val commentsCount = (d["commentsCount"] as? Number)?.toInt() ?: 0
+        val viewsCount = (d["viewsCount"] as? Number)?.toInt() ?: 0
+        val isHidden = d["is_hidden"] as? Boolean
+        val isPublished = d["is_published"] as? Boolean
+        val topicId = d["topicId"] as? String
+        val lastEdited = d["lastEdited"] as? Timestamp
+        val senderIsAdmin = d["senderIsAdmin"] as? Boolean
+
+        val tags = (d["tags"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+        val readBy = (d["readBy"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+
+        @Suppress("UNCHECKED_CAST")
+        val reactions = (d["reactions"] as? List<*>)?.mapNotNull { item ->
+            when (item) {
+                is Map<*, *> -> item.entries.mapNotNull { (k, v) ->
+                    val kStr = k as? String ?: return@mapNotNull null
+                    val vObj = v ?: return@mapNotNull null
+                    kStr to vObj
+                }.toMap()
+                else -> null
+            }
+        } ?: emptyList()
+
+        @Suppress("UNCHECKED_CAST")
+        val editHistory = (d["editHistory"] as? List<*>)?.mapNotNull { item ->
+            when (item) {
+                is Map<*, *> -> item.entries.mapNotNull { (k, v) ->
+                    val kStr = k as? String ?: return@mapNotNull null
+                    val vObj = v ?: return@mapNotNull null
+                    kStr to vObj
+                }.toMap()
+                else -> null
+            }
+        } ?: emptyList()
+
+        @Suppress("UNCHECKED_CAST")
+        val replyTo = d["replyTo"] as? Map<String, Any?>
+
+        @Suppress("UNCHECKED_CAST")
+        val forwardFrom = d["forwardFrom"] as? Map<String, Any?>
+
+        val images = (d["images"] as? List<*>)?.mapNotNull { item ->
+            when (item) {
+                is Map<*, *> -> AlbumImage(
+                    url = item["url"] as? String ?: "",
+                    fileName = item["fileName"] as? String ?: "",
+                    spoiler = (item["spoiler"] as? Boolean) ?: false
+                )
+                else -> null
+            }
+        } ?: emptyList()
+
+        // Стикеры
+        val stickerId = d["stickerId"] as? String
+        val packId = d["packId"] as? String
+        val packName = d["packName"] as? String
+        val packEmoji = d["packEmoji"] as? String
+        val stickerFormat = d["stickerFormat"] as? String
+        val stickerPreviewUrl = d["stickerPreviewUrl"] as? String
+
+        // Подарки
+        val userGift = (d["userGift"] as? Boolean) ?: false
+        val giftId = d["giftId"] as? String
+        val design = d["design"] as? String
+        @Suppress("UNCHECKED_CAST")
+        val giftSkin = (d["skin"] as? Map<String, Any?>) ?: (d["giftSkin"] as? Map<String, Any?>)
+        val giftStatus = d["giftStatus"] as? String
+        val redeemed = (d["redeemed"] as? Boolean) ?: false
+        val redeemedByUid = d["redeemedByUid"] as? String
+        val redeemedByUsername = d["redeemedByUsername"] as? String
+        val giftType = d["giftType"] as? String
+
+        // Аудио и музыка
+        val coverCdnMediaId = d["coverCdnMediaId"] as? String
+        val coverUrl = d["coverUrl"] as? String
+        val title = d["title"] as? String
+        val performer = d["performer"] as? String
+        val fileSize = (d["fileSize"] as? Number)?.toLong()
+
+        // Google Drive
+        val driveFileId = d["driveFileId"] as? String
+        val driveUrl = d["driveUrl"] as? String
+        val previewUrl = d["previewUrl"] as? String
+        val thumbnailUrl = d["thumbnailUrl"] as? String
+
+        // CDN / Временные файлы
+        val cdnMediaId = d["cdnMediaId"] as? String
+        val thumbUrl = d["thumbUrl"] as? String
+        val width = (d["width"] as? Number)?.toInt()
+        val height = (d["height"] as? Number)?.toInt()
+        val mimeType = d["mimeType"] as? String
+
+        // Forward
+        val tg_forwarded = d["tg_forwarded"] as? Boolean
+        val tg_forwarded_from = d["tg_forwarded_from"] as? String
+        val tg_forwarded_from_fallback = d["tg_forwarded_from_fallback"] as? String
+        val isUnofficialClient = d["isUnofficialClient"] as? Boolean
+        val tradeId = d["tradeId"] as? String
+
+        return Message(
+            id = this.id,
+            seq = seq,
+            senderId = senderId,
+            senderUsername = senderUsername,
+            senderIsAdmin = senderIsAdmin,
+            tags = tags,
+            type = type,
+            text = text,
+            url = url,
+            fileName = fileName,
+            duration = duration,
+            stickerId = stickerId,
+            packId = packId,
+            packName = packName,
+            packEmoji = packEmoji,
+            stickerFormat = stickerFormat,
+            stickerPreviewUrl = stickerPreviewUrl,
+            createdAt = createdAt,
+            deleted = deleted,
+            deletedAt = deletedAt,
+            replyTo = replyTo,
+            reactions = reactions,
+            readBy = readBy,
+            spoiler = spoiler,
+            commentsEnabled = commentsEnabled,
+            commentsCount = commentsCount,
+            viewsCount = viewsCount,
+            isHidden = isHidden,
+            isPublished = isPublished,
+            caption = caption,
+            images = images,
+            forwardFrom = forwardFrom,
+            topicId = topicId,
+            lastEdited = lastEdited,
+            editHistory = editHistory,
+            tg_forwarded = tg_forwarded,
+            tg_forwarded_from = tg_forwarded_from,
+            tg_forwarded_from_fallback = tg_forwarded_from_fallback,
+            isUnofficialClient = isUnofficialClient,
+            tradeId = tradeId,
+            userGift = userGift,
+            giftId = giftId,
+            design = design,
+            giftSkin = giftSkin,
+            giftStatus = giftStatus,
+            redeemed = redeemed,
+            redeemedByUid = redeemedByUid,
+            redeemedByUsername = redeemedByUsername,
+            giftType = giftType,
+            coverCdnMediaId = coverCdnMediaId,
+            coverUrl = coverUrl,
+            title = title,
+            performer = performer,
+            fileSize = fileSize,
+            driveFileId = driveFileId,
+            driveUrl = driveUrl,
+            previewUrl = previewUrl,
+            thumbnailUrl = thumbnailUrl,
+            cdnMediaId = cdnMediaId,
+            thumbUrl = thumbUrl,
+            width = width,
+            height = height,
+            mimeType = mimeType,
+            status = "sent"
+        )
+    } catch (e: Exception) {
+        android.util.Log.e("MessageParser", "Error parsing message doc $id: ${e.message}", e)
+        return null
+    }
 }
 
 /**

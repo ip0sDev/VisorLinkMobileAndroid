@@ -13,6 +13,7 @@ import org.visorlink.app.utils.PresenceManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.launch
 
 import org.visorlink.app.utils.NetworkMonitor
@@ -36,8 +37,15 @@ class ChatListViewModel(
         if (!online) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED
     }.stateIn(viewModelScope, SharingStarted.Eagerly, if (networkMonitor?.isOnline?.value == false) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED)
 
-    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
-    val currentUid: String = auth.currentUser?.uid.orEmpty()
+    val currentUid: String get() = auth.currentUser?.uid.orEmpty()
+
+    private val authUidFlow: Flow<String> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { a ->
+            trySend(a.currentUser?.uid.orEmpty())
+        }
+        auth.addAuthStateListener(listener)
+        awaitClose { auth.removeAuthStateListener(listener) }
+    }.distinctUntilChanged()
 
     private val rawTypingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
         ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
@@ -45,12 +53,18 @@ class ChatListViewModel(
     val currentUser: StateFlow<UserProfile?> = userRepository.currentUserFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val chats: StateFlow<List<Chat>> = chatRepository.allChatsFlow(currentUid)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val chats: StateFlow<List<Chat>> = authUidFlow.flatMapLatest { uid ->
+        if (uid.isEmpty()) flowOf(emptyList())
+        else chatRepository.allChatsFlow(uid)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Непрочитанные приглашения в группы и каналы (`users/{uid}/notifications`). */
-    val invites: StateFlow<List<AppNotification>> = chatRepository.notificationsFlow(currentUid)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val invites: StateFlow<List<AppNotification>> = authUidFlow.flatMapLatest { uid ->
+        if (uid.isEmpty()) flowOf(emptyList())
+        else chatRepository.notificationsFlow(uid)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Чаты со строкой «Приглашения», вставленной по дате последнего приглашения. */
     private val prefs = context?.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE)
@@ -58,9 +72,13 @@ class ChatListViewModel(
     private val _activeFolderId = MutableStateFlow<String?>(prefs?.getString("vl_active_folder", null))
     val activeFolderId: StateFlow<String?> = _activeFolderId.asStateFlow()
 
-    val folders: StateFlow<List<ChatFolder>> = if (chatFoldersRepository != null && currentUid.isNotEmpty()) {
-        combine(chatFoldersRepository.foldersFlow(currentUid), currentUser) { folderList, user ->
-            if (user?.isPro == true) folderList else emptyList()
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val folders: StateFlow<List<ChatFolder>> = if (chatFoldersRepository != null) {
+        authUidFlow.flatMapLatest { uid ->
+            if (uid.isEmpty()) flowOf(emptyList())
+            else combine(chatFoldersRepository.foldersFlow(uid), currentUser) { folderList, user ->
+                if (user?.isPro == true) folderList else emptyList()
+            }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     } else {
         MutableStateFlow<List<ChatFolder>>(emptyList()).asStateFlow()

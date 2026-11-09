@@ -26,9 +26,10 @@ class AppCheckViewModel(application: Application) : AndroidViewModel(application
         val app = getApplication<Application>()
         val isInitialDone = AppCheckManager.isInitialAttestationDone(app)
         val isUpdated = AppCheckManager.isAppUpdated(app)
+        val isLoggedIn = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser != null
 
         // При обновлении приложения forceRefresh = true; при обычном старте — false (использует кэш/рефреш по истечении)
-        if (isInitialDone) {
+        if (isInitialDone || isLoggedIn) {
             check(forceRefresh = isUpdated)
         }
     }

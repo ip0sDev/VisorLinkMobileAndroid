@@ -222,10 +222,12 @@ class ChatRepository(
             db.collection("chats").document(chatId).collection("messages")
                 .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
                 .addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
-                    if (error != null || snap == null) return@addSnapshotListener
-                    val messages = snap.documents.mapNotNull { doc ->
-                        try { doc.toObject(Message::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = doc.id) } catch (_: Exception) { null }
-                    }.reversed()
+                    if (error != null) {
+                        Log.e("ChatRepository", "latestMessagesFlow error: ${error.message}", error)
+                        return@addSnapshotListener
+                    }
+                    if (snap == null) return@addSnapshotListener
+                    val messages = snap.documents.mapNotNull { it.toMessageOrNull() }.reversed()
                     
                     currentFirestore = messages
                     currentLastDoc = snap.documents.lastOrNull()
@@ -256,9 +258,7 @@ class ChatRepository(
     suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> = try {
         val snap = db.collection("chats").document(chatId).collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING).startAfter(startAfterDoc).limit(PAGE_SIZE).get().await()
-        val messages = snap.documents.mapNotNull { doc ->
-            try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
-        }.reversed()
+        val messages = snap.documents.mapNotNull { it.toMessageOrNull() }.reversed()
         Pair(sortMessages(messages), if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
     } catch (e: Exception) {
         Pair(emptyList(), null)
@@ -1200,7 +1200,7 @@ class ChatRepository(
 
     fun listenPost(chatId: String, messageId: String, onUpdate: (Message) -> Unit): ListenerRegistration {
         return db.collection("chats").document(chatId).collection("messages").document(messageId)
-            .addSnapshotListener { snap, _ -> snap?.toObject(Message::class.java)?.copy(id = snap.id)?.let(onUpdate) }
+            .addSnapshotListener { snap, _ -> snap?.toMessageOrNull()?.let(onUpdate) }
     }
 
     suspend fun addComment(chatId: String, messageId: String, type: String, text: String? = null, cdnMediaId: String? = null, url: String? = null, fileName: String? = null, duration: Int? = null, spoiler: Boolean = false, replyTo: CommentReplyData? = null): String {
