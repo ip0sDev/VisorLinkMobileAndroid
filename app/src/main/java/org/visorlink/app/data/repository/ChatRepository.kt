@@ -301,7 +301,9 @@ class ChatRepository(
                     rebuild()
                 }
             } catch (e: Throwable) {
-                DiagnosticLogBuffer.e("ChatRepo", "Outbox flow error: ${e.message}", e)
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    DiagnosticLogBuffer.e("ChatRepo", "Outbox flow error: ${e.message}", e)
+                }
             }
         }
 
@@ -325,12 +327,16 @@ class ChatRepository(
                             }
                             rebuild()
                         } catch (e: Throwable) {
-                            DiagnosticLogBuffer.e("ChatRepo", "Cache reload error: ${e.message}", e)
+                            if (e !is kotlinx.coroutines.CancellationException) {
+                                DiagnosticLogBuffer.e("ChatRepo", "Cache reload error: ${e.message}", e)
+                            }
                         }
                     }
                 }
             } catch (e: Throwable) {
-                DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached messages: ${e.message}", e)
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached messages: ${e.message}", e)
+                }
             }
         }
 
@@ -640,18 +646,26 @@ class ChatRepository(
     }
 
     suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) {
+        val resolvedUid = currentUid.ifBlank { auth.currentUser?.uid.orEmpty() }
+        val resolvedUsername = senderUsername.ifBlank {
+            auth.currentUser?.displayName?.ifBlank { null }
+                ?: auth.currentUser?.email?.substringBefore('@')?.ifBlank { null }
+                ?: "user"
+        }
+        DiagnosticLogBuffer.i("ChatRepo", "sendTextNow starting: msgId=$id, chatId=$chatId, sender=$resolvedUsername, uid=$resolvedUid, isDirect=$isDirect")
+
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
-        val userRef = db.collection("users").document(currentUid)
+        val userRef = db.collection("users").document(resolvedUid)
 
         val msgData = mutableMapOf<String, Any?>(
-            "senderId"       to currentUid,
-            "senderUsername" to senderUsername,
+            "senderId"       to resolvedUid,
+            "senderUsername" to resolvedUsername,
             "type"           to MessageType.TEXT,
             "text"           to text,
             "createdAt"      to FieldValue.serverTimestamp(),
             "deleted"        to false,
             "reactions"      to emptyList<Any>(),
-            "readBy"         to listOf(currentUid),
+            "readBy"         to listOf(resolvedUid),
             "replyTo"        to replyTo?.toMap()
         )
         if (nextSeq != null && nextSeq > 0) {
@@ -663,16 +677,24 @@ class ChatRepository(
 
         val batch  = db.batch()
         batch.set(msgRef, msgData)
-        batch.update(db.collection("chats").document(chatId), buildChatUpdates(text, currentUid, senderUsername, nextSeq, isDirect, otherUserId))
+        batch.update(db.collection("chats").document(chatId), buildChatUpdates(text, resolvedUid, resolvedUsername, nextSeq, isDirect, otherUserId))
         if (topicId != null) {
             val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
             batch.update(topicRef, mapOf(
-                "lastMessage" to mapOf("text" to text, "senderUsername" to senderUsername),
+                "lastMessage" to mapOf("text" to text, "senderUsername" to resolvedUsername),
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
-        batch.commit().await()
+        if (resolvedUid.isNotBlank()) {
+            batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+        }
+        try {
+            batch.commit().await()
+            DiagnosticLogBuffer.i("ChatRepo", "sendTextNow committed successfully for msgId=$id in $chatId")
+        } catch (e: Exception) {
+            DiagnosticLogBuffer.e("ChatRepo", "sendTextNow commit failed for msgId=$id in $chatId: ${e.message}", e)
+            throw e
+        }
     }
 
     suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, caption: String? = null, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO) {

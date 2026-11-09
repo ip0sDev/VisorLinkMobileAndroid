@@ -17,6 +17,7 @@ import java.io.IOException
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 
+import org.visorlink.app.utils.DiagnosticLogBuffer
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
@@ -129,6 +130,7 @@ class OutboxManager(
         scope.launch {
             networkMonitor.isOnline.collectLatest { online ->
                 if (online) {
+                    DiagnosticLogBuffer.i(TAG, "Network became online -> starting processing")
                     startProcessing()
                 } else {
                     stopProcessing()
@@ -137,8 +139,12 @@ class OutboxManager(
         }
         scope.launch {
             ChatDataCache.outboxSignal.collect {
+                DiagnosticLogBuffer.i(TAG, "Outbox signal received -> starting processing")
                 if (networkMonitor.isOnline.value) startProcessing()
             }
+        }
+        if (networkMonitor.isOnline.value) {
+            startProcessing()
         }
     }
 
@@ -180,6 +186,7 @@ class OutboxManager(
                                 inFlightIds.add(action.id)
                                 val job = coroutineContext[Job]
                                 if (job != null) inFlightJobs[action.id] = job
+                                DiagnosticLogBuffer.i(TAG, "Outbox starting action: id=${action.id}, type=${action.type}, chatId=${action.chatId}, retry=${action.retryCount}")
                                 try {
                                     if (action.type == "image" || action.type == "voice" || action.type == "video") {
                                         mediaSemaphore.withPermit {
@@ -192,16 +199,18 @@ class OutboxManager(
                                             processAction(action)
                                         }
                                     }
+                                    DiagnosticLogBuffer.i(TAG, "Outbox action completed: id=${action.id}")
                                     outboxDataSource.updateStatus(context, action.id, 1)
                                 } catch (e: Exception) {
                                     // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
                                     // Таймаут — тоже CancellationException, но он считается обычной неудачей.
                                     if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                                    DiagnosticLogBuffer.e(TAG, "Outbox action failed: id=${action.id}, retry=${action.retryCount}, error=${e.message}", e)
                                     val nextRetry = action.retryCount + 1
                                     outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
                                     // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
-                                    // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут
-                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || isPermissionDenied(e)) {
+                                    // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут (даём 2 попытки на случай гонки кулдауна)
+                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || (isPermissionDenied(e) && nextRetry >= 2)) {
                                         outboxDataSource.updateStatus(context, action.id, 2)
                                     }
                                     // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)

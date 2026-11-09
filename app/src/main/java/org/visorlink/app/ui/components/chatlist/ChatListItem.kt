@@ -188,9 +188,9 @@ fun ChatListItem(
                         ChatType.DIRECT, ChatType.EMERGENCY -> {
                             val otherUsername = chat.otherUsername(currentUid)
                             val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
-                            val resolvedAvatarUrl = otherProfile?.avatarUrl
-                                ?: chat.otherAvatarUrl(currentUid)
-                                ?: chat.avatarUrl
+                            val resolvedAvatarUrl = otherProfile?.avatarUrl?.takeIf { it.isNotBlank() }
+                                ?: chat.otherAvatarUrl(currentUid)?.takeIf { it.isNotBlank() }
+                                ?: chat.avatarUrl?.takeIf { it.isNotBlank() }
                             AvatarWithPresence(
                                 avatarUrl = resolvedAvatarUrl,
                                 displayName = chat.otherDisplayName(currentUid),
@@ -200,7 +200,7 @@ fun ChatListItem(
                             )
                         }
                         ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
-                            avatarUrl = chat.avatarUrl,
+                            avatarUrl = chat.avatarUrl?.takeIf { it.isNotBlank() },
                             name = chat.name,
                             isChannel = chatType == ChatType.CHANNEL,
                             size = 52.dp

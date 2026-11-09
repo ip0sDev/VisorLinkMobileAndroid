@@ -581,10 +581,12 @@ object ChatDataCache {
         val pDataObj = optJSONObject("participantData") ?: JSONObject()
         val pData = mutableMapOf<String, Map<String, String>>()
         pDataObj.keys().forEach { k ->
-            val vObj = pDataObj.getJSONObject(k)
-            val vMap = mutableMapOf<String, String>()
-            vObj.keys().forEach { vk -> vMap[vk] = vObj.getString(vk) }
-            pData[k] = vMap
+            val vObj = pDataObj.optJSONObject(k)
+            if (vObj != null) {
+                val vMap = mutableMapOf<String, String>()
+                vObj.keys().forEach { vk -> vMap[vk] = vObj.optString(vk, "") }
+                pData[k] = vMap
+            }
         }
 
         val mArray = optJSONArray("memberIds") ?: JSONArray()

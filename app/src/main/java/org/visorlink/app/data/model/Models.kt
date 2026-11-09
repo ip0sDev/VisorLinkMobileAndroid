@@ -205,7 +205,7 @@ fun DocumentSnapshot.toUserProfileOrNull(): UserProfile? {
             username = getString("username") ?: "",
             displayName = getString("displayName") ?: "",
             bio = getString("bio") ?: "",
-            avatarUrl = getString("avatarUrl"),
+            avatarUrl = (getString("avatarUrl") ?: getString("photoURL") ?: getString("photoUrl"))?.takeIf { it.isNotBlank() },
             online = getBoolean("online") ?: false,
             lastSeen = parseTimestamp(d["lastSeen"]),
             createdAt = parseTimestamp(d["createdAt"]),
@@ -382,6 +382,8 @@ data class Chat(
     fun otherAvatarUrl(currentUid: String): String? {
         val otherId = otherParticipantId(currentUid)
         return participantData[otherId]?.get("avatarUrl")?.takeIf { it.isNotBlank() }
+            ?: participantData[otherId]?.get("photoURL")?.takeIf { it.isNotBlank() }
+            ?: participantData[otherId]?.get("photoUrl")?.takeIf { it.isNotBlank() }
             ?: avatarUrl?.takeIf { it.isNotBlank() }
     }
 }
@@ -453,7 +455,7 @@ fun DocumentSnapshot.toChatOrNull(): Chat? {
         val name = d["name"] as? String ?: ""
         val tag = d["tag"] as? String ?: ""
         val description = d["description"] as? String ?: ""
-        val avatarUrl = d["avatarUrl"] as? String
+        val avatarUrl = ((d["avatarUrl"] as? String) ?: (d["photoURL"] as? String) ?: (d["photoUrl"] as? String))?.takeIf { it.isNotBlank() }
         val createdBy = d["createdBy"] as? String ?: ""
         val memberCount = (d["memberCount"] as? Number)?.toInt() ?: 0
         val memberIds = (d["memberIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()

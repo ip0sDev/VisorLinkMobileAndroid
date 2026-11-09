@@ -180,6 +180,7 @@ class ChatListViewModel(
     }
 
     private val observedPresenceUids = mutableSetOf<String>()
+    private val observedProfileUids = mutableSetOf<String>()
 
     init {
         sidebarTypingManager?.startListening(currentUid)
@@ -224,14 +225,23 @@ class ChatListViewModel(
                     .distinct()
 
                 directUids.forEach { uid ->
-                    if (uid !in _profileCache.value.keys) {
+                    if (observedProfileUids.add(uid)) {
                         launch {
                             try {
-                                userRepository.getUserProfile(uid)?.let { profile ->
-                                    _profileCache.update { it + (uid to profile) }
+                                userRepository.userProfileFlow(uid).collect { profile ->
+                                    if (profile != null) {
+                                        _profileCache.update { currentMap ->
+                                            val existing = currentMap[uid]
+                                            if (existing == null || existing.avatarUrl != profile.avatarUrl || existing.displayName != profile.displayName) {
+                                                currentMap + (uid to profile)
+                                            } else {
+                                                currentMap
+                                            }
+                                        }
+                                    }
                                 }
                             } catch (e: Exception) {
-                                Log.e("ChatListVM", "Failed to fetch profile for $uid: ${e.message}")
+                                org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatListVM", "Failed to observe profile flow for $uid: ${e.message}", e)
                             }
                         }
                     }

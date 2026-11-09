@@ -963,11 +963,24 @@ class ChatViewModel(
     }
 
     fun sendText(text: String) {
-        if (!_uiState.value.canSendMessage) return
         val trimmed = text.trim().ifEmpty { return }
+        org.visorlink.app.utils.DiagnosticLogBuffer.i("ChatVM", "sendText called: chatId=$chatId, canSend=${_uiState.value.canSendMessage}, isCooldown=${_uiState.value.isCooldown}")
+        if (!_uiState.value.canSendMessage) {
+            org.visorlink.app.utils.DiagnosticLogBuffer.w("ChatVM", "sendText blocked: canSendMessage is false (chatType=${_uiState.value.chatType}, myMember=${_uiState.value.myMember})")
+            return
+        }
 
         if (trimmed.length > 2000) return
-        if (!startCooldown()) return
+        if (!startCooldown()) {
+            org.visorlink.app.utils.DiagnosticLogBuffer.w("ChatVM", "sendText blocked: cooldown is active")
+            return
+        }
+
+        val resolvedUsername = currentUsername.ifBlank {
+            auth.currentUser?.displayName?.ifBlank { null }
+                ?: auth.currentUser?.email?.substringBefore('@')?.ifBlank { null }
+                ?: "user"
+        }
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
@@ -978,10 +991,11 @@ class ChatViewModel(
             clearReply()
             draftManager.clearDraft(chatId)
             try {
+                org.visorlink.app.utils.DiagnosticLogBuffer.i("ChatVM", "Enqueuing sendText for chatId=$chatId, isDirect=$isDirect, targetUserId=$targetUserId, sender=$resolvedUsername")
                 chatRepository.sendText(
                     chatId = chatId,
                     text = trimmed,
-                    senderUsername = currentUsername,
+                    senderUsername = resolvedUsername,
                     replyTo = reply,
                     topicId = activeTopicId,
                     nextSeq = nextSeq,
@@ -989,6 +1003,7 @@ class ChatViewModel(
                     otherUserId = targetUserId
                 )
             } catch (e: Exception) {
+                org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatVM", "chatRepository.sendText failed: ${e.message}", e)
                 _uiState.update { it.copy(error = e.message) }
             }
         }
