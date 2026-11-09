@@ -426,6 +426,7 @@ fun DocumentSnapshot.toChatOrNull(): Chat? {
         )
     } catch (e: Exception) {
         android.util.Log.e("ChatParser", "Error parsing chat doc $id: ${e.message}", e)
+        org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatParser", "Error parsing chat doc $id: ${e.message}", e)
         return null
     }
 }
@@ -1003,6 +1004,7 @@ fun DocumentSnapshot.toMessageOrNull(): Message? {
         )
     } catch (e: Exception) {
         android.util.Log.e("MessageParser", "Error parsing message doc $id: ${e.message}", e)
+        org.visorlink.app.utils.DiagnosticLogBuffer.e("MessageParser", "Error parsing message doc $id: ${e.message}", e)
         return null
     }
 }

@@ -171,6 +171,66 @@ fun AppCheckDiagnosticScreen(
                 }
             }
 
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Журнал событий (Логи)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    var logsText by remember { mutableStateOf(org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()) }
+
+                    SelectionContainer {
+                        Text(
+                            text = logsText.ifBlank { "Логов пока нет" },
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 240.dp)
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                val fullLogs = "VisorLink Diag Log (${BuildConfig.VERSION_NAME} - ${BuildConfig.VERSION_CODE}):\n" +
+                                        "UID: ${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}\n" +
+                                        "Time: ${java.util.Date()}\n\n" +
+                                        org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()
+                                clipboardManager.setText(AnnotatedString(fullLogs))
+                                Toast.makeText(context, "Логи скопированы в буфер обмена", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Скопировать")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                org.visorlink.app.utils.DiagnosticLogBuffer.clear()
+                                logsText = ""
+                                Toast.makeText(context, "Журнал очищен", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Очистить")
+                        }
+                    }
+                }
+            }
+
             Button(
                 onClick = { viewModel.refresh() },
                 modifier = Modifier.fillMaxWidth()

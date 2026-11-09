@@ -15,6 +15,7 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.*
 import org.visorlink.app.utils.ChatDataCache
+import org.visorlink.app.utils.DiagnosticLogBuffer
 import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.VoiceCache
 import org.visorlink.app.utils.NetworkMonitor
@@ -45,6 +46,17 @@ import java.util.TimeZone
 private const val PAGE_SIZE = 20L
 private const val CHATS_LIST_LIMIT = 50L
 
+data class ChatDiagInfo(
+    val uid: String = "",
+    val directCount: Int = 0,
+    val groupCount: Int = 0,
+    val emerCount: Int = 0,
+    val totalCount: Int = 0,
+    val lastDirectError: String? = null,
+    val lastGroupError: String? = null,
+    val lastSyncTs: Long = 0L
+)
+
 class ChatRepository(
     private val auth: FirebaseAuth,
     private val db: FirebaseFirestore,
@@ -56,6 +68,9 @@ class ChatRepository(
     private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager
 ) {
     val currentUid: String get() = auth.currentUser?.uid ?: ""
+
+    private val _diagInfo = MutableStateFlow(ChatDiagInfo())
+    val diagInfo: StateFlow<ChatDiagInfo> = _diagInfo.asStateFlow()
 
     fun getChatId(uid1: String, uid2: String) =
         listOf(uid1, uid2).sorted().joinToString("_")
@@ -86,9 +101,15 @@ class ChatRepository(
     }
 
     fun allChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
+        DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow started for uid=$uid, limit=$CHATS_LIST_LIMIT")
+        _diagInfo.update { it.copy(uid = uid) }
+
         launch(Dispatchers.IO) {
             val cached = ChatDataCache.loadChatList(context, uid)
-            if (cached.isNotEmpty()) trySend(cached)
+            if (cached.isNotEmpty()) {
+                DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow loaded ${cached.size} cached chats from SQLite")
+                trySend(cached)
+            }
         }
 
         val directChats = mutableListOf<Chat>()
@@ -100,6 +121,20 @@ class ChatRepository(
                 val all = (directChats + groupChats + emerChats)
                     .distinctBy { it.id }
                     .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+                DiagnosticLogBuffer.i(
+                    "ChatRepo",
+                    "allChatsFlow merged: direct=${directChats.size}, group=${groupChats.size}, emer=${emerChats.size}, total=${all.size}"
+                )
+                _diagInfo.update {
+                    it.copy(
+                        uid = uid,
+                        directCount = directChats.size,
+                        groupCount = groupChats.size,
+                        emerCount = emerChats.size,
+                        totalCount = all.size,
+                        lastSyncTs = System.currentTimeMillis()
+                    )
+                }
                 trySend(all)
                 ChatDataCache.saveChatList(context, uid, all)
             }
@@ -109,12 +144,20 @@ class ChatRepository(
             .limit(CHATS_LIST_LIMIT)
             .addSnapshotListener { snap, error ->
                 if (error != null) {
-                    Log.e("ChatRepository", "allChatsFlow direct listener error", error)
+                    val errMsg = "${error.code}: ${error.message}"
+                    Log.e("ChatRepository", "allChatsFlow direct listener error: $errMsg", error)
+                    DiagnosticLogBuffer.e("ChatRepo", "allChatsFlow direct listener error: $errMsg", error)
+                    _diagInfo.update { it.copy(lastDirectError = errMsg) }
                     return@addSnapshotListener
                 }
+                _diagInfo.update { it.copy(lastDirectError = null) }
                 directChats.clear()
-                snap?.documents?.forEach { doc ->
-                    doc.toChatOrNull()?.let { directChats.add(it) }
+                val docs = snap?.documents.orEmpty()
+                DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow direct snapshot: ${docs.size} docs")
+                docs.forEach { doc ->
+                    doc.toChatOrNull()?.let { directChats.add(it) } ?: run {
+                        DiagnosticLogBuffer.w("ChatRepo", "direct chat doc ${doc.id} parse failed")
+                    }
                 }
                 merge()
             }
@@ -123,12 +166,20 @@ class ChatRepository(
             .limit(CHATS_LIST_LIMIT)
             .addSnapshotListener { snap, error ->
                 if (error != null) {
-                    Log.e("ChatRepository", "allChatsFlow group listener error", error)
+                    val errMsg = "${error.code}: ${error.message}"
+                    Log.e("ChatRepository", "allChatsFlow group listener error: $errMsg", error)
+                    DiagnosticLogBuffer.e("ChatRepo", "allChatsFlow group listener error: $errMsg", error)
+                    _diagInfo.update { it.copy(lastGroupError = errMsg) }
                     return@addSnapshotListener
                 }
+                _diagInfo.update { it.copy(lastGroupError = null) }
                 groupChats.clear()
-                snap?.documents?.forEach { doc ->
-                    doc.toChatOrNull()?.let { groupChats.add(it) }
+                val docs = snap?.documents.orEmpty()
+                DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow group snapshot: ${docs.size} docs")
+                docs.forEach { doc ->
+                    doc.toChatOrNull()?.let { groupChats.add(it) } ?: run {
+                        DiagnosticLogBuffer.w("ChatRepo", "group chat doc ${doc.id} parse failed")
+                    }
                 }
                 merge()
             }
@@ -139,6 +190,7 @@ class ChatRepository(
     fun chatsFlow(uid: String) = allChatsFlow(uid)
 
     fun latestMessagesFlow(chatId: String, onUpdate: (List<Message>, DocumentSnapshot?) -> Unit): Flow<Unit> = channelFlow {
+        DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow started for chatId=$chatId")
         var currentFirestore = emptyList<Message>()
         var currentOutbox = emptyList<ChatDataCache.QueuedAction>()
         var currentLastDoc: DocumentSnapshot? = null
@@ -223,10 +275,13 @@ class ChatRepository(
                 .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
                 .addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
                     if (error != null) {
-                        Log.e("ChatRepository", "latestMessagesFlow error: ${error.message}", error)
+                        val errMsg = "${error.code}: ${error.message}"
+                        Log.e("ChatRepository", "latestMessagesFlow error: $errMsg", error)
+                        DiagnosticLogBuffer.e("ChatRepo", "latestMessagesFlow $chatId error: $errMsg", error)
                         return@addSnapshotListener
                     }
                     if (snap == null) return@addSnapshotListener
+                    DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow $chatId: ${snap.documents.size} docs")
                     val messages = snap.documents.mapNotNull { it.toMessageOrNull() }.reversed()
                     
                     currentFirestore = messages

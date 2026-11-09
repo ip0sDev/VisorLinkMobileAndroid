@@ -38,6 +38,7 @@ class ChatListViewModel(
     }.stateIn(viewModelScope, SharingStarted.Eagerly, if (networkMonitor?.isOnline?.value == false) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED)
 
     val currentUid: String get() = auth.currentUser?.uid.orEmpty()
+    val diagInfo: StateFlow<org.visorlink.app.data.repository.ChatDiagInfo> = chatRepository.diagInfo
 
     private val authUidFlow: Flow<String> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { a ->

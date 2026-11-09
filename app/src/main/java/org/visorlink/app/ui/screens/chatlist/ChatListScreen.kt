@@ -282,9 +282,77 @@ fun ChatListScreen(
                                     .padding(vertical = 4.dp)
                             )
                         }
-                        ChatListEmptyState(
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ChatListEmptyState(
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        val diagInfo by viewModel.diagInfo.collectAsStateWithLifecycle()
+                        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                        val ctx = LocalContext.current
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                                .clickable {
+                                    val full = "VisorLink Diag (Chats Empty):\n" +
+                                            "UID: ${diagInfo.uid}\n" +
+                                            "Direct: ${diagInfo.directCount} (err: ${diagInfo.lastDirectError})\n" +
+                                            "Group: ${diagInfo.groupCount} (err: ${diagInfo.lastGroupError})\n" +
+                                            "Emer: ${diagInfo.emerCount}\n" +
+                                            "SyncTs: ${diagInfo.lastSyncTs}\n\n" +
+                                            "Recent Logs:\n" +
+                                            org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()
+                                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(full))
+                                    android.widget.Toast.makeText(ctx, "Диагностические логи скопированы!", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+                            ),
+                            shape = VlTheme.tokens.shapes.card
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Диагностика Firestore",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Нажмите, чтобы скопировать",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "UID: ${diagInfo.uid.ifBlank { "нет (auth listener пустой)" }}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "Прямые: ${diagInfo.directCount}${if (diagInfo.lastDirectError != null) " [ERR: ${diagInfo.lastDirectError}]" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (diagInfo.lastDirectError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Групповые: ${diagInfo.groupCount}${if (diagInfo.lastGroupError != null) " [ERR: ${diagInfo.lastGroupError}]" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (diagInfo.lastGroupError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 } else {
                     LazyColumn(
