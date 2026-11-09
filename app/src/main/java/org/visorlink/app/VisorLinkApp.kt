@@ -22,6 +22,7 @@ import coil.ImageLoaderFactory
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
@@ -67,9 +68,35 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             getSharedPreferences("visorlink_yandex_relay", MODE_PRIVATE).edit().clear().apply()
         } catch (_: Exception) {}
 
-        startKoin {
+                startKoin {
             androidContext(this@VisorLinkApp)
             modules(appModule)
+        }
+
+        // ─── Разовая полная зачистка устаревшего/разросшегося кэша при переходе на v1.5.0 ───
+        try {
+            val updatePrefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
+            if (!updatePrefs.getBoolean("cache_purged_v150", false)) {
+                Firebase.firestore.clearPersistence().addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        Log.i("VisorLinkApp", "Firestore legacy persistence cache purged for v1.5.0")
+                    } else {
+                        Log.w("VisorLinkApp", "clearPersistence: ${task.exception?.message}")
+                    }
+                }
+                val cacheManager: CacheManager = GlobalContext.get().get()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        cacheManager.clearAll()
+                        updatePrefs.edit().putBoolean("cache_purged_v150", true).apply()
+                        Log.i("VisorLinkApp", "All legacy app caches purged successfully for v1.5.0")
+                    } catch (e: Exception) {
+                        Log.w("VisorLinkApp", "Failed to clear legacy cache", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("VisorLinkApp", "Cache purge check error", e)
         }
 
         // ─── Firebase App Check — ОБЯЗАТЕЛЬНО до любых Firestore-запросов ───

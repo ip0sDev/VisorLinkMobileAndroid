@@ -41,6 +41,7 @@ import org.visorlink.app.utils.OutboxManager
 import org.visorlink.app.utils.VoicePlayerManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.firestore
@@ -58,8 +59,11 @@ val appModule = module {
     single {
         Firebase.firestore.also { db ->
             db.firestoreSettings = firestoreSettings {
-                isPersistenceEnabled = true
-                cacheSizeBytes = FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED
+                setLocalCacheSettings(
+                    PersistentCacheSettings.newBuilder()
+                        .setSizeBytes(100L * 1024 * 1024)
+                        .build()
+                )
             }
         }
     }

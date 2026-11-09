@@ -29,7 +29,7 @@ class LegalRepository(
 ) {
     companion object {
         private const val TAG = "LegalRepository"
-        const val DEFAULT_FALLBACK_VERSION = "1.0.0"
+        const val DEFAULT_FALLBACK_VERSION = "1.5.0"
         private const val TOS_ASSET = "legal_tos.json"
         private const val PRIVACY_ASSET = "legal_privacy_policy.json"
     }

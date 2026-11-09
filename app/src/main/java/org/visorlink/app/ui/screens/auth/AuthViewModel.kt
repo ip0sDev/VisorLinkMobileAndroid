@@ -483,7 +483,7 @@ class AuthViewModel(
     fun logout() {
         stopVerificationPolling()
         tfaHold.release()
-        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+        val uid = runCatching { com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid }.getOrNull()
         viewModelScope.launch {
             // Полная очистка локальных данных аккаунта (TODO §14.6): SQLite-кэш,
             // Firestore persistence, черновики, расшифрованные медиа, 2FA-кэш, обёртки CK

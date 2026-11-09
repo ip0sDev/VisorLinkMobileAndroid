@@ -7,6 +7,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.Sticker
 import org.visorlink.app.data.model.UserProfile
@@ -138,14 +139,41 @@ class UserRepository(
             launch {
                 try {
                     val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
-                    if (net != null) ChatDataCache.saveProfile(context, net)
+                    if (net != null) {
+                        memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
+                        ChatDataCache.saveProfile(context, net)
+                    }
                 } catch (_: Exception) {}
             }
             return@withContext cached
         }
+        
+        // Попытка взять из оффлайн-кэша Firestore до похода в сеть
+        val cachedDoc = try {
+            db.collection("users").document(uid).get(Source.CACHE).await()
+        } catch (_: Exception) { null }
+        val fromCache = cachedDoc?.toObject(UserProfile::class.java)
+        if (fromCache != null) {
+            memoryProfiles.getOrPut(uid) { MutableStateFlow(fromCache) }.value = fromCache
+            ChatDataCache.saveProfile(context, fromCache)
+            launch {
+                try {
+                    val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+                    if (net != null) {
+                        memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
+                        ChatDataCache.saveProfile(context, net)
+                    }
+                } catch (_: Exception) {}
+            }
+            return@withContext fromCache
+        }
+
         try {
             val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
-            if (net != null) ChatDataCache.saveProfile(context, net)
+            if (net != null) {
+                memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
+                ChatDataCache.saveProfile(context, net)
+            }
             return@withContext net
         } catch (e: Exception) {
             null

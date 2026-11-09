@@ -34,8 +34,8 @@ class AuthViewModelTest {
             on { userProfileFlow(any()) } doReturn flowOf(null)
         }
         tfaManager = mock()
-        val fcmManager: org.visorlink.app.utils.FcmManager = mock()
-        viewModel = AuthViewModel(authRepository, userRepository, tfaManager, fcmManager)
+        val fcmManager: org.visorlink.app.utils.FcmManager = mock(); val appContext: android.content.Context = mock(); val contentKeyManager: org.visorlink.app.utils.ContentKeyManager = mock()
+        viewModel = AuthViewModel(authRepository, userRepository, tfaManager, fcmManager, appContext = appContext, contentKeyManager = contentKeyManager)
     }
 
     @After

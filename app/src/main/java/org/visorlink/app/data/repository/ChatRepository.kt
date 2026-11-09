@@ -10,6 +10,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Source
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.*
 import org.visorlink.app.utils.ChatDataCache
@@ -41,6 +42,7 @@ import java.util.Locale
 import java.util.TimeZone
 
 private const val PAGE_SIZE = 20L
+private const val CHATS_LIST_LIMIT = 50L
 
 class ChatRepository(
     private val auth: FirebaseAuth,
@@ -57,16 +59,29 @@ class ChatRepository(
     fun getChatId(uid1: String, uid2: String) =
         listOf(uid1, uid2).sorted().joinToString("_")
 
-    suspend fun chatExists(chatId: String): Boolean = try {
+    suspend fun chatExists(chatId: String): Boolean = withContext(Dispatchers.IO) {
         if (chatId.startsWith("emer_")) {
             val cached = ChatDataCache.loadChat(context, chatId)
-            return cached != null
+            return@withContext cached != null
         }
-        db.collection("chats").document(chatId).get().await().exists()
-    } catch (e: Exception) {
-        // Если оффлайн, проверяем наличие чата в нашем локальном кэше (SQLite)
+        // 1. Сначала мгновенно проверяем наш локальный SQLite-кэш
+        val cached = ChatDataCache.loadChat(context, chatId)
+        if (cached != null) return@withContext true
         val cachedChats = ChatDataCache.loadChatList(context, currentUid)
-        cachedChats.any { it.id == chatId }
+        if (cachedChats.any { it.id == chatId }) return@withContext true
+
+        // 2. Быстрая проверка Firestore кэша без ожидания сети
+        try {
+            val cacheDoc = db.collection("chats").document(chatId).get(Source.CACHE).await()
+            if (cacheDoc.exists()) return@withContext true
+        } catch (_: Exception) {}
+
+        // 3. Сетевой фоллбэк
+        try {
+            db.collection("chats").document(chatId).get().await().exists()
+        } catch (e: Exception) {
+            false
+        }
     }
 
     fun allChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
@@ -91,6 +106,7 @@ class ChatRepository(
 
         val reg1 = db.collection("chats").whereArrayContains("participants", uid)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
+            .limit(CHATS_LIST_LIMIT)
             .addSnapshotListener { snap, _ ->
                 directChats.clear()
                 snap?.documents?.forEach { doc ->
@@ -101,6 +117,7 @@ class ChatRepository(
 
         val reg2 = db.collection("chats").whereArrayContains("memberIds", uid)
             .orderBy("lastMessageAt", Query.Direction.DESCENDING)
+            .limit(CHATS_LIST_LIMIT)
             .addSnapshotListener { snap, _ ->
                 groupChats.clear()
                 snap?.documents?.forEach { doc ->

@@ -45,19 +45,19 @@ class LegalRepositoryTest {
     }
 
     @Test
-    fun `loadBundledVersion returns valid 1_0_0 version`() {
+    fun `loadBundledVersion returns valid 1_5_0 version`() {
         val version = repository.loadBundledVersion()
-        assertEquals("1.0.0", version)
+        assertEquals("1.5.0", version)
     }
 
     @Test
-    fun `loadBundledTosDocument parses all 8 sections and titles`() {
+    fun `loadBundledTosDocument parses all 9 sections and titles`() {
         val doc = repository.loadBundledTosDocument()
         assertNotNull(doc)
         assertEquals("terms_of_service", doc.id)
         assertEquals("Правила использования сервиса (Terms of Service)", doc.title)
-        assertEquals("1.0.0", doc.version)
-        assertEquals(8, doc.sections.size)
+        assertEquals("1.5.0", doc.version)
+        assertEquals(9, doc.sections.size)
 
         val section1 = doc.sections.first()
         assertEquals("1", section1.number)
@@ -74,7 +74,7 @@ class LegalRepositoryTest {
         assertNotNull(doc)
         assertEquals("privacy_policy", doc.id)
         assertEquals("Политика конфиденциальности", doc.title)
-        assertEquals("1.0.0", doc.version)
+        assertEquals("1.5.0", doc.version)
         assertEquals(8, doc.sections.size)
 
         val section2 = doc.sections[1]

@@ -214,6 +214,14 @@ class StickerPackRepository(
         try {
             purgeLegacyCacheIfNeeded()
             val query = firestore.collection("stickerPacks").whereEqualTo("isOfficial", true)
+            // 1. Мгновенная выдача из кэша
+            try {
+                val cachedSnap = query.get(Source.CACHE).await()
+                if (!cachedSnap.isEmpty) {
+                    processSnapshot(cachedSnap)
+                }
+            } catch (_: Exception) {}
+            // 2. Сетевое обновление в фоне
             val snapshot = try {
                 if (forceServer) {
                     query.get(Source.SERVER).await()
