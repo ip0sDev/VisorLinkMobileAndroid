@@ -193,10 +193,7 @@ fun AppCheckDiagnosticScreen(
                             text = logsText.ifBlank { "Логов пока нет" },
                             style = MaterialTheme.typography.bodySmall,
                             fontFamily = FontFamily.Monospace,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 240.dp)
-                                .verticalScroll(rememberScrollState())
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
 
@@ -206,16 +203,26 @@ fun AppCheckDiagnosticScreen(
                     ) {
                         Button(
                             onClick = {
+                                logsText = org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()
                                 val fullLogs = "VisorLink Diag Log (${BuildConfig.VERSION_NAME} - ${BuildConfig.VERSION_CODE}):\n" +
                                         "UID: ${com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid}\n" +
                                         "Time: ${java.util.Date()}\n\n" +
-                                        org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()
+                                        logsText
                                 clipboardManager.setText(AnnotatedString(fullLogs))
                                 Toast.makeText(context, "Логи скопированы в буфер обмена", Toast.LENGTH_SHORT).show()
                             },
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("Скопировать")
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                logsText = org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()
+                                Toast.makeText(context, "Логи обновлены", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Обновить")
                         }
 
                         OutlinedButton(

@@ -68,11 +68,9 @@ fun NavGraphBuilder.settingsNavGraph(
         )
     }
 
-    // Диагностика App Check — только debug-сборки (TODO §14.6: не доступна из release-навигации)
-    if (org.visorlink.app.BuildConfig.DEBUG) {
-        composable(Screen.AppCheckDiagnostic.route) {
-            AppCheckDiagnosticScreen(onNavigateBack = { navController.popBackStack() })
-        }
+    // Диагностика App Check и системный журнал
+    composable(Screen.AppCheckDiagnostic.route) {
+        AppCheckDiagnosticScreen(onNavigateBack = { navController.popBackStack() })
     }
 
     composable(Screen.AnimationTest.route) {

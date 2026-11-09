@@ -1,6 +1,8 @@
 package org.visorlink.app.utils
 
+import android.content.Context
 import android.util.Log
+import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.text.SimpleDateFormat
@@ -11,6 +13,7 @@ import java.util.Locale
 /**
  * Кольцевой буфер диагностических логов в памяти для баг-репортов и отладки.
  * Хранит до 500 последних записей уровней I/W/E и неперехваченные сбои.
+ * При фатальном падении сохраняет копию на диск (last_fatal_crash.txt).
  */
 object DiagnosticLogBuffer {
 
@@ -21,8 +24,12 @@ object DiagnosticLogBuffer {
     private val buffer = ArrayDeque<String>(MAX_ENTRIES)
     private val dateFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     private var isHandlerInstalled = false
+    private var appContext: Context? = null
 
-    fun install() {
+    fun install(context: Context? = null) {
+        if (context != null) {
+            appContext = context.applicationContext
+        }
         if (isHandlerInstalled) return
         isHandlerInstalled = true
 
@@ -30,6 +37,10 @@ object DiagnosticLogBuffer {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 record("FATAL", "CrashHandler", "Uncaught exception on thread ${thread.name}", throwable)
+                appContext?.let { ctx ->
+                    val file = File(ctx.filesDir, "last_fatal_crash.txt")
+                    file.writeText(getFormattedLogs())
+                }
             } catch (_: Exception) {}
             defaultHandler?.uncaughtException(thread, throwable)
         }
@@ -79,16 +90,27 @@ object DiagnosticLogBuffer {
         synchronized(lock) {
             buffer.clear()
         }
+        try {
+            appContext?.let { File(it.filesDir, "last_fatal_crash.txt").delete() }
+        } catch (_: Exception) {}
     }
 
     fun getFormattedLogs(): String {
         val raw = synchronized(lock) {
             buffer.joinToString(separator = "\n")
         }
-        return if (raw.length > MAX_OUTPUT_CHARS) {
-            raw.takeLast(MAX_OUTPUT_CHARS)
+        val crashFile = appContext?.let { File(it.filesDir, "last_fatal_crash.txt") }
+        val crashLog = if (crashFile?.exists() == true) {
+            try {
+                "\n--- ПРЕДЫДУЩИЙ КРАШ ИЗ ФАЙЛА ---\n" + crashFile.readText() + "\n--------------------------------\n"
+            } catch (_: Exception) { "" }
+        } else ""
+
+        val combined = if (crashLog.isNotEmpty()) crashLog + "\n" + raw else raw
+        return if (combined.length > MAX_OUTPUT_CHARS) {
+            combined.takeLast(MAX_OUTPUT_CHARS)
         } else {
-            raw
+            combined
         }
     }
 }

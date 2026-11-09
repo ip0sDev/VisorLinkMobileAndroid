@@ -60,7 +60,7 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         }
 
         NotificationHelper.createChannels(this)
-        org.visorlink.app.utils.DiagnosticLogBuffer.install()
+        org.visorlink.app.utils.DiagnosticLogBuffer.install(this)
 
         // Разовая зачистка удалённой фичи Яндекс-релея (TODO §14.2): в этих префах у старых
         // версий лежал OAuth-токен Диска в открытом виде
