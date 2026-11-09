@@ -90,7 +90,12 @@ fun GiftMessage(
     chatId: String,
     modifier: Modifier = Modifier
 ) {
-    if (message.userGift) {
+    val isUserGift = message.userGift ||
+            message.giftType in listOf("postcard", "pro_week", "pro_month", "skin", "pro") ||
+            !message.design.isNullOrEmpty() ||
+            !message.giftId.isNullOrEmpty()
+
+    if (isUserGift) {
         UserGiftMessage(message = message, modifier = modifier)
     } else {
         AdminGiftMessage(message = message, chatId = chatId, modifier = modifier)
@@ -119,7 +124,7 @@ fun UserGiftMessage(
         System.currentTimeMillis() - created < 30_000L
     }
 
-    if (message.giftType == "postcard") {
+    if (message.giftType == "postcard" || !message.design.isNullOrEmpty()) {
         Postcard(
             design = message.design ?: "spark",
             text = message.text ?: "",

@@ -675,16 +675,24 @@ data class Message(
     val tradeId: String? = null,
 
     // Подарки
-    val userGift: Boolean = false,
-    val giftId: String? = null,
-    val design: String? = null,
+    @get:PropertyName("userGift") @set:PropertyName("userGift")
+    var userGift: Boolean = false,
+    @get:PropertyName("giftId") @set:PropertyName("giftId")
+    var giftId: String? = null,
+    @get:PropertyName("design") @set:PropertyName("design")
+    var design: String? = null,
     @get:PropertyName("skin") @set:PropertyName("skin")
     var giftSkin: Map<String, Any?>? = null,
-    val giftStatus: String? = null,
-    val redeemed: Boolean = false,
-    val redeemedByUid: String? = null,
-    val redeemedByUsername: String? = null,
-    val giftType: String? = null,
+    @get:PropertyName("giftStatus") @set:PropertyName("giftStatus")
+    var giftStatus: String? = null,
+    @get:PropertyName("redeemed") @set:PropertyName("redeemed")
+    var redeemed: Boolean = false,
+    @get:PropertyName("redeemedByUid") @set:PropertyName("redeemedByUid")
+    var redeemedByUid: String? = null,
+    @get:PropertyName("redeemedByUsername") @set:PropertyName("redeemedByUsername")
+    var redeemedByUsername: String? = null,
+    @get:PropertyName("giftType") @set:PropertyName("giftType")
+    var giftType: String? = null,
 
     // Аудио и музыка
     val coverCdnMediaId: String? = null,

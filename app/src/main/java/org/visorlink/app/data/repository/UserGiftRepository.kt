@@ -13,6 +13,7 @@ object UserGifts {
     const val NOTE_MAX = 140
 
     val kindTitles = mapOf(
+        "pro" to "VisorLink PRO",
         "pro_week" to "PRO на 7 дней",
         "pro_month" to "PRO на 30 дней",
         "skin" to "ID-карта",

@@ -702,6 +702,11 @@ object ChatDataCache {
         put("redeemedByUid", redeemedByUid ?: JSONObject.NULL)
         put("redeemedByUsername", redeemedByUsername ?: JSONObject.NULL)
         put("giftType", giftType ?: JSONObject.NULL)
+        put("userGift", userGift)
+        put("giftId", giftId ?: JSONObject.NULL)
+        put("design", design ?: JSONObject.NULL)
+        giftSkin?.let { put("skin", JSONObject(it)) } ?: put("skin", JSONObject.NULL)
+        put("giftStatus", giftStatus ?: JSONObject.NULL)
 
         unknownPayload.forEach { (k, v) ->
             if (!has(k)) {
@@ -754,6 +759,13 @@ object ChatDataCache {
             )
         }
 
+        val skinMap = if (has("skin") && !isNull("skin")) {
+            val sObj = optJSONObject("skin")
+            val map = mutableMapOf<String, Any?>()
+            sObj?.keys()?.forEach { map[it] = sObj.opt(it) }
+            map
+        } else null
+
         val knownKeys = setOf(
             "id", "seq", "senderId", "senderUsername", "type", "text", "url", "fileName",
             "duration", "thumbUrl", "width", "height", "stickerId", "packId", "packName",
@@ -761,7 +773,7 @@ object ChatDataCache {
             "caption", "readBy", "images", "replyTo", "forwardFrom", "reactions", "status",
             "mimeType", "uploadProgress", "cdnMediaId", "driveFileId", "driveUrl", "previewUrl",
             "thumbnailUrl", "title", "performer", "fileSize", "coverCdnMediaId", "coverUrl", "tradeId",
-            "redeemed", "redeemedByUid", "redeemedByUsername", "giftType"
+            "redeemed", "redeemedByUid", "redeemedByUsername", "giftType", "userGift", "giftId", "design", "skin", "giftStatus"
         )
         val unknown = mutableMapOf<String, Any?>()
         val keysIt = keys()
@@ -790,6 +802,11 @@ object ChatDataCache {
             redeemedByUid = if (has("redeemedByUid") && !isNull("redeemedByUid")) optString("redeemedByUid") else null,
             redeemedByUsername = if (has("redeemedByUsername") && !isNull("redeemedByUsername")) optString("redeemedByUsername") else null,
             giftType = if (has("giftType") && !isNull("giftType")) optString("giftType") else null,
+            userGift = optBoolean("userGift", false) || (optString("giftType") in listOf("postcard", "pro_week", "pro_month", "skin")),
+            giftId = if (has("giftId") && !isNull("giftId")) optString("giftId") else null,
+            design = if (has("design") && !isNull("design")) optString("design") else null,
+            giftSkin = skinMap,
+            giftStatus = if (has("giftStatus") && !isNull("giftStatus")) optString("giftStatus") else null,
             stickerId = if (isNull("stickerId")) null else optString("stickerId"),
             packId = if (isNull("packId")) null else optString("packId"),
             packName = if (isNull("packName")) null else optString("packName"),
