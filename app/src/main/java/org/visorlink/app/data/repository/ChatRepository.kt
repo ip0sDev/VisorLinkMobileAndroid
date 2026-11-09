@@ -104,39 +104,62 @@ class ChatRepository(
         DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow started for uid=$uid, limit=$CHATS_LIST_LIMIT")
         _diagInfo.update { it.copy(uid = uid) }
 
-        launch(Dispatchers.IO) {
-            val cached = ChatDataCache.loadChatList(context, uid)
-            if (cached.isNotEmpty()) {
-                DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow loaded ${cached.size} cached chats from SQLite")
-                trySend(cached)
+        var emerList: List<Chat> = emptyList()
+        var directList: List<Chat> = emptyList()
+        var groupList: List<Chat> = emptyList()
+        val listLock = Any()
+
+        fun merge() {
+            val all: List<Chat>
+            val dCount: Int
+            val gCount: Int
+            val eCount: Int
+            synchronized(listLock) {
+                dCount = directList.size
+                gCount = groupList.size
+                eCount = emerList.size
+                all = (directList + groupList + emerList)
+                    .distinctBy { it.id }
+                    .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+            }
+
+            DiagnosticLogBuffer.i(
+                "ChatRepo",
+                "allChatsFlow merged: direct=$dCount, group=$gCount, emer=$eCount, total=${all.size}"
+            )
+            _diagInfo.update {
+                it.copy(
+                    uid = uid,
+                    directCount = dCount,
+                    groupCount = gCount,
+                    emerCount = eCount,
+                    totalCount = all.size,
+                    lastSyncTs = System.currentTimeMillis()
+                )
+            }
+            trySend(all)
+
+            launch(Dispatchers.IO) {
+                try {
+                    ChatDataCache.saveChatList(context, uid, all)
+                } catch (e: Throwable) {
+                    DiagnosticLogBuffer.e("ChatRepo", "Failed to cache chat list: ${e.message}", e)
+                }
             }
         }
 
-        val directChats = mutableListOf<Chat>()
-        val groupChats  = mutableListOf<Chat>()
-
-        fun merge() {
-            launch(Dispatchers.IO) {
-                val emerChats = ChatDataCache.loadChatList(context, uid).filter { it.isEmergency }
-                val all = (directChats + groupChats + emerChats)
-                    .distinctBy { it.id }
-                    .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
-                DiagnosticLogBuffer.i(
-                    "ChatRepo",
-                    "allChatsFlow merged: direct=${directChats.size}, group=${groupChats.size}, emer=${emerChats.size}, total=${all.size}"
-                )
-                _diagInfo.update {
-                    it.copy(
-                        uid = uid,
-                        directCount = directChats.size,
-                        groupCount = groupChats.size,
-                        emerCount = emerChats.size,
-                        totalCount = all.size,
-                        lastSyncTs = System.currentTimeMillis()
-                    )
+        launch(Dispatchers.IO) {
+            try {
+                val cached = ChatDataCache.loadChatList(context, uid)
+                synchronized(listLock) {
+                    emerList = cached.filter { it.isEmergency }
                 }
-                trySend(all)
-                ChatDataCache.saveChatList(context, uid, all)
+                if (cached.isNotEmpty()) {
+                    DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow loaded ${cached.size} cached chats from SQLite")
+                    trySend(cached)
+                }
+            } catch (e: Throwable) {
+                DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached chats: ${e.message}", e)
             }
         }
 
@@ -151,13 +174,16 @@ class ChatRepository(
                     return@addSnapshotListener
                 }
                 _diagInfo.update { it.copy(lastDirectError = null) }
-                directChats.clear()
                 val docs = snap?.documents.orEmpty()
                 DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow direct snapshot: ${docs.size} docs")
-                docs.forEach { doc ->
-                    doc.toChatOrNull()?.let { directChats.add(it) } ?: run {
+                val parsed = docs.mapNotNull { doc ->
+                    doc.toChatOrNull() ?: run {
                         DiagnosticLogBuffer.w("ChatRepo", "direct chat doc ${doc.id} parse failed")
+                        null
                     }
+                }
+                synchronized(listLock) {
+                    directList = parsed
                 }
                 merge()
             }
@@ -173,13 +199,16 @@ class ChatRepository(
                     return@addSnapshotListener
                 }
                 _diagInfo.update { it.copy(lastGroupError = null) }
-                groupChats.clear()
                 val docs = snap?.documents.orEmpty()
                 DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow group snapshot: ${docs.size} docs")
-                docs.forEach { doc ->
-                    doc.toChatOrNull()?.let { groupChats.add(it) } ?: run {
+                val parsed = docs.mapNotNull { doc ->
+                    doc.toChatOrNull() ?: run {
                         DiagnosticLogBuffer.w("ChatRepo", "group chat doc ${doc.id} parse failed")
+                        null
                     }
+                }
+                synchronized(listLock) {
+                    groupList = parsed
                 }
                 merge()
             }
@@ -194,78 +223,114 @@ class ChatRepository(
         var currentFirestore = emptyList<Message>()
         var currentOutbox = emptyList<ChatDataCache.QueuedAction>()
         var currentLastDoc: DocumentSnapshot? = null
+        val msgLock = Any()
 
         fun rebuild() {
-            val firestoreIds = currentFirestore.map { it.id }.toSet()
-            val outboxMsgs = currentOutbox.map { action ->
-                val type = action.data.optString("type", action.type)
-                if (action.progress > 0f) {
-                    Log.d("ChatRepo", "Outbox message ${action.id} progress: ${action.progress}")
-                }
-                Message(
-                    id = action.id,
-                    seq = action.data.optLong("nextSeq").takeIf { it > 0 },
-                    senderId = currentUid,
-                    senderUsername = action.data.optString("senderUsername"),
-                    type = type,
-                    text = action.data.optString("text"),
-                    // Подпись видна с момента нажатия «Отправить»
-                    caption = action.data.optString("caption").ifEmpty { null },
-                    localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
-                    uploadProgress = if (action.status == 0) action.progress else null,
-                    createdAt = Timestamp(Date(action.ts)),
-                    status = when (action.status) {
-                        1 -> SendStatus.SENT
-                        2 -> SendStatus.ERROR
-                        else -> SendStatus.QUEUED
+            val firestoreIds: Set<String>
+            val combined: List<Message>
+            val lastDoc: DocumentSnapshot?
+            val outboxCopy: List<ChatDataCache.QueuedAction>
+            synchronized(msgLock) {
+                firestoreIds = currentFirestore.map { it.id }.toSet()
+                outboxCopy = currentOutbox
+                val outboxMsgs = currentOutbox.map { action ->
+                    val type = action.data.optString("type", action.type)
+                    if (action.progress > 0f) {
+                        Log.d("ChatRepo", "Outbox message ${action.id} progress: ${action.progress}")
                     }
-                )
-            }
-            
-            val outboxMap = outboxMsgs.associateBy { it.id }
-            val firestoreMap = currentFirestore.associateBy { it.id }
-            
-            val combinedMap = outboxMap.toMutableMap()
-            firestoreMap.forEach { (id, fsMsg) ->
-                val obMsg = outboxMap[id]
-                combinedMap[id] = if (obMsg != null) {
-                    fsMsg.copy(
-                        localFile = obMsg.localFile ?: fsMsg.localFile,
-                        status = SendStatus.SENT
+                    Message(
+                        id = action.id,
+                        seq = action.data.optLong("nextSeq").takeIf { it > 0 },
+                        senderId = currentUid,
+                        senderUsername = action.data.optString("senderUsername"),
+                        type = type,
+                        text = action.data.optString("text"),
+                        // Подпись видна с момента нажатия «Отправить»
+                        caption = action.data.optString("caption").ifEmpty { null },
+                        localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
+                        uploadProgress = if (action.status == 0) action.progress else null,
+                        createdAt = Timestamp(Date(action.ts)),
+                        status = when (action.status) {
+                            1 -> SendStatus.SENT
+                            2 -> SendStatus.ERROR
+                            else -> SendStatus.QUEUED
+                        }
                     )
-                } else {
-                    fsMsg
                 }
+
+                val outboxMap = outboxMsgs.associateBy { it.id }
+                val firestoreMap = currentFirestore.associateBy { it.id }
+
+                val combinedMap = outboxMap.toMutableMap()
+                firestoreMap.forEach { (id, fsMsg) ->
+                    val obMsg = outboxMap[id]
+                    combinedMap[id] = if (obMsg != null) {
+                        fsMsg.copy(
+                            localFile = obMsg.localFile ?: fsMsg.localFile,
+                            status = SendStatus.SENT
+                        )
+                    } else {
+                        fsMsg
+                    }
+                }
+
+                combined = combinedMap.values.distinctBy { it.id }
+                lastDoc = currentLastDoc
             }
-            
-            val combined = combinedMap.values.distinctBy { it.id }
-            onUpdate(combined, currentLastDoc)
-            
-            val confirmedIds = currentOutbox.map { it.id }.filter { it in firestoreIds }
+            onUpdate(combined, lastDoc)
+
+            val confirmedIds = outboxCopy.map { it.id }.filter { it in firestoreIds }
             if (confirmedIds.isNotEmpty()) {
-                launch(Dispatchers.IO) { ChatDataCache.cleanupOutbox(context, confirmedIds) }
+                launch(Dispatchers.IO) {
+                    try {
+                        ChatDataCache.cleanupOutbox(context, confirmedIds)
+                    } catch (e: Throwable) {
+                        DiagnosticLogBuffer.e("ChatRepo", "Failed to cleanup outbox: ${e.message}", e)
+                    }
+                }
             }
         }
 
         // 1. Outbox listener (отображение отправляемых сообщений)
         launch(Dispatchers.Default) {
-            ChatDataCache.outboxFlow(context, chatId).collect {
-                currentOutbox = it
-                rebuild()
+            try {
+                ChatDataCache.outboxFlow(context, chatId).collect {
+                    synchronized(msgLock) {
+                        currentOutbox = it
+                    }
+                    rebuild()
+                }
+            } catch (e: Throwable) {
+                DiagnosticLogBuffer.e("ChatRepo", "Outbox flow error: ${e.message}", e)
             }
         }
 
         // 2. Initial Cache load + Signal listener (для мгновенного обновления при сохранении в SQLite)
         launch(Dispatchers.IO) {
-            currentFirestore = ChatDataCache.loadMessages(context, chatId)
-            rebuild()
-
-            ChatDataCache.cacheUpdateSignal.collect { updatedChatId ->
-                if (updatedChatId == chatId) {
-                    val updated = ChatDataCache.loadMessages(context, chatId)
-                    currentFirestore = updated
-                    rebuild()
+            try {
+                val cached = ChatDataCache.loadMessages(context, chatId)
+                synchronized(msgLock) {
+                    if (currentFirestore.isEmpty() && cached.isNotEmpty()) {
+                        currentFirestore = cached
+                        rebuild()
+                    }
                 }
+
+                ChatDataCache.cacheUpdateSignal.collect { updatedChatId ->
+                    if (updatedChatId == chatId) {
+                        try {
+                            val updated = ChatDataCache.loadMessages(context, chatId)
+                            synchronized(msgLock) {
+                                currentFirestore = updated
+                            }
+                            rebuild()
+                        } catch (e: Throwable) {
+                            DiagnosticLogBuffer.e("ChatRepo", "Cache reload error: ${e.message}", e)
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached messages: ${e.message}", e)
             }
         }
 
@@ -283,22 +348,28 @@ class ChatRepository(
                     if (snap == null) return@addSnapshotListener
                     DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow $chatId: ${snap.documents.size} docs")
                     val messages = snap.documents.mapNotNull { it.toMessageOrNull() }.reversed()
-                    
-                    currentFirestore = messages
-                    currentLastDoc = snap.documents.lastOrNull()
+
+                    synchronized(msgLock) {
+                        currentFirestore = messages
+                        currentLastDoc = snap.documents.lastOrNull()
+                    }
                     rebuild()
 
                     launch(Dispatchers.IO) {
-                        ChatDataCache.saveMessages(context, chatId, messages)
-                        // Prefetch media
-                        messages.forEach { msg ->
-                            try {
-                                val url = msg.url
-                                if (!url.isNullOrEmpty()) {
-                                    if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
-                                    else ImageCache.getOrDownload(context, url)
-                                }
-                            } catch (_: Exception) {}
+                        try {
+                            ChatDataCache.saveMessages(context, chatId, messages)
+                            // Prefetch media
+                            messages.forEach { msg ->
+                                try {
+                                    val url = msg.url
+                                    if (!url.isNullOrEmpty()) {
+                                        if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
+                                        else ImageCache.getOrDownload(context, url)
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        } catch (e: Throwable) {
+                            DiagnosticLogBuffer.e("ChatRepo", "Failed to save messages to cache: ${e.message}", e)
                         }
                     }
                 }
