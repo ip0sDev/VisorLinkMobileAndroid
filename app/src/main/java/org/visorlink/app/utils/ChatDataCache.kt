@@ -126,7 +126,10 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 object ChatDataCache {
     private var dbHelper: LocalCacheDB? = null
 
-    private val _outboxSignal = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val _outboxSignal = MutableSharedFlow<Unit>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+    )
     val outboxSignal: SharedFlow<Unit> = _outboxSignal.asSharedFlow()
 
     private val _cacheUpdateSignal = MutableSharedFlow<String>(extraBufferCapacity = 16)
@@ -187,6 +190,7 @@ object ChatDataCache {
             val uuid = UUID.randomUUID().toString().take(8)
             val id = "queued_${System.currentTimeMillis()}_$uuid"
             try {
+                DiagnosticLogBuffer.i(TAG, "addToOutbox starting: id=$id, chatId=$chatId, type=$type")
                 val db = getDb(context).writableDatabase
                 val stmt = db.compileStatement("INSERT INTO outbox (id, chat_id, type, data, ts, status) VALUES (?, ?, ?, ?, ?, 0)")
                 stmt.bindString(1, id)
@@ -194,9 +198,13 @@ object ChatDataCache {
                 stmt.bindString(3, type)
                 stmt.bindString(4, data.toString())
                 stmt.bindLong(5, System.currentTimeMillis())
-                stmt.executeInsert()
-                _outboxSignal.emit(Unit)
-            } catch (e: Exception) { Log.e(TAG, "Failed to add to outbox (id=$id)", e) }
+                val rowId = stmt.executeInsert()
+                DiagnosticLogBuffer.i(TAG, "addToOutbox inserted row: rowId=$rowId, id=$id")
+                _outboxSignal.tryEmit(Unit)
+            } catch (e: Exception) {
+                DiagnosticLogBuffer.e(TAG, "Failed to add to outbox (id=$id): ${e.message}", e)
+                Log.e(TAG, "Failed to add to outbox (id=$id)", e)
+            }
             id
         }
 
@@ -253,7 +261,7 @@ object ChatDataCache {
                 stmt.bindDouble(1, progress.toDouble())
                 stmt.bindString(2, id)
                 stmt.executeUpdateDelete()
-                _outboxSignal.emit(Unit)
+                _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox progress", e) }
         }
 
@@ -267,7 +275,7 @@ object ChatDataCache {
                 if (error == null) stmt.bindNull(3) else stmt.bindString(3, error)
                 stmt.bindString(4, id)
                 stmt.executeUpdateDelete()
-                _outboxSignal.emit(Unit)
+                _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox retry", e) }
         }
 
@@ -279,7 +287,7 @@ object ChatDataCache {
                 stmt.bindLong(1, status.toLong())
                 stmt.bindString(2, id)
                 stmt.executeUpdateDelete()
-                _outboxSignal.emit(Unit)
+                _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox status", e) }
         }
 
@@ -290,7 +298,7 @@ object ChatDataCache {
                 val stmt = db.compileStatement("UPDATE outbox SET status=0, retry_count=0, last_attempt=0, last_error=NULL WHERE id=?")
                 stmt.bindString(1, id)
                 stmt.executeUpdateDelete()
-                _outboxSignal.emit(Unit)
+                _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to retry outbox action", e) }
         }
 

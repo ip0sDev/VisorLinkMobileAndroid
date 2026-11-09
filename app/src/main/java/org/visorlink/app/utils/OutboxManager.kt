@@ -90,6 +90,7 @@ class OutboxManager(
     private val inFlightChatIds = ConcurrentHashMap.newKeySet<String>()
     private val lastProgressUpdate = ConcurrentHashMap<String, Long>()
     private val mediaSemaphore = Semaphore(MEDIA_CONCURRENCY)
+    private val wakeUpChannel = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     @Volatile
     private var lastHealthCheckTimestamp: Long = 0L
 
@@ -107,6 +108,18 @@ class OutboxManager(
         fun retry(actionId: String) {
             instance?.let { mgr ->
                 mgr.scope.launch { mgr.retryAction(actionId) }
+            }
+        }
+
+        fun triggerProcessing() {
+            instance?.let { mgr ->
+                DiagnosticLogBuffer.i(TAG, "triggerProcessing requested")
+                if (mgr.networkMonitor.isOnline.value) {
+                    mgr.startProcessing()
+                    mgr.wakeUpChannel.trySend(Unit)
+                }
+            } ?: run {
+                DiagnosticLogBuffer.w(TAG, "triggerProcessing: OutboxManager instance is null")
             }
         }
     }
@@ -140,7 +153,10 @@ class OutboxManager(
         scope.launch {
             ChatDataCache.outboxSignal.collect {
                 DiagnosticLogBuffer.i(TAG, "Outbox signal received -> starting processing")
-                if (networkMonitor.isOnline.value) startProcessing()
+                if (networkMonitor.isOnline.value) {
+                    startProcessing()
+                    wakeUpChannel.trySend(Unit)
+                }
             }
         }
         if (networkMonitor.isOnline.value) {
@@ -148,12 +164,21 @@ class OutboxManager(
         }
     }
 
-    private fun startProcessing() {
-        if (processingJob?.isActive == true) return
+    internal fun startProcessing() {
+        if (processingJob?.isActive == true) {
+            wakeUpChannel.trySend(Unit)
+            return
+        }
         processingJob = scope.launch {
-            while (isActive) {
+            DiagnosticLogBuffer.i(TAG, "processing loop started")
+            while (isActive && networkMonitor.isOnline.value) {
                 val now = System.currentTimeMillis()
-                val allQueued = outboxDataSource.loadPending(context)
+                val allQueued = try {
+                    outboxDataSource.loadPending(context)
+                } catch (e: Exception) {
+                    DiagnosticLogBuffer.e(TAG, "loadPending failed: ${e.message}", e)
+                    emptyList()
+                }
                 
                 val toProcess = allQueued.filter { action ->
                     action.status == 0 &&
@@ -164,11 +189,17 @@ class OutboxManager(
 
                 if (toProcess.isEmpty()) {
                     if (inFlightIds.isEmpty() && inFlightChatIds.isEmpty()) {
-                        break
+                        // Ожидаем пробуждения по сигналу или опрашиваем через 2.5 сек (спека §7.5)
+                        withTimeoutOrNull(2500L) {
+                            wakeUpChannel.receive()
+                        }
+                        continue
                     }
                     delay(1500)
                     continue
                 }
+
+                DiagnosticLogBuffer.i(TAG, "Found ${toProcess.size} pending action(s) to process")
 
                 // Группируем по чатам для строго последовательной отправки внутри каждого чата
                 val groups = toProcess.groupBy { it.chatId }
@@ -225,8 +256,11 @@ class OutboxManager(
                         }
                     }
                 }
-                delay(1500)
+                withTimeoutOrNull(1000L) {
+                    wakeUpChannel.receive()
+                }
             }
+            DiagnosticLogBuffer.i(TAG, "processing loop ended")
         }
     }
 

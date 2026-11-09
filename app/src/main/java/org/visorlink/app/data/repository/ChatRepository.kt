@@ -642,6 +642,8 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         val outboxId = ChatDataCache.addToOutbox(context, chatId, "text", data)
+        DiagnosticLogBuffer.i("ChatRepo", "sendText added to outbox: outboxId=$outboxId, chatId=$chatId")
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
         null
     }
 
@@ -720,6 +722,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "image", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendImageNow(
@@ -806,6 +809,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "voice", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendVoiceNow(
@@ -891,6 +895,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "audio", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendAudioNow(
@@ -987,6 +992,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "video", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendVideoNow(
@@ -1083,6 +1089,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "sticker", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendStickerNow(
