@@ -52,7 +52,7 @@ private object CacheCrypto {
             String(cipher.doFinal(android.util.Base64.decode(p[2], android.util.Base64.NO_WRAP)), Charsets.UTF_8)
         }
     } catch (_: Exception) {
-        ""
+        stored
     }
 }
 
@@ -165,7 +165,7 @@ object ChatDataCache {
             execSQL("DELETE FROM messages")
             execSQL("DELETE FROM profiles")
             execSQL("DELETE FROM stickers")
-            execSQL("DELETE FROM outbox")
+            execSQL("DELETE FROM outbox WHERE status = 1")
             execSQL("DELETE FROM likes")
         }
     }
@@ -216,18 +216,29 @@ object ChatDataCache {
                 val args = if (filterChatId != null) arrayOf(filterChatId) else null
                 db.rawQuery(sql, args).use { cursor ->
                     while (cursor.moveToNext()) {
-                        list.add(QueuedAction(
-                            id = cursor.getString(0),
-                            chatId = cursor.getString(1),
-                            type = cursor.getString(2),
-                            data = JSONObject(CacheCrypto.decrypt(cursor.getString(3))),
-                            ts = cursor.getLong(4),
-                            status = cursor.getInt(5),
-                            retryCount = cursor.getInt(6),
-                            lastAttempt = cursor.getLong(7),
-                            lastError = cursor.getString(8),
-                            progress = cursor.getFloat(9)
-                        ))
+                        try {
+                            val rawData = cursor.getString(3).orEmpty()
+                            val decrypted = CacheCrypto.decrypt(rawData)
+                            val json = if (decrypted.isNotBlank()) {
+                                try { JSONObject(decrypted) } catch (_: Exception) { JSONObject(rawData) }
+                            } else {
+                                JSONObject(rawData)
+                            }
+                            list.add(QueuedAction(
+                                id = cursor.getString(0),
+                                chatId = cursor.getString(1),
+                                type = cursor.getString(2),
+                                data = json,
+                                ts = cursor.getLong(4),
+                                status = cursor.getInt(5),
+                                retryCount = cursor.getInt(6),
+                                lastAttempt = cursor.getLong(7),
+                                lastError = cursor.getString(8),
+                                progress = cursor.getFloat(9)
+                            ))
+                        } catch (itemError: Exception) {
+                            Log.w(TAG, "Skipping corrupted outbox item", itemError)
+                        }
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load outbox", e) }

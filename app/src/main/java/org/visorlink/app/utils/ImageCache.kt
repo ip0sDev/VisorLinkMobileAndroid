@@ -13,7 +13,6 @@ import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -41,17 +40,41 @@ object ImageCache {
             }
 
             Log.d(TAG, "Downloading image: $url")
-            val dir = file.parentFile!!
+            val dir = file.parentFile ?: context.cacheDir
             if (!dir.exists()) dir.mkdirs()
 
             val tmp = File(dir, "${file.name}.tmp")
             try {
-                val conn = URL(url).openConnection() as HttpURLConnection
-                conn.connectTimeout = 10_000
-                conn.readTimeout    = 30_000
-                conn.connect()
+                var currentUrl = url
+                var redirectCount = 0
+                var conn: HttpURLConnection? = null
+                var code = 0
 
-                if (conn.responseCode == 200) {
+                while (redirectCount < 5) {
+                    conn = URL(currentUrl).openConnection() as HttpURLConnection
+                    conn.instanceFollowRedirects = true
+                    conn.connectTimeout = 10_000
+                    conn.readTimeout = 30_000
+                    conn.connect()
+                    code = conn.responseCode
+
+                    if (code == HttpURLConnection.HTTP_MOVED_PERM ||
+                        code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        code == HttpURLConnection.HTTP_SEE_OTHER ||
+                        code == 307 || code == 308
+                    ) {
+                        val location = conn.getHeaderField("Location")
+                        if (!location.isNullOrBlank()) {
+                            currentUrl = location
+                            redirectCount++
+                            conn.disconnect()
+                            continue
+                        }
+                    }
+                    break
+                }
+
+                if (conn != null && code == HttpURLConnection.HTTP_OK) {
                     FileOutputStream(tmp).use { out ->
                         conn.inputStream.use { it.copyTo(out) }
                     }
@@ -59,7 +82,7 @@ object ImageCache {
                     Log.d(TAG, "Downloaded: ${file.name}")
                     file
                 } else {
-                    throw Exception("HTTP ${conn.responseCode}")
+                    throw Exception("HTTP $code")
                 }
             } catch (e: Exception) {
                 tmp.delete()
@@ -71,7 +94,8 @@ object ImageCache {
     private fun cacheFile(context: Context, url: String): File {
         val dir = File(context.cacheDir, CACHE_DIR_CUSTOM_IMAGES)
         val hash = url.hashCode().toString()
-        val ext = url.substringAfterLast('.', "jpg").take(5).filter { it.isLetterOrDigit() }
+        val cleanUrl = url.substringBefore('?')
+        val ext = cleanUrl.substringAfterLast('.', "jpg").take(5).filter { it.isLetterOrDigit() }.ifEmpty { "jpg" }
         return File(dir, "img_$hash.$ext")
     }
 

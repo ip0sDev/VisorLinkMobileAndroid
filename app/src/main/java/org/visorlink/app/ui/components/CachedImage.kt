@@ -1,19 +1,21 @@
 package org.visorlink.app.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import org.visorlink.app.utils.ImageCache
-import coil.compose.AsyncImage
+import androidx.compose.ui.unit.dp
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 
 /**
@@ -36,37 +38,16 @@ fun CachedImage(
     decodeSize: Int? = null,
 ) {
     val context = LocalContext.current
-    var modelSource by remember(model) { mutableStateOf<Any?>(model) }
+    val isModelEmpty = model == null || (model is String && model.isBlank())
 
-    LaunchedEffect(model) {
-        if (model is String && model.isNotEmpty()) {
-            val cached = ImageCache.getCachedPath(context, model)
-            if (cached != null) {
-                modelSource = cached
-            } else {
-                try {
-                    val file = ImageCache.getOrDownload(context, model)
-                    modelSource = file
-                } catch (e: Exception) {
-                    modelSource = model
-                }
-            }
-        } else {
-            modelSource = model
-        }
-    }
-
-    if (modelSource == null) {
+    if (isModelEmpty) {
         error?.invoke() ?: Box(modifier, contentAlignment = Alignment.Center) {
             Icon(Icons.Default.BrokenImage, null, tint = MaterialTheme.colorScheme.error)
         }
     } else {
-        var isLoading by remember { mutableStateOf(true) }
-        var isError by remember { mutableStateOf(false) }
-
-        AsyncImage(
+        SubcomposeAsyncImage(
             model = ImageRequest.Builder(context)
-                .data(modelSource)
+                .data(model)
                 .crossfade(true)
                 .apply { if (decodeSize != null) size(decodeSize) }
                 .build(),
@@ -74,19 +55,19 @@ fun CachedImage(
             modifier = modifier,
             contentScale = contentScale,
             filterQuality = if (decodeSize != null) FilterQuality.Low else FilterQuality.Medium,
-            onLoading = { isLoading = true; isError = false },
-            onSuccess = { isLoading = false; isError = false },
-            onError = { isLoading = false; isError = true }
+            loading = {
+                loading?.invoke() ?: Box(modifier, contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                }
+            },
+            success = {
+                SubcomposeAsyncImageContent()
+            },
+            error = {
+                error?.invoke() ?: Box(modifier, contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.BrokenImage, null, tint = MaterialTheme.colorScheme.error)
+                }
+            }
         )
-
-        if (isLoading) {
-            loading?.invoke() ?: Box(modifier, contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (isError) {
-            error?.invoke() ?: Box(modifier, contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.BrokenImage, null, tint = MaterialTheme.colorScheme.error)
-            }
-        }
     }
 }

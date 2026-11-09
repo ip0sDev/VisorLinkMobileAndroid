@@ -77,13 +77,6 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         try {
             val updatePrefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
             if (!updatePrefs.getBoolean("cache_purged_v150", false)) {
-                Firebase.firestore.clearPersistence().addOnCompleteListener { task ->
-                    if (task.isSuccessful) {
-                        Log.i("VisorLinkApp", "Firestore legacy persistence cache purged for v1.5.0")
-                    } else {
-                        Log.w("VisorLinkApp", "clearPersistence: ${task.exception?.message}")
-                    }
-                }
                 val cacheManager: CacheManager = GlobalContext.get().get()
                 CoroutineScope(Dispatchers.IO).launch {
                     try {

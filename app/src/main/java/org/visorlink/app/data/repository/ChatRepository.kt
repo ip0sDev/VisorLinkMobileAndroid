@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.Source
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.*
 import org.visorlink.app.utils.ChatDataCache
@@ -105,9 +106,12 @@ class ChatRepository(
         }
 
         val reg1 = db.collection("chats").whereArrayContains("participants", uid)
-            .orderBy("lastMessageAt", Query.Direction.DESCENDING)
             .limit(CHATS_LIST_LIMIT)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    Log.e("ChatRepository", "allChatsFlow direct listener error", error)
+                    return@addSnapshotListener
+                }
                 directChats.clear()
                 snap?.documents?.forEach { doc ->
                     doc.toChatOrNull()?.let { directChats.add(it) }
@@ -116,9 +120,12 @@ class ChatRepository(
             }
 
         val reg2 = db.collection("chats").whereArrayContains("memberIds", uid)
-            .orderBy("lastMessageAt", Query.Direction.DESCENDING)
             .limit(CHATS_LIST_LIMIT)
-            .addSnapshotListener { snap, _ ->
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    Log.e("ChatRepository", "allChatsFlow group listener error", error)
+                    return@addSnapshotListener
+                }
                 groupChats.clear()
                 snap?.documents?.forEach { doc ->
                     doc.toChatOrNull()?.let { groupChats.add(it) }
@@ -537,7 +544,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -624,7 +631,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -703,7 +710,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -801,7 +808,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -894,7 +901,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -983,7 +990,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -1070,7 +1077,7 @@ class ChatRepository(
             "lastMessageSenderId" to currentUid,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
         return msgRef.id
     }
@@ -1093,7 +1100,7 @@ class ChatRepository(
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to preview, "lastMessageAt" to FieldValue.serverTimestamp()))
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 

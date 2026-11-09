@@ -67,8 +67,10 @@ object AppImageLoader {
         val okhttp = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
             // Принудительно кешируем даже ответы без Cache-Control (Firebase Storage)
-            .addNetworkInterceptor { chain ->
+            .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
                 response.newBuilder()
                     .header("Cache-Control", "public, max-age=2592000") // 30 дней
