@@ -346,8 +346,9 @@ class ChatRepository(
                         return@addSnapshotListener
                     }
                     if (snap == null) return@addSnapshotListener
-                    DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow $chatId: ${snap.documents.size} docs")
-                    val messages = snap.documents.mapNotNull { it.toMessageOrNull() }.reversed()
+                    val parsed = snap.documents.mapNotNull { it.toMessageOrNull() }
+                    DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow $chatId: ${snap.documents.size} docs, ${parsed.size} parsed")
+                    val messages = parsed.reversed()
 
                     synchronized(msgLock) {
                         currentFirestore = messages

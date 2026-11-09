@@ -188,8 +188,11 @@ fun ChatListItem(
                         ChatType.DIRECT, ChatType.EMERGENCY -> {
                             val otherUsername = chat.otherUsername(currentUid)
                             val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
+                            val resolvedAvatarUrl = otherProfile?.avatarUrl
+                                ?: chat.otherAvatarUrl(currentUid)
+                                ?: chat.avatarUrl
                             AvatarWithPresence(
-                                avatarUrl = otherProfile?.avatarUrl,
+                                avatarUrl = resolvedAvatarUrl,
                                 displayName = chat.otherDisplayName(currentUid),
                                 isOnline = otherProfile?.online ?: false,
                                 size = 52.dp,

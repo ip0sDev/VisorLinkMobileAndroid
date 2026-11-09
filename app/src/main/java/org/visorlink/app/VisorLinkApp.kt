@@ -216,7 +216,13 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                     runCatching { GlobalContext.get().get<org.visorlink.app.data.repository.BlockRepository>().start(uid) }
                     val sessions = GlobalContext.get().get<org.visorlink.app.data.repository.SessionRepository>()
                     sessions.watchRevocation(uid)
-                    MainScope().launch { sessions.ensureRegistered() }
+                    MainScope().launch {
+                        try {
+                            sessions.ensureRegistered()
+                        } catch (e: Exception) {
+                            Log.w("VisorLinkApp", "ensureRegistered failed: ${e.message}")
+                        }
+                    }
                 }
                 MainScope().launch {
                     try {

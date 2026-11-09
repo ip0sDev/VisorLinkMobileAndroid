@@ -194,7 +194,31 @@ class ChatListViewModel(
                     }
                 }
 
-                val directUids = list.filter { it.chatType() == ChatType.DIRECT }
+                val directChats = list.filter { it.chatType() == ChatType.DIRECT || it.chatType() == ChatType.EMERGENCY }
+
+                // Мгновенный посев кэша профилей из participantData чатов для отображения аватарок без ожидания сети
+                val seedProfiles = mutableMapOf<String, UserProfile>()
+                directChats.forEach { chat ->
+                    val otherId = chat.otherParticipantId(currentUid)
+                    if (otherId.isNotEmpty() && otherId !in _profileCache.value) {
+                        val pData = chat.participantData[otherId]
+                        val name = pData?.get("displayName") ?: pData?.get("username")
+                        val av = pData?.get("avatarUrl") ?: chat.avatarUrl
+                        if (name != null || av != null) {
+                            seedProfiles[otherId] = UserProfile(
+                                uid = otherId,
+                                username = pData?.get("username").orEmpty(),
+                                displayName = name.orEmpty(),
+                                avatarUrl = av
+                            )
+                        }
+                    }
+                }
+                if (seedProfiles.isNotEmpty()) {
+                    _profileCache.update { it + seedProfiles }
+                }
+
+                val directUids = directChats
                     .map { it.otherParticipantId(currentUid) }
                     .filter { it.isNotEmpty() }
                     .distinct()

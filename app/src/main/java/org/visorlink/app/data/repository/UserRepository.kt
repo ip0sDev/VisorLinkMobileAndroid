@@ -11,6 +11,7 @@ import com.google.firebase.firestore.Source
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.Sticker
 import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.data.model.toUserProfileOrNull
 import org.visorlink.app.utils.ChatDataCache
 import org.visorlink.app.utils.ImageCompressor
 import org.visorlink.app.data.repository.FlagsRepository
@@ -108,7 +109,7 @@ class UserRepository(
                 } else if (snap != null) {
                     _deniedUids.update { if (uid in it) it - uid else it }
                 }
-                val net = snap?.toObject(UserProfile::class.java)
+                val net = snap?.toUserProfileOrNull()
                 trySend(net)
                 if (net != null) {
                     stateFlow.value = net
@@ -138,7 +139,7 @@ class UserRepository(
         if (cached != null) {
             launch {
                 try {
-                    val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+                    val net = db.collection("users").document(uid).get().await().toUserProfileOrNull()
                     if (net != null) {
                         memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
                         ChatDataCache.saveProfile(context, net)
@@ -152,13 +153,13 @@ class UserRepository(
         val cachedDoc = try {
             db.collection("users").document(uid).get(Source.CACHE).await()
         } catch (_: Exception) { null }
-        val fromCache = cachedDoc?.toObject(UserProfile::class.java)
+        val fromCache = cachedDoc?.toUserProfileOrNull()
         if (fromCache != null) {
             memoryProfiles.getOrPut(uid) { MutableStateFlow(fromCache) }.value = fromCache
             ChatDataCache.saveProfile(context, fromCache)
             launch {
                 try {
-                    val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+                    val net = db.collection("users").document(uid).get().await().toUserProfileOrNull()
                     if (net != null) {
                         memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
                         ChatDataCache.saveProfile(context, net)
@@ -169,7 +170,7 @@ class UserRepository(
         }
 
         try {
-            val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
+            val net = db.collection("users").document(uid).get().await().toUserProfileOrNull()
             if (net != null) {
                 memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
                 ChatDataCache.saveProfile(context, net)

@@ -136,7 +136,9 @@ fun ChatTopBar(
                     ?: ""
                 // Заблокировавший меня: аватарка скрыта, остаётся инициал
                 val directAvatarUrl = if (uiState.blockedByPeer) null
-                else uiState.otherUser?.avatarUrl ?: uiState.chat?.avatarUrl
+                else uiState.otherUser?.avatarUrl
+                    ?: uiState.chat?.otherAvatarUrl(currentUid)
+                    ?: uiState.chat?.avatarUrl
 
                 when (uiState.chatType) {
                     ChatType.DIRECT, ChatType.EMERGENCY -> {

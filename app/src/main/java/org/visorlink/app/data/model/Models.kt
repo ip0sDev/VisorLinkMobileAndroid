@@ -168,6 +168,97 @@ data class FreezeUseInfo(
     val n: Int = 1
 )
 
+fun parseTimestamp(value: Any?): Timestamp? {
+    return when (value) {
+        is Timestamp -> value
+        is java.util.Date -> Timestamp(value)
+        is Number -> {
+            val num = value.toLong()
+            if (num > 10_000_000_000L) {
+                Timestamp(num / 1000L, ((num % 1000L) * 1_000_000L).toInt())
+            } else {
+                Timestamp(num, 0)
+            }
+        }
+        is String -> {
+            try {
+                val instant = java.time.Instant.parse(value)
+                Timestamp(instant.epochSecond, instant.nano)
+            } catch (_: Exception) { null }
+        }
+        is Map<*, *> -> {
+            val sec = (value["_seconds"] ?: value["seconds"]) as? Number
+            val nano = (value["_nanoseconds"] ?: value["nanoseconds"]) as? Number
+            if (sec != null) Timestamp(sec.toLong(), nano?.toInt() ?: 0) else null
+        }
+        else -> null
+    }
+}
+
+fun DocumentSnapshot.toUserProfileOrNull(): UserProfile? {
+    if (!exists()) return null
+    return try {
+        val d = data ?: return null
+        UserProfile(
+            uid = getString("uid") ?: id,
+            email = getString("email") ?: "",
+            username = getString("username") ?: "",
+            displayName = getString("displayName") ?: "",
+            bio = getString("bio") ?: "",
+            avatarUrl = getString("avatarUrl"),
+            online = getBoolean("online") ?: false,
+            lastSeen = parseTimestamp(d["lastSeen"]),
+            createdAt = parseTimestamp(d["createdAt"]),
+            updatedAt = parseTimestamp(d["updatedAt"]),
+            fcmTokens = (d["fcmTokens"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            isAdmin = getBoolean("isAdmin") ?: false,
+            lastMessageAt = parseTimestamp(d["lastMessageAt"]),
+            isBot = getBoolean("isBot") ?: false,
+            botBadge = getString("botBadge") ?: "unverified",
+            ownerId = getString("ownerId"),
+            bits = (d["bits"] as? Number)?.toInt() ?: 0,
+            streak = (d["streak"] as? Number)?.toInt() ?: 0,
+            showStreak = getBoolean("showStreak") ?: true,
+            proUntil = parseTimestamp(d["proUntil"]),
+            trialUsed = getBoolean("trialUsed") ?: false,
+            tfaEnabled = getBoolean("tfaEnabled") ?: false,
+            tfaTelegram = getBoolean("tfaTelegram"),
+            telegramId = d["telegramId"],
+            telegramUsername = getString("telegramUsername"),
+            registeredViaOfficialClient = getBoolean("registeredViaOfficialClient") ?: true,
+            ignoreCustomizations = getBoolean("ignoreCustomizations") ?: false,
+            diaryEnabled = getBoolean("diaryEnabled") ?: false,
+            diaryRemindersEnabled = getBoolean("diaryRemindersEnabled") ?: false,
+            diaryReminderTime = getString("diaryReminderTime") ?: "21:00",
+            stickerPackIds = (d["stickerPackIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            customization = (d["customization"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to v } }?.toMap() ?: emptyMap(),
+            lastStreakUpdate = parseTimestamp(d["lastStreakUpdate"]),
+            settings = (d["settings"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to v } }?.toMap() ?: emptyMap(),
+            mutedChatIds = (d["mutedChatIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList(),
+            lastBitsClaim = parseTimestamp(d["lastBitsClaim"]),
+            acceptedAt = parseTimestamp(d["acceptedAt"]),
+            acceptedVersion = getString("acceptedVersion"),
+            idMode = getString("idMode"),
+            banned = getBoolean("banned") ?: false,
+            banReason = getString("banReason"),
+            streakBest = (d["streakBest"] as? Number)?.toInt() ?: 0,
+            activeDays = (d["activeDays"] as? Number)?.toInt() ?: 0,
+            streakFreezes = (d["streakFreezes"] as? Number)?.toInt() ?: 0,
+            streakFreezeGrantAt = d["streakFreezeGrantAt"],
+            timeZone = getString("timeZone"),
+            hideOnline = getBoolean("hideOnline") ?: false,
+            hideReads = getBoolean("hideReads") ?: false,
+            emojiStatus = getString("emojiStatus"),
+            nameColor = getString("nameColor"),
+            emojiStatusUnlocked = getBoolean("emojiStatusUnlocked") ?: false,
+            nameColorUnlocked = getBoolean("nameColorUnlocked") ?: false,
+            unlocks = (d["unlocks"] as? Map<*, *>)?.mapNotNull { (k, v) -> (k as? String)?.let { it to v } }?.toMap() ?: emptyMap()
+        )
+    } catch (_: Exception) {
+        null
+    }
+}
+
 enum class ChatType { DIRECT, GROUP, CHANNEL, EMERGENCY }
 
 @IgnoreExtraProperties
@@ -287,6 +378,12 @@ data class Chat(
 
     fun otherUsername(currentUid: String) =
         participantData[otherParticipantId(currentUid)]?.get("username") ?: ""
+
+    fun otherAvatarUrl(currentUid: String): String? {
+        val otherId = otherParticipantId(currentUid)
+        return participantData[otherId]?.get("avatarUrl")?.takeIf { it.isNotBlank() }
+            ?: avatarUrl?.takeIf { it.isNotBlank() }
+    }
 }
 
 /**
@@ -395,8 +492,8 @@ fun DocumentSnapshot.toChatOrNull(): Chat? {
         val lastSeq = (d["lastSeq"] as? Number)?.toLong() ?: 0L
         val lastSenderId = d["lastMessageSenderId"] as? String
         val lastMsg = d["lastMessage"]
-        val lastMessageAt = d["lastMessageAt"] as? Timestamp
-        val createdAt = d["createdAt"] as? Timestamp
+        val lastMessageAt = parseTimestamp(d["lastMessageAt"])
+        val createdAt = parseTimestamp(d["createdAt"])
 
         @Suppress("UNCHECKED_CAST")
         val groupId = d["groupId"] as? Map<String, Any?>
@@ -832,9 +929,9 @@ fun DocumentSnapshot.toMessageOrNull(): Message? {
         val fileName = d["fileName"] as? String
         val duration = (d["duration"] as? Number)?.toInt()
         val seq = (d["seq"] as? Number)?.toLong()
-        val createdAt = d["createdAt"] as? Timestamp
+        val createdAt = parseTimestamp(d["createdAt"])
         val deleted = (d["deleted"] as? Boolean) ?: false
-        val deletedAt = d["deletedAt"] as? Timestamp
+        val deletedAt = parseTimestamp(d["deletedAt"])
         val spoiler = (d["spoiler"] as? Boolean) ?: false
         val commentsEnabled = d["commentsEnabled"] as? Boolean
         val commentsCount = (d["commentsCount"] as? Number)?.toInt() ?: 0
@@ -842,7 +939,7 @@ fun DocumentSnapshot.toMessageOrNull(): Message? {
         val isHidden = d["is_hidden"] as? Boolean
         val isPublished = d["is_published"] as? Boolean
         val topicId = d["topicId"] as? String
-        val lastEdited = d["lastEdited"] as? Timestamp
+        val lastEdited = parseTimestamp(d["lastEdited"])
         val senderIsAdmin = d["senderIsAdmin"] as? Boolean
 
         val tags = (d["tags"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()

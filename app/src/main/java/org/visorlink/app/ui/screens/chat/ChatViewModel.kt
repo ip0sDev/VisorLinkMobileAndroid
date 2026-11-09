@@ -414,12 +414,6 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            val exists = waitForChat()
-            if (!exists) {
-                _uiState.update { it.copy(error = "Failed to open chat") }
-                return@launch
-            }
-
             typingManager = TypingManager(chatId, currentUid)
 
             launch {
@@ -917,7 +911,7 @@ class ChatViewModel(
         val dateFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
 
         for (message in sorted) {
-            val createdAt = message.createdAt ?: continue
+            val createdAt = message.createdAt ?: Timestamp.now()
             val epochMilli = (createdAt.seconds * 1000L) + (createdAt.nanoseconds / 1_000_000L)
             val msgDate = Instant.ofEpochMilli(epochMilli).atZone(zone).toLocalDate()
             if (msgDate != lastDate) {
