@@ -183,8 +183,10 @@ class SavedMessagesViewModel(
             var ck: SecretKey?
 
             if (settings?.cryptoV2 == true) {
-                // v2: проверка PIN = разворот PIN-обёртки CK (локально, без серверного хэша)
-                ck = contentKeyManager.ckByPin(currentUid, ContentKeyManager.DOMAIN_SAVED, pin)
+                // v2: проверка PIN = разворот PIN-обёртки CK (локально на Default диспетчере без блокировки UI)
+                ck = withContext(Dispatchers.Default) {
+                    contentKeyManager.ckByPin(currentUid, ContentKeyManager.DOMAIN_SAVED, pin)
+                }
                 if (ck == null) {
                     contentKeyManager.registerFailedAttempt(currentUid, ContentKeyManager.DOMAIN_SAVED)
                     _uiState.update { it.copy(pinError = true) }
@@ -203,7 +205,7 @@ class SavedMessagesViewModel(
 
                 if (!contentKeyManager.migrationEnabled()) {
                     // Kill-switch выключили → обратная миграция v2 → v1 с экраном прогресса (TODO §14.4)
-                    legacyKey = deriveKey(pin, currentUid)
+                    legacyKey = withContext(Dispatchers.Default) { deriveKey(pin, currentUid) }
                     startMigrationFlow(rollback = true, pin = pin, ck = ck, enableBiometrics = enableBiometrics, activity = activity)
                     return@launch
                 }
@@ -213,9 +215,13 @@ class SavedMessagesViewModel(
                 // После стирания данных (забытый recovery-код, TODO §14.4) серверного хэша нет,
                 // а PIN включён заново под свежим CK — проверяем разворотом локальной PIN-обёртки
                 val freshCK = if (settings?.pinHash == null) {
-                    contentKeyManager.ckByPin(currentUid, ContentKeyManager.DOMAIN_SAVED, pin)
+                    withContext(Dispatchers.Default) {
+                        contentKeyManager.ckByPin(currentUid, ContentKeyManager.DOMAIN_SAVED, pin)
+                    }
                 } else null
-                val valid = freshCK != null || repository.verifyPin(currentUid, pin)
+                val valid = freshCK != null || withContext(Dispatchers.Default) {
+                    repository.verifyPin(currentUid, pin)
+                }
                 if (!valid) {
                     _uiState.update { it.copy(pinError = true) }
                     return@launch
@@ -229,8 +235,9 @@ class SavedMessagesViewModel(
                     }
                     legacyKey = null
                 } else {
-                    legacyKey = deriveKey(pin, currentUid)
-                    ck = legacyKey
+                    val derived = withContext(Dispatchers.Default) { deriveKey(pin, currentUid) }
+                    legacyKey = derived
+                    ck = derived
 
                     // Миграция v1 → v2 — полноэкранный флоу с прогрессом и recovery-кодом (TODO §14.4)
                     if (contentKeyManager.migrationEnabled()) {
@@ -286,40 +293,41 @@ class SavedMessagesViewModel(
         viewModelScope.launch {
             var newCode: String? = null
             try {
-                val contentKey = ck ?: contentKeyManager.getOrCreateCK(currentUid, ContentKeyManager.DOMAIN_SAVED)
+                val contentKey = ck ?: withContext(Dispatchers.Default) {
+                    contentKeyManager.getOrCreateCK(currentUid, ContentKeyManager.DOMAIN_SAVED)
+                }
                 if (!rollback) {
-                    val legacy = deriveKey(pin, currentUid)
+                    val legacy = withContext(Dispatchers.Default) { deriveKey(pin, currentUid) }
 
                     stage("Пере-шифровка текстов")
                     repository.migrateContentToV2(currentUid, legacy, contentKey) { done, total ->
                         _uiState.update { it.copy(migrationTexts = done, migrationTextsTotal = total) }
                     }
 
-                    stage("Пере-шифровка медиа")
-                    repository.migrateMediaToV2(currentUid, legacy, contentKey) { done, total ->
-                        _uiState.update { it.copy(migrationMedia = done, migrationMediaTotal = total) }
-                    }
-
                     stage("Обновление настроек")
-                    contentKeyManager.enablePin(currentUid, ContentKeyManager.DOMAIN_SAVED, contentKey, pin)
+                    withContext(Dispatchers.Default) {
+                        contentKeyManager.enablePin(currentUid, ContentKeyManager.DOMAIN_SAVED, contentKey, pin)
+                    }
                     repository.markCryptoV2(currentUid)
                     // Старые биометрические данные (хранение PIN) больше не нужны
                     biometricPinManager.clearSavedPin(currentUid)
                     cryptoV2 = true
                     encryptionKey = contentKey
-                    legacyKey = deriveKey(pin, currentUid) // остатки v1 читаются в этой сессии
+                    legacyKey = legacy // остатки v1 читаются в этой сессии
 
                     stage("Ключ восстановления")
                     if (!contentKeyManager.recoveryWrapExists(currentUid, ContentKeyManager.DOMAIN_SAVED)) {
-                        newCode = contentKeyManager.setupRecovery(
-                            currentUid,
-                            mapOf(ContentKeyManager.DOMAIN_SAVED to contentKey)
-                        )
+                        newCode = withContext(Dispatchers.Default) {
+                            contentKeyManager.setupRecovery(
+                                currentUid,
+                                mapOf(ContentKeyManager.DOMAIN_SAVED to contentKey)
+                            )
+                        }
                     }
 
-                    // Фоновая до-миграция медиа, если что-то не успело
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        try { repository.migrateMediaToV2(currentUid, legacyKey!!, contentKey) } catch (_: Exception) {}
+                    // Фоновая до-миграция медиа в IO, чтобы не блокировать интерфейс приложения
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try { repository.migrateMediaToV2(currentUid, legacy, contentKey) } catch (_: Exception) {}
                     }
                 } else {
                     stage("Возврат текстов к прежней схеме")
@@ -330,7 +338,7 @@ class SavedMessagesViewModel(
                     stage("Обновление настроек")
                     repository.markCryptoV1(currentUid, pin)
                     cryptoV2 = false
-                    encryptionKey = deriveKey(pin, currentUid)
+                    encryptionKey = withContext(Dispatchers.Default) { deriveKey(pin, currentUid) }
                     legacyKey = encryptionKey
 
                     if (enableBiometrics) {

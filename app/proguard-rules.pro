@@ -43,11 +43,23 @@
     <init>(...);
 }
 
-# ─── Firebase Core & Play Services ──────────────────────────────────────────
+# ─── Firebase Core, Firestore, gRPC & Protobuf ──────────────────────────────
 -keep class com.google.firebase.** { *; }
--keep class com.google.android.gms.** { *; }
+-keepclassmembers class com.google.firebase.** { *; }
 -dontwarn com.google.firebase.**
+-keep class com.google.android.gms.** { *; }
 -dontwarn com.google.android.gms.**
+
+-keep class io.grpc.** { *; }
+-keepclassmembers class io.grpc.** { *; }
+-dontwarn io.grpc.**
+
+-keep class com.google.protobuf.** { *; }
+-keepclassmembers class com.google.protobuf.** { *; }
+-dontwarn com.google.protobuf.**
+
+-keep class io.perfmark.** { *; }
+-dontwarn io.perfmark.**
 
 # ─── Coil Image Loader ──────────────────────────────────────────────────────
 -keep class coil.** { *; }
@@ -82,7 +94,11 @@
 -keepclassmembers,allowshrinking,allowobfuscation interface * {
     @retrofit2.http.* <methods>;
 }
+-keep class okhttp3.** { *; }
+-keepclassmembers class okhttp3.** { *; }
 -dontwarn okhttp3.**
+-keep class okio.** { *; }
+-keepclassmembers class okio.** { *; }
 -dontwarn okio.**
 -keepnames class okhttp3.internal.publicsuffix.PublicSuffixDatabase
 

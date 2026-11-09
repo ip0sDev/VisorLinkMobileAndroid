@@ -28,7 +28,7 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 211
+        versionCode = 213
         versionName = "5.1.00"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
