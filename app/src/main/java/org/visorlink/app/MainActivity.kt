@@ -52,12 +52,19 @@ class MainActivity : AppCompatActivity() {
     private val authViewModel: AuthViewModel by inject()
     private val fcmManager: org.visorlink.app.utils.FcmManager by inject()
     private val musicPlayerManager: org.visorlink.app.utils.MusicPlayerManager by inject()
-    private val yandexRelayConfigManager: org.visorlink.app.data.remote.yandex.YandexRelayConfigManager by inject()
     private val maskModeManager: org.visorlink.app.utils.MaskModeManager by inject()
     private val chatThemeController: org.visorlink.app.ui.idcard.ChatThemeController by inject()
+    private val stealthManager: org.visorlink.app.utils.StealthManager by inject()
+    private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager by inject()
+    private val ckHandshakeManager: org.visorlink.app.utils.CkHandshakeManager by inject()
 
     private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val pendingOpenSenderUid = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    // E2EE-хендшейк (TODO §14.3–14.4): заявка на выдачу ключа контента новому браузеру —
+    // из пуша ck_handshake (extra ck_request_id) → Compose-диалог одобрения
+    private val pendingCkRequestId = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private val pendingCkClient = androidx.compose.runtime.mutableStateOf<String?>(null)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -70,8 +77,8 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
 
         extractOpenChatId(intent)
+        extractCkRequestId(intent)
         extractInviteCode(intent)
-        extractYandexAuthToken(intent)
         if (intent?.getBooleanExtra("open_music_player", false) == true) {
             musicPlayerManager.openFullscreenPlayer()
         }
@@ -218,6 +225,27 @@ class MainActivity : AppCompatActivity() {
                                             pendingOpenSenderUid.value = null
                                         }
                                     )
+                                    // E2EE-хендшейк (TODO §14.3–14.4): диалог одобрения выдачи
+                                    // ключа контента новому браузеру — сверка кода с браузером
+                                    pendingCkRequestId.value?.let { ckRequestId ->
+                                        val ckUid = FirebaseAuth.getInstance().currentUser?.uid
+                                        if (ckUid == null) {
+                                            pendingCkRequestId.value = null
+                                            pendingCkClient.value = null
+                                        } else {
+                                            org.visorlink.app.ui.components.saved.CkHandshakeDialog(
+                                                uid = ckUid,
+                                                requestId = ckRequestId,
+                                                pushClient = pendingCkClient.value,
+                                                handshake = ckHandshakeManager,
+                                                contentKeyManager = contentKeyManager,
+                                                onDone = {
+                                                    pendingCkRequestId.value = null
+                                                    pendingCkClient.value = null
+                                                }
+                                            )
+                                        }
+                                    }
                                     // Личный сюрприз (surprises/{uid}) — под выдачей карты: сначала карта
                                     org.visorlink.app.ui.surprise.SurpriseGate()
                                     // Выдача ID-карты: без карты в приложение не пускаем (спека §5)
@@ -243,32 +271,10 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         extractOpenChatId(intent)
+        extractCkRequestId(intent)
         extractInviteCode(intent)
-        extractYandexAuthToken(intent)
         if (intent.getBooleanExtra("open_music_player", false)) {
             musicPlayerManager.openFullscreenPlayer()
-        }
-    }
-
-    private fun extractYandexAuthToken(intent: android.content.Intent?) {
-        val data = intent?.data ?: return
-        if (data.scheme == "visorlink" && data.host == "yandex-auth") {
-            var token: String? = data.getQueryParameter("access_token")
-            if (token.isNullOrBlank()) {
-                val fragment = data.fragment
-                if (!fragment.isNullOrBlank()) {
-                    val params = fragment.split("&").associate { param ->
-                        val parts = param.split("=", limit = 2)
-                        if (parts.size == 2) parts[0] to parts[1] else parts[0] to ""
-                    }
-                    token = params["access_token"]
-                }
-            }
-            if (!token.isNullOrBlank()) {
-                yandexRelayConfigManager.setCustomToken(token)
-                yandexRelayConfigManager.setRelayEnabled(true)
-                android.widget.Toast.makeText(this, "Яндекс.Диск подключен!", android.widget.Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
@@ -289,6 +295,19 @@ class MainActivity : AppCompatActivity() {
             pendingOpenChatId.value = chatId
             pendingOpenSenderUid.value = senderUid
         }
+    }
+
+    /**
+     * Заявка хендшейка из хедс-ап уведомления (data-пуш ck_handshake, TODO §14.3–14.4):
+     * поднимаем диалог одобрения. Стелс активен — молча не показываем (уведомление
+     * FcmService уже подавил, здесь страхуемся на случай присланного intent).
+     */
+    private fun extractCkRequestId(intent: android.content.Intent?) {
+        val requestId = intent?.getStringExtra("ck_request_id")
+        if (requestId.isNullOrBlank()) return
+        if (stealthManager.isStealthActive()) return
+        pendingCkRequestId.value = requestId
+        pendingCkClient.value = intent.getStringExtra("ck_client")
     }
 
     private fun requestNotificationPermissionIfNeeded() {

@@ -27,7 +27,10 @@ data class ProfileUiState(
 class ProfileViewModel(
     private val userRepository: UserRepository,
     private val authRepository: AuthRepository,
-    private val fcmManager: org.visorlink.app.utils.FcmManager
+    private val fcmManager: org.visorlink.app.utils.FcmManager,
+    private val tfaManager: org.visorlink.app.utils.TfaManager,
+    private val appContext: android.content.Context,
+    private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProfileUiState())
@@ -117,6 +120,12 @@ class ProfileViewModel(
 
     fun logout() {
         viewModelScope.launch {
+            val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
+            // Единая точка очистки локальных данных (TODO §14.6) — раньше этот путь
+            // не чистил 2FA-кэш и локальные данные вовсе
+            org.visorlink.app.utils.SessionCleanup.wipeAccountLocalData(
+                appContext, uid, tfaManager, contentKeyManager
+            )
             runCatching { fcmManager.revokeToken() }
             authRepository.logout()
         }

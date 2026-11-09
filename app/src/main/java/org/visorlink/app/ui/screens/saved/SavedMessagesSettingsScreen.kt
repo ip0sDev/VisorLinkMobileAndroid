@@ -53,9 +53,31 @@ fun SavedMessagesSettingsScreen(
 
     val pinEnabled = uiState.settings?.pinEnabled == true
     val lockTimeout = uiState.settings?.lockTimeout ?: 5
+    // Сброс ключа восстановления (ротация CK, TODO §14.4): только при v2, включённом PIN
+    // и локально сохранённом ключе (Keystore-обёртка)
+    val canRotate = uiState.settings?.cryptoV2 == true && pinEnabled && viewModel.canResetRecoveryKey()
 
     var showSetPinDialog by remember { mutableStateOf(false) }
     var showDisablePinDialog by remember { mutableStateOf(false) }
+    var showResetKeyDialog by remember { mutableStateOf(false) }
+
+    // Полноэкранный флоу ротации CK / миграции (TODO §14.4)
+    if (uiState.migrationActive) {
+        org.visorlink.app.ui.screens.saved.CryptoMigrationScreen(
+            rollback = uiState.migrationRollback,
+            rotate = uiState.migrationRotate,
+            stage = uiState.migrationStage,
+            textsDone = uiState.migrationTexts,
+            textsTotal = uiState.migrationTextsTotal,
+            mediaDone = uiState.migrationMedia,
+            mediaTotal = uiState.migrationMediaTotal,
+            finished = uiState.migrationFinished,
+            failed = uiState.migrationFailed,
+            recoveryCode = uiState.recoveryCode,
+            onDone = { viewModel.finishMigration() }
+        )
+        return
+    }
 
     Box(
         modifier = Modifier
@@ -166,6 +188,21 @@ fun SavedMessagesSettingsScreen(
                                 }
                             }
                         }
+
+                        // Сброс ключа восстановления (ротация CK, TODO §14.4): контент
+                        // пере-шифруется под новый ключ, старый recovery-код станет бесполезным
+                        if (canRotate) {
+                            VlSettingsItem(
+                                icon = Icons.Default.Key,
+                                iconColor = MaterialTheme.colorScheme.primary,
+                                title = "Сбросить ключ восстановления",
+                                subtitle = "Новый recovery-код взамен старого · нужен текущий PIN",
+                                onClick = {
+                                    haptic.perform(HapticType.SELECTION, hapticEnabled)
+                                    showResetKeyDialog = true
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -188,6 +225,20 @@ fun SavedMessagesSettingsScreen(
         SetPinDialog(
             onConfirm = { pin -> viewModel.setPin(pin); showSetPinDialog = false },
             onDismiss = { showSetPinDialog = false }
+        )
+    }
+
+    // Диалог ввода текущего PIN для сброса ключа восстановления: при старте ротации
+    // закрывается, вместо него показывается CryptoMigrationScreen (uiState.migrationActive)
+    if (showResetKeyDialog && !uiState.migrationActive) {
+        org.visorlink.app.ui.components.saved.RecoveryResetPinDialog(
+            error = uiState.recoveryResetError,
+            onConfirm = { pin -> viewModel.startRecoveryResetFlow(pin) },
+            onDismiss = {
+                showResetKeyDialog = false
+                viewModel.clearRecoveryResetError()
+            },
+            clearError = { viewModel.clearRecoveryResetError() }
         )
     }
 

@@ -61,6 +61,12 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         NotificationHelper.createChannels(this)
         org.visorlink.app.utils.DiagnosticLogBuffer.install()
 
+        // Разовая зачистка удалённой фичи Яндекс-релея (TODO §14.2): в этих префах у старых
+        // версий лежал OAuth-токен Диска в открытом виде
+        try {
+            getSharedPreferences("visorlink_yandex_relay", MODE_PRIVATE).edit().clear().apply()
+        } catch (_: Exception) {}
+
         startKoin {
             androidContext(this@VisorLinkApp)
             modules(appModule)

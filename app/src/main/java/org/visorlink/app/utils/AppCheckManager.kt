@@ -62,8 +62,13 @@ object AppCheckManager {
     /**
      * Получить или сгенерировать фиксированный Debug Secret для Firebase App Check.
      * Сохраняется в стандартном файле SharedPreferences Firebase Debug Provider.
+     * Только debug-сборки (TODO §14.6): секрет не должен попадать в release-процесс/бинарник.
      */
     fun getOrCreateDebugSecret(context: android.content.Context): String {
+        if (!org.visorlink.app.BuildConfig.DEBUG) {
+            Log.w(TAG, "getOrCreateDebugSecret called outside DEBUG build — ignored")
+            return ""
+        }
         val fixedSecret = "5fe72dba-b295-4e3d-b164-4883567fd9f4"
         try {
             val app = com.google.firebase.FirebaseApp.getInstance()

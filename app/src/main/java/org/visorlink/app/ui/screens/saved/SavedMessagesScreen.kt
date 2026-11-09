@@ -148,22 +148,56 @@ fun SavedMessagesScreen(
         }
     }
 
+    // Полноэкранный флоу миграции шифрования (TODO §14.4)
+    if (uiState.migrationActive) {
+        CryptoMigrationScreen(
+            rollback = uiState.migrationRollback,
+            rotate = uiState.migrationRotate,
+            stage = uiState.migrationStage,
+            textsDone = uiState.migrationTexts,
+            textsTotal = uiState.migrationTextsTotal,
+            mediaDone = uiState.migrationMedia,
+            mediaTotal = uiState.migrationMediaTotal,
+            finished = uiState.migrationFinished,
+            failed = uiState.migrationFailed,
+            recoveryCode = uiState.recoveryCode,
+            onDone = { viewModel.finishMigration() }
+        )
+        return
+    }
+
+    // Стирание «Избранного» при забытом recovery-коде (TODO §14.4): точка входа одна —
+    // только здесь; дневник ссылку «Забыли код?» не показывает
+    var showWipeConfirm by remember { mutableStateOf(false) }
+
     if (uiState.showPinInput) {
         PinInputDialog(
             pinError              = uiState.pinError,
             hasBiometric          = viewModel.hasBiometricPinSaved(),
             keystoreSecurityLevel = viewModel.getKeystoreSecurityLevel(),
-            onPinEntered          = { pin, useBio -> viewModel.onPinEntered(pin, useBio) },
+            onPinEntered          = { pin, useBio -> viewModel.onPinEntered(pin, useBio, context as? FragmentActivity) },
             onDismiss             = onNavigateBack,
             onBiometric           = {
                 (context as? FragmentActivity)?.let { activity ->
                     viewModel.launchBiometricUnlock(activity) {}
                 }
             },
-            clearError            = { viewModel.clearPinError() }
+            clearError            = { viewModel.clearPinError() },
+            onForgotCode          = { showWipeConfirm = true }
         )
+        if (showWipeConfirm) {
+            WipeAllConfirmDialog(
+                inProgress = uiState.isLoading,
+                onConfirm = {
+                    showWipeConfirm = false
+                    viewModel.wipeForgotCode()
+                },
+                onDismiss = { if (!uiState.isLoading) showWipeConfirm = false }
+            )
+        }
         return
     }
+
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),

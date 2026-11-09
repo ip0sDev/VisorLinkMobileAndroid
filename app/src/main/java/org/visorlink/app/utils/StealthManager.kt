@@ -2,29 +2,22 @@ package org.visorlink.app.utils
 
 import android.content.Context
 import android.util.Base64
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 class StealthManager(context: Context) {
-    private val masterKey by lazy {
-        MasterKey.Builder(context.applicationContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-    }
 
+    // TODO §14.5: SecurePrefs вместо deprecated EncryptedSharedPreferences.
+    // Fail-closed: сбой Keystore → stealth недоступен (isEnabled=false), плейнтекст-fallback убран.
     private val prefs by lazy {
-        try {
-            EncryptedSharedPreferences.create(
-                context.applicationContext,
-                "visorlink_stealth_prefs",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        SecurePrefs(context.applicationContext, "stealth").apply {
+            migrateKeysFrom(
+                listOf(
+                    SecurePrefs.LegacyFile("visorlink_stealth_prefs", encrypted = true),
+                    SecurePrefs.LegacyFile("visorlink_stealth_prefs_fallback", encrypted = false)
+                ),
+                keys = listOf(KEY_ENABLED, KEY_BIOMETRIC_UNLOCK, KEY_PIN_HASH, KEY_SALT)
             )
-        } catch (_: Exception) {
-            context.applicationContext.getSharedPreferences("visorlink_stealth_prefs_fallback", Context.MODE_PRIVATE)
         }
     }
 
@@ -45,7 +38,7 @@ class StealthManager(context: Context) {
     fun isStealthActive(): Boolean = isEnabled() && !isUnlocked
 
     fun setEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs.putBoolean(KEY_ENABLED, enabled)
         if (!enabled) {
             isUnlocked = false
         }
@@ -55,16 +48,14 @@ class StealthManager(context: Context) {
     fun isBiometricUnlockEnabled(): Boolean = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK, false)
 
     fun setBiometricUnlockEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_BIOMETRIC_UNLOCK, enabled).apply()
+        prefs.putBoolean(KEY_BIOMETRIC_UNLOCK, enabled)
     }
 
     fun setPin(pin: String) {
         val salt = generateSalt()
         val hash = hashPinPbkdf2(pin, salt)
-        prefs.edit()
-            .putString(KEY_SALT, salt)
-            .putString(KEY_PIN_HASH, "pbkdf2:$hash")
-            .apply()
+        prefs.putString(KEY_SALT, salt)
+        prefs.putString(KEY_PIN_HASH, "pbkdf2:$hash")
     }
 
     fun verifyPin(pin: String): Boolean {
@@ -86,7 +77,8 @@ class StealthManager(context: Context) {
     }
 
     fun clearPin() {
-        prefs.edit().remove(KEY_PIN_HASH).remove(KEY_SALT).apply()
+        prefs.remove(KEY_PIN_HASH)
+        prefs.remove(KEY_SALT)
     }
 
     private fun generateSalt(): String {

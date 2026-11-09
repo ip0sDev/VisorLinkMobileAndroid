@@ -382,7 +382,7 @@ class AuthRepository(
             .call(mapOf("status" to status))
             .await()
         val data = res.data as? Map<*, *> ?: return emptyList()
-        val list = data["requests"] as? List<Map<String, Any?>> ?: return emptyList()
+        val list = (data["requests"] as? List<*>)?.filterIsInstance<Map<String, Any?>>() ?: return emptyList()
         return list.map { item ->
             org.visorlink.app.data.model.AccessRequest(
                 requestId = item["requestId"] as? String ?: "",

@@ -116,7 +116,6 @@ data class AppFlags(
         const val PROFILE_NAVBAR = "enable_profile_navbar"
         const val SIGNAL_TAB = "enable_signal_tab"
         const val STEP_ACTIVITIES = "enable_step_activities"
-        const val ALTERNATIVE_OUTBOX = "enable_alternative_outbox"
 
         /** У флага отладки Aegis два имени — в Flipper показывается одно. */
         const val AEGIS_DEBUG = "aegis_debug_mode_enabled"
@@ -132,7 +131,6 @@ data class AppFlags(
             SIGNAL_TAB,
             STEP_ACTIVITIES,
             AEGIS_DEBUG,
-            ALTERNATIVE_OUTBOX
         )
 
         /** Удалённые флаги: их переопределения вычищаются из настроек при загрузке. */

@@ -80,8 +80,7 @@ class OutboxManager(
     private val outboxDataSource: OutboxDataSource = ChatDataOutboxSource(),
     coroutineContext: CoroutineContext = Dispatchers.IO,
     private val googleDriveAuthManager: GoogleDriveAuthManager? = null,
-    private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null,
-    private val yandexDeadDropManager: org.visorlink.app.data.remote.yandex.YandexDeadDropManager? = null
+    private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + coroutineContext)
     private var processingJob: Job? = null
@@ -273,29 +272,26 @@ class OutboxManager(
                 }
             }
 
-            val isEmergencyChat = action.chatId.startsWith("emer_") || data.optBoolean("isEmergency", false)
+            // Аварийный dead-drop-транспорт (Яндекс.Диск) удалён (TODO §14.2): остатки очереди
+            // от старых версий помечаются «не отправлено» без бессмысленных повторов
+            if (action.chatId.startsWith("emer_") || data.optBoolean("isEmergency", false)) {
+                throw DriveNotConnectedException()
+            }
 
             when (action.type) {
                 "text" -> {
-                    if (isEmergencyChat) {
-                        val recipient = otherUserId?.takeIf { it.isNotBlank() }
-                            ?: action.chatId.removePrefix("emer_").split("_").find { it != chatRepository.currentUid }
-                        if (recipient.isNullOrBlank()) throw IllegalStateException("Unknown recipient for emergency chat ${action.chatId}")
-                        sendTextViaDeadDrop(action, recipient, replyTo, nextSeq)
-                    } else {
-                        withTimeout(20_000) {
-                            chatRepository.sendTextNow(
-                                id = action.id,
-                                chatId = action.chatId,
-                                text = data.getString("text"),
-                                senderUsername = data.getString("senderUsername"),
-                                replyTo = replyTo,
-                                topicId = topicId,
-                                nextSeq = nextSeq,
-                                isDirect = isDirect,
-                                otherUserId = otherUserId
-                            )
-                        }
+                    withTimeout(20_000) {
+                        chatRepository.sendTextNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            text = data.getString("text"),
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo,
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
+                        )
                     }
                 }
                 "image" -> {
@@ -525,14 +521,8 @@ class OutboxManager(
                     }
                 }
                 "sticker" -> {
-                    if (isEmergencyChat) {
-                        val recipient = otherUserId?.takeIf { it.isNotBlank() }
-                            ?: action.chatId.removePrefix("emer_").split("_").find { it != chatRepository.currentUid }
-                        if (recipient.isNullOrBlank()) throw IllegalStateException("Unknown recipient for emergency chat ${action.chatId}")
-                        sendStickerViaDeadDrop(action, recipient, replyTo, nextSeq)
-                    } else {
-                        withTimeout(20_000) {
-                            chatRepository.sendStickerNow(
+                    withTimeout(20_000) {
+                        chatRepository.sendStickerNow(
                                 id = action.id,
                                 chatId = action.chatId,
                                 stickerId = data.getString("stickerId"),
@@ -549,7 +539,6 @@ class OutboxManager(
                                 isDirect = isDirect,
                                 otherUserId = otherUserId
                             )
-                        }
                     }
                 }
                 // Лайки ленты старых версий (сейчас лента зовёт toggleLike напрямую). Сервер
@@ -567,88 +556,6 @@ class OutboxManager(
         } catch (e: Exception) {
             Log.e(TAG, "Error processing action ${action.id} of type ${action.type}", e)
             throw e
-        }
-    }
-
-    private suspend fun sendTextViaDeadDrop(
-        action: ChatDataCache.QueuedAction,
-        recipientUid: String,
-        replyTo: ReplyData?,
-        nextSeq: Long?
-    ) {
-        val manager = yandexDeadDropManager ?: throw IllegalStateException("Dead drop manager is unavailable")
-        val data = action.data
-        val nowSec = System.currentTimeMillis() / 1000L
-        val text = data.getString("text")
-        val messageJson = JSONObject().apply {
-            put("id", action.id)
-            put("seq", nextSeq ?: JSONObject.NULL)
-            put("senderId", data.optString("senderId").ifBlank { chatRepository.currentUid })
-            put("senderUsername", data.getString("senderUsername"))
-            put("type", "text")
-            put("text", text)
-            put("createdAt", nowSec)
-            put("deleted", false)
-            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
-        }
-        val sent = manager.sendViaDeadDrop(action.chatId, recipientUid, messageJson)
-        if (sent) {
-            val localMsg = ChatDataCache.jsonToMessage(messageJson)
-            ChatDataCache.saveMessages(context, action.chatId, listOf(localMsg))
-            ChatDataCache.updateChatLastMessage(
-                context = context,
-                uid = chatRepository.currentUid,
-                chatId = action.chatId,
-                text = text,
-                senderId = chatRepository.currentUid,
-                tsSeconds = nowSec
-            )
-        } else {
-            throw IOException("Failed to deliver message via Yandex Dead-Drop")
-        }
-    }
-
-    private suspend fun sendStickerViaDeadDrop(
-        action: ChatDataCache.QueuedAction,
-        recipientUid: String,
-        replyTo: ReplyData?,
-        nextSeq: Long?
-    ) {
-        val manager = yandexDeadDropManager ?: throw IllegalStateException("Dead drop manager is unavailable")
-        val data = action.data
-        val nowSec = System.currentTimeMillis() / 1000L
-        val emoji = data.optString("packEmoji", "🎨")
-        val messageJson = JSONObject().apply {
-            put("id", action.id)
-            put("seq", nextSeq ?: JSONObject.NULL)
-            put("senderId", data.optString("senderId").ifBlank { chatRepository.currentUid })
-            put("senderUsername", data.getString("senderUsername"))
-            put("type", "sticker")
-            put("stickerId", data.getString("stickerId"))
-            put("url", data.getString("url"))
-            put("packId", data.getString("packId"))
-            put("packName", data.getString("packName"))
-            put("packEmoji", emoji)
-            put("stickerFormat", data.optString("stickerFormat").ifBlank { null } ?: JSONObject.NULL)
-            put("stickerPreviewUrl", data.optString("stickerPreviewUrl").ifBlank { null } ?: JSONObject.NULL)
-            put("createdAt", nowSec)
-            put("deleted", false)
-            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
-        }
-        val sent = manager.sendViaDeadDrop(action.chatId, recipientUid, messageJson)
-        if (sent) {
-            val localMsg = ChatDataCache.jsonToMessage(messageJson)
-            ChatDataCache.saveMessages(context, action.chatId, listOf(localMsg))
-            ChatDataCache.updateChatLastMessage(
-                context = context,
-                uid = chatRepository.currentUid,
-                chatId = action.chatId,
-                text = "Стикер $emoji",
-                senderId = chatRepository.currentUid,
-                tsSeconds = nowSec
-            )
-        } else {
-            throw IOException("Failed to deliver sticker via Yandex Dead-Drop")
         }
     }
 }

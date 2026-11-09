@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- TODO §14.6: cleartext HTTP запрещён глобально; при реальной необходимости отдельного
+     http-домена — точечный <domain-config cleartextTrafficPermitted="true"> для него -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="true">
+    <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

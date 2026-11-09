@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
@@ -19,14 +20,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.VlTextField
+import org.visorlink.app.utils.CkHandshakeManager
+import org.visorlink.app.utils.ContentKeyManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,7 +102,10 @@ fun PinInputDialog(
     onPinEntered: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
     onBiometric: () -> Unit,
-    clearError: () -> Unit
+    clearError: () -> Unit,
+    // «Забыли код?» — escape-hatch полного стирания (TODO §14.4). null = ссылка не показывается
+    // (дневник её не передаёт: стирание общее, одной точки входа достаточно)
+    onForgotCode: (() -> Unit)? = null
 ) {
     var pin by remember { mutableStateOf("") }
     var useBiometrics by remember { mutableStateOf(false) }
@@ -165,6 +173,20 @@ fun PinInputDialog(
                         Text(stringResource(R.string.saved_biometric_enable), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
+
+                if (onForgotCode != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(
+                        onClick = onForgotCode,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            "Забыли код?",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         },
         confirmButton = {
@@ -181,6 +203,332 @@ fun PinInputDialog(
                     }
                 }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+            }
+        }
+    )
+}
+
+/**
+ * Подтверждение полного стирания «Избранного» и дневника (забытый recovery-код, TODO §14.4):
+ * для активации нужно ввести слово УДАЛИТЬ — защита от случайного нажатия.
+ */
+@Composable
+fun WipeAllConfirmDialog(
+    inProgress: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var word by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.DeleteForever,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = { Text("Стереть всё?") },
+        text = {
+            Column {
+                Text(
+                    "Будут удалены все Избранное и записи дневника, медиа и ключи шифрования. Отменить это нельзя.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                VlTextField(
+                    value = word,
+                    onValueChange = { word = it },
+                    label = "Введите УДАЛИТЬ",
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (inProgress) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Стираем…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = !inProgress && word == "УДАЛИТЬ",
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) { Text("Стереть навсегда") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !inProgress) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
+}
+
+/**
+ * Ввод текущего PIN для сброса ключа восстановления (TODO §14.4): проверка выполняется
+ * в ViewModel разворотом PIN-обёртки, ошибка показывается здесь же (диалог не закрывается).
+ */
+@Composable
+fun RecoveryResetPinDialog(
+    error: String?,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+    clearError: () -> Unit
+) {
+    var pin by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = { Text("Сбросить ключ восстановления?") },
+        text = {
+            Column {
+                Text(
+                    "Введите текущий PIN. Контент будет пере-шифрован под новый ключ, старый код восстановления перестанет действовать — новый будет показан один раз.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                VlTextField(
+                    value = pin,
+                    onValueChange = {
+                        if (it.length <= 8 && it.all { char -> char.isDigit() }) {
+                            pin = it
+                            clearError()
+                        }
+                    },
+                    label = stringResource(R.string.saved_pin_hint),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    isError = error != null,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (error != null) {
+                    Text(
+                        error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(pin) },
+                enabled = pin.length in 4..8
+            ) { Text("Продолжить") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
+        }
+    )
+}
+
+/**
+ * Диалог одобрения выдачи ключа контента новому браузеру (E2EE-хендшейк, TODO §14.3–14.4).
+ * Показываем код сверки — «Разрешить» только если он совпадает с кодом в браузере:
+ * конверт AES-GCM(CK) на одноразовом ECDH-секрете кладётся в заявку (сервер видит только
+ * ciphertext). «Отклонить»/закрытие — статус rejected, веб откатится к recovery-коду.
+ */
+@Composable
+fun CkHandshakeDialog(
+    uid: String,
+    requestId: String,
+    pushClient: String?,
+    handshake: CkHandshakeManager,
+    contentKeyManager: ContentKeyManager,
+    onDone: () -> Unit
+) {
+    var info by remember { mutableStateOf<CkHandshakeManager.CkRequestInfo?>(null) }
+    var loadFailed by remember { mutableStateOf(false) }
+    var code by remember { mutableStateOf<String?>(null) }
+    var inProgress by remember { mutableStateOf(false) }
+    var resultMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // Загрузка заявки: статус/свежесть + код сверки из ephemeralPub (тот же расчёт, что на вебе)
+    LaunchedEffect(uid, requestId) {
+        val loaded = handshake.loadRequest(uid, requestId)
+        when {
+            loaded == null -> loadFailed = true
+            loaded.expired -> {
+                info = loaded
+                resultMessage = "Заявка устарела. Обновите запрос в браузере."
+            }
+            else -> {
+                info = loaded
+                code = try {
+                    CkHandshakeManager.verificationCode(
+                        android.util.Base64.decode(loaded.ephemeralPubB64, android.util.Base64.NO_WRAP)
+                    )
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+    }
+
+    // На этом телефоне CK ещё не заведён — одобрять нечего (веб пойдёт через recovery-код)
+    val hasCK = contentKeyManager.hasCK(uid, ContentKeyManager.DOMAIN_SAVED)
+
+    fun rejectAndClose() {
+        if (inProgress) return
+        inProgress = true
+        scope.launch {
+            handshake.rejectRequest(uid, requestId)
+            inProgress = false
+            onDone()
+        }
+    }
+
+    fun approve() {
+        val current = info ?: return
+        if (inProgress || code == null || !hasCK) return
+        inProgress = true
+        scope.launch {
+            val outcome = handshake.approveRequest(
+                uid, requestId, current,
+                contentKeyManager.getOrCreateCK(uid, ContentKeyManager.DOMAIN_SAVED)
+            )
+            when (outcome) {
+                is CkHandshakeManager.ApproveResult.Approved -> onDone()
+                is CkHandshakeManager.ApproveResult.Stale -> {
+                    resultMessage = "Заявка устарела. Обновите запрос в браузере."
+                    inProgress = false
+                }
+                is CkHandshakeManager.ApproveResult.Error -> {
+                    resultMessage = "Не удалось передать ключ. Попробуйте ещё раз."
+                    inProgress = false
+                }
+            }
+        }
+    }
+
+    // Имя браузера: короткое из пуша, иначе обрезанный UA из заявки
+    val clientName = pushClient?.takeIf { it.isNotBlank() }
+        ?: info?.client?.take(60)?.takeIf { it.isNotBlank() }
+        ?: "браузер"
+
+    AlertDialog(
+        onDismissRequest = {
+            if (resultMessage != null || loadFailed) onDone() else rejectAndClose()
+        },
+        icon = {
+            Icon(
+                Icons.Default.Lock,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(28.dp)
+            )
+        },
+        title = { Text("Запрос ключа шифрования") },
+        text = {
+            Column {
+                when {
+                    loadFailed -> {
+                        Text(
+                            "Заявка не найдена или недоступна.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    inProgress && code == null -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Загрузка…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    else -> {
+                        Text(
+                            "Браузер $clientName запрашивает ключ шифрования «Избранного».",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        // Код сверки — крупно, пользователь сверяет его с браузером
+                        Surface(
+                            shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(vertical = 10.dp)) {
+                                Text(
+                                    "Код подтверждения:",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    code ?: "…",
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 2.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Разрешайте только если код совпадает с показанным в браузере.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (!hasCK && code != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                "Сначала обновите шифрование в приложении",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        if (inProgress) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Передаём ключ…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        if (resultMessage != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                resultMessage!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (resultMessage != null || loadFailed) {
+                TextButton(onClick = onDone) { Text("Закрыть") }
+            } else {
+                TextButton(
+                    onClick = { approve() },
+                    enabled = !inProgress && code != null && hasCK
+                ) { Text("Разрешить") }
+            }
+        },
+        dismissButton = {
+            if (resultMessage == null && !loadFailed) {
+                TextButton(onClick = { rejectAndClose() }, enabled = !inProgress) { Text("Отклонить") }
             }
         }
     )

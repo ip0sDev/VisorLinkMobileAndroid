@@ -23,9 +23,14 @@ object NotificationHelper {
     private const val CHANNEL_MESSAGES_NAME = "Messages"
     private const val CHANNEL_DIARY       = "diary_reminders"
     private const val CHANNEL_DIARY_NAME  = "Diary Reminders"
+    private const val CHANNEL_CK          = "ck_handshake"
+    private const val CHANNEL_CK_NAME     = "Key delivery approvals"
     private const val TAG = "NotificationHelper"
     private const val GROUP_KEY = "org.visorlink.app.MESSAGES"
     private const val SUMMARY_ID = 9999
+
+    /** Фиксированный id уведомления хендшейка (не пересекается с чатами 10000+ и сводкой). */
+    private const val CK_NOTIFICATION_ID = 9901
 
     fun createChannels(context: Context) {
         val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
@@ -61,6 +66,18 @@ object NotificationHelper {
             description = "Daily diary entry reminders"
         }
 
+        // 3. E2EE-хендшейк «ключ контента на новый браузер» (TODO §14.3): хедс-ап одобрения.
+        // Отдельный канал — пользователь управляет им независимо от сообщений чатов.
+        val ckChannel = NotificationChannel(
+            CHANNEL_CK,
+            CHANNEL_CK_NAME,
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Approve delivering your encryption key to a new browser"
+            enableVibration(true)
+            lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+        }
+
         val existing = manager.getNotificationChannel(CHANNEL_MESSAGES)
         if (existing != null && existing.importance < NotificationManager.IMPORTANCE_HIGH) {
             manager.deleteNotificationChannel(CHANNEL_MESSAGES)
@@ -69,6 +86,7 @@ object NotificationHelper {
 
         manager.createNotificationChannel(msgChannel)
         manager.createNotificationChannel(diaryChannel)
+        manager.createNotificationChannel(ckChannel)
     }
 
     fun getChatNotificationId(chatId: String): Int {
@@ -121,7 +139,7 @@ object NotificationHelper {
         if (history.size > 7) {
             history.removeAt(0)
         }
-        prefs.edit().putString(historyKey, history.joinToString("|||")).apply()
+        prefs.putString(historyKey, history.joinToString("|||"))
 
         val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
         activeChatsPrefs.edit().putBoolean(chatId, true).apply()
@@ -181,30 +199,82 @@ object NotificationHelper {
         }
     }
 
-    @Volatile
-    private var cachedFcmPrefs: android.content.SharedPreferences? = null
+    /**
+     * Хедс-ап «Запрос ключа шифрования» (E2EE-хендшейк, TODO §14.3): тап открывает
+     * MainActivity с extra ck_request_id — там Compose-диалог одобрения со сверкой кода.
+     * В пейлоаде только id заявки и имя браузера — никаких ключей. Фиксированный id:
+     * повторные запросы заменяют уведомление, а не копят шторку.
+     */
+    fun showCkHandshakeNotification(context: Context, requestId: String, client: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.w(TAG, "POST_NOTIFICATIONS permission not granted")
+                return
+            }
+        }
 
-    private fun getFcmPrefs(context: Context): android.content.SharedPreferences {
+        createChannels(context)
+
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            putExtra("ck_request_id", requestId)
+            if (client.isNotBlank()) putExtra("ck_client", client)
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            CK_NOTIFICATION_ID,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val body = if (client.isBlank()) {
+            "Браузер запрашивает ключ шифрования «Избранного»"
+        } else {
+            "Браузер $client запрашивает ключ шифрования «Избранного»"
+        }
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_CK)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Запрос ключа шифрования")
+            .setContentText(body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .setVibrate(longArrayOf(0, 150, 80, 150))
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+            .build()
+
+        try {
+            with(NotificationManagerCompat.from(context)) { notify(CK_NOTIFICATION_ID, notification) }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Failed to show ck_handshake notification: ${e.message}")
+        }
+    }
+
+    @Volatile
+    private var cachedFcmPrefs: SecurePrefs? = null
+
+    /**
+     * Превью сообщений — чувствительные данные: SecurePrefs на SecureVault (TODO §14.5).
+     * Fail-closed, плейнтекст-fallback убран; legacy переносится однократно.
+     */
+    private fun getFcmPrefs(context: Context): SecurePrefs {
         cachedFcmPrefs?.let { return it }
         return synchronized(this) {
-            cachedFcmPrefs ?: run {
-                val prefs = try {
-                    val masterKey = androidx.security.crypto.MasterKey.Builder(context.applicationContext)
-                        .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
-                        .build()
-                    androidx.security.crypto.EncryptedSharedPreferences.create(
-                        context.applicationContext,
-                        "fcm_prefs_encrypted",
-                        masterKey,
-                        androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                        androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            cachedFcmPrefs ?: SecurePrefs(context.applicationContext, "fcm_prefs").apply {
+                migrateAllFrom(
+                    listOf(
+                        SecurePrefs.LegacyFile("fcm_prefs_encrypted", encrypted = true),
+                        SecurePrefs.LegacyFile("fcm_prefs", encrypted = false)
                     )
-                } catch (_: Exception) {
-                    context.applicationContext.getSharedPreferences("fcm_prefs", Context.MODE_PRIVATE)
-                }
-                cachedFcmPrefs = prefs
-                prefs
-            }
+                )
+            }.also { cachedFcmPrefs = it }
         }
     }
 
@@ -221,7 +291,7 @@ object NotificationHelper {
     fun clearNotification(context: Context, chatId: String) {
         try {
             val prefs = getFcmPrefs(context)
-            prefs.edit().remove("unread_msgs_$chatId").apply()
+            prefs.remove("unread_msgs_$chatId")
 
             val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
             activeChatsPrefs.edit().remove(chatId).apply()
@@ -242,7 +312,7 @@ object NotificationHelper {
     fun clearAllNotifications(context: Context) {
         try {
             val prefs = getFcmPrefs(context)
-            prefs.edit().clear().apply()
+            prefs.clear()
 
             val activeChatsPrefs = context.getSharedPreferences("fcm_active_chats", Context.MODE_PRIVATE)
             activeChatsPrefs.edit().clear().apply()

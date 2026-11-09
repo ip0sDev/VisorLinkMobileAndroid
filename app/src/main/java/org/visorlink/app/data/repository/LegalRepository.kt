@@ -10,6 +10,7 @@ import org.visorlink.app.data.model.LegalMeta
 import org.visorlink.app.data.model.LegalSection
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import org.visorlink.app.utils.SecurePrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -206,29 +207,26 @@ class LegalRepository(
             Log.w(TAG, "Cloud Function recordUserLegalConsent not available or failed: ${e.message}")
         }
 
-        // 2. Локальная фиксация в защищенном хранилище EncryptedSharedPreferences
+        // 2. Локальная фиксация в SecurePrefs (TODO §14.5 — замена deprecated EncryptedSharedPreferences)
         try {
-            val masterKey = androidx.security.crypto.MasterKey.Builder(context)
-                .setKeyScheme(androidx.security.crypto.MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            val securePrefs = androidx.security.crypto.EncryptedSharedPreferences.create(
-                context,
-                "legal_secure_prefs",
-                masterKey,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                androidx.security.crypto.EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-            securePrefs.edit()
-                .putString("accepted_version", version)
-                .putLong("accepted_at", timestamp)
-                .putBoolean("agree_tos", true)
-                .putBoolean("agree_privacy", true)
-                .putBoolean("agree_personal_data", true)
-                .putBoolean("agree_cross_border", true)
-                .putBoolean("agree_age16", true)
-                .apply()
+            val securePrefs = SecurePrefs(context, "legal").apply {
+                migrateKeysFrom(
+                    listOf(SecurePrefs.LegacyFile("legal_secure_prefs", encrypted = true)),
+                    keys = listOf(
+                        "accepted_version", "accepted_at", "agree_tos", "agree_privacy",
+                        "agree_personal_data", "agree_cross_border", "agree_age16"
+                    )
+                )
+            }
+            securePrefs.putString("accepted_version", version)
+            securePrefs.putLong("accepted_at", timestamp)
+            securePrefs.putBoolean("agree_tos", true)
+            securePrefs.putBoolean("agree_privacy", true)
+            securePrefs.putBoolean("agree_personal_data", true)
+            securePrefs.putBoolean("agree_cross_border", true)
+            securePrefs.putBoolean("agree_age16", true)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to save consent into EncryptedSharedPreferences: ${e.message}")
+            Log.w(TAG, "Failed to save consent into SecurePrefs: ${e.message}")
         }
 
         // 3. Обновление профиля пользователя в Firestore

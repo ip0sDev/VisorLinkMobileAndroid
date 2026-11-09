@@ -18,6 +18,44 @@ private const val DB_NAME = "visorlink_cache.db"
 private const val DB_VERSION = 5
 private const val TAG = "ChatDataCache"
 
+
+/**
+ * Шифрование data-колонок локального кэша ключом AndroidKeyStore (TODO §14.6).
+ * Кэш не критичен: при сбое шифрования пишем как есть (fail-open для кэша),
+ * при сбое расшифровки строка отбрасывается парсером. Старые плейнтекст-строки
+ * читаются как есть — ленивая миграция по мере перезаписи.
+ */
+private object CacheCrypto {
+    private const val PREFIX = "enc1:"
+
+    fun encrypt(plain: String): String = try {
+        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, SecureVault.masterKey())
+        val ct = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
+        val iv = cipher.iv ?: return plain
+        PREFIX + android.util.Base64.encodeToString(iv, android.util.Base64.NO_WRAP) + ":" +
+                android.util.Base64.encodeToString(ct, android.util.Base64.NO_WRAP)
+    } catch (_: Exception) {
+        plain
+    }
+
+    fun decrypt(stored: String): String = try {
+        if (!stored.startsWith(PREFIX)) {
+            stored
+        } else {
+            val p = stored.split(":")
+            val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(
+                javax.crypto.Cipher.DECRYPT_MODE, SecureVault.masterKey(),
+                javax.crypto.spec.GCMParameterSpec(128, android.util.Base64.decode(p[1], android.util.Base64.NO_WRAP))
+            )
+            String(cipher.doFinal(android.util.Base64.decode(p[2], android.util.Base64.NO_WRAP)), Charsets.UTF_8)
+        }
+    } catch (_: Exception) {
+        ""
+    }
+}
+
 class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
     override fun onConfigure(db: SQLiteDatabase) {
         super.onConfigure(db)
@@ -182,7 +220,7 @@ object ChatDataCache {
                             id = cursor.getString(0),
                             chatId = cursor.getString(1),
                             type = cursor.getString(2),
-                            data = JSONObject(cursor.getString(3)),
+                            data = JSONObject(CacheCrypto.decrypt(cursor.getString(3))),
                             ts = cursor.getLong(4),
                             status = cursor.getInt(5),
                             retryCount = cursor.getInt(6),
@@ -292,7 +330,7 @@ object ChatDataCache {
                     chats.forEach { chat ->
                         stmt.bindString(1, uid)
                         stmt.bindString(2, chat.id)
-                        stmt.bindString(3, chat.toJson().toString())
+                        stmt.bindString(3, CacheCrypto.encrypt(chat.toJson().toString()))
                         stmt.executeInsert()
                     }
                     db.setTransactionSuccessful()
@@ -309,7 +347,7 @@ object ChatDataCache {
                 val stmt = db.compileStatement("INSERT OR REPLACE INTO chats (uid, chat_id, data) VALUES (?, ?, ?)")
                 stmt.bindString(1, uid)
                 stmt.bindString(2, chat.id)
-                stmt.bindString(3, chat.toJson().toString())
+                stmt.bindString(3, CacheCrypto.encrypt(chat.toJson().toString()))
                 stmt.executeInsert()
             } catch (e: Exception) { Log.e(TAG, "Failed to save single chat ${chat.id}", e) }
         }
@@ -335,7 +373,7 @@ object ChatDataCache {
                 val db = getDb(context).readableDatabase
                 db.rawQuery("SELECT data FROM chats WHERE uid=?", arrayOf(uid)).use { cursor ->
                     while (cursor.moveToNext()) {
-                        try { list.add(JSONObject(cursor.getString(0)).toChat()) } catch(_: Exception) {}
+                        try { list.add(JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toChat()) } catch(_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load chat list", e) }
@@ -348,7 +386,7 @@ object ChatDataCache {
                 val db = getDb(context).readableDatabase
                 db.rawQuery("SELECT data FROM chats WHERE chat_id=? LIMIT 1", arrayOf(chatId)).use { cursor ->
                     if (cursor.moveToFirst()) {
-                        try { return@withContext JSONObject(cursor.getString(0)).toChat() } catch (_: Exception) {}
+                        try { return@withContext JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toChat() } catch (_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load chat from cache", e) }
@@ -368,7 +406,7 @@ object ChatDataCache {
                         stmt.bindString(1, chatId)
                         stmt.bindString(2, msg.id)
                         stmt.bindLong(3, msg.createdAt?.seconds ?: 0L)
-                        stmt.bindString(4, msg.toJson().toString())
+                        stmt.bindString(4, CacheCrypto.encrypt(msg.toJson().toString()))
                         stmt.executeInsert()
                     }
                     db.setTransactionSuccessful()
@@ -387,7 +425,7 @@ object ChatDataCache {
                 // Выбираем все сообщения для оффлайн-режима
                 db.rawQuery("SELECT data FROM messages WHERE chat_id=? ORDER BY ts DESC", arrayOf(chatId)).use { cursor ->
                     while (cursor.moveToNext()) {
-                        try { list.add(JSONObject(cursor.getString(0)).toMessage()) } catch(_: Exception) {}
+                        try { list.add(JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toMessage()) } catch(_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load messages", e) }
@@ -410,7 +448,7 @@ object ChatDataCache {
                     packs.forEach { pack ->
                         stmt.bindString(1, effectiveUid)
                         stmt.bindString(2, pack.id)
-                        stmt.bindString(3, pack.toJson().toString())
+                        stmt.bindString(3, CacheCrypto.encrypt(pack.toJson().toString()))
                         stmt.executeInsert()
                     }
                     db.setTransactionSuccessful()
@@ -437,7 +475,7 @@ object ChatDataCache {
                 val effectiveUid = uid.ifBlank { "global" }
                 db.rawQuery("SELECT data FROM stickers WHERE uid=? OR uid='global'", arrayOf(effectiveUid)).use { cursor ->
                     while (cursor.moveToNext()) {
-                        try { list.add(JSONObject(cursor.getString(0)).toStickerPack()) } catch(_: Exception) {}
+                        try { list.add(JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toStickerPack()) } catch(_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load sticker packs", e) }
@@ -461,7 +499,7 @@ object ChatDataCache {
                 val db = getDb(context).writableDatabase
                 val stmt = db.compileStatement("INSERT OR REPLACE INTO profiles (uid, data) VALUES (?, ?)")
                 stmt.bindString(1, profile.uid)
-                stmt.bindString(2, profile.toJson().toString())
+                stmt.bindString(2, CacheCrypto.encrypt(profile.toJson().toString()))
                 stmt.executeInsert()
             } catch (e: Exception) { Log.e(TAG, "Failed to save profile ${profile.uid}", e) }
         }
@@ -472,7 +510,7 @@ object ChatDataCache {
                 val db = getDb(context).readableDatabase
                 db.rawQuery("SELECT data FROM profiles WHERE uid=?", arrayOf(uid)).use { cursor ->
                     if (cursor.moveToFirst()) {
-                        return@withContext JSONObject(cursor.getString(0)).toUserProfile()
+                        return@withContext JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toUserProfile()
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load profile", e) }

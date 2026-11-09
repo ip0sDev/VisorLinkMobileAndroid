@@ -27,7 +27,7 @@ class FcmService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         super.onNewToken(token)
         if (org.visorlink.app.BuildConfig.DEBUG) {
-            Log.d("FCM", "New token received: $token")
+            Log.d("FCM", "New token received: ${token.take(8)}…")
         }
 
         // Сохраняем pending-токен локально для гарантии регистрации при 2FA / ретраях
@@ -51,7 +51,7 @@ class FcmService : FirebaseMessagingService() {
                     userRepository.saveFcmToken(token)
                     internalPrefs.edit().remove("pending_fcm_token").apply()
                     if (org.visorlink.app.BuildConfig.DEBUG) {
-                        Log.d("FCM", "New token saved: $token")
+                        Log.d("FCM", "New token saved: ${token.take(8)}…")
                     }
                 } else {
                     if (org.visorlink.app.BuildConfig.DEBUG) {
@@ -68,6 +68,39 @@ class FcmService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         if (org.visorlink.app.BuildConfig.DEBUG) {
             Log.d("FCM", "Message received: ${message.data}")
+        }
+
+        // E2EE-хендшейк «ключ контента на новый браузер» (TODO §14.3–14.4): data-пуш без chatId.
+        // Просим пользователя одобрить выдачу ключа: хедс-ап уведомление, тап открывает
+        // MainActivity с extra ck_request_id (диалог одобрения, сверка кода с браузером).
+        // Стелс активен — пуш тихо игнорируем: ни уведомления, ни диалога (TODO §14.5).
+        if (message.data["type"] == "ck_handshake") {
+            val requestId = message.data["requestId"]
+            if (requestId.isNullOrBlank()) {
+                Log.w("FCM", "ck_handshake without requestId, skipping")
+                return
+            }
+            if (stealthManager.isStealthActive()) {
+                Log.d("FCM", "Suppressed notification: stealth mode is active")
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.w("FCM", "No notification permission, skipping ck_handshake")
+                return
+            }
+            val settingsPrefs = applicationContext.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE)
+            if (!settingsPrefs.getBoolean("notifications_enabled", true)) {
+                Log.d("FCM", "Notifications are disabled in app settings, skipping ck_handshake")
+                return
+            }
+            NotificationHelper.showCkHandshakeNotification(
+                context = applicationContext,
+                requestId = requestId,
+                client = message.data["client"].orEmpty()
+            )
+            return
         }
 
         val chatId = message.data["chatId"] ?: run {

@@ -91,13 +91,12 @@ val appModule = module {
     single { org.visorlink.app.utils.GoogleDriveAuthManager(androidContext()) }
     single { org.visorlink.app.data.remote.GoogleDriveMediaService(get()) }
 
-    // --- Yandex Disk Emergency Relay (enable_alternative_outbox) ---
-    single { org.visorlink.app.data.remote.yandex.YandexRelayConfigManager(androidContext(), get()) }
-    single { org.visorlink.app.data.remote.yandex.YandexDiskTransportService() }
-    single { org.visorlink.app.data.remote.yandex.YandexDeadDropManager(androidContext(), get(), get()) }
-
     single { SessionRepository(get(), get(), get()) }
     single { AuthRepository(get(), get(), get(), get()) }
+    // Ключи контента (CK) + обёртки PIN/биометрии/recovery (TODO §14.3)
+    single { org.visorlink.app.utils.ContentKeyManager(androidContext(), get()) }
+    // E2EE-хендшейк «ключ контента на новый браузер по одобрению с телефона» (TODO §14.3–14.4)
+    single { org.visorlink.app.utils.CkHandshakeManager() }
     single {
         ChatRepository(
             auth = get(),
@@ -107,7 +106,7 @@ val appModule = module {
             networkMonitor = get(),
             googleDriveAuthManager = get(),
             googleDriveMediaService = get(),
-            yandexDeadDropManager = get()
+            contentKeyManager = get()
         )
     }
     single { UserRepository(get(), get(), get(), androidContext()) }
@@ -147,19 +146,18 @@ val appModule = module {
             functions = get(),
             networkMonitor = get(),
             googleDriveAuthManager = get(),
-            googleDriveMediaService = get(),
-            yandexDeadDropManager = get()
+            googleDriveMediaService = get()
         )
     }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
-    single { org.visorlink.app.utils.FcmManager(androidContext(), get(), get()) }
+    single { org.visorlink.app.utils.FcmManager(androidContext(), get(), get(), get()) }
     single { org.visorlink.app.utils.UsageRankManager(androidContext()) }
 
     viewModel { AppCheckViewModel() }
 
-    viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get(), get(), androidApplication(), get()) }
     viewModel {
         org.visorlink.app.ui.screens.auth.TfaLockViewModel(
             get(), get(), get(), get(), get(), get(),
@@ -243,7 +241,7 @@ val appModule = module {
     }
 
     viewModel { SearchViewModel(get(), get(), get()) }
-    viewModel { ProfileViewModel(get(), get(), get()) }
+    viewModel { ProfileViewModel(get(), get(), get(), get(), androidApplication(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), get(), parameters.get()) }
 
     viewModel { StickerPackViewModel(get(), get(), get()) }
@@ -260,16 +258,16 @@ val appModule = module {
     }
 
     viewModel { CacheViewModel(get(), androidApplication()) }
-    viewModel { StorageViewModel(get(), get(), get()) }
+    viewModel { StorageViewModel(get(), get()) }
     viewModel { StatusViewModel(get(), get()) }
 
-    single { SavedMessagesRepository(get(), androidContext()) }
+    single { SavedMessagesRepository(get(), androidContext(), get()) }
     single { FeedRepository(get(), get()) }
     single { ForwardRepository(get(), get()) }
     single { org.visorlink.app.utils.BiometricPinManager(androidContext()) }
 
-    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get(), get()) }
+    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get(), get(), get()) }
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }

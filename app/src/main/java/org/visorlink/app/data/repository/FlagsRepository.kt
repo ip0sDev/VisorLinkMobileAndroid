@@ -220,7 +220,7 @@ class FlagsRepository(
             request = ConfigRequest(deviceId, timestamp, nonce)
         )
 
-        if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Config response received. Token: ${response.token}")
+        if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Config response received. Token length: ${response.token.length}")
         val applied = parseAndApplyFlags(response.token)
         if (applied) lastFetchAt = SystemClock.elapsedRealtime()
         return applied
@@ -228,7 +228,6 @@ class FlagsRepository(
 
     private fun parseAndApplyFlags(token: String): Boolean {
         return try {
-            if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Parsing JWT Token: $token")
             val jwt = JWT(token)
 
             val allClaimsMap = mutableMapOf<String, Any?>()
@@ -243,7 +242,8 @@ class FlagsRepository(
                     }
                     allClaimsMap[key] = value
                     claimsJson.put(key, value)
-                    if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Claim: $key = $value")
+                    // Значения claims не логируем: среди них бывают секреты (токены)
+                    if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Claim present: $key")
                 }
             }
             // Кэшируем claims для offline-first работы

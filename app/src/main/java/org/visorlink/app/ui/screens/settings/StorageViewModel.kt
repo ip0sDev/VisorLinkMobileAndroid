@@ -19,32 +19,19 @@ data class StorageUiState(
     val folderId: String? = null,
     val isConnecting: Boolean = false,
     val isLoadingConfig: Boolean = false,
-    val error: String? = null,
-    val isYandexRelayAvailable: Boolean = false,
-    val isYandexRelayEnabled: Boolean = true,
-    val yandexRelayCustomToken: String? = null,
-    val yandexRelayHasActiveToken: Boolean = false,
-    val yandexClientId: String = "",
-    val yandexOAuthUrl: String = ""
+    val error: String? = null
 )
 
 class StorageViewModel(
     private val googleDriveAuthManager: GoogleDriveAuthManager,
-    private val googleDriveConfigRepository: GoogleDriveConfigRepository,
-    private val yandexRelayConfigManager: org.visorlink.app.data.remote.yandex.YandexRelayConfigManager? = null
+    private val googleDriveConfigRepository: GoogleDriveConfigRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         StorageUiState(
             isConnected = googleDriveAuthManager.isConnected(),
             accountEmail = googleDriveAuthManager.getConnectedEmail(),
-            folderId = googleDriveAuthManager.getCachedFolderId(),
-            isYandexRelayAvailable = yandexRelayConfigManager?.isFeatureAvailable() == true,
-            isYandexRelayEnabled = yandexRelayConfigManager?.isRelayEnabled() == true,
-            yandexRelayCustomToken = yandexRelayConfigManager?.getCustomToken(),
-            yandexRelayHasActiveToken = !yandexRelayConfigManager?.getActiveToken().isNullOrBlank(),
-            yandexClientId = yandexRelayConfigManager?.getClientId() ?: "",
-            yandexOAuthUrl = yandexRelayConfigManager?.buildOAuthUrl() ?: ""
+            folderId = googleDriveAuthManager.getCachedFolderId()
         )
     )
     val uiState: StateFlow<StorageUiState> = _uiState.asStateFlow()
@@ -69,35 +56,9 @@ class StorageViewModel(
             it.copy(
                 isConnected = googleDriveAuthManager.isConnected(),
                 accountEmail = googleDriveAuthManager.getConnectedEmail(),
-                folderId = googleDriveAuthManager.getCachedFolderId(),
-                isYandexRelayAvailable = yandexRelayConfigManager?.isFeatureAvailable() == true,
-                isYandexRelayEnabled = yandexRelayConfigManager?.isRelayEnabled() == true,
-                yandexRelayCustomToken = yandexRelayConfigManager?.getCustomToken(),
-                yandexRelayHasActiveToken = !yandexRelayConfigManager?.getActiveToken().isNullOrBlank(),
-                yandexClientId = yandexRelayConfigManager?.getClientId() ?: "",
-                yandexOAuthUrl = yandexRelayConfigManager?.buildOAuthUrl() ?: ""
+                folderId = googleDriveAuthManager.getCachedFolderId()
             )
         }
-    }
-
-    fun toggleYandexRelay(enabled: Boolean) {
-        yandexRelayConfigManager?.setRelayEnabled(enabled)
-        refresh()
-    }
-
-    fun setYandexCustomToken(token: String?) {
-        yandexRelayConfigManager?.setCustomToken(token)
-        refresh()
-    }
-
-    fun setYandexClientId(clientId: String?) {
-        yandexRelayConfigManager?.setCustomClientId(clientId)
-        refresh()
-    }
-
-    fun disconnectYandex() {
-        yandexRelayConfigManager?.disconnect()
-        refresh()
     }
 
     fun connectGoogleDrive(onResolutionRequired: (PendingIntent) -> Unit) {
@@ -140,7 +101,8 @@ class StorageViewModel(
     fun handleAuthorizationResult(resultCode: Int, data: Intent?) {
         viewModelScope.launch {
             _uiState.update { it.copy(isConnecting = true, error = null) }
-            Log.d("StorageViewModel", "handleAuthorizationResult: resultCode=$resultCode, data=$data")
+            // Логируем только код результата: в data лежит Intent с access-токеном Google
+            Log.d("StorageViewModel", "handleAuthorizationResult: resultCode=$resultCode")
             if (resultCode != android.app.Activity.RESULT_OK) {
                 try {
                     if (data != null) {

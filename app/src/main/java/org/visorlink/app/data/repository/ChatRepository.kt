@@ -50,7 +50,7 @@ class ChatRepository(
     private val networkMonitor: NetworkMonitor,
     private val googleDriveAuthManager: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
     private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null,
-    private val yandexDeadDropManager: org.visorlink.app.data.remote.yandex.YandexDeadDropManager? = null
+    private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager
 ) {
     val currentUid: String get() = auth.currentUser?.uid ?: ""
 
@@ -223,63 +223,10 @@ class ChatRepository(
                 }
         } else null
 
-        // 4. Polling Yandex Dead-Drop (если включена аварийная доставка)
-        val deadDropJob = if (yandexDeadDropManager?.isAvailable() == true && currentUid.isNotBlank() && chatId.startsWith("emer_")) {
-            launch(Dispatchers.IO) {
-                // Мгновенный первый опрос при входе
-                try {
-                    val initialIncoming = yandexDeadDropManager.pollIncomingMessages(chatId, currentUid)
-                    if (initialIncoming.isNotEmpty()) {
-                        val newMsgs = initialIncoming.mapNotNull {
-                            try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
-                        }
-                        if (newMsgs.isNotEmpty()) {
-                            ChatDataCache.saveMessages(context, chatId, newMsgs)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w("ChatRepo", "Initial dead-drop poll: ${e.message}")
-                }
-
-                while (true) {
-                    kotlinx.coroutines.delay(3000L)
-                    try {
-                        val incoming = yandexDeadDropManager.pollIncomingMessages(chatId, currentUid)
-                        if (incoming.isNotEmpty()) {
-                            val newMsgs = incoming.mapNotNull {
-                                try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
-                            }
-                            if (newMsgs.isNotEmpty()) {
-                                ChatDataCache.saveMessages(context, chatId, newMsgs)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        Log.w("ChatRepo", "Dead-drop poll error: ${e.message}")
-                    }
-                }
-            }
-        } else null
-
         awaitClose {
             reg?.remove()
-            deadDropJob?.cancel()
         }
         send(Unit)
-    }
-
-    suspend fun pollDeadDropNow(chatId: String): List<Message> = withContext(Dispatchers.IO) {
-        val manager = yandexDeadDropManager ?: return@withContext emptyList()
-        if (!manager.isAvailable() || currentUid.isBlank()) return@withContext emptyList()
-        val incoming = manager.pollIncomingMessages(chatId, currentUid)
-        if (incoming.isEmpty()) return@withContext emptyList()
-        val messages = incoming.mapNotNull {
-            try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
-        }
-        if (messages.isNotEmpty()) {
-            ChatDataCache.saveMessages(context, chatId, messages)
-        }
-        messages
     }
 
     suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> = try {
@@ -1297,39 +1244,9 @@ class ChatRepository(
     }
 
     /**
-     * Создаёт или возвращает существующий изолированный аварийный чат (транспорт через Яндекс.Диск).
-     * Аварийный чат не зависит от состояния серверов Firestore и сохраняется в SQLite.
-     */
-    suspend fun getOrCreateEmergencyChat(otherUser: UserProfile): Chat = withContext(Dispatchers.IO) {
-        val sortedUids = listOf(currentUid, otherUser.uid).sorted()
-        val chatId = "emer_${sortedUids.joinToString("_")}"
-        val existing = ChatDataCache.loadChat(context, chatId)
-        if (existing != null) {
-            return@withContext existing
-        }
-
-        val myProfile = ChatDataCache.loadProfile(context, currentUid)
-        val myName = myProfile?.displayName?.ifEmpty { myProfile.username } ?: "Пользователь"
-        val otherName = otherUser.displayName.ifEmpty { otherUser.username }.ifEmpty { "Собеседник" }
-
-        val newChat = Chat(
-            id = chatId,
-            type = "emergency",
-            participants = sortedUids,
-            participantData = mapOf(
-                currentUid to mapOf("username" to (myProfile?.username ?: ""), "displayName" to myName),
-                otherUser.uid to mapOf("username" to otherUser.username, "displayName" to otherName)
-            ),
-            name = otherName,
-            createdAt = Timestamp.now()
-        )
-        ChatDataCache.saveSingleChat(context, currentUid, newChat)
-        newChat
-    }
-
-    /**
      * Зашифрованная синхронизация истории аварийного чата в защищенный Vault пользователя в Firestore.
      * Коллекция users/{uid}/emergency_vault/{chatId} защищена правилами Firestore (доступ только auth.uid == uid).
+     * Шифрование — ключом контента (CK, TODO §14.3); старые v1-документы тихо пере-шифровываются.
      */
     suspend fun syncEmergencyVault(chatId: String): Boolean = withContext(Dispatchers.IO) {
         if (!chatId.startsWith("emer_") || currentUid.isBlank()) return@withContext false
@@ -1342,20 +1259,44 @@ class ChatRepository(
                 jsonArray.put(ChatDataCache.messageToJson(msg))
             }
 
-            // Шифруем данные AES-256-GCM симметричным ключом пользователя
-            val vaultKey = deriveKey("vl_vault_user_salt", currentUid)
+            // Тихая миграция v1 → v2: старый ключ вычислим в приложении (TODO §14.4)
+            val vaultRef = db.collection("users").document(currentUid)
+                .collection("emergency_vault").document(chatId)
+            val existing = try { vaultRef.get().await() } catch (_: Exception) { null }
+            if (existing != null && existing.exists() && existing.getLong("keyVersion") != 2L) {
+                val oldPayload = existing.getString("payload")
+                val oldIv = existing.getString("iv")
+                if (oldPayload != null && oldIv != null) {
+                    val legacyVaultKey = deriveKey("vl_vault_user_salt", currentUid)
+                    val plain = decryptText(oldPayload, oldIv, legacyVaultKey)
+                    if (plain != null) {
+                        val ck = contentKeyManager.getOrCreateCK(currentUid, org.visorlink.app.utils.ContentKeyManager.DOMAIN_VAULT)
+                        val (ct, iv) = encryptText(plain, ck)
+                        vaultRef.set(
+                            mapOf(
+                                "chatId" to chatId, "payload" to ct, "iv" to iv, "keyVersion" to 2L,
+                                "messageCount" to (existing.getLong("messageCount") ?: 0L),
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        ).await()
+                    }
+                }
+            }
+
+            // Шифруем данные ключом контента (CK)
+            val vaultKey = contentKeyManager.getOrCreateCK(currentUid, org.visorlink.app.utils.ContentKeyManager.DOMAIN_VAULT)
             val (encryptedPayload, iv) = encryptText(jsonArray.toString(), vaultKey)
 
             val vaultDoc = hashMapOf<String, Any>(
                 "chatId" to chatId,
                 "payload" to encryptedPayload,
                 "iv" to iv,
+                "keyVersion" to 2L,
                 "messageCount" to messages.size,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
 
-            db.collection("users").document(currentUid)
-                .collection("emergency_vault").document(chatId)
+            vaultRef
                 .set(vaultDoc)
                 .await()
             Log.d("ChatRepo", "Successfully synced emergency vault for $chatId (${messages.size} msgs)")
@@ -1380,13 +1321,16 @@ class ChatRepository(
 
             if (snapshot.isEmpty) return@withContext 0
 
-            val vaultKey = deriveKey("vl_vault_user_salt", currentUid)
+            // v2 — ключ контента; v1 — legacy-ключ (окно миграции, тихо обновится при следующем sync)
+            val ck = contentKeyManager.getOrCreateCK(currentUid, org.visorlink.app.utils.ContentKeyManager.DOMAIN_VAULT)
+            val legacyVaultKey = deriveKey("vl_vault_user_salt", currentUid)
             var restoredCount = 0
 
             for (doc in snapshot.documents) {
                 val chatId = doc.id
                 val payload = doc.getString("payload") ?: continue
                 val iv = doc.getString("iv") ?: continue
+                val vaultKey = if (doc.getLong("keyVersion") == 2L) ck else legacyVaultKey
 
                 val decryptedJson = decryptText(payload, iv, vaultKey) ?: continue
                 val jsonArray = org.json.JSONArray(decryptedJson)

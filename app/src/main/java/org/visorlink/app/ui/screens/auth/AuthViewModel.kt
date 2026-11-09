@@ -52,6 +52,8 @@ class AuthViewModel(
     private val tfaManager: TfaManager,
     private val fcmManager: org.visorlink.app.utils.FcmManager,
     private val tfaHold: TfaGateHold = TfaGateHold(),
+    private val appContext: android.content.Context,
+    private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager
 ) : ViewModel() {
 
     private val initialAuthState = authRepository.getCurrentAuthState()
@@ -480,10 +482,14 @@ class AuthViewModel(
 
     fun logout() {
         stopVerificationPolling()
-        tfaManager.clearCache()
         tfaHold.release()
+        val uid = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid
         viewModelScope.launch {
-            // FCM токены автоматически отзываются при сбросе приложения / логауте
+            // Полная очистка локальных данных аккаунта (TODO §14.6): SQLite-кэш,
+            // Firestore persistence, черновики, расшифрованные медиа, 2FA-кэш, обёртки CK
+            org.visorlink.app.utils.SessionCleanup.wipeAccountLocalData(
+                appContext, uid, tfaManager, contentKeyManager
+            )
             fcmManager.revokeToken()
             authRepository.logout()
         }
