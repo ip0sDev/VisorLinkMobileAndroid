@@ -28,39 +28,21 @@ object SecureVault {
     private const val GCM_TAG_LENGTH = 128
     private const val KEY_SIZE = 256
 
+    @Volatile
+    private var cachedKey: SecretKey? = null
+
     /**
      * Мастер-ключ (свободный — без привязки к аутентификации): используется для
      * прозрачных операций (Vault-синхронизация, контент без PIN-гейта).
      */
-    @Synchronized
     fun masterKey(): SecretKey {
-        val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
-        (keyStore.getKey(MASTER_ALIAS, null) as? SecretKey)?.let { return it }
-
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-        val builder = KeyGenParameterSpec.Builder(
-            MASTER_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-        )
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setRandomizedEncryptionRequired(true)
-            .setKeySize(KEY_SIZE)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            try {
-                builder.setIsStrongBoxBacked(true)
-            } catch (_: Exception) {
-                // StrongBox недоступен на устройстве — используем TEE/Software
-            }
-        }
-        generator.init(builder.build())
-        return try {
-            generator.generateKey()
-        } catch (e: Exception) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                // Повтор без StrongBox
-                generator.init(
-                    KeyGenParameterSpec.Builder(
+        cachedKey?.let { return it }
+        return synchronized(this) {
+            cachedKey ?: run {
+                val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+                (keyStore.getKey(MASTER_ALIAS, null) as? SecretKey) ?: run {
+                    val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
+                    val builder = KeyGenParameterSpec.Builder(
                         MASTER_ALIAS,
                         KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
                     )
@@ -68,10 +50,35 @@ object SecureVault {
                         .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                         .setRandomizedEncryptionRequired(true)
                         .setKeySize(KEY_SIZE)
-                        .build()
-                )
-                generator.generateKey()
-            } else throw e
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        try {
+                            builder.setIsStrongBoxBacked(true)
+                        } catch (_: Exception) {
+                            // StrongBox недоступен на устройстве — используем TEE/Software
+                        }
+                    }
+                    generator.init(builder.build())
+                    try {
+                        generator.generateKey()
+                    } catch (e: Exception) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            // Повтор без StrongBox
+                            generator.init(
+                                KeyGenParameterSpec.Builder(
+                                    MASTER_ALIAS,
+                                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+                                )
+                                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                                    .setRandomizedEncryptionRequired(true)
+                                    .setKeySize(KEY_SIZE)
+                                    .build()
+                            )
+                            generator.generateKey()
+                        } else throw e
+                    }
+                }
+            }.also { cachedKey = it }
         }
     }
 

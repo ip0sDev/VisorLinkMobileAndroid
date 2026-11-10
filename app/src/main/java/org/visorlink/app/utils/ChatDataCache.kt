@@ -10,6 +10,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -124,7 +125,6 @@ class LocalCacheDB(context: Context) : SQLiteOpenHelper(context, DB_NAME, null, 
 }
 
 object ChatDataCache {
-    private var dbHelper: LocalCacheDB? = null
 
     private val _outboxSignal = MutableSharedFlow<Unit>(
         extraBufferCapacity = 64,
@@ -155,11 +155,15 @@ object ChatDataCache {
         awaitClose { collector.cancel() }
     }
 
+    @Volatile
+    private var dbHelper: LocalCacheDB? = null
+    private val dbInitLock = Any()
+    private val dbMutex = kotlinx.coroutines.sync.Mutex()
+
     private fun getDb(context: Context): LocalCacheDB {
-        if (dbHelper == null) {
-            dbHelper = LocalCacheDB(context.applicationContext)
+        return dbHelper ?: synchronized(dbInitLock) {
+            dbHelper ?: LocalCacheDB(context.applicationContext).also { dbHelper = it }
         }
-        return dbHelper!!
     }
 
     fun clearAll(context: Context) {
@@ -176,10 +180,12 @@ object ChatDataCache {
     suspend fun pruneOldData(context: Context, days: Int) = withContext(Dispatchers.IO) {
         if (days <= 0) return@withContext
         try {
-            val db = getDb(context).writableDatabase
-            val threshold = System.currentTimeMillis() / 1000L - (days * 24 * 60 * 60)
-            db.execSQL("DELETE FROM messages WHERE ts < ?", arrayOf(threshold.toString()))
-            Log.d(TAG, "Pruned messages older than $days days (threshold: $threshold)")
+            dbMutex.withLock {
+                val db = getDb(context).writableDatabase
+                val threshold = System.currentTimeMillis() / 1000L - (days * 24 * 60 * 60)
+                db.execSQL("DELETE FROM messages WHERE ts < ?", arrayOf(threshold.toString()))
+                Log.d(TAG, "Pruned messages older than $days days (threshold: $threshold)")
+            }
         } catch (e: Exception) { Log.e(TAG, "Failed to prune old data", e) }
     }
 
@@ -189,21 +195,25 @@ object ChatDataCache {
         withContext(Dispatchers.IO) {
             val uuid = UUID.randomUUID().toString().take(8)
             val id = "queued_${System.currentTimeMillis()}_$uuid"
-            try {
-                DiagnosticLogBuffer.i(TAG, "addToOutbox starting: id=$id, chatId=$chatId, type=$type")
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("INSERT INTO outbox (id, chat_id, type, data, ts, status) VALUES (?, ?, ?, ?, ?, 0)")
-                stmt.bindString(1, id)
-                stmt.bindString(2, chatId)
-                stmt.bindString(3, type)
-                stmt.bindString(4, data.toString())
-                stmt.bindLong(5, System.currentTimeMillis())
-                val rowId = stmt.executeInsert()
-                DiagnosticLogBuffer.i(TAG, "addToOutbox inserted row: rowId=$rowId, id=$id")
-                _outboxSignal.tryEmit(Unit)
-            } catch (e: Exception) {
-                DiagnosticLogBuffer.e(TAG, "Failed to add to outbox (id=$id): ${e.message}", e)
-                Log.e(TAG, "Failed to add to outbox (id=$id)", e)
+            dbMutex.withLock {
+                try {
+                    DiagnosticLogBuffer.i(TAG, "addToOutbox starting: id=$id, chatId=$chatId, type=$type")
+                    val db = getDb(context).writableDatabase
+                    val values = android.content.ContentValues().apply {
+                        put("id", id)
+                        put("chat_id", chatId)
+                        put("type", type)
+                        put("data", data.toString())
+                        put("ts", System.currentTimeMillis())
+                        put("status", 0)
+                    }
+                    val rowId = db.insertWithOnConflict("outbox", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+                    DiagnosticLogBuffer.i(TAG, "addToOutbox inserted row: rowId=$rowId, id=$id")
+                    _outboxSignal.tryEmit(Unit)
+                } catch (e: Exception) {
+                    DiagnosticLogBuffer.e(TAG, "Failed to add to outbox (id=$id): ${e.message}", e)
+                    Log.e(TAG, "Failed to add to outbox (id=$id)", e)
+                }
             }
             id
         }
@@ -256,11 +266,14 @@ object ChatDataCache {
     suspend fun updateOutboxProgress(context: Context, id: String, progress: Float) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("UPDATE outbox SET progress=? WHERE id=?")
-                stmt.bindDouble(1, progress.toDouble())
-                stmt.bindString(2, id)
-                stmt.executeUpdateDelete()
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.compileStatement("UPDATE outbox SET progress=? WHERE id=?").use { stmt ->
+                        stmt.bindDouble(1, progress.toDouble())
+                        stmt.bindString(2, id)
+                        stmt.executeUpdateDelete()
+                    }
+                }
                 _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox progress", e) }
         }
@@ -268,13 +281,16 @@ object ChatDataCache {
     suspend fun updateOutboxRetry(context: Context, id: String, retryCount: Int, error: String?) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("UPDATE outbox SET retry_count=?, last_attempt=?, last_error=? WHERE id=?")
-                stmt.bindLong(1, retryCount.toLong())
-                stmt.bindLong(2, System.currentTimeMillis())
-                if (error == null) stmt.bindNull(3) else stmt.bindString(3, error)
-                stmt.bindString(4, id)
-                stmt.executeUpdateDelete()
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.compileStatement("UPDATE outbox SET retry_count=?, last_attempt=?, last_error=? WHERE id=?").use { stmt ->
+                        stmt.bindLong(1, retryCount.toLong())
+                        stmt.bindLong(2, System.currentTimeMillis())
+                        if (error == null) stmt.bindNull(3) else stmt.bindString(3, error)
+                        stmt.bindString(4, id)
+                        stmt.executeUpdateDelete()
+                    }
+                }
                 _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox retry", e) }
         }
@@ -282,11 +298,14 @@ object ChatDataCache {
     suspend fun updateOutboxStatus(context: Context, id: String, status: Int) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("UPDATE outbox SET status=? WHERE id=?")
-                stmt.bindLong(1, status.toLong())
-                stmt.bindString(2, id)
-                stmt.executeUpdateDelete()
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.compileStatement("UPDATE outbox SET status=? WHERE id=?").use { stmt ->
+                        stmt.bindLong(1, status.toLong())
+                        stmt.bindString(2, id)
+                        stmt.executeUpdateDelete()
+                    }
+                }
                 _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to update outbox status", e) }
         }
@@ -294,10 +313,13 @@ object ChatDataCache {
     suspend fun retryOutbox(context: Context, id: String) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("UPDATE outbox SET status=0, retry_count=0, last_attempt=0, last_error=NULL WHERE id=?")
-                stmt.bindString(1, id)
-                stmt.executeUpdateDelete()
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.compileStatement("UPDATE outbox SET status=0, retry_count=0, last_attempt=0, last_error=NULL WHERE id=?").use { stmt ->
+                        stmt.bindString(1, id)
+                        stmt.executeUpdateDelete()
+                    }
+                }
                 _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to retry outbox action", e) }
         }
@@ -306,17 +328,20 @@ object ChatDataCache {
         withContext(Dispatchers.IO) {
             if (confirmedIds.isEmpty()) return@withContext
             try {
-                val db = getDb(context).writableDatabase
-                db.beginTransaction()
-                try {
-                    val stmt = db.compileStatement("DELETE FROM outbox WHERE id=?")
-                    confirmedIds.forEach { id ->
-                        stmt.bindString(1, id)
-                        stmt.executeUpdateDelete()
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.beginTransactionNonExclusive()
+                    try {
+                        db.compileStatement("DELETE FROM outbox WHERE id=?").use { stmt ->
+                            confirmedIds.forEach { id ->
+                                stmt.bindString(1, id)
+                                stmt.executeUpdateDelete()
+                            }
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
                     }
-                    db.setTransactionSuccessful()
-                } finally {
-                    db.endTransaction()
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to cleanup outbox", e) }
         }
@@ -340,21 +365,28 @@ object ChatDataCache {
     suspend fun saveChatList(context: Context, uid: String, chats: List<Chat>) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                db.beginTransaction()
-                try {
-                    // Удаляем только обычные чаты, сохраняя локальные аварийные чаты
-                    db.delete("chats", "uid=? AND chat_id NOT LIKE 'emer_%'", arrayOf(uid))
-                    val stmt = db.compileStatement("INSERT INTO chats (uid, chat_id, data) VALUES (?, ?, ?)")
-                    chats.forEach { chat ->
-                        stmt.bindString(1, uid)
-                        stmt.bindString(2, chat.id)
-                        stmt.bindString(3, CacheCrypto.encrypt(chat.toJson().toString()))
-                        stmt.executeInsert()
+                // Шифруем данные ДО открытия транзакции базы данных!
+                val prepared = chats.map { chat ->
+                    Triple(uid, chat.id, CacheCrypto.encrypt(chat.toJson().toString()))
+                }
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.beginTransactionNonExclusive()
+                    try {
+                        // Удаляем только обычные чаты, сохраняя локальные аварийные чаты
+                        db.delete("chats", "uid=? AND chat_id NOT LIKE 'emer_%'", arrayOf(uid))
+                        db.compileStatement("INSERT INTO chats (uid, chat_id, data) VALUES (?, ?, ?)").use { stmt ->
+                            prepared.forEach { (u, cId, enc) ->
+                                stmt.bindString(1, u)
+                                stmt.bindString(2, cId)
+                                stmt.bindString(3, enc)
+                                stmt.executeInsert()
+                            }
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
                     }
-                    db.setTransactionSuccessful()
-                } finally {
-                    db.endTransaction()
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to save chat list", e) }
         }
@@ -362,12 +394,16 @@ object ChatDataCache {
     suspend fun saveSingleChat(context: Context, uid: String, chat: Chat) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("INSERT OR REPLACE INTO chats (uid, chat_id, data) VALUES (?, ?, ?)")
-                stmt.bindString(1, uid)
-                stmt.bindString(2, chat.id)
-                stmt.bindString(3, CacheCrypto.encrypt(chat.toJson().toString()))
-                stmt.executeInsert()
+                val enc = CacheCrypto.encrypt(chat.toJson().toString())
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.compileStatement("INSERT OR REPLACE INTO chats (uid, chat_id, data) VALUES (?, ?, ?)").use { stmt ->
+                        stmt.bindString(1, uid)
+                        stmt.bindString(2, chat.id)
+                        stmt.bindString(3, enc)
+                        stmt.executeInsert()
+                    }
+                }
             } catch (e: Exception) { Log.e(TAG, "Failed to save single chat ${chat.id}", e) }
         }
 
@@ -417,20 +453,27 @@ object ChatDataCache {
     suspend fun saveMessages(context: Context, chatId: String, messages: List<Message>) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                db.beginTransaction()
-                try {
-                    val stmt = db.compileStatement("INSERT OR REPLACE INTO messages (chat_id, msg_id, ts, data) VALUES (?, ?, ?, ?)")
-                    messages.forEach { msg ->
-                        stmt.bindString(1, chatId)
-                        stmt.bindString(2, msg.id)
-                        stmt.bindLong(3, msg.createdAt?.seconds ?: 0L)
-                        stmt.bindString(4, CacheCrypto.encrypt(msg.toJson().toString()))
-                        stmt.executeInsert()
+                // Шифруем данные ДО открытия транзакции базы данных!
+                val prepared = messages.map { msg ->
+                    Triple(msg.id, msg.createdAt?.seconds ?: 0L, CacheCrypto.encrypt(msg.toJson().toString()))
+                }
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.beginTransactionNonExclusive()
+                    try {
+                        db.compileStatement("INSERT OR REPLACE INTO messages (chat_id, msg_id, ts, data) VALUES (?, ?, ?, ?)").use { stmt ->
+                            prepared.forEach { (msgId, ts, enc) ->
+                                stmt.bindString(1, chatId)
+                                stmt.bindString(2, msgId)
+                                stmt.bindLong(3, ts)
+                                stmt.bindString(4, enc)
+                                stmt.executeInsert()
+                            }
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
                     }
-                    db.setTransactionSuccessful()
-                } finally {
-                    db.endTransaction()
                 }
                 notifyCacheUpdated(chatId)
             } catch (e: Exception) { Log.e(TAG, "Failed to save messages for $chatId", e) }
@@ -457,30 +500,38 @@ object ChatDataCache {
     suspend fun saveStickerPacks(context: Context, uid: String, packs: List<StickerPack>) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
                 val effectiveUid = uid.ifBlank { "global" }
-                db.beginTransaction()
-                try {
-                    // Полностью вычищаем старые стикеры, чтобы удаленные на сервере не оставались в SQLite
-                    db.delete("stickers", null, null)
-                    val stmt = db.compileStatement("INSERT INTO stickers (uid, pack_id, data) VALUES (?, ?, ?)")
-                    packs.forEach { pack ->
-                        stmt.bindString(1, effectiveUid)
-                        stmt.bindString(2, pack.id)
-                        stmt.bindString(3, CacheCrypto.encrypt(pack.toJson().toString()))
-                        stmt.executeInsert()
+                val prepared = packs.map { pack ->
+                    Pair(pack.id, CacheCrypto.encrypt(pack.toJson().toString()))
+                }
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.beginTransactionNonExclusive()
+                    try {
+                        db.delete("stickers", null, null)
+                        db.compileStatement("INSERT INTO stickers (uid, pack_id, data) VALUES (?, ?, ?)").use { stmt ->
+                            packs.indices.forEach { i ->
+                                val (packId, enc) = prepared[i]
+                                stmt.bindString(1, effectiveUid)
+                                stmt.bindString(2, packId)
+                                stmt.bindString(3, enc)
+                                stmt.executeInsert()
+                            }
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
                     }
-                    db.setTransactionSuccessful()
-                } finally {
-                    db.endTransaction()
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to save sticker packs", e) }
         }
 
     suspend fun deleteStickerPack(context: Context, packId: String) = withContext(Dispatchers.IO) {
         try {
-            val db = getDb(context).writableDatabase
-            db.delete("stickers", "pack_id=?", arrayOf(packId))
+            dbMutex.withLock {
+                val db = getDb(context).writableDatabase
+                db.delete("stickers", "pack_id=?", arrayOf(packId))
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to delete sticker pack $packId from cache", e)
         }
@@ -503,8 +554,10 @@ object ChatDataCache {
 
     suspend fun clearAllStickerPacks(context: Context) = withContext(Dispatchers.IO) {
         try {
-            val db = getDb(context).writableDatabase
-            db.delete("stickers", null, null)
+            dbMutex.withLock {
+                val db = getDb(context).writableDatabase
+                db.delete("stickers", null, null)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear sticker packs", e)
         }
@@ -515,11 +568,15 @@ object ChatDataCache {
     suspend fun saveProfile(context: Context, profile: UserProfile) =
         withContext(Dispatchers.IO) {
             try {
-                val db = getDb(context).writableDatabase
-                val stmt = db.compileStatement("INSERT OR REPLACE INTO profiles (uid, data) VALUES (?, ?)")
-                stmt.bindString(1, profile.uid)
-                stmt.bindString(2, CacheCrypto.encrypt(profile.toJson().toString()))
-                stmt.executeInsert()
+                val enc = CacheCrypto.encrypt(profile.toJson().toString())
+                dbMutex.withLock {
+                    val db = getDb(context).writableDatabase
+                    db.compileStatement("INSERT OR REPLACE INTO profiles (uid, data) VALUES (?, ?)").use { stmt ->
+                        stmt.bindString(1, profile.uid)
+                        stmt.bindString(2, enc)
+                        stmt.executeInsert()
+                    }
+                }
             } catch (e: Exception) { Log.e(TAG, "Failed to save profile ${profile.uid}", e) }
         }
 
