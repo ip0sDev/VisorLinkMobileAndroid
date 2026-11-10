@@ -22,35 +22,81 @@ private const val TAG = "ChatDataCache"
 
 /**
  * Шифрование data-колонок локального кэша ключом AndroidKeyStore (TODO §14.6).
- * Кэш не критичен: при сбое шифрования пишем как есть (fail-open для кэша),
- * при сбое расшифровки строка отбрасывается парсером. Старые плейнтекст-строки
- * читаются как есть — ленивая миграция по мере перезаписи.
+ * Для исключения блокировок IPC к аппаратному Keystore/TEE на каждой строке SQLite
+ * используется симметричный ключ в RAM, обёрнутый мастер-ключом Keystore.
+ * Старые строки, зашифрованные напрямую мастер-ключом (enc1:), прозрачно читаются
+ * и мигрируют на быстрый ключ (enc2:) по мере перезаписи.
  */
 private object CacheCrypto {
-    private const val PREFIX = "enc1:"
+    private const val PREFIX_V1 = "enc1:"
+    private const val PREFIX_V2 = "enc2:"
+    private const val PREFS_NAME = "vl_cache_crypto_prefs"
+    private const val KEY_WRAPPED_FAST = "wrapped_fast_key_v2"
 
-    fun encrypt(plain: String): String = try {
+    @Volatile
+    private var fastSecretKey: javax.crypto.SecretKey? = null
+    private val keyLock = Any()
+
+    fun initKey(context: Context): javax.crypto.SecretKey? {
+        fastSecretKey?.let { return it }
+        synchronized(keyLock) {
+            fastSecretKey?.let { return it }
+            return try {
+                val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val existingBlob = prefs.getString(KEY_WRAPPED_FAST, null)
+                val unwrapped = existingBlob?.let { SecureVault.unwrapSecretKey(it) }
+                if (unwrapped != null) {
+                    fastSecretKey = unwrapped
+                    unwrapped
+                } else {
+                    val raw = ByteArray(32).also { java.security.SecureRandom().nextBytes(it) }
+                    val newKey = javax.crypto.spec.SecretKeySpec(raw, "AES")
+                    val wrapped = SecureVault.wrapKey(raw)
+                    prefs.edit().putString(KEY_WRAPPED_FAST, wrapped).apply()
+                    fastSecretKey = newKey
+                    newKey
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    fun encrypt(context: Context, plain: String): String = try {
+        val key = initKey(context) ?: SecureVault.masterKey()
+        val prefix = if (key === fastSecretKey && fastSecretKey != null) PREFIX_V2 else PREFIX_V1
         val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, SecureVault.masterKey())
+        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, key)
         val ct = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
         val iv = cipher.iv ?: return plain
-        PREFIX + android.util.Base64.encodeToString(iv, android.util.Base64.NO_WRAP) + ":" +
+        prefix + android.util.Base64.encodeToString(iv, android.util.Base64.NO_WRAP) + ":" +
                 android.util.Base64.encodeToString(ct, android.util.Base64.NO_WRAP)
     } catch (_: Exception) {
         plain
     }
 
-    fun decrypt(stored: String): String = try {
-        if (!stored.startsWith(PREFIX)) {
-            stored
-        } else {
-            val p = stored.split(":")
-            val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(
-                javax.crypto.Cipher.DECRYPT_MODE, SecureVault.masterKey(),
-                javax.crypto.spec.GCMParameterSpec(128, android.util.Base64.decode(p[1], android.util.Base64.NO_WRAP))
-            )
-            String(cipher.doFinal(android.util.Base64.decode(p[2], android.util.Base64.NO_WRAP)), Charsets.UTF_8)
+    fun decrypt(context: Context, stored: String): String = try {
+        when {
+            stored.startsWith(PREFIX_V2) -> {
+                val key = initKey(context) ?: return stored
+                val p = stored.split(":")
+                val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(
+                    javax.crypto.Cipher.DECRYPT_MODE, key,
+                    javax.crypto.spec.GCMParameterSpec(128, android.util.Base64.decode(p[1], android.util.Base64.NO_WRAP))
+                )
+                String(cipher.doFinal(android.util.Base64.decode(p[2], android.util.Base64.NO_WRAP)), Charsets.UTF_8)
+            }
+            stored.startsWith(PREFIX_V1) -> {
+                val p = stored.split(":")
+                val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(
+                    javax.crypto.Cipher.DECRYPT_MODE, SecureVault.masterKey(),
+                    javax.crypto.spec.GCMParameterSpec(128, android.util.Base64.decode(p[1], android.util.Base64.NO_WRAP))
+                )
+                String(cipher.doFinal(android.util.Base64.decode(p[2], android.util.Base64.NO_WRAP)), Charsets.UTF_8)
+            }
+            else -> stored
         }
     } catch (_: Exception) {
         stored
@@ -159,6 +205,7 @@ object ChatDataCache {
     private var dbHelper: LocalCacheDB? = null
     private val dbInitLock = Any()
     private val dbMutex = kotlinx.coroutines.sync.Mutex()
+    private val outboxMutex = kotlinx.coroutines.sync.Mutex()
 
     private fun getDb(context: Context): LocalCacheDB {
         return dbHelper ?: synchronized(dbInitLock) {
@@ -192,10 +239,10 @@ object ChatDataCache {
     // ── Outbox ───────────────────────────────────────────────────────────────
 
     suspend fun addToOutbox(context: Context, chatId: String, type: String, data: JSONObject): String =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
             val uuid = UUID.randomUUID().toString().take(8)
             val id = "queued_${System.currentTimeMillis()}_$uuid"
-            dbMutex.withLock {
+            outboxMutex.withLock {
                 try {
                     DiagnosticLogBuffer.i(TAG, "addToOutbox starting: id=$id, chatId=$chatId, type=$type")
                     val db = getDb(context).writableDatabase
@@ -236,7 +283,7 @@ object ChatDataCache {
                     while (cursor.moveToNext()) {
                         try {
                             val rawData = cursor.getString(3).orEmpty()
-                            val decrypted = CacheCrypto.decrypt(rawData)
+                            val decrypted = CacheCrypto.decrypt(context, rawData)
                             val json = if (decrypted.isNotBlank()) {
                                 try { JSONObject(decrypted) } catch (_: Exception) { JSONObject(rawData) }
                             } else {
@@ -264,9 +311,9 @@ object ChatDataCache {
         }
 
     suspend fun updateOutboxProgress(context: Context, id: String, progress: Float) =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
             try {
-                dbMutex.withLock {
+                outboxMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.compileStatement("UPDATE outbox SET progress=? WHERE id=?").use { stmt ->
                         stmt.bindDouble(1, progress.toDouble())
@@ -279,9 +326,9 @@ object ChatDataCache {
         }
 
     suspend fun updateOutboxRetry(context: Context, id: String, retryCount: Int, error: String?) =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
             try {
-                dbMutex.withLock {
+                outboxMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.compileStatement("UPDATE outbox SET retry_count=?, last_attempt=?, last_error=? WHERE id=?").use { stmt ->
                         stmt.bindLong(1, retryCount.toLong())
@@ -296,9 +343,9 @@ object ChatDataCache {
         }
 
     suspend fun updateOutboxStatus(context: Context, id: String, status: Int) =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
             try {
-                dbMutex.withLock {
+                outboxMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.compileStatement("UPDATE outbox SET status=? WHERE id=?").use { stmt ->
                         stmt.bindLong(1, status.toLong())
@@ -311,9 +358,9 @@ object ChatDataCache {
         }
 
     suspend fun retryOutbox(context: Context, id: String) =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
             try {
-                dbMutex.withLock {
+                outboxMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.compileStatement("UPDATE outbox SET status=0, retry_count=0, last_attempt=0, last_error=NULL WHERE id=?").use { stmt ->
                         stmt.bindString(1, id)
@@ -325,10 +372,10 @@ object ChatDataCache {
         }
 
     suspend fun cleanupOutbox(context: Context, confirmedIds: List<String>) =
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
             if (confirmedIds.isEmpty()) return@withContext
             try {
-                dbMutex.withLock {
+                outboxMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.beginTransactionNonExclusive()
                     try {
@@ -343,6 +390,7 @@ object ChatDataCache {
                         db.endTransaction()
                     }
                 }
+                _outboxSignal.tryEmit(Unit)
             } catch (e: Exception) { Log.e(TAG, "Failed to cleanup outbox", e) }
         }
 
@@ -367,7 +415,7 @@ object ChatDataCache {
             try {
                 // Шифруем данные ДО открытия транзакции базы данных!
                 val prepared = chats.map { chat ->
-                    Triple(uid, chat.id, CacheCrypto.encrypt(chat.toJson().toString()))
+                    Triple(uid, chat.id, CacheCrypto.encrypt(context, chat.toJson().toString()))
                 }
                 dbMutex.withLock {
                     val db = getDb(context).writableDatabase
@@ -394,7 +442,7 @@ object ChatDataCache {
     suspend fun saveSingleChat(context: Context, uid: String, chat: Chat) =
         withContext(Dispatchers.IO) {
             try {
-                val enc = CacheCrypto.encrypt(chat.toJson().toString())
+                val enc = CacheCrypto.encrypt(context, chat.toJson().toString())
                 dbMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.compileStatement("INSERT OR REPLACE INTO chats (uid, chat_id, data) VALUES (?, ?, ?)").use { stmt ->
@@ -428,7 +476,7 @@ object ChatDataCache {
                 val db = getDb(context).readableDatabase
                 db.rawQuery("SELECT data FROM chats WHERE uid=?", arrayOf(uid)).use { cursor ->
                     while (cursor.moveToNext()) {
-                        try { list.add(JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toChat()) } catch(_: Exception) {}
+                        try { list.add(JSONObject(CacheCrypto.decrypt(context, cursor.getString(0))).toChat()) } catch(_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load chat list", e) }
@@ -441,7 +489,7 @@ object ChatDataCache {
                 val db = getDb(context).readableDatabase
                 db.rawQuery("SELECT data FROM chats WHERE chat_id=? LIMIT 1", arrayOf(chatId)).use { cursor ->
                     if (cursor.moveToFirst()) {
-                        try { return@withContext JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toChat() } catch (_: Exception) {}
+                        try { return@withContext JSONObject(CacheCrypto.decrypt(context, cursor.getString(0))).toChat() } catch (_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load chat from cache", e) }
@@ -455,7 +503,7 @@ object ChatDataCache {
             try {
                 // Шифруем данные ДО открытия транзакции базы данных!
                 val prepared = messages.map { msg ->
-                    Triple(msg.id, msg.createdAt?.seconds ?: 0L, CacheCrypto.encrypt(msg.toJson().toString()))
+                    Triple(msg.id, msg.createdAt?.seconds ?: 0L, CacheCrypto.encrypt(context, msg.toJson().toString()))
                 }
                 dbMutex.withLock {
                     val db = getDb(context).writableDatabase
@@ -487,7 +535,7 @@ object ChatDataCache {
                 // Выбираем все сообщения для оффлайн-режима
                 db.rawQuery("SELECT data FROM messages WHERE chat_id=? ORDER BY ts DESC", arrayOf(chatId)).use { cursor ->
                     while (cursor.moveToNext()) {
-                        try { list.add(JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toMessage()) } catch(_: Exception) {}
+                        try { list.add(JSONObject(CacheCrypto.decrypt(context, cursor.getString(0))).toMessage()) } catch(_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load messages", e) }
@@ -502,7 +550,7 @@ object ChatDataCache {
             try {
                 val effectiveUid = uid.ifBlank { "global" }
                 val prepared = packs.map { pack ->
-                    Pair(pack.id, CacheCrypto.encrypt(pack.toJson().toString()))
+                    Pair(pack.id, CacheCrypto.encrypt(context, pack.toJson().toString()))
                 }
                 dbMutex.withLock {
                     val db = getDb(context).writableDatabase
@@ -545,7 +593,7 @@ object ChatDataCache {
                 val effectiveUid = uid.ifBlank { "global" }
                 db.rawQuery("SELECT data FROM stickers WHERE uid=? OR uid='global'", arrayOf(effectiveUid)).use { cursor ->
                     while (cursor.moveToNext()) {
-                        try { list.add(JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toStickerPack()) } catch(_: Exception) {}
+                        try { list.add(JSONObject(CacheCrypto.decrypt(context, cursor.getString(0))).toStickerPack()) } catch(_: Exception) {}
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load sticker packs", e) }
@@ -568,7 +616,7 @@ object ChatDataCache {
     suspend fun saveProfile(context: Context, profile: UserProfile) =
         withContext(Dispatchers.IO) {
             try {
-                val enc = CacheCrypto.encrypt(profile.toJson().toString())
+                val enc = CacheCrypto.encrypt(context, profile.toJson().toString())
                 dbMutex.withLock {
                     val db = getDb(context).writableDatabase
                     db.compileStatement("INSERT OR REPLACE INTO profiles (uid, data) VALUES (?, ?)").use { stmt ->
@@ -586,7 +634,7 @@ object ChatDataCache {
                 val db = getDb(context).readableDatabase
                 db.rawQuery("SELECT data FROM profiles WHERE uid=?", arrayOf(uid)).use { cursor ->
                     if (cursor.moveToFirst()) {
-                        return@withContext JSONObject(CacheCrypto.decrypt(cursor.getString(0))).toUserProfile()
+                        return@withContext JSONObject(CacheCrypto.decrypt(context, cursor.getString(0))).toUserProfile()
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load profile", e) }

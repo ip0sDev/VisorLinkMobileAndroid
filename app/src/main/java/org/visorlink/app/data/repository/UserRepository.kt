@@ -44,6 +44,7 @@ class UserRepository(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val memoryProfiles = java.util.concurrent.ConcurrentHashMap<String, MutableStateFlow<UserProfile?>>()
+    private val sharedProfileFlows = java.util.concurrent.ConcurrentHashMap<String, SharedFlow<UserProfile?>>()
     private val _deniedUids = MutableStateFlow<Set<String>>(emptySet())
     /**
      * Профили, которые сервер закрыл правилами (`PERMISSION_DENIED`: этот пользователь заблокировал
@@ -52,6 +53,8 @@ class UserRepository(
     val deniedUids: StateFlow<Set<String>> = _deniedUids.asStateFlow()
 
     private val lastFetchTimes = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    fun getMemoryCachedProfile(uid: String): UserProfile? = memoryProfiles[uid]?.value
 
     fun updateCachedProfile(uid: String, update: (UserProfile) -> UserProfile) {
         val current = memoryProfiles[uid]?.value
@@ -86,17 +89,38 @@ class UserRepository(
 
     fun currentUserFlow(): Flow<UserProfile?> = userProfileFlow(auth.currentUser?.uid ?: "")
 
-    fun userProfileFlow(uid: String): Flow<UserProfile?> = channelFlow {
-        if (uid.isEmpty()) { send(null); close(); return@channelFlow }
+    fun userProfileFlow(uid: String): Flow<UserProfile?> {
+        if (uid.isEmpty()) return flowOf(null)
+        return sharedProfileFlows.getOrPut(uid) {
+            createUserProfileFlow(uid).shareIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 60_000L, replayExpirationMillis = Long.MAX_VALUE),
+                replay = 1
+            )
+        }
+    }
 
+    private fun createUserProfileFlow(uid: String): Flow<UserProfile?> = channelFlow {
         val stateFlow = memoryProfiles.getOrPut(uid) {
             MutableStateFlow(null)
         }
 
+        // 1. Мгновенно отдаём профиль из RAM-кэша, если он уже загружен
+        stateFlow.value?.let { trySend(it) }
+
+        // 2. Загружаем профиль из локального SQLite-кэша на старте (до ответа сети)
         launch(Dispatchers.IO) {
             val cached = stateFlow.value ?: ChatDataCache.loadProfile(context, uid)
-            if (cached != null) {
+            if (cached != null && stateFlow.value == null) {
                 stateFlow.value = cached
+                trySend(cached)
+            }
+        }
+
+        // 3. Транслируем локальные обновления из stateFlow (например, updateCachedProfile)
+        launch {
+            stateFlow.filterNotNull().collect { profile ->
+                trySend(profile)
             }
         }
 
@@ -110,10 +134,15 @@ class UserRepository(
                     _deniedUids.update { if (uid in it) it - uid else it }
                 }
                 val net = snap?.toUserProfileOrNull()
-                trySend(net)
                 if (net != null) {
+                    val prev = stateFlow.value
                     stateFlow.value = net
-                    launch(Dispatchers.IO) { ChatDataCache.saveProfile(context, net) }
+                    trySend(net)
+                    if (prev != net) {
+                        launch(Dispatchers.IO) { ChatDataCache.saveProfile(context, net) }
+                    }
+                } else if (stateFlow.value == null) {
+                    trySend(null)
                 }
             }
         awaitClose { reg.remove() }

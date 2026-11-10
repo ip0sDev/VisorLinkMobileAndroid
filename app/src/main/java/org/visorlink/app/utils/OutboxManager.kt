@@ -210,49 +210,74 @@ class OutboxManager(
 
                     launch {
                         try {
-                            for (action in actions) {
-                                if (!networkMonitor.isOnline.value || !isActive) break
-                                if (inFlightIds.contains(action.id)) continue
+                            var currentBatch = actions
+                            while (currentBatch.isNotEmpty() && networkMonitor.isOnline.value && isActive) {
+                                var batchAborted = false
+                                for (action in currentBatch) {
+                                    if (!networkMonitor.isOnline.value || !isActive) {
+                                        batchAborted = true
+                                        break
+                                    }
+                                    if (inFlightIds.contains(action.id)) continue
 
-                                inFlightIds.add(action.id)
-                                val job = coroutineContext[Job]
-                                if (job != null) inFlightJobs[action.id] = job
-                                DiagnosticLogBuffer.i(TAG, "Outbox starting action: id=${action.id}, type=${action.type}, chatId=${action.chatId}, retry=${action.retryCount}")
-                                try {
-                                    if (action.type == "image" || action.type == "voice" || action.type == "video") {
-                                        mediaSemaphore.withPermit {
-                                            withTimeout(120_000) {
+                                    inFlightIds.add(action.id)
+                                    val job = coroutineContext[Job]
+                                    if (job != null) inFlightJobs[action.id] = job
+                                    DiagnosticLogBuffer.i(TAG, "Outbox starting action: id=${action.id}, type=${action.type}, chatId=${action.chatId}, retry=${action.retryCount}")
+                                    try {
+                                        if (action.type == "image" || action.type == "voice" || action.type == "video") {
+                                            mediaSemaphore.withPermit {
+                                                withTimeout(120_000) {
+                                                    processAction(action)
+                                                }
+                                            }
+                                        } else {
+                                            withTimeout(60_000) {
                                                 processAction(action)
                                             }
                                         }
-                                    } else {
-                                        withTimeout(60_000) {
-                                            processAction(action)
+                                        DiagnosticLogBuffer.i(TAG, "Outbox action completed: id=${action.id}")
+                                        outboxDataSource.updateStatus(context, action.id, 1)
+                                    } catch (e: Exception) {
+                                        // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
+                                        // Таймаут — тоже CancellationException, но он считается обычной неудачей.
+                                        if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                                        DiagnosticLogBuffer.e(TAG, "Outbox action failed: id=${action.id}, retry=${action.retryCount}, error=${e.message}", e)
+                                        val nextRetry = action.retryCount + 1
+                                        outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
+                                        // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
+                                        // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут (даём 2 попытки на случай гонки кулдауна)
+                                        if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || (isPermissionDenied(e) && nextRetry >= 2)) {
+                                            outboxDataSource.updateStatus(context, action.id, 2)
                                         }
+                                        // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
+                                        batchAborted = true
+                                        break
+                                    } finally {
+                                        inFlightJobs.remove(action.id)
+                                        inFlightIds.remove(action.id)
                                     }
-                                    DiagnosticLogBuffer.i(TAG, "Outbox action completed: id=${action.id}")
-                                    outboxDataSource.updateStatus(context, action.id, 1)
-                                } catch (e: Exception) {
-                                    // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
-                                    // Таймаут — тоже CancellationException, но он считается обычной неудачей.
-                                    if (e is CancellationException && e !is TimeoutCancellationException) throw e
-                                    DiagnosticLogBuffer.e(TAG, "Outbox action failed: id=${action.id}, retry=${action.retryCount}, error=${e.message}", e)
-                                    val nextRetry = action.retryCount + 1
-                                    outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
-                                    // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
-                                    // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут (даём 2 попытки на случай гонки кулдауна)
-                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || (isPermissionDenied(e) && nextRetry >= 2)) {
-                                        outboxDataSource.updateStatus(context, action.id, 2)
-                                    }
-                                    // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
-                                    break
-                                } finally {
-                                    inFlightJobs.remove(action.id)
-                                    inFlightIds.remove(action.id)
+                                }
+                                if (batchAborted || !networkMonitor.isOnline.value || !isActive) break
+
+                                // Перепроверяем очередь этого чата: пока шла отправка, могли поступить новые сообщения
+                                val refreshedNow = System.currentTimeMillis()
+                                val refreshed = try {
+                                    outboxDataSource.loadPending(context)
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                                currentBatch = refreshed.filter { action ->
+                                    action.chatId == chatId &&
+                                        action.status == 0 &&
+                                        !inFlightIds.contains(action.id) &&
+                                        action.retryCount < MAX_RETRIES &&
+                                        (refreshedNow - action.lastAttempt) >= (action.retryCount * 5000L)
                                 }
                             }
                         } finally {
                             inFlightChatIds.remove(chatId)
+                            wakeUpChannel.trySend(Unit)
                         }
                     }
                 }

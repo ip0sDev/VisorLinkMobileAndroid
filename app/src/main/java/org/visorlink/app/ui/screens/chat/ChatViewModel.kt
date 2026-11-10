@@ -1002,6 +1002,8 @@ class ChatViewModel(
                     isDirect = isDirect,
                     otherUserId = targetUserId
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatVM", "chatRepository.sendText failed: ${e.message}", e)
                 _uiState.update { it.copy(error = e.message) }

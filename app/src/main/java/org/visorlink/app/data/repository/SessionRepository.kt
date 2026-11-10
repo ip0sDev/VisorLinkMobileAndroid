@@ -55,7 +55,14 @@ class SessionRepository(
 
     suspend fun currentSessionId(): String? {
         val user = auth.currentUser ?: return null
-        return user.getIdToken(false).await().claims["auth_time"]?.toString()
+        return try {
+            user.getIdToken(false).await().claims["auth_time"]?.toString()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w(TAG, "currentSessionId failed: ${e.message}")
+            null
+        }
     }
 
     /** Регистрирует вход (при каждом запуске). Возвращает id сессии; при отзыве поднимает [revoked]. */
@@ -142,11 +149,15 @@ class SessionRepository(
             val revokedList = (data["revokedSessions"] as? List<*>)?.map { it.toString() }.orEmpty()
             val validAfter = (data["sessionsValidAfter"] as? Number)?.toLong() ?: 0L
             val user = auth.currentUser ?: return@addSnapshotListener
-            user.getIdToken(false).addOnSuccessListener { token ->
-                val id = token.claims["auth_time"]?.toString() ?: return@addOnSuccessListener
-                val idNum = id.toLongOrNull() ?: Long.MAX_VALUE
-                if (id in revokedList || idNum < validAfter) _revoked.value = true
-            }
+            user.getIdToken(false)
+                .addOnSuccessListener { token ->
+                    val id = token.claims["auth_time"]?.toString() ?: return@addOnSuccessListener
+                    val idNum = id.toLongOrNull() ?: Long.MAX_VALUE
+                    if (id in revokedList || idNum < validAfter) _revoked.value = true
+                }
+                .addOnFailureListener { e ->
+                    if (BuildConfig.DEBUG) Log.w(TAG, "watchRevocation getIdToken failed: ${e.message}")
+                }
         }
     }
 

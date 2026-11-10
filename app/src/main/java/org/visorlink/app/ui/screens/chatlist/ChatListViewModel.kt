@@ -197,21 +197,26 @@ class ChatListViewModel(
 
                 val directChats = list.filter { it.chatType() == ChatType.DIRECT || it.chatType() == ChatType.EMERGENCY }
 
-                // Мгновенный посев кэша профилей из participantData чатов для отображения аватарок без ожидания сети
+                // Мгновенный посев кэша профилей из RAM-кэша UserRepository и participantData чатов для отображения аватарок без ожидания сети
                 val seedProfiles = mutableMapOf<String, UserProfile>()
                 directChats.forEach { chat ->
                     val otherId = chat.otherParticipantId(currentUid)
                     if (otherId.isNotEmpty() && otherId !in _profileCache.value) {
-                        val pData = chat.participantData[otherId]
-                        val name = pData?.get("displayName") ?: pData?.get("username")
-                        val av = pData?.get("avatarUrl") ?: chat.avatarUrl
-                        if (name != null || av != null) {
-                            seedProfiles[otherId] = UserProfile(
-                                uid = otherId,
-                                username = pData?.get("username").orEmpty(),
-                                displayName = name.orEmpty(),
-                                avatarUrl = av
-                            )
+                        val memCached = userRepository.getMemoryCachedProfile(otherId)
+                        if (memCached != null) {
+                            seedProfiles[otherId] = memCached
+                        } else {
+                            val pData = chat.participantData[otherId]
+                            val name = pData?.get("displayName") ?: pData?.get("username")
+                            val av = pData?.get("avatarUrl") ?: chat.avatarUrl
+                            if (name != null || av != null) {
+                                seedProfiles[otherId] = UserProfile(
+                                    uid = otherId,
+                                    username = pData?.get("username").orEmpty(),
+                                    displayName = name.orEmpty(),
+                                    avatarUrl = av
+                                )
+                            }
                         }
                     }
                 }
@@ -232,14 +237,24 @@ class ChatListViewModel(
                                     if (profile != null) {
                                         _profileCache.update { currentMap ->
                                             val existing = currentMap[uid]
-                                            if (existing == null || existing.avatarUrl != profile.avatarUrl || existing.displayName != profile.displayName) {
-                                                currentMap + (uid to profile)
+                                            val merged = if (existing != null) {
+                                                profile.copy(
+                                                    avatarUrl = profile.avatarUrl?.takeIf { it.isNotBlank() } ?: existing.avatarUrl,
+                                                    online = existing.online
+                                                )
+                                            } else {
+                                                profile
+                                            }
+                                            if (existing != merged) {
+                                                currentMap + (uid to merged)
                                             } else {
                                                 currentMap
                                             }
                                         }
                                     }
                                 }
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
                             } catch (e: Exception) {
                                 org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatListVM", "Failed to observe profile flow for $uid: ${e.message}", e)
                             }

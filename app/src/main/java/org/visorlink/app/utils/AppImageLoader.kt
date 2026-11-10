@@ -110,6 +110,8 @@ object AppImageLoader {
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .networkCachePolicy(CachePolicy.ENABLED)
+            // Игнорируем строгие HTTP-заголовки запрета кэша от Firebase Storage / CDN, чтобы аватарки всегда оставались в DiskCache
+            .respectCacheHeaders(false)
             // Crossfade по умолчанию для всех изображений
             .crossfade(true)
             .crossfade(300)

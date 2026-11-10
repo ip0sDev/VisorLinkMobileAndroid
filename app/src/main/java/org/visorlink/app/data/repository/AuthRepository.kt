@@ -343,8 +343,15 @@ class AuthRepository(
 
     suspend fun getAuthTime(): String? {
         val user = auth.currentUser ?: return null
-        val result: GetTokenResult = user.getIdToken(false).await()
-        return result.claims["auth_time"]?.toString()
+        return try {
+            val result: GetTokenResult = user.getIdToken(false).await()
+            result.claims["auth_time"]?.toString()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("AuthRepository", "getAuthTime failed: ${e.message}")
+            null
+        }
     }
 
     // ── Invite-Only Registration ─────────────────────────────────────────────

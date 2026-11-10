@@ -45,12 +45,23 @@ fun CachedImage(
             Icon(Icons.Default.BrokenImage, null, tint = MaterialTheme.colorScheme.error)
         }
     } else {
-        SubcomposeAsyncImage(
-            model = ImageRequest.Builder(context)
+        val imageRequest = androidx.compose.runtime.remember(context, model, decodeSize) {
+            val urlString = (model as? String)?.takeIf { it.isNotBlank() }
+            ImageRequest.Builder(context)
                 .data(model)
                 .crossfade(true)
-                .apply { if (decodeSize != null) size(decodeSize) }
-                .build(),
+                .apply {
+                    if (decodeSize != null) size(decodeSize)
+                    if (urlString != null) {
+                        val memKey = if (decodeSize != null) "$urlString#s$decodeSize" else urlString
+                        memoryCacheKey(memKey)
+                        diskCacheKey(urlString)
+                    }
+                }
+                .build()
+        }
+        SubcomposeAsyncImage(
+            model = imageRequest,
             contentDescription = contentDescription,
             modifier = modifier,
             contentScale = contentScale,

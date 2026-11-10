@@ -69,6 +69,9 @@ class ChatRepository(
 ) {
     val currentUid: String get() = auth.currentUser?.uid ?: ""
 
+    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val sharedChatsFlows = java.util.concurrent.ConcurrentHashMap<String, SharedFlow<List<Chat>>>()
+
     private val _diagInfo = MutableStateFlow(ChatDiagInfo())
     val diagInfo: StateFlow<ChatDiagInfo> = _diagInfo.asStateFlow()
 
@@ -100,7 +103,18 @@ class ChatRepository(
         }
     }
 
-    fun allChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
+    fun allChatsFlow(uid: String): Flow<List<Chat>> {
+        if (uid.isBlank()) return flowOf(emptyList())
+        return sharedChatsFlows.getOrPut(uid) {
+            createChatsFlow(uid).shareIn(
+                scope = repoScope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 30_000L, replayExpirationMillis = Long.MAX_VALUE),
+                replay = 1
+            )
+        }
+    }
+
+    private fun createChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
         DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow started for uid=$uid, limit=$CHATS_LIST_LIMIT")
         _diagInfo.update { it.copy(uid = uid) }
 
@@ -365,13 +379,12 @@ class ChatRepository(
                     launch(Dispatchers.IO) {
                         try {
                             ChatDataCache.saveMessages(context, chatId, messages)
-                            // Prefetch media
+                            // Предзагрузка голосовых сообщений (изображения кешируются через Coil AppImageLoader по требованию)
                             messages.forEach { msg ->
                                 try {
                                     val url = msg.url
-                                    if (!url.isNullOrEmpty()) {
-                                        if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
-                                        else ImageCache.getOrDownload(context, url)
+                                    if (!url.isNullOrEmpty() && msg.type == MessageType.VOICE) {
+                                        VoiceCache.getOrDownload(context, url)
                                     }
                                 } catch (_: Exception) {}
                             }
@@ -631,7 +644,7 @@ class ChatRepository(
         return updates
     }
 
-    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? = withContext(Dispatchers.IO) {
+    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
@@ -699,7 +712,7 @@ class ChatRepository(
         }
     }
 
-    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, caption: String? = null, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO) {
+    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, caption: String? = null, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val rawName = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "image"
         val safeName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}_${rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}.jpg"
         val tempFile = File(context.cacheDir, safeName)
@@ -797,7 +810,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("localPath", file.absolutePath)
             put("duration", durationSec)
@@ -880,7 +893,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("localPath", file.absolutePath)
             put("title", title)
@@ -975,7 +988,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "video.mp4"}"
         val tempFile = File(context.cacheDir, fileName)
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -1072,7 +1085,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("stickerId", sticker.id)
             put("url", sticker.url)
