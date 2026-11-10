@@ -80,8 +80,7 @@ fun StickerPickerBottomSheet(
         (configuration.screenHeightDp * 0.72f).dp.coerceIn(400.dp, 560.dp)
     }
 
-    // Материал панели рисуем сами (containerColor прозрачный): keycap-свет и рельеф
-    // поверх M3-шторки не подмешать, а её containerColor+tonalElevation давали серый тон
+    // Материал панели рисуем сами: keycap-свет и рельеф в стиле дизайн-системы Vl
     val panelColor = if (tokens.isForge) cs.surface else cs.surfaceContainerHigh
     val sheetShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
 
@@ -90,7 +89,8 @@ fun StickerPickerBottomSheet(
         sheetState = sheetState,
         dragHandle = null,
         shape = sheetShape,
-        containerColor = Color.Transparent,
+        containerColor = panelColor,
+        tonalElevation = 0.dp,
         contentWindowInsets = { WindowInsets(0) }
     ) {
         Box(
@@ -102,7 +102,7 @@ fun StickerPickerBottomSheet(
                 )
                 // Keycap-свет: в Forge верх панели светлее к белому (sheen), в Biolume — плоско
                 .vlKeycapBackground(tokens.structure, panelColor, sheetShape, VlDepth.Raised)
-                .vlHairline(cs.outlineVariant.copy(alpha = 0.4f), sheetShape)
+                .vlHairline(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.25f else 0.40f), sheetShape)
                 .height(targetHeight)
                 .navigationBarsPadding()
         ) {
@@ -150,27 +150,42 @@ internal fun StickerPickerContent(
     val frequentStickers = frequentStore.items.take(28)
     val hasFrequent = frequentStickers.isNotEmpty()
 
-    // Лента секций: индекс 0 — «Часто используемые» (если есть), дальше — паки
+    // Лента секций с виртуализацией по строкам
     val listState = rememberLazyListState()
     val tabScrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
 
-    // Активная секция: последняя, чей верх дорастал до верха вьюпорта (F: offset >= offsets[i] − 40)
-    val activeSection by remember {
+    // Предвычисленные стартовые индексы секций в LazyColumn для мгновенного скролла и отслеживания активного таба
+    val sectionStartIndices = remember(hasFrequent, userPacks, frequentStickers.size) {
+        val list = mutableListOf<Int>()
+        var current = 0
+        if (hasFrequent) {
+            list.add(current)
+            val fRows = (frequentStickers.size + CROSS_AXIS_COUNT - 1) / CROSS_AXIS_COUNT
+            current += 1 + fRows // 1 header item + fRows
+        }
+        for (pack in userPacks) {
+            list.add(current)
+            val pRows = if (pack.stickers.isEmpty()) 1 else (pack.stickers.size + CROSS_AXIS_COUNT - 1) / CROSS_AXIS_COUNT
+            current += 1 + pRows // 1 header item + pRows
+        }
+        list
+    }
+
+    val activeSection by remember(sectionStartIndices) {
         derivedStateOf {
-            var idx = 0
-            for (item in listState.layoutInfo.visibleItemsInfo) {
-                if (item.offset <= with(density) { 40.dp.toPx() }) idx = item.index else break
-            }
-            idx
+            val first = listState.firstVisibleItemIndex
+            val idx = sectionStartIndices.indexOfLast { it <= first }
+            idx.coerceAtLeast(0)
         }
     }
 
     fun scrollToSection(sectionIdx: Int) {
         haptic.perform(HapticType.SELECTION, true)
+        val targetItem = sectionStartIndices.getOrNull(sectionIdx) ?: 0
         scope.launch {
-            listState.animateScrollToItem(sectionIdx.coerceIn(0, (if (hasFrequent) 1 else 0) + userPacks.size - 1).coerceAtLeast(0))
+            listState.animateScrollToItem(targetItem)
         }
         // Таб-бар подматывается так, чтобы активный таб был в зоне видимости (F: (tabIdx*42) − 100)
         scope.launch {
@@ -289,7 +304,7 @@ internal fun StickerPickerContent(
     }
 }
 
-// ── Лента «Мои стикеры»: секция частых + паки секциями (Telegram-style) ─────────
+// ── Лента «Мои стикеры»: виртуализация по строкам для максимальной плавности 60/120 FPS ──
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -305,6 +320,8 @@ private fun MyStickersFeed(
     onGoToStore: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    var previewPair by remember { mutableStateOf<Pair<StickerPack?, StickerItem>?>(null) }
+
     when {
         isLoading && userPacks.isEmpty() && frequentStickers.isEmpty() ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -312,26 +329,119 @@ private fun MyStickersFeed(
             }
         userPacks.isEmpty() && frequentStickers.isEmpty() ->
             EmptyPacksView(isStore = false, onGoToStore = onGoToStore)
-        else -> LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-        ) {
-            if (frequentStickers.isNotEmpty()) {
-                item(key = "frequent") {
-                    FrequentSection(
-                        frequentStickers = frequentStickers,
-                        onStickerTap = onSendFrequentSticker,
-                    )
+        else -> {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            ) {
+                if (frequentStickers.isNotEmpty()) {
+                    item(key = "frequent_hdr") {
+                        FrequentSectionHeader(count = frequentStickers.size)
+                    }
+                    val frequentRows = (frequentStickers.size + CROSS_AXIS_COUNT - 1) / CROSS_AXIS_COUNT
+                    items(
+                        count = frequentRows,
+                        key = { "frequent_row_$it" },
+                        contentType = { "sticker_row" }
+                    ) { r ->
+                        val rowStart = r * CROSS_AXIS_COUNT
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            for (c in 0 until CROSS_AXIS_COUNT) {
+                                val idx = rowStart + c
+                                Box(Modifier.weight(1f)) {
+                                    if (idx < frequentStickers.size) {
+                                        val item = frequentStickers[idx]
+                                        StickerGridTile(
+                                            url = item.sticker.url,
+                                            format = item.sticker.effectiveFormat,
+                                            previewUrl = item.sticker.previewUrl,
+                                            emojiFallback = item.sticker.emoji,
+                                            onTap = { onSendFrequentSticker(item) },
+                                            onLongPress = {
+                                                previewPair = StickerPack(
+                                                    id = item.packId,
+                                                    name = item.packName,
+                                                    emoji = item.packEmoji
+                                                ) to item.sticker
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                userPacks.forEach { pack ->
+                    item(key = "pack_hdr_${pack.id}") {
+                        PackSectionHeader(
+                            pack = pack,
+                            isOwner = pack.authorId == currentUid,
+                            onDeletePack = { onDeletePack(pack) }
+                        )
+                    }
+
+                    if (pack.stickers.isEmpty()) {
+                        item(key = "pack_empty_${pack.id}") {
+                            Text(
+                                "Пак пока пустой",
+                                fontSize = 12.sp,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                            )
+                        }
+                    } else {
+                        val rowCount = (pack.stickers.size + CROSS_AXIS_COUNT - 1) / CROSS_AXIS_COUNT
+                        items(
+                            count = rowCount,
+                            key = { r -> "row_${pack.id}_$r" },
+                            contentType = { "sticker_row" }
+                        ) { r ->
+                            val rowStart = r * CROSS_AXIS_COUNT
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                for (c in 0 until CROSS_AXIS_COUNT) {
+                                    val idx = rowStart + c
+                                    Box(Modifier.weight(1f)) {
+                                        if (idx < pack.stickers.size) {
+                                            val sticker = pack.stickers[idx]
+                                            StickerGridTile(
+                                                url = sticker.url,
+                                                format = sticker.effectiveFormat,
+                                                previewUrl = sticker.previewUrl,
+                                                emojiFallback = sticker.emoji,
+                                                onTap = { onSendPackSticker(pack, sticker) },
+                                                onLongPress = { previewPair = pack to sticker },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            items(userPacks.size, key = { "pack_${userPacks[it].id}" }) { index ->
-                val pack = userPacks[index]
-                PackFeedSection(
-                    pack = pack,
-                    isOwner = pack.authorId == currentUid,
-                    onStickerTap = { onSendPackSticker(pack, it) },
-                    onDeletePack = { onDeletePack(pack) },
+
+            previewPair?.let { (pack, sticker) ->
+                org.visorlink.app.ui.components.chat.StickerPreviewDialog(
+                    sticker = sticker,
+                    onDismiss = { previewPair = null },
+                    onSend = {
+                        if (pack != null) {
+                            onSendPackSticker(pack, sticker)
+                        }
+                        previewPair = null
+                    }
                 )
             }
         }
@@ -341,120 +451,67 @@ private fun MyStickersFeed(
 // ── Секция «Часто используемые» ──────────────────────────────────────────────────
 
 @Composable
-private fun FrequentSection(
-    frequentStickers: List<FrequentSticker>,
-    onStickerTap: (FrequentSticker) -> Unit,
-) {
+private fun FrequentSectionHeader(count: Int) {
     val cs = MaterialTheme.colorScheme
-    Column(Modifier.padding(bottom = 14.dp)) {
-        SectionHeader(height = 38.dp, contentPadding = 4.dp) {
-            Icon(Icons.Rounded.AccessTime, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                "Часто используемые",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = cs.primary,
-            )
-            Spacer(Modifier.weight(1f))
-            CountBadge(frequentStickers.size)
-        }
-        StickerGridRows(count = frequentStickers.size) { rowStart, cellIndex ->
-            val item = frequentStickers[rowStart + cellIndex]
-            StickerGridTile(
-                url = item.sticker.url,
-                format = item.sticker.effectiveFormat,
-                previewUrl = item.sticker.previewUrl,
-                emojiFallback = item.sticker.emoji,
-                onTap = { onStickerTap(item) },
-                onLongPress = null,
-            )
-        }
+    SectionHeader(height = 38.dp, contentPadding = 4.dp) {
+        Icon(Icons.Rounded.AccessTime, contentDescription = null, tint = cs.primary, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            "Часто используемые",
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            color = cs.primary,
+        )
+        Spacer(Modifier.weight(1f))
+        CountBadge(count)
     }
 }
 
-// ── Секция ленты: конкретный стикерпак ───────────────────────────────────────────
+// ── Секция ленты: заголовок стикерпака ───────────────────────────────────────────
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PackFeedSection(
+private fun PackSectionHeader(
     pack: StickerPack,
     isOwner: Boolean,
-    onStickerTap: (StickerItem) -> Unit,
     onDeletePack: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     var showMenu by remember { mutableStateOf(false) }
-    var previewSticker by remember { mutableStateOf<StickerItem?>(null) }
 
-    Column(Modifier.padding(bottom = 14.dp)) {
-        // Заголовок стикерпака с меню
-        SectionHeader(height = 38.dp, contentPadding = 4.dp) {
-            Text(pack.emoji, fontSize = 16.sp)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                pack.name,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "${pack.stickers.size}",
-                color = cs.onSurfaceVariant,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Box {
-                Icon(
-                    Icons.Rounded.MoreVert,
-                    contentDescription = null,
-                    tint = cs.onSurfaceVariant,
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clickable { showMenu = true }
-                        .padding(5.dp),
-                )
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Удалить из моих", color = cs.error, fontSize = 13.sp) },
-                        onClick = { showMenu = false; onDeletePack() },
-                    )
-                }
-            }
-        }
-        if (pack.stickers.isEmpty()) {
-            Text(
-                "Пак пока пустой",
-                fontSize = 12.sp,
-                color = cs.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-            )
-        } else {
-            StickerGridRows(count = pack.stickers.size) { rowStart, cellIndex ->
-                val sticker = pack.stickers[rowStart + cellIndex]
-                StickerGridTile(
-                    url = sticker.url,
-                    format = sticker.effectiveFormat,
-                    previewUrl = sticker.previewUrl,
-                    emojiFallback = sticker.emoji,
-                    onTap = { onStickerTap(sticker) },
-                    onLongPress = { previewSticker = sticker },
-                )
-            }
-        }
-    }
-
-    previewSticker?.let { sticker ->
-        org.visorlink.app.ui.components.chat.StickerPreviewDialog(
-            sticker = sticker,
-            onDismiss = { previewSticker = null },
-            onSend = {
-                onStickerTap(sticker)
-                previewSticker = null
-            }
+    SectionHeader(height = 38.dp, contentPadding = 4.dp) {
+        Text(pack.emoji, fontSize = 16.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            pack.name,
+            fontWeight = FontWeight.Bold,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        Text(
+            "${pack.stickers.size}",
+            color = cs.onSurfaceVariant,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Box {
+            Icon(
+                Icons.Rounded.MoreVert,
+                contentDescription = null,
+                tint = cs.onSurfaceVariant,
+                modifier = Modifier
+                    .size(28.dp)
+                    .clickable { showMenu = true }
+                    .padding(5.dp),
+            )
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Удалить из моих", color = cs.error, fontSize = 13.sp) },
+                    onClick = { showMenu = false; onDeletePack() },
+                )
+            }
+        }
     }
 }
 
@@ -593,6 +650,7 @@ private fun StorePackCard(
                                 previewUrl = sticker.previewUrl,
                                 contentDescription = sticker.emoji,
                                 modifier = Modifier.size(46.dp),
+                                animate = false,
                             )
                         }
                     }
@@ -673,6 +731,7 @@ private fun PackTabBar(
                         previewUrl = first.previewUrl,
                         contentDescription = pack.name,
                         modifier = Modifier.size(22.dp),
+                        animate = false,
                     )
                 }
             }
@@ -813,7 +872,7 @@ private fun StickerGridRows(
     }
 }
 
-/** Оптимизированный элемент стикера в сетке. */
+/** Оптимизированный элемент стикера в сетке: чистый бокс без BoxWithConstraints и без тяжелых плееров. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StickerGridTile(
@@ -828,22 +887,15 @@ private fun StickerGridTile(
     val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
     val tileShape = tokens.shapes.adapt(RoundedCornerShape(12.dp))
-    // Forge: «голые» плитки без коробок — LED-экраны лежат прямо на панели шторки,
-    // ячейка проявляется только при нажатии (hardShadow в ForgeV2 всегда null —
-    // детект по нему не работал, оставляя серые коробки)
-    val bare = tokens.isForge
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val isLed = format == StickerFormat.LED || url.startsWith("led:") || url.startsWith("led_")
 
-    BoxWithConstraints(
+    Box(
         modifier = Modifier
             .padding(2.dp)
             .aspectRatio(1f)
             .clip(tileShape)
-            .then(
-                if (bare) Modifier else Modifier.background(cs.surfaceContainerHighest.copy(alpha = 0.4f), tileShape)
-            )
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -851,25 +903,26 @@ private fun StickerGridTile(
                 onLongClick = { onLongPress?.invoke() },
             )
             .then(
-                if (bare && isPressed) Modifier.background(cs.primary.copy(alpha = 0.12f), tileShape) else Modifier
+                if (isPressed) Modifier.background(cs.primary.copy(alpha = 0.12f), tileShape) else Modifier
             ),
         contentAlignment = Alignment.Center,
     ) {
         if (isLed) {
-            // LED-стикер сам сайзится от ширины — иначе фиксированный бокс 140dp обрезался бы
             org.visorlink.app.ui.components.chat.InteractiveLedSticker(
                 expression = org.visorlink.app.ui.components.led.VlLedExpression.fromUrl(url),
-                size = maxWidth * 0.92f,
+                size = 64.dp,
                 interactive = false,
+                modifier = Modifier.fillMaxSize(0.92f)
             )
         } else {
-            // В ленте и сетках — лёгкие постеры без лагов (76% плитки, как во Flutter)
+            // В ленте и сетках — мгновенные легкие постеры без лагов (76% плитки)
             VlSticker(
                 url = url,
                 format = format,
                 previewUrl = previewUrl,
                 contentDescription = emojiFallback,
                 modifier = Modifier.fillMaxSize(0.76f),
+                animate = false,
             )
         }
     }

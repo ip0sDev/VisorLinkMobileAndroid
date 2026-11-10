@@ -40,8 +40,10 @@ import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.screens.chat.ChatUiState
 import org.visorlink.app.ui.screens.stickers.StickerPackViewModel
 import org.visorlink.app.ui.components.stickers.StickerPickerContent
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
@@ -144,8 +146,10 @@ fun LiquidMorphingChatBottomBar(
     }
 
     val panelShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius))
-    // Матовая панель: backdrop-блюр контента под ней + полупрозрачный тон
-    val matte = isVlMatte()
+    // Чистая поверхность по дизайн-системе: в Forge — поверхность клавиш (Clean/Blackout),
+    // в Biolume — Tidepool/Abyss контейнер. Без тяжелого backdrop-блюра на 520dp, который давал
+    // серый налёт и вызывал лаги при скролле сетки стикеров.
+    val panelColor = if (tokens.isForge) cs.surface else cs.surfaceContainerLow
 
     Box(
         modifier = modifier
@@ -156,18 +160,13 @@ fun LiquidMorphingChatBottomBar(
                 if (isExpanded) {
                     Modifier
                         .clip(panelShape)
-                        .vlBackdropBlur()
-                        .background(
-                            if (matte) cs.surfaceContainerLow.copy(alpha = if (tokens.isDark) 0.75f else 0.85f)
-                            else cs.surfaceContainerLow
-                        )
+                        .vlKeycapBackground(tokens.structure, panelColor, panelShape, VlDepth.Raised)
                         .then(
                             if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                             else Modifier
                         )
                         .then(
-                            if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), panelShape)
-                            else Modifier
+                            Modifier.vlHairline(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.25f else 0.40f), panelShape)
                         )
                 } else Modifier
             )
