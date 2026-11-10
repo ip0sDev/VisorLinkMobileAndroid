@@ -121,6 +121,10 @@ class ChatRepository(
         var emerList: List<Chat> = emptyList()
         var directList: List<Chat> = emptyList()
         var groupList: List<Chat> = emptyList()
+        var directReceived = false
+        var groupReceived = false
+        var hasFirestoreEmitted = false
+        var cacheSaveJob: kotlinx.coroutines.Job? = null
         val listLock = Any()
 
         fun merge() {
@@ -128,13 +132,16 @@ class ChatRepository(
             val dCount: Int
             val gCount: Int
             val eCount: Int
+            val canSaveCache: Boolean
             synchronized(listLock) {
+                hasFirestoreEmitted = true
                 dCount = directList.size
                 gCount = groupList.size
                 eCount = emerList.size
+                canSaveCache = directReceived && groupReceived
                 all = (directList + groupList + emerList)
                     .distinctBy { it.id }
-                    .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
+                    .sortedByDescending { (it.lastMessageAt ?: it.createdAt)?.seconds ?: 0L }
             }
 
             DiagnosticLogBuffer.i(
@@ -153,11 +160,16 @@ class ChatRepository(
             }
             trySend(all)
 
-            launch(Dispatchers.IO) {
-                try {
-                    ChatDataCache.saveChatList(context, uid, all)
-                } catch (e: Throwable) {
-                    DiagnosticLogBuffer.e("ChatRepo", "Failed to cache chat list: ${e.message}", e)
+            if (canSaveCache) {
+                cacheSaveJob?.cancel()
+                cacheSaveJob = launch(Dispatchers.IO) {
+                    try {
+                        ChatDataCache.saveChatList(context, uid, all)
+                    } catch (e: Throwable) {
+                        if (e !is kotlinx.coroutines.CancellationException) {
+                            DiagnosticLogBuffer.e("ChatRepo", "Failed to cache chat list: ${e.message}", e)
+                        }
+                    }
                 }
             }
         }
@@ -165,12 +177,25 @@ class ChatRepository(
         launch(Dispatchers.IO) {
             try {
                 val cached = ChatDataCache.loadChatList(context, uid)
+                val shouldEmit: Boolean
+                val hasEmer: Boolean
                 synchronized(listLock) {
                     emerList = cached.filter { it.isEmergency }
+                    hasEmer = emerList.isNotEmpty()
+                    // Если Firestore уже прислал снапшот, SQLite-кэш не должен перезаписывать свежие данные
+                    shouldEmit = !hasFirestoreEmitted && cached.isNotEmpty()
                 }
-                if (cached.isNotEmpty()) {
+                if (shouldEmit) {
                     DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow loaded ${cached.size} cached chats from SQLite")
                     trySend(cached)
+                } else {
+                    DiagnosticLogBuffer.i(
+                        "ChatRepo",
+                        "allChatsFlow SQLite cache loaded (${cached.size} chats), emit skipped (hasFirestore=$hasFirestoreEmitted)"
+                    )
+                    if (hasEmer) {
+                        merge()
+                    }
                 }
             } catch (e: Throwable) {
                 DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached chats: ${e.message}", e)
@@ -197,6 +222,7 @@ class ChatRepository(
                     }
                 }
                 synchronized(listLock) {
+                    directReceived = true
                     directList = parsed
                 }
                 merge()
@@ -222,12 +248,17 @@ class ChatRepository(
                     }
                 }
                 synchronized(listLock) {
+                    groupReceived = true
                     groupList = parsed
                 }
                 merge()
             }
 
-        awaitClose { reg1.remove(); reg2.remove() }
+        awaitClose {
+            cacheSaveJob?.cancel()
+            reg1.remove()
+            reg2.remove()
+        }
     }
 
     fun chatsFlow(uid: String) = allChatsFlow(uid)

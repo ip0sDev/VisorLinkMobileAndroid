@@ -112,7 +112,8 @@ class ChatListViewModel(
             val folder = folderList.firstOrNull { it.id == activeId }
             if (folder == null) list else list.filter { chatInFolder(it, folder, it.unreadCountFor(currentUid)) }
         }
-        withEntryByDate(filteredChats, invitesEntry(currentUid, inv))
+        val sortedChats = filteredChats.sortedByDescending { (it.lastMessageAt ?: it.createdAt)?.seconds ?: 0L }
+        withEntryByDate(sortedChats, invitesEntry(currentUid, inv))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
 

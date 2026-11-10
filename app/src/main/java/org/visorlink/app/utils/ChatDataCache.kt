@@ -423,7 +423,7 @@ object ChatDataCache {
                     try {
                         // Удаляем только обычные чаты, сохраняя локальные аварийные чаты
                         db.delete("chats", "uid=? AND chat_id NOT LIKE 'emer_%'", arrayOf(uid))
-                        db.compileStatement("INSERT INTO chats (uid, chat_id, data) VALUES (?, ?, ?)").use { stmt ->
+                        db.compileStatement("INSERT OR REPLACE INTO chats (uid, chat_id, data) VALUES (?, ?, ?)").use { stmt ->
                             prepared.forEach { (u, cId, enc) ->
                                 stmt.bindString(1, u)
                                 stmt.bindString(2, cId)
@@ -480,7 +480,7 @@ object ChatDataCache {
                     }
                 }
             } catch (e: Exception) { Log.e(TAG, "Failed to load chat list", e) }
-            list
+            list.distinctBy { it.id }.sortedByDescending { (it.lastMessageAt ?: it.createdAt)?.seconds ?: 0L }
         }
 
     suspend fun loadChat(context: Context, chatId: String): Chat? =

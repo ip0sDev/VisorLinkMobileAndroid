@@ -4,6 +4,15 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -33,11 +42,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -53,15 +65,16 @@ import org.visorlink.app.data.activity.StepCounterModel
 import org.visorlink.app.data.model.aegis.LinkEmotion
 import org.visorlink.app.data.model.aegis.VisorIcon
 import org.visorlink.app.ui.aegis.AnimatedProtogen
+import org.visorlink.app.ui.aegis.linkVisorColor
 import org.visorlink.app.ui.components.VlButton
 import org.visorlink.app.ui.components.VlCard
 import org.visorlink.app.ui.components.VlTopAppBarButton
+import org.visorlink.app.ui.components.led.VlLedDot
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.random.Random
 
 private fun groupDigits(n: Int): String =
     String.format(Locale.US, "%,d", n).replace(',', ' ')
@@ -270,6 +283,7 @@ fun SignalStepsScreen(
 @Composable
 private fun LinkStepsCard(ui: StepsViewModel.UiState) {
     val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
     val haptic = rememberHaptic()
 
     val mood = remember(ui) { LinkStepsMood.mood(ui) }
@@ -288,89 +302,138 @@ private fun LinkStepsCard(ui: StepsViewModel.UiState) {
     }
 
     val shown: LinkMood = reaction?.mood ?: mood
+    val activeAccent by animateColorAsState(
+        targetValue = linkVisorColor(shown.emotion, shown.visor),
+        animationSpec = tween(420),
+        label = "link_card_accent"
+    )
 
     VlCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(horizontal = 16.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             var isPressed by remember { mutableStateOf(false) }
-            var petAccumulator by remember { mutableStateOf(0f) }
+            var isDraggingPet by remember { mutableStateOf(false) }
+            var petAccumulator by remember { mutableFloatStateOf(0f) }
 
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            // Бейдж имени компаньона со светодиодом статуса визора
+            Row(
+                modifier = Modifier
+                    .clip(tokens.shapes.chip)
+                    .background(cs.surfaceContainerHighest.copy(alpha = 0.75f))
+                    .border(1.dp, activeAccent.copy(alpha = 0.32f), tokens.shapes.chip)
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                VlLedDot(size = 6.dp, color = activeAccent)
                 Text(
                     text = stringResource(R.string.link_step_name),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
-                    color = cs.onSurfaceVariant
+                    color = cs.onSurface
                 )
-
-                Box(
-                    modifier = Modifier
-                        .size(160.dp)
-                        .pointerInput(ui.enabled) {
-                            detectTapGestures(
-                                onPress = {
-                                    isPressed = true
-                                    tryAwaitRelease()
-                                    isPressed = false
-                                },
-                                onTap = {
-                                    haptic.perform(HapticType.REACTION, true)
-                                    reaction = LinkReaction(
-                                        LinkMood(LinkEmotion.HAPPY, VisorIcon.HEART, boopLines.random())
-                                    )
-                                }
-                            )
-                        }
-                        .pointerInput(Unit) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { petAccumulator = 0f },
-                                onHorizontalDrag = { change, dragAmount ->
-                                    change.consume()
-                                    petAccumulator += abs(dragAmount)
-                                    if (petAccumulator > 60f) {
-                                        petAccumulator = 0f
-                                        haptic.perform(HapticType.SELECTION, true)
-                                        reaction = LinkReaction(
-                                            LinkMood(LinkEmotion.PARTY, VisorIcon.HEART, R.string.link_step_pet)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                ) {
-                    AnimatedProtogen(
-                        emotion = shown.emotion,
-                        visorIcon = shown.visor,
-                        isPressed = isPressed,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
             }
 
-            Surface(
-                color = cs.primaryContainer,
-                shape = VlTheme.tokens.shapes.button,
-                shadowElevation = 4.dp,
-                modifier = Modifier.widthIn(max = 300.dp)
+            // Интерактивная сцена протогена (тап — boop по носу, свайп — погладить по голове)
+            Box(
+                modifier = Modifier
+                    .size(196.dp)
+                    .pointerInput(ui.enabled) {
+                        detectTapGestures(
+                            onPress = {
+                                isPressed = true
+                                tryAwaitRelease()
+                                isPressed = false
+                            },
+                            onTap = {
+                                haptic.perform(HapticType.REACTION, true)
+                                reaction = LinkReaction(
+                                    mood = LinkMood(LinkEmotion.HAPPY, VisorIcon.HEART, boopLines.random()),
+                                    isPet = false
+                                )
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(
+                            onDragStart = {
+                                petAccumulator = 0f
+                                isDraggingPet = true
+                            },
+                            onDragEnd = { isDraggingPet = false },
+                            onDragCancel = { isDraggingPet = false },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                petAccumulator += abs(dragAmount)
+                                if (petAccumulator > 50f) {
+                                    petAccumulator = 0f
+                                    haptic.perform(HapticType.SELECTION, true)
+                                    reaction = LinkReaction(
+                                        mood = LinkMood(LinkEmotion.PARTY, VisorIcon.HEART, R.string.link_step_pet),
+                                        isPet = true
+                                    )
+                                }
+                            }
+                        )
+                    },
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = stringResource(shown.messageRes, *shown.args.toTypedArray()),
-                    modifier = Modifier
-                        .padding(horizontal = 14.dp, vertical = 10.dp)
-                        .fillMaxWidth(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = cs.onPrimaryContainer,
-                    textAlign = TextAlign.Center
+                AnimatedProtogen(
+                    emotion = shown.emotion,
+                    visorIcon = shown.visor,
+                    isPressed = isPressed,
+                    isPetting = isDraggingPet || reaction?.isPet == true,
+                    modifier = Modifier.fillMaxSize()
                 )
+            }
+
+            // Реплика-пузырь с хвостиком к Линку и плавной сменой текста
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val bubbleColor = cs.primaryContainer
+                Canvas(modifier = Modifier.size(width = 16.dp, height = 8.dp)) {
+                    val tail = Path().apply {
+                        moveTo(size.width / 2f, 0f)
+                        lineTo(size.width, size.height)
+                        lineTo(0f, size.height)
+                        close()
+                    }
+                    drawPath(tail, color = bubbleColor)
+                }
+
+                Surface(
+                    color = bubbleColor,
+                    shape = tokens.shapes.button,
+                    shadowElevation = 4.dp,
+                    modifier = Modifier
+                        .widthIn(max = 320.dp)
+                        .border(1.dp, activeAccent.copy(alpha = 0.25f), tokens.shapes.button)
+                ) {
+                    val messageText = stringResource(shown.messageRes, *shown.args.toTypedArray())
+                    AnimatedContent(
+                        targetState = messageText,
+                        transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
+                        label = "link_speech"
+                    ) { text ->
+                        Text(
+                            text = text,
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 11.dp)
+                                .fillMaxWidth(),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = cs.onPrimaryContainer,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 /** Кратковременная эмоция Линка от взаимодействия. */
-private data class LinkReaction(val mood: LinkMood)
+private data class LinkReaction(val mood: LinkMood, val isPet: Boolean = false)

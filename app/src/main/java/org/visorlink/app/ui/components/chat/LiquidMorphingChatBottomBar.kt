@@ -146,10 +146,9 @@ fun LiquidMorphingChatBottomBar(
     }
 
     val panelShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius))
-    // Чистая поверхность по дизайн-системе: в Forge — поверхность клавиш (Clean/Blackout),
-    // в Biolume — Tidepool/Abyss контейнер. Без тяжелого backdrop-блюра на 520dp, который давал
-    // серый налёт и вызывал лаги при скролле сетки стикеров.
-    val panelColor = if (tokens.isForge) cs.surface else cs.surfaceContainerLow
+    // Чистая поверхность по дизайн-системе: cs.surface во всех темах является целевым цветом
+    // поверхностей (белый фарфор в светлой теме, глубокий графит в тёмной) без грязного серого тона Monet
+    val panelColor = cs.surface
 
     Box(
         modifier = modifier
@@ -159,15 +158,13 @@ fun LiquidMorphingChatBottomBar(
             .then(
                 if (isExpanded) {
                     Modifier
-                        .clip(panelShape)
-                        .vlKeycapBackground(tokens.structure, panelColor, panelShape, VlDepth.Raised)
                         .then(
                             if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                             else Modifier
                         )
-                        .then(
-                            Modifier.vlHairline(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.25f else 0.40f), panelShape)
-                        )
+                        .clip(panelShape)
+                        .vlKeycapBackground(tokens.structure, panelColor, panelShape, VlDepth.Raised)
+                        .vlHairline(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.25f else 0.35f), panelShape)
                 } else Modifier
             )
     ) {

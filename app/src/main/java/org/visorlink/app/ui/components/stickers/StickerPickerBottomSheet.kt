@@ -80,8 +80,8 @@ fun StickerPickerBottomSheet(
         (configuration.screenHeightDp * 0.72f).dp.coerceIn(400.dp, 560.dp)
     }
 
-    // Материал панели рисуем сами: keycap-свет и рельеф в стиле дизайн-системы Vl
-    val panelColor = if (tokens.isForge) cs.surface else cs.surfaceContainerHigh
+    // Материал панели рисуем сами: чистый cs.surface (без серого Monet)
+    val panelColor = cs.surface
     val sheetShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
 
     ModalBottomSheet(
@@ -96,10 +96,10 @@ fun StickerPickerBottomSheet(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(sheetShape)
                 .then(
                     if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, sheetShape) else Modifier
                 )
+                .clip(sheetShape)
                 // Keycap-свет: в Forge верх панели светлее к белому (sheen), в Biolume — плоско
                 .vlKeycapBackground(tokens.structure, panelColor, sheetShape, VlDepth.Raised)
                 .vlHairline(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.25f else 0.40f), sheetShape)
@@ -748,26 +748,23 @@ private fun PackTabThumb(
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
     val shape = tokens.shapes.adapt(RoundedCornerShape(12.dp))
-    // Forge: приподнятая клавиша; Biolume/M3E — прозрачная пилюля с подсветкой выбора
     val structure = tokens.structure.enabled
     Box(
         modifier = Modifier
             .padding(horizontal = 3.dp, vertical = 5.dp)
             .size(36.dp, 34.dp)
-            .then(if (structure) Modifier.vlRaised(tokens.structure, shape) else Modifier)
             .clip(shape)
             .background(
                 when {
                     isSelected && tokens.isBiolume -> cs.primary.copy(alpha = 0.18f)
                     isSelected -> cs.primaryContainer
-                    tokens.isBiolume -> cs.surfaceContainer.copy(alpha = 0.5f)
-                    else -> cs.surfaceContainerLow
+                    else -> cs.surfaceContainerLow.copy(alpha = 0.6f)
                 },
                 shape,
             )
             .then(
                 when {
-                    isSelected && structure -> Modifier.vlHairline(cs.primary.copy(alpha = 0.45f), shape)
+                    isSelected && structure -> Modifier.vlHairline(cs.primary.copy(alpha = 0.50f), shape)
                     structure -> Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.25f), shape)
                     isSelected -> Modifier.border(1.5.dp, cs.primary.copy(alpha = 0.5f), shape)
                     else -> Modifier

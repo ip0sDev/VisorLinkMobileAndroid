@@ -92,6 +92,11 @@ internal fun DrawScope.drawSoftShadow(
     drawIntoCanvas { canvas ->
         val native = canvas.nativeCanvas
         native.save()
+        if (strokeWidthPx == null) {
+            // Внешняя тень (vlRaised / vlSignalGlow) не должна закрашивать внутреннюю область
+            // самой фигуры серым/тёмным тоном при прозрачной или полупрозрачной заливке
+            native.clipOutPath(path.asAndroidPath())
+        }
         native.translate(dx, dy)
         val paint = android.graphics.Paint().apply {
             isAntiAlias = true

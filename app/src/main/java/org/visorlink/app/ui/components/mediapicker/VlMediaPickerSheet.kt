@@ -142,7 +142,7 @@ fun VlMediaPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)),
-        containerColor = if (tokens.structure.enabled) cs.surfaceContainerLow else cs.surface,
+        containerColor = cs.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
