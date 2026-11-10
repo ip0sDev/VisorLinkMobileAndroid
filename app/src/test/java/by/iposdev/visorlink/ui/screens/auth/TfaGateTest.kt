@@ -68,8 +68,8 @@ class TfaGateTest {
             on { userProfileFlow(any()) } doReturn flowOf(profile)
             on { profileExistsFlow(any()) } doReturn exists
         }
-        val fcm: FcmManager = mock()
-        return AuthViewModel(auth, users, tfaManager, fcm, TfaGateHold())
+        val fcm: FcmManager = mock(); val appContext: android.content.Context = mock(); val ckm: org.visorlink.app.utils.ContentKeyManager = mock()
+        return AuthViewModel(auth, users, tfaManager, fcm, TfaGateHold(), appContext, ckm)
     }
 
     private fun TestScope.settle() { runCurrent() }

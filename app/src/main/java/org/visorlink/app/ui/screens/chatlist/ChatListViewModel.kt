@@ -13,6 +13,7 @@ import org.visorlink.app.utils.PresenceManager
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.launch
 
 import org.visorlink.app.utils.NetworkMonitor
@@ -26,6 +27,7 @@ class ChatListViewModel(
     private val sidebarTypingManager: org.visorlink.app.utils.SidebarTypingManager? = null,
     private val networkMonitor: NetworkMonitor? = null,
     private val blockRepository: org.visorlink.app.data.repository.BlockRepository? = null,
+    private val chatFoldersRepository: org.visorlink.app.data.repository.ChatFoldersRepository? = null,
 ) : ViewModel() {
 
     val isOnline: StateFlow<Boolean> = networkMonitor?.isOnline
@@ -35,8 +37,16 @@ class ChatListViewModel(
         if (!online) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED
     }.stateIn(viewModelScope, SharingStarted.Eagerly, if (networkMonitor?.isOnline?.value == false) SyncState.WAITING_FOR_NETWORK else SyncState.SYNCED)
 
-    // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
-    val currentUid: String = auth.currentUser?.uid.orEmpty()
+    val currentUid: String get() = auth.currentUser?.uid.orEmpty()
+    val diagInfo: StateFlow<org.visorlink.app.data.repository.ChatDiagInfo> = chatRepository.diagInfo
+
+    private val authUidFlow: Flow<String> = callbackFlow {
+        val listener = FirebaseAuth.AuthStateListener { a ->
+            trySend(a.currentUser?.uid.orEmpty())
+        }
+        auth.addAuthStateListener(listener)
+        awaitClose { auth.removeAuthStateListener(listener) }
+    }.distinctUntilChanged()
 
     private val rawTypingMap: StateFlow<Map<String, Boolean>> = sidebarTypingManager?.typingMap
         ?: MutableStateFlow<Map<String, Boolean>>(emptyMap()).asStateFlow()
@@ -44,17 +54,72 @@ class ChatListViewModel(
     val currentUser: StateFlow<UserProfile?> = userRepository.currentUserFlow()
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val chats: StateFlow<List<Chat>> = chatRepository.allChatsFlow(currentUid)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val chats: StateFlow<List<Chat>> = authUidFlow.flatMapLatest { uid ->
+        if (uid.isEmpty()) flowOf(emptyList())
+        else chatRepository.allChatsFlow(uid)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Непрочитанные приглашения в группы и каналы (`users/{uid}/notifications`). */
-    val invites: StateFlow<List<AppNotification>> = chatRepository.notificationsFlow(currentUid)
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val invites: StateFlow<List<AppNotification>> = authUidFlow.flatMapLatest { uid ->
+        if (uid.isEmpty()) flowOf(emptyList())
+        else chatRepository.notificationsFlow(uid)
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** Чаты со строкой «Приглашения», вставленной по дате последнего приглашения. */
-    val listEntries: StateFlow<List<Chat>> = combine(chats, invites) { list, inv ->
-        withEntryByDate(list, invitesEntry(currentUid, inv))
+    private val prefs = context?.getSharedPreferences("visorlink_settings", Context.MODE_PRIVATE)
+
+    private val _activeFolderId = MutableStateFlow<String?>(prefs?.getString("vl_active_folder", null))
+    val activeFolderId: StateFlow<String?> = _activeFolderId.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val folders: StateFlow<List<ChatFolder>> = if (chatFoldersRepository != null) {
+        authUidFlow.flatMapLatest { uid ->
+            if (uid.isEmpty()) flowOf(emptyList())
+            else combine(chatFoldersRepository.foldersFlow(uid), currentUser) { folderList, user ->
+                if (user?.isPro == true) folderList else emptyList()
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    } else {
+        MutableStateFlow<List<ChatFolder>>(emptyList()).asStateFlow()
+    }
+
+    val unreadByFolder: StateFlow<Map<String, Int>> = combine(chats, folders) { list, folderList ->
+        folderList.associate { folder ->
+            val count = list.filter { chatInFolder(it, folder, it.unreadCountFor(currentUid)) }
+                .sumOf { it.unreadCountFor(currentUid) }
+            folder.id to count
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
+    val totalUnread: StateFlow<Int> = chats.map { list ->
+        list.sumOf { it.unreadCountFor(currentUid) }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    fun selectFolder(folderId: String?) {
+        _activeFolderId.value = folderId
+        prefs?.edit()?.let {
+            if (folderId == null) it.remove("vl_active_folder") else it.putString("vl_active_folder", folderId)
+            it.apply()
+        }
+    }
+
+    val listEntries: StateFlow<List<Chat>> = combine(chats, invites, folders, activeFolderId) { list, inv, folderList, activeId ->
+        val filteredChats = if (activeId == null) {
+            list
+        } else {
+            val folder = folderList.firstOrNull { it.id == activeId }
+            if (folder == null) list else list.filter { chatInFolder(it, folder, it.unreadCountFor(currentUid)) }
+        }
+        val sortedChats = filteredChats.sortedByDescending { (it.lastMessageAt ?: it.createdAt)?.seconds ?: 0L }
+        withEntryByDate(sortedChats, invitesEntry(currentUid, inv))
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+
+
+
+
 
     fun isInvitesEntry(chat: Chat): Boolean = chat.id == invitesEntryId(currentUid)
 
@@ -116,6 +181,7 @@ class ChatListViewModel(
     }
 
     private val observedPresenceUids = mutableSetOf<String>()
+    private val observedProfileUids = mutableSetOf<String>()
 
     init {
         sidebarTypingManager?.startListening(currentUid)
@@ -130,20 +196,68 @@ class ChatListViewModel(
                     }
                 }
 
-                val directUids = list.filter { it.chatType() == ChatType.DIRECT }
+                val directChats = list.filter { it.chatType() == ChatType.DIRECT || it.chatType() == ChatType.EMERGENCY }
+
+                // Мгновенный посев кэша профилей из RAM-кэша UserRepository и participantData чатов для отображения аватарок без ожидания сети
+                val seedProfiles = mutableMapOf<String, UserProfile>()
+                directChats.forEach { chat ->
+                    val otherId = chat.otherParticipantId(currentUid)
+                    if (otherId.isNotEmpty() && otherId !in _profileCache.value) {
+                        val memCached = userRepository.getMemoryCachedProfile(otherId)
+                        if (memCached != null) {
+                            seedProfiles[otherId] = memCached
+                        } else {
+                            val pData = chat.participantData[otherId]
+                            val name = pData?.get("displayName") ?: pData?.get("username")
+                            val av = pData?.get("avatarUrl") ?: chat.avatarUrl
+                            if (name != null || av != null) {
+                                seedProfiles[otherId] = UserProfile(
+                                    uid = otherId,
+                                    username = pData?.get("username").orEmpty(),
+                                    displayName = name.orEmpty(),
+                                    avatarUrl = av
+                                )
+                            }
+                        }
+                    }
+                }
+                if (seedProfiles.isNotEmpty()) {
+                    _profileCache.update { it + seedProfiles }
+                }
+
+                val directUids = directChats
                     .map { it.otherParticipantId(currentUid) }
                     .filter { it.isNotEmpty() }
                     .distinct()
 
                 directUids.forEach { uid ->
-                    if (uid !in _profileCache.value.keys) {
+                    if (observedProfileUids.add(uid)) {
                         launch {
                             try {
-                                userRepository.getUserProfile(uid)?.let { profile ->
-                                    _profileCache.update { it + (uid to profile) }
+                                userRepository.userProfileFlow(uid).collect { profile ->
+                                    if (profile != null) {
+                                        _profileCache.update { currentMap ->
+                                            val existing = currentMap[uid]
+                                            val merged = if (existing != null) {
+                                                profile.copy(
+                                                    avatarUrl = profile.avatarUrl?.takeIf { it.isNotBlank() } ?: existing.avatarUrl,
+                                                    online = existing.online
+                                                )
+                                            } else {
+                                                profile
+                                            }
+                                            if (existing != merged) {
+                                                currentMap + (uid to merged)
+                                            } else {
+                                                currentMap
+                                            }
+                                        }
+                                    }
                                 }
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
                             } catch (e: Exception) {
-                                Log.e("ChatListVM", "Failed to fetch profile for $uid: ${e.message}")
+                                org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatListVM", "Failed to observe profile flow for $uid: ${e.message}", e)
                             }
                         }
                     }

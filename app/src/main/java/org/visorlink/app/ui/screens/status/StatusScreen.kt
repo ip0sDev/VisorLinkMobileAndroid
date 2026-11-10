@@ -70,7 +70,7 @@ fun StatusScreen(
                     modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text("Статус системы", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = cs.onSurface) },
                     navigationIcon = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             topBarJelly.press(0.06f)
                             onNavigateBack()
                         }) {
@@ -78,7 +78,7 @@ fun StatusScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             topBarJelly.press(0.06f)
                             viewModel.refreshStatus()
                         }, enabled = !uiState.isRefreshing) {

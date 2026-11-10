@@ -14,6 +14,7 @@ data class SavedMessage(
     val encrypted: Boolean? = null,
     val encryptedText: String? = null,
     val encryptedCaption: String? = null,
+    val captionIv: String? = null,
     val iv: String? = null,
     val url: String? = null,
     val cdnMediaId: String? = null,
@@ -39,6 +40,10 @@ data class SavedMessage(
     val editHistory: List<Map<String, Any>> = emptyList(),
     val createdAt: Timestamp? = null,
     val isDiary: Boolean = false,
+    // Версия схемы ключа: 2 = ключ контента (CK, TODO §14.3); null/1 = legacy v1 (PBKDF2 от PIN)
+    val keyVersion: Long? = null,
+    // Версия ключа медиа-блоба: миграции текста и файла могут проходить в разные проходы
+    val fileKeyVersion: Long? = null,
     // Временные/Локальные данные для расшифровки на лету в UI
     val localBytes: ByteArray? = null
 ) {
@@ -60,6 +65,7 @@ data class SavedMessage(
 data class SavedMessagesSettings(
     val pinEnabled: Boolean = false,
     val pinHash: String? = null,
+    val cryptoV2: Boolean = false,    // миграция на ключ контента (CK) выполнена
     val lockTimeout: Int = 5,         // минуты; 0 = немедленно
     val updatedAt: Timestamp? = null
 )

@@ -92,6 +92,7 @@ data class ChatUiState(
     val blockedByPeer: Boolean = false,
     /** Я заблокировал собеседника (`blocks`): писать нельзя, пока не разблокирую. */
     val blockedByMe: Boolean = false,
+    val scheduledMessages: List<org.visorlink.app.data.model.ScheduledMessage> = emptyList(),
 ) {
     /** Блокировка в любую сторону закрывает отправку в личном чате (сервер откажет правилами). */
     val isBlockedDirect get() = blockedByPeer || blockedByMe
@@ -122,6 +123,7 @@ class ChatViewModel(
     /** Google Диск: медиа загружаются на Диск отправителя. `null` — проверка выключена (тесты). */
     private val driveAuth: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
     private val blockRepository: org.visorlink.app.data.repository.BlockRepository? = null,
+    private val scheduledRepository: org.visorlink.app.data.repository.ScheduledRepository? = null,
 ) : AndroidViewModel(context) {
 
     // Снимок на создание VM: после выхода из аккаунта геттер с !! падал бы NPE до ухода с экрана
@@ -292,6 +294,14 @@ class ChatViewModel(
     }
 
     init {
+        if (scheduledRepository != null && currentUid.isNotEmpty() && chatId.isNotEmpty()) {
+            viewModelScope.launch {
+                scheduledRepository.mine(currentUid, chatId).collect { list ->
+                    _uiState.update { it.copy(scheduledMessages = list) }
+                }
+            }
+        }
+
         val initialMode = wallpaperPrefs.getString("mode_$chatId", "mine") ?: "mine"
         _uiState.update { it.copy(wallpaperMode = initialMode) }
 
@@ -404,12 +414,6 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            val exists = waitForChat()
-            if (!exists) {
-                _uiState.update { it.copy(error = "Failed to open chat") }
-                return@launch
-            }
-
             typingManager = TypingManager(chatId, currentUid)
 
             launch {
@@ -493,10 +497,11 @@ class ChatViewModel(
                     }
 
                     if (ActiveChatTracker.isChatActive(chatId)) {
+                        val hideReads = _uiState.value.currentUser?.hidesReads == true
                         viewModelScope.launch(Dispatchers.IO) {
                             try {
-                                chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid)
-                                chatRepository.resetUnreadCount(chatId, currentUid)
+                                chatRepository.markMessagesAsRead(chatId, latestMessages, currentUid, hideReads = hideReads)
+                                chatRepository.resetUnreadCount(chatId, currentUid, hideReads = hideReads)
                                 NotificationHelper.clearNotification(context, chatId)
                             }
                             catch (_: Exception) {}
@@ -871,8 +876,9 @@ class ChatViewModel(
                 }
 
                 if (ActiveChatTracker.isChatActive(chatId)) {
+                    val hideReads = _uiState.value.currentUser?.hidesReads == true
                     try {
-                        chatRepository.markMessagesAsRead(chatId, older, currentUid)
+                        chatRepository.markMessagesAsRead(chatId, older, currentUid, hideReads = hideReads)
                         NotificationHelper.clearNotification(context, chatId)
                     }
                     catch (_: Exception) {}
@@ -905,7 +911,7 @@ class ChatViewModel(
         val dateFormatter = DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault())
 
         for (message in sorted) {
-            val createdAt = message.createdAt ?: continue
+            val createdAt = message.createdAt ?: Timestamp.now()
             val epochMilli = (createdAt.seconds * 1000L) + (createdAt.nanoseconds / 1_000_000L)
             val msgDate = Instant.ofEpochMilli(epochMilli).atZone(zone).toLocalDate()
             if (msgDate != lastDate) {
@@ -957,11 +963,24 @@ class ChatViewModel(
     }
 
     fun sendText(text: String) {
-        if (!_uiState.value.canSendMessage) return
         val trimmed = text.trim().ifEmpty { return }
+        org.visorlink.app.utils.DiagnosticLogBuffer.i("ChatVM", "sendText called: chatId=$chatId, canSend=${_uiState.value.canSendMessage}, isCooldown=${_uiState.value.isCooldown}")
+        if (!_uiState.value.canSendMessage) {
+            org.visorlink.app.utils.DiagnosticLogBuffer.w("ChatVM", "sendText blocked: canSendMessage is false (chatType=${_uiState.value.chatType}, myMember=${_uiState.value.myMember})")
+            return
+        }
 
         if (trimmed.length > 2000) return
-        if (!startCooldown()) return
+        if (!startCooldown()) {
+            org.visorlink.app.utils.DiagnosticLogBuffer.w("ChatVM", "sendText blocked: cooldown is active")
+            return
+        }
+
+        val resolvedUsername = currentUsername.ifBlank {
+            auth.currentUser?.displayName?.ifBlank { null }
+                ?: auth.currentUser?.email?.substringBefore('@')?.ifBlank { null }
+                ?: "user"
+        }
 
         val reply = _uiState.value.replyingTo?.toReplyData()
         val activeTopicId = _uiState.value.topicId ?: initialTopicId
@@ -972,17 +991,21 @@ class ChatViewModel(
             clearReply()
             draftManager.clearDraft(chatId)
             try {
+                org.visorlink.app.utils.DiagnosticLogBuffer.i("ChatVM", "Enqueuing sendText for chatId=$chatId, isDirect=$isDirect, targetUserId=$targetUserId, sender=$resolvedUsername")
                 chatRepository.sendText(
                     chatId = chatId,
                     text = trimmed,
-                    senderUsername = currentUsername,
+                    senderUsername = resolvedUsername,
                     replyTo = reply,
                     topicId = activeTopicId,
                     nextSeq = nextSeq,
                     isDirect = isDirect,
                     otherUserId = targetUserId
                 )
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
+                org.visorlink.app.utils.DiagnosticLogBuffer.e("ChatVM", "chatRepository.sendText failed: ${e.message}", e)
                 _uiState.update { it.copy(error = e.message) }
             }
         }
@@ -1510,6 +1533,75 @@ class ChatViewModel(
 
     fun openFullscreenAudio() {
         musicPlayerManager.openFullscreenPlayer()
+    }
+
+    fun scheduleMessage(
+        text: String,
+        sendAt: Long,
+        replyTo: Message? = null,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                val replyMap = replyTo?.let {
+                    mapOf(
+                        "id" to it.id,
+                        "text" to it.text,
+                        "senderUsername" to it.senderUsername
+                    )
+                }
+                repo.create(
+                    chatId = chatId,
+                    topicId = _uiState.value.topicId,
+                    text = text,
+                    sendAt = sendAt,
+                    replyTo = replyMap
+                )
+                onSuccess()
+            } catch (e: Exception) {
+                val reason = (e as? org.visorlink.app.data.remote.EconomyException)?.reason
+                onError(org.visorlink.app.data.model.scheduledReasonText(reason))
+            }
+        }
+    }
+
+    fun updateScheduledMessage(
+        id: String,
+        text: String? = null,
+        sendAt: Long? = null,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.update(id = id, text = text, sendAt = sendAt)
+                onSuccess()
+            } catch (e: Exception) {
+                val reason = (e as? org.visorlink.app.data.remote.EconomyException)?.reason
+                onError(org.visorlink.app.data.model.scheduledReasonText(reason))
+            }
+        }
+    }
+
+    fun cancelScheduledMessage(id: String) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.cancel(id)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun sendScheduledMessageNow(id: String) {
+        val repo = scheduledRepository ?: return
+        viewModelScope.launch {
+            try {
+                repo.sendNow(id)
+            } catch (_: Exception) {}
+        }
     }
 
     fun saveTrackToLibrary(track: MusicTrack) {

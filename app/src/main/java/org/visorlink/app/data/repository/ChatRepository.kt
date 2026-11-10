@@ -10,9 +10,12 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.Source
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.*
 import org.visorlink.app.utils.ChatDataCache
+import org.visorlink.app.utils.DiagnosticLogBuffer
 import org.visorlink.app.utils.ImageCache
 import org.visorlink.app.utils.VoiceCache
 import org.visorlink.app.utils.NetworkMonitor
@@ -41,6 +44,18 @@ import java.util.Locale
 import java.util.TimeZone
 
 private const val PAGE_SIZE = 20L
+private const val CHATS_LIST_LIMIT = 50L
+
+data class ChatDiagInfo(
+    val uid: String = "",
+    val directCount: Int = 0,
+    val groupCount: Int = 0,
+    val emerCount: Int = 0,
+    val totalCount: Int = 0,
+    val lastDirectError: String? = null,
+    val lastGroupError: String? = null,
+    val lastSyncTs: Long = 0L
+)
 
 class ChatRepository(
     private val auth: FirebaseAuth,
@@ -50,145 +65,322 @@ class ChatRepository(
     private val networkMonitor: NetworkMonitor,
     private val googleDriveAuthManager: org.visorlink.app.utils.GoogleDriveAuthManager? = null,
     private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null,
-    private val yandexDeadDropManager: org.visorlink.app.data.remote.yandex.YandexDeadDropManager? = null
+    private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager
 ) {
     val currentUid: String get() = auth.currentUser?.uid ?: ""
+
+    private val repoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val sharedChatsFlows = java.util.concurrent.ConcurrentHashMap<String, SharedFlow<List<Chat>>>()
+
+    private val _diagInfo = MutableStateFlow(ChatDiagInfo())
+    val diagInfo: StateFlow<ChatDiagInfo> = _diagInfo.asStateFlow()
 
     fun getChatId(uid1: String, uid2: String) =
         listOf(uid1, uid2).sorted().joinToString("_")
 
-    suspend fun chatExists(chatId: String): Boolean = try {
+    suspend fun chatExists(chatId: String): Boolean = withContext(Dispatchers.IO) {
         if (chatId.startsWith("emer_")) {
             val cached = ChatDataCache.loadChat(context, chatId)
-            return cached != null
+            return@withContext cached != null
         }
-        db.collection("chats").document(chatId).get().await().exists()
-    } catch (e: Exception) {
-        // Если оффлайн, проверяем наличие чата в нашем локальном кэше (SQLite)
+        // 1. Сначала мгновенно проверяем наш локальный SQLite-кэш
+        val cached = ChatDataCache.loadChat(context, chatId)
+        if (cached != null) return@withContext true
         val cachedChats = ChatDataCache.loadChatList(context, currentUid)
-        cachedChats.any { it.id == chatId }
+        if (cachedChats.any { it.id == chatId }) return@withContext true
+
+        // 2. Быстрая проверка Firestore кэша без ожидания сети
+        try {
+            val cacheDoc = db.collection("chats").document(chatId).get(Source.CACHE).await()
+            if (cacheDoc.exists()) return@withContext true
+        } catch (_: Exception) {}
+
+        // 3. Сетевой фоллбэк
+        try {
+            db.collection("chats").document(chatId).get().await().exists()
+        } catch (e: Exception) {
+            false
+        }
     }
 
-    fun allChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
-        launch(Dispatchers.IO) {
-            val cached = ChatDataCache.loadChatList(context, uid)
-            if (cached.isNotEmpty()) trySend(cached)
+    fun allChatsFlow(uid: String): Flow<List<Chat>> {
+        if (uid.isBlank()) return flowOf(emptyList())
+        return sharedChatsFlows.getOrPut(uid) {
+            createChatsFlow(uid).shareIn(
+                scope = repoScope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 30_000L, replayExpirationMillis = Long.MAX_VALUE),
+                replay = 1
+            )
         }
+    }
 
-        val directChats = mutableListOf<Chat>()
-        val groupChats  = mutableListOf<Chat>()
+    private fun createChatsFlow(uid: String): Flow<List<Chat>> = channelFlow {
+        DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow started for uid=$uid, limit=$CHATS_LIST_LIMIT")
+        _diagInfo.update { it.copy(uid = uid) }
+
+        var emerList: List<Chat> = emptyList()
+        var directList: List<Chat> = emptyList()
+        var groupList: List<Chat> = emptyList()
+        var directReceived = false
+        var groupReceived = false
+        var hasFirestoreEmitted = false
+        var cacheSaveJob: kotlinx.coroutines.Job? = null
+        val listLock = Any()
 
         fun merge() {
-            launch(Dispatchers.IO) {
-                val emerChats = ChatDataCache.loadChatList(context, uid).filter { it.isEmergency }
-                val all = (directChats + groupChats + emerChats)
+            val all: List<Chat>
+            val dCount: Int
+            val gCount: Int
+            val eCount: Int
+            val canSaveCache: Boolean
+            synchronized(listLock) {
+                hasFirestoreEmitted = true
+                dCount = directList.size
+                gCount = groupList.size
+                eCount = emerList.size
+                canSaveCache = directReceived && groupReceived
+                all = (directList + groupList + emerList)
                     .distinctBy { it.id }
-                    .sortedByDescending { it.lastMessageAt?.seconds ?: 0 }
-                trySend(all)
-                ChatDataCache.saveChatList(context, uid, all)
+                    .sortedByDescending { (it.lastMessageAt ?: it.createdAt)?.seconds ?: 0L }
+            }
+
+            DiagnosticLogBuffer.i(
+                "ChatRepo",
+                "allChatsFlow merged: direct=$dCount, group=$gCount, emer=$eCount, total=${all.size}"
+            )
+            _diagInfo.update {
+                it.copy(
+                    uid = uid,
+                    directCount = dCount,
+                    groupCount = gCount,
+                    emerCount = eCount,
+                    totalCount = all.size,
+                    lastSyncTs = System.currentTimeMillis()
+                )
+            }
+            trySend(all)
+
+            if (canSaveCache) {
+                cacheSaveJob?.cancel()
+                cacheSaveJob = launch(Dispatchers.IO) {
+                    try {
+                        ChatDataCache.saveChatList(context, uid, all)
+                    } catch (e: Throwable) {
+                        if (e !is kotlinx.coroutines.CancellationException) {
+                            DiagnosticLogBuffer.e("ChatRepo", "Failed to cache chat list: ${e.message}", e)
+                        }
+                    }
+                }
+            }
+        }
+
+        launch(Dispatchers.IO) {
+            try {
+                val cached = ChatDataCache.loadChatList(context, uid)
+                val shouldEmit: Boolean
+                val hasEmer: Boolean
+                synchronized(listLock) {
+                    emerList = cached.filter { it.isEmergency }
+                    hasEmer = emerList.isNotEmpty()
+                    // Если Firestore уже прислал снапшот, SQLite-кэш не должен перезаписывать свежие данные
+                    shouldEmit = !hasFirestoreEmitted && cached.isNotEmpty()
+                }
+                if (shouldEmit) {
+                    DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow loaded ${cached.size} cached chats from SQLite")
+                    trySend(cached)
+                } else {
+                    DiagnosticLogBuffer.i(
+                        "ChatRepo",
+                        "allChatsFlow SQLite cache loaded (${cached.size} chats), emit skipped (hasFirestore=$hasFirestoreEmitted)"
+                    )
+                    if (hasEmer) {
+                        merge()
+                    }
+                }
+            } catch (e: Throwable) {
+                DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached chats: ${e.message}", e)
             }
         }
 
         val reg1 = db.collection("chats").whereArrayContains("participants", uid)
-            .orderBy("lastMessageAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snap, _ ->
-                directChats.clear()
-                snap?.documents?.forEach { doc ->
-                    doc.toChatOrNull()?.let { directChats.add(it) }
+            .limit(CHATS_LIST_LIMIT)
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    val errMsg = "${error.code}: ${error.message}"
+                    Log.e("ChatRepository", "allChatsFlow direct listener error: $errMsg", error)
+                    DiagnosticLogBuffer.e("ChatRepo", "allChatsFlow direct listener error: $errMsg", error)
+                    _diagInfo.update { it.copy(lastDirectError = errMsg) }
+                    return@addSnapshotListener
+                }
+                _diagInfo.update { it.copy(lastDirectError = null) }
+                val docs = snap?.documents.orEmpty()
+                DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow direct snapshot: ${docs.size} docs")
+                val parsed = docs.mapNotNull { doc ->
+                    doc.toChatOrNull() ?: run {
+                        DiagnosticLogBuffer.w("ChatRepo", "direct chat doc ${doc.id} parse failed")
+                        null
+                    }
+                }
+                synchronized(listLock) {
+                    directReceived = true
+                    directList = parsed
                 }
                 merge()
             }
 
         val reg2 = db.collection("chats").whereArrayContains("memberIds", uid)
-            .orderBy("lastMessageAt", Query.Direction.DESCENDING)
-            .addSnapshotListener { snap, _ ->
-                groupChats.clear()
-                snap?.documents?.forEach { doc ->
-                    doc.toChatOrNull()?.let { groupChats.add(it) }
+            .limit(CHATS_LIST_LIMIT)
+            .addSnapshotListener { snap, error ->
+                if (error != null) {
+                    val errMsg = "${error.code}: ${error.message}"
+                    Log.e("ChatRepository", "allChatsFlow group listener error: $errMsg", error)
+                    DiagnosticLogBuffer.e("ChatRepo", "allChatsFlow group listener error: $errMsg", error)
+                    _diagInfo.update { it.copy(lastGroupError = errMsg) }
+                    return@addSnapshotListener
+                }
+                _diagInfo.update { it.copy(lastGroupError = null) }
+                val docs = snap?.documents.orEmpty()
+                DiagnosticLogBuffer.i("ChatRepo", "allChatsFlow group snapshot: ${docs.size} docs")
+                val parsed = docs.mapNotNull { doc ->
+                    doc.toChatOrNull() ?: run {
+                        DiagnosticLogBuffer.w("ChatRepo", "group chat doc ${doc.id} parse failed")
+                        null
+                    }
+                }
+                synchronized(listLock) {
+                    groupReceived = true
+                    groupList = parsed
                 }
                 merge()
             }
 
-        awaitClose { reg1.remove(); reg2.remove() }
+        awaitClose {
+            cacheSaveJob?.cancel()
+            reg1.remove()
+            reg2.remove()
+        }
     }
 
     fun chatsFlow(uid: String) = allChatsFlow(uid)
 
     fun latestMessagesFlow(chatId: String, onUpdate: (List<Message>, DocumentSnapshot?) -> Unit): Flow<Unit> = channelFlow {
+        DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow started for chatId=$chatId")
         var currentFirestore = emptyList<Message>()
         var currentOutbox = emptyList<ChatDataCache.QueuedAction>()
         var currentLastDoc: DocumentSnapshot? = null
+        val msgLock = Any()
 
         fun rebuild() {
-            val firestoreIds = currentFirestore.map { it.id }.toSet()
-            val outboxMsgs = currentOutbox.map { action ->
-                val type = action.data.optString("type", action.type)
-                if (action.progress > 0f) {
-                    Log.d("ChatRepo", "Outbox message ${action.id} progress: ${action.progress}")
-                }
-                Message(
-                    id = action.id,
-                    seq = action.data.optLong("nextSeq").takeIf { it > 0 },
-                    senderId = currentUid,
-                    senderUsername = action.data.optString("senderUsername"),
-                    type = type,
-                    text = action.data.optString("text"),
-                    // Подпись видна с момента нажатия «Отправить»
-                    caption = action.data.optString("caption").ifEmpty { null },
-                    localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
-                    uploadProgress = if (action.status == 0) action.progress else null,
-                    createdAt = Timestamp(Date(action.ts)),
-                    status = when (action.status) {
-                        1 -> SendStatus.SENT
-                        2 -> SendStatus.ERROR
-                        else -> SendStatus.QUEUED
+            val firestoreIds: Set<String>
+            val combined: List<Message>
+            val lastDoc: DocumentSnapshot?
+            val outboxCopy: List<ChatDataCache.QueuedAction>
+            synchronized(msgLock) {
+                firestoreIds = currentFirestore.map { it.id }.toSet()
+                outboxCopy = currentOutbox
+                val outboxMsgs = currentOutbox.map { action ->
+                    val type = action.data.optString("type", action.type)
+                    if (action.progress > 0f) {
+                        Log.d("ChatRepo", "Outbox message ${action.id} progress: ${action.progress}")
                     }
-                )
-            }
-            
-            val outboxMap = outboxMsgs.associateBy { it.id }
-            val firestoreMap = currentFirestore.associateBy { it.id }
-            
-            val combinedMap = outboxMap.toMutableMap()
-            firestoreMap.forEach { (id, fsMsg) ->
-                val obMsg = outboxMap[id]
-                combinedMap[id] = if (obMsg != null) {
-                    fsMsg.copy(
-                        localFile = obMsg.localFile ?: fsMsg.localFile,
-                        status = SendStatus.SENT
+                    Message(
+                        id = action.id,
+                        seq = action.data.optLong("nextSeq").takeIf { it > 0 },
+                        senderId = currentUid,
+                        senderUsername = action.data.optString("senderUsername"),
+                        type = type,
+                        text = action.data.optString("text"),
+                        // Подпись видна с момента нажатия «Отправить»
+                        caption = action.data.optString("caption").ifEmpty { null },
+                        localFile = action.data.optString("localPath").takeIf { it.isNotEmpty() }?.let { File(it) },
+                        uploadProgress = if (action.status == 0) action.progress else null,
+                        createdAt = Timestamp(Date(action.ts)),
+                        status = when (action.status) {
+                            1 -> SendStatus.SENT
+                            2 -> SendStatus.ERROR
+                            else -> SendStatus.QUEUED
+                        }
                     )
-                } else {
-                    fsMsg
                 }
+
+                val outboxMap = outboxMsgs.associateBy { it.id }
+                val firestoreMap = currentFirestore.associateBy { it.id }
+
+                val combinedMap = outboxMap.toMutableMap()
+                firestoreMap.forEach { (id, fsMsg) ->
+                    val obMsg = outboxMap[id]
+                    combinedMap[id] = if (obMsg != null) {
+                        fsMsg.copy(
+                            localFile = obMsg.localFile ?: fsMsg.localFile,
+                            status = SendStatus.SENT
+                        )
+                    } else {
+                        fsMsg
+                    }
+                }
+
+                combined = combinedMap.values.distinctBy { it.id }
+                lastDoc = currentLastDoc
             }
-            
-            val combined = combinedMap.values.distinctBy { it.id }
-            onUpdate(combined, currentLastDoc)
-            
-            val confirmedIds = currentOutbox.map { it.id }.filter { it in firestoreIds }
+            onUpdate(combined, lastDoc)
+
+            val confirmedIds = outboxCopy.map { it.id }.filter { it in firestoreIds }
             if (confirmedIds.isNotEmpty()) {
-                launch(Dispatchers.IO) { ChatDataCache.cleanupOutbox(context, confirmedIds) }
+                launch(Dispatchers.IO) {
+                    try {
+                        ChatDataCache.cleanupOutbox(context, confirmedIds)
+                    } catch (e: Throwable) {
+                        DiagnosticLogBuffer.e("ChatRepo", "Failed to cleanup outbox: ${e.message}", e)
+                    }
+                }
             }
         }
 
         // 1. Outbox listener (отображение отправляемых сообщений)
         launch(Dispatchers.Default) {
-            ChatDataCache.outboxFlow(context, chatId).collect {
-                currentOutbox = it
-                rebuild()
+            try {
+                ChatDataCache.outboxFlow(context, chatId).collect {
+                    synchronized(msgLock) {
+                        currentOutbox = it
+                    }
+                    rebuild()
+                }
+            } catch (e: Throwable) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    DiagnosticLogBuffer.e("ChatRepo", "Outbox flow error: ${e.message}", e)
+                }
             }
         }
 
         // 2. Initial Cache load + Signal listener (для мгновенного обновления при сохранении в SQLite)
         launch(Dispatchers.IO) {
-            currentFirestore = ChatDataCache.loadMessages(context, chatId)
-            rebuild()
+            try {
+                val cached = ChatDataCache.loadMessages(context, chatId)
+                synchronized(msgLock) {
+                    if (currentFirestore.isEmpty() && cached.isNotEmpty()) {
+                        currentFirestore = cached
+                        rebuild()
+                    }
+                }
 
-            ChatDataCache.cacheUpdateSignal.collect { updatedChatId ->
-                if (updatedChatId == chatId) {
-                    val updated = ChatDataCache.loadMessages(context, chatId)
-                    currentFirestore = updated
-                    rebuild()
+                ChatDataCache.cacheUpdateSignal.collect { updatedChatId ->
+                    if (updatedChatId == chatId) {
+                        try {
+                            val updated = ChatDataCache.loadMessages(context, chatId)
+                            synchronized(msgLock) {
+                                currentFirestore = updated
+                            }
+                            rebuild()
+                        } catch (e: Throwable) {
+                            if (e !is kotlinx.coroutines.CancellationException) {
+                                DiagnosticLogBuffer.e("ChatRepo", "Cache reload error: ${e.message}", e)
+                            }
+                        }
+                    }
+                }
+            } catch (e: Throwable) {
+                if (e !is kotlinx.coroutines.CancellationException) {
+                    DiagnosticLogBuffer.e("ChatRepo", "Failed to load cached messages: ${e.message}", e)
                 }
             }
         }
@@ -198,96 +390,52 @@ class ChatRepository(
             db.collection("chats").document(chatId).collection("messages")
                 .orderBy("createdAt", Query.Direction.DESCENDING).limit(PAGE_SIZE)
                 .addSnapshotListener(MetadataChanges.INCLUDE) { snap, error ->
-                    if (error != null || snap == null) return@addSnapshotListener
-                    val messages = snap.documents.mapNotNull { doc ->
-                        try { doc.toObject(Message::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)?.copy(id = doc.id) } catch (_: Exception) { null }
-                    }.reversed()
-                    
-                    currentFirestore = messages
-                    currentLastDoc = snap.documents.lastOrNull()
+                    if (error != null) {
+                        val errMsg = "${error.code}: ${error.message}"
+                        Log.e("ChatRepository", "latestMessagesFlow error: $errMsg", error)
+                        DiagnosticLogBuffer.e("ChatRepo", "latestMessagesFlow $chatId error: $errMsg", error)
+                        return@addSnapshotListener
+                    }
+                    if (snap == null) return@addSnapshotListener
+                    val parsed = snap.documents.mapNotNull { it.toMessageOrNull() }
+                    DiagnosticLogBuffer.i("ChatRepo", "latestMessagesFlow $chatId: ${snap.documents.size} docs, ${parsed.size} parsed")
+                    val messages = parsed.reversed()
+
+                    synchronized(msgLock) {
+                        currentFirestore = messages
+                        currentLastDoc = snap.documents.lastOrNull()
+                    }
                     rebuild()
 
                     launch(Dispatchers.IO) {
-                        ChatDataCache.saveMessages(context, chatId, messages)
-                        // Prefetch media
-                        messages.forEach { msg ->
-                            try {
-                                val url = msg.url
-                                if (!url.isNullOrEmpty()) {
-                                    if (msg.type == MessageType.VOICE) VoiceCache.getOrDownload(context, url)
-                                    else ImageCache.getOrDownload(context, url)
-                                }
-                            } catch (_: Exception) {}
-                        }
-                    }
-                }
-        } else null
-
-        // 4. Polling Yandex Dead-Drop (если включена аварийная доставка)
-        val deadDropJob = if (yandexDeadDropManager?.isAvailable() == true && currentUid.isNotBlank() && chatId.startsWith("emer_")) {
-            launch(Dispatchers.IO) {
-                // Мгновенный первый опрос при входе
-                try {
-                    val initialIncoming = yandexDeadDropManager.pollIncomingMessages(chatId, currentUid)
-                    if (initialIncoming.isNotEmpty()) {
-                        val newMsgs = initialIncoming.mapNotNull {
-                            try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
-                        }
-                        if (newMsgs.isNotEmpty()) {
-                            ChatDataCache.saveMessages(context, chatId, newMsgs)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w("ChatRepo", "Initial dead-drop poll: ${e.message}")
-                }
-
-                while (true) {
-                    kotlinx.coroutines.delay(3000L)
-                    try {
-                        val incoming = yandexDeadDropManager.pollIncomingMessages(chatId, currentUid)
-                        if (incoming.isNotEmpty()) {
-                            val newMsgs = incoming.mapNotNull {
-                                try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
+                        try {
+                            ChatDataCache.saveMessages(context, chatId, messages)
+                            // Предзагрузка голосовых сообщений (изображения кешируются через Coil AppImageLoader по требованию)
+                            messages.forEach { msg ->
+                                try {
+                                    val url = msg.url
+                                    if (!url.isNullOrEmpty() && msg.type == MessageType.VOICE) {
+                                        VoiceCache.getOrDownload(context, url)
+                                    }
+                                } catch (_: Exception) {}
                             }
-                            if (newMsgs.isNotEmpty()) {
-                                ChatDataCache.saveMessages(context, chatId, newMsgs)
-                            }
+                        } catch (e: Throwable) {
+                            DiagnosticLogBuffer.e("ChatRepo", "Failed to save messages to cache: ${e.message}", e)
                         }
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        Log.w("ChatRepo", "Dead-drop poll error: ${e.message}")
                     }
                 }
-            }
         } else null
 
         awaitClose {
             reg?.remove()
-            deadDropJob?.cancel()
         }
         send(Unit)
-    }
-
-    suspend fun pollDeadDropNow(chatId: String): List<Message> = withContext(Dispatchers.IO) {
-        val manager = yandexDeadDropManager ?: return@withContext emptyList()
-        if (!manager.isAvailable() || currentUid.isBlank()) return@withContext emptyList()
-        val incoming = manager.pollIncomingMessages(chatId, currentUid)
-        if (incoming.isEmpty()) return@withContext emptyList()
-        val messages = incoming.mapNotNull {
-            try { ChatDataCache.jsonToMessage(it) } catch (_: Exception) { null }
-        }
-        if (messages.isNotEmpty()) {
-            ChatDataCache.saveMessages(context, chatId, messages)
-        }
-        messages
     }
 
     suspend fun loadOlderMessages(chatId: String, startAfterDoc: DocumentSnapshot): Pair<List<Message>, DocumentSnapshot?> = try {
         val snap = db.collection("chats").document(chatId).collection("messages")
             .orderBy("createdAt", Query.Direction.DESCENDING).startAfter(startAfterDoc).limit(PAGE_SIZE).get().await()
-        val messages = snap.documents.mapNotNull { doc ->
-            try { doc.toObject(Message::class.java)?.copy(id = doc.id) } catch (_: Exception) { null }
-        }.reversed()
+        val messages = snap.documents.mapNotNull { it.toMessageOrNull() }.reversed()
         Pair(sortMessages(messages), if (snap.documents.size >= PAGE_SIZE) snap.documents.lastOrNull() else null)
     } catch (e: Exception) {
         Pair(emptyList(), null)
@@ -527,7 +675,7 @@ class ChatRepository(
         return updates
     }
 
-    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? = withContext(Dispatchers.IO) {
+    suspend fun sendText(chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null): Message? = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("text", text)
             put("senderUsername", senderUsername)
@@ -538,22 +686,32 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         val outboxId = ChatDataCache.addToOutbox(context, chatId, "text", data)
+        DiagnosticLogBuffer.i("ChatRepo", "sendText added to outbox: outboxId=$outboxId, chatId=$chatId")
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
         null
     }
 
     suspend fun sendTextNow(id: String, chatId: String, text: String, senderUsername: String, replyTo: ReplyData?, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) {
+        val resolvedUid = currentUid.ifBlank { auth.currentUser?.uid.orEmpty() }
+        val resolvedUsername = senderUsername.ifBlank {
+            auth.currentUser?.displayName?.ifBlank { null }
+                ?: auth.currentUser?.email?.substringBefore('@')?.ifBlank { null }
+                ?: "user"
+        }
+        DiagnosticLogBuffer.i("ChatRepo", "sendTextNow starting: msgId=$id, chatId=$chatId, sender=$resolvedUsername, uid=$resolvedUid, isDirect=$isDirect")
+
         val msgRef = db.collection("chats").document(chatId).collection("messages").document(id)
-        val userRef = db.collection("users").document(currentUid)
+        val userRef = db.collection("users").document(resolvedUid)
 
         val msgData = mutableMapOf<String, Any?>(
-            "senderId"       to currentUid,
-            "senderUsername" to senderUsername,
+            "senderId"       to resolvedUid,
+            "senderUsername" to resolvedUsername,
             "type"           to MessageType.TEXT,
             "text"           to text,
             "createdAt"      to FieldValue.serverTimestamp(),
             "deleted"        to false,
             "reactions"      to emptyList<Any>(),
-            "readBy"         to listOf(currentUid),
+            "readBy"         to listOf(resolvedUid),
             "replyTo"        to replyTo?.toMap()
         )
         if (nextSeq != null && nextSeq > 0) {
@@ -565,19 +723,27 @@ class ChatRepository(
 
         val batch  = db.batch()
         batch.set(msgRef, msgData)
-        batch.update(db.collection("chats").document(chatId), buildChatUpdates(text, currentUid, senderUsername, nextSeq, isDirect, otherUserId))
+        batch.update(db.collection("chats").document(chatId), buildChatUpdates(text, resolvedUid, resolvedUsername, nextSeq, isDirect, otherUserId))
         if (topicId != null) {
             val topicRef = db.collection("chats").document(chatId).collection("topics").document(topicId)
             batch.update(topicRef, mapOf(
-                "lastMessage" to mapOf("text" to text, "senderUsername" to senderUsername),
+                "lastMessage" to mapOf("text" to text, "senderUsername" to resolvedUsername),
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
-        batch.commit().await()
+        if (resolvedUid.isNotBlank()) {
+            batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+        }
+        try {
+            batch.commit().await()
+            DiagnosticLogBuffer.i("ChatRepo", "sendTextNow committed successfully for msgId=$id in $chatId")
+        } catch (e: Exception) {
+            DiagnosticLogBuffer.e("ChatRepo", "sendTextNow commit failed for msgId=$id in $chatId: ${e.message}", e)
+            throw e
+        }
     }
 
-    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, caption: String? = null, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO) {
+    suspend fun sendImage(chatId: String, uri: Uri, senderUsername: String, replyTo: ReplyData?, isSpoiler: Boolean = false, caption: String? = null, topicId: String? = null, nextSeq: Long? = null, isDirect: Boolean = false, otherUserId: String? = null) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val rawName = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "image"
         val safeName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID().toString().take(8)}_${rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_")}.jpg"
         val tempFile = File(context.cacheDir, safeName)
@@ -600,6 +766,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "image", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendImageNow(
@@ -660,7 +827,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -674,7 +841,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("localPath", file.absolutePath)
             put("duration", durationSec)
@@ -686,6 +853,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "voice", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendVoiceNow(
@@ -739,7 +907,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -756,7 +924,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("localPath", file.absolutePath)
             put("title", title)
@@ -771,6 +939,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "audio", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendAudioNow(
@@ -837,7 +1006,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -850,7 +1019,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) = withContext(Dispatchers.IO) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val fileName = "${System.currentTimeMillis()}_${uri.lastPathSegment ?: "video.mp4"}"
         val tempFile = File(context.cacheDir, fileName)
         context.contentResolver.openInputStream(uri)?.use { input ->
@@ -867,6 +1036,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "video", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendVideoNow(
@@ -930,7 +1100,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -946,7 +1116,7 @@ class ChatRepository(
         nextSeq: Long? = null,
         isDirect: Boolean = false,
         otherUserId: String? = null
-    ) {
+    ) = withContext(Dispatchers.IO + kotlinx.coroutines.NonCancellable) {
         val data = JSONObject().apply {
             put("stickerId", sticker.id)
             put("url", sticker.url)
@@ -963,6 +1133,7 @@ class ChatRepository(
             if (otherUserId != null) put("otherUserId", otherUserId)
         }
         ChatDataCache.addToOutbox(context, chatId, "sticker", data)
+        org.visorlink.app.utils.OutboxManager.triggerProcessing()
     }
 
     suspend fun sendStickerNow(
@@ -1019,7 +1190,7 @@ class ChatRepository(
                 "lastMessageAt" to FieldValue.serverTimestamp()
             ))
         }
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -1106,7 +1277,7 @@ class ChatRepository(
             "lastMessageSenderId" to currentUid,
             "lastMessageAt" to FieldValue.serverTimestamp()
         ))
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
         return msgRef.id
     }
@@ -1129,7 +1300,7 @@ class ChatRepository(
         val batch = db.batch()
         batch.set(msgRef, msg)
         batch.update(db.collection("chats").document(chatId), mapOf("lastMessage" to preview, "lastMessageAt" to FieldValue.serverTimestamp()))
-        batch.update(userRef, "lastMessageAt", FieldValue.serverTimestamp())
+        batch.set(userRef, mapOf("lastMessageAt" to FieldValue.serverTimestamp()), SetOptions.merge())
         batch.commit().await()
     }
 
@@ -1140,7 +1311,11 @@ class ChatRepository(
         }
     }
 
-    suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String) {
+    suspend fun markMessagesAsRead(chatId: String, messages: List<Message>, uid: String, hideReads: Boolean = false) {
+        if (hideReads) {
+            resetUnreadCount(chatId, uid, hideReads = true)
+            return
+        }
         val unread = messages.filter { it.senderId != uid && !it.readBy.contains(uid) && !it.deleted }
         if (unread.isEmpty()) return
         val batch = db.batch()
@@ -1157,13 +1332,15 @@ class ChatRepository(
         batch.commit().await()
     }
 
-    suspend fun resetUnreadCount(chatId: String, uid: String) {
+    suspend fun resetUnreadCount(chatId: String, uid: String, hideReads: Boolean = false) {
         if (uid.isEmpty() || chatId.isEmpty()) return
         try {
             val chatUpdates = hashMapOf<String, Any>(
-                "unreadCount.$uid" to 0L,
-                "lastMessage.readBy" to FieldValue.arrayUnion(uid)
+                "unreadCount.$uid" to 0L
             )
+            if (!hideReads) {
+                chatUpdates["lastMessage.readBy"] = FieldValue.arrayUnion(uid)
+            }
             db.collection("chats").document(chatId).update(chatUpdates).await()
         } catch (_: Exception) {}
     }
@@ -1223,7 +1400,7 @@ class ChatRepository(
 
     fun listenPost(chatId: String, messageId: String, onUpdate: (Message) -> Unit): ListenerRegistration {
         return db.collection("chats").document(chatId).collection("messages").document(messageId)
-            .addSnapshotListener { snap, _ -> snap?.toObject(Message::class.java)?.copy(id = snap.id)?.let(onUpdate) }
+            .addSnapshotListener { snap, _ -> snap?.toMessageOrNull()?.let(onUpdate) }
     }
 
     suspend fun addComment(chatId: String, messageId: String, type: String, text: String? = null, cdnMediaId: String? = null, url: String? = null, fileName: String? = null, duration: Int? = null, spoiler: Boolean = false, replyTo: CommentReplyData? = null): String {
@@ -1291,39 +1468,9 @@ class ChatRepository(
     }
 
     /**
-     * Создаёт или возвращает существующий изолированный аварийный чат (транспорт через Яндекс.Диск).
-     * Аварийный чат не зависит от состояния серверов Firestore и сохраняется в SQLite.
-     */
-    suspend fun getOrCreateEmergencyChat(otherUser: UserProfile): Chat = withContext(Dispatchers.IO) {
-        val sortedUids = listOf(currentUid, otherUser.uid).sorted()
-        val chatId = "emer_${sortedUids.joinToString("_")}"
-        val existing = ChatDataCache.loadChat(context, chatId)
-        if (existing != null) {
-            return@withContext existing
-        }
-
-        val myProfile = ChatDataCache.loadProfile(context, currentUid)
-        val myName = myProfile?.displayName?.ifEmpty { myProfile.username } ?: "Пользователь"
-        val otherName = otherUser.displayName.ifEmpty { otherUser.username }.ifEmpty { "Собеседник" }
-
-        val newChat = Chat(
-            id = chatId,
-            type = "emergency",
-            participants = sortedUids,
-            participantData = mapOf(
-                currentUid to mapOf("username" to (myProfile?.username ?: ""), "displayName" to myName),
-                otherUser.uid to mapOf("username" to otherUser.username, "displayName" to otherName)
-            ),
-            name = otherName,
-            createdAt = Timestamp.now()
-        )
-        ChatDataCache.saveSingleChat(context, currentUid, newChat)
-        newChat
-    }
-
-    /**
      * Зашифрованная синхронизация истории аварийного чата в защищенный Vault пользователя в Firestore.
      * Коллекция users/{uid}/emergency_vault/{chatId} защищена правилами Firestore (доступ только auth.uid == uid).
+     * Шифрование — ключом контента (CK, TODO §14.3); старые v1-документы тихо пере-шифровываются.
      */
     suspend fun syncEmergencyVault(chatId: String): Boolean = withContext(Dispatchers.IO) {
         if (!chatId.startsWith("emer_") || currentUid.isBlank()) return@withContext false
@@ -1336,20 +1483,44 @@ class ChatRepository(
                 jsonArray.put(ChatDataCache.messageToJson(msg))
             }
 
-            // Шифруем данные AES-256-GCM симметричным ключом пользователя
-            val vaultKey = deriveKey("vl_vault_user_salt", currentUid)
+            // Тихая миграция v1 → v2: старый ключ вычислим в приложении (TODO §14.4)
+            val vaultRef = db.collection("users").document(currentUid)
+                .collection("emergency_vault").document(chatId)
+            val existing = try { vaultRef.get().await() } catch (_: Exception) { null }
+            if (existing != null && existing.exists() && existing.getLong("keyVersion") != 2L) {
+                val oldPayload = existing.getString("payload")
+                val oldIv = existing.getString("iv")
+                if (oldPayload != null && oldIv != null) {
+                    val legacyVaultKey = deriveKey("vl_vault_user_salt", currentUid)
+                    val plain = decryptText(oldPayload, oldIv, legacyVaultKey)
+                    if (plain != null) {
+                        val ck = contentKeyManager.getOrCreateCK(currentUid, org.visorlink.app.utils.ContentKeyManager.DOMAIN_VAULT)
+                        val (ct, iv) = encryptText(plain, ck)
+                        vaultRef.set(
+                            mapOf(
+                                "chatId" to chatId, "payload" to ct, "iv" to iv, "keyVersion" to 2L,
+                                "messageCount" to (existing.getLong("messageCount") ?: 0L),
+                                "updatedAt" to FieldValue.serverTimestamp()
+                            )
+                        ).await()
+                    }
+                }
+            }
+
+            // Шифруем данные ключом контента (CK)
+            val vaultKey = contentKeyManager.getOrCreateCK(currentUid, org.visorlink.app.utils.ContentKeyManager.DOMAIN_VAULT)
             val (encryptedPayload, iv) = encryptText(jsonArray.toString(), vaultKey)
 
             val vaultDoc = hashMapOf<String, Any>(
                 "chatId" to chatId,
                 "payload" to encryptedPayload,
                 "iv" to iv,
+                "keyVersion" to 2L,
                 "messageCount" to messages.size,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
 
-            db.collection("users").document(currentUid)
-                .collection("emergency_vault").document(chatId)
+            vaultRef
                 .set(vaultDoc)
                 .await()
             Log.d("ChatRepo", "Successfully synced emergency vault for $chatId (${messages.size} msgs)")
@@ -1374,13 +1545,16 @@ class ChatRepository(
 
             if (snapshot.isEmpty) return@withContext 0
 
-            val vaultKey = deriveKey("vl_vault_user_salt", currentUid)
+            // v2 — ключ контента; v1 — legacy-ключ (окно миграции, тихо обновится при следующем sync)
+            val ck = contentKeyManager.getOrCreateCK(currentUid, org.visorlink.app.utils.ContentKeyManager.DOMAIN_VAULT)
+            val legacyVaultKey = deriveKey("vl_vault_user_salt", currentUid)
             var restoredCount = 0
 
             for (doc in snapshot.documents) {
                 val chatId = doc.id
                 val payload = doc.getString("payload") ?: continue
                 val iv = doc.getString("iv") ?: continue
+                val vaultKey = if (doc.getLong("keyVersion") == 2L) ck else legacyVaultKey
 
                 val decryptedJson = decryptText(payload, iv, vaultKey) ?: continue
                 val jsonArray = org.json.JSONArray(decryptedJson)

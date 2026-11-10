@@ -3,10 +3,7 @@ package org.visorlink.app.utils
 import android.accounts.Account
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
 import android.util.Log
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import android.app.PendingIntent
 import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.identity.AuthorizationClient
@@ -34,28 +31,23 @@ class GoogleDriveAuthManager(
         private const val KEY_FOLDER_ID = "gdrive_folder_id"
     }
 
-    private val prefs: SharedPreferences = createSecurePreferences()
+    // TODO §14.5: SecurePrefs на SecureVault вместо deprecated EncryptedSharedPreferences.
+    // Fail-closed: сбой Keystore → токен недоступен, Drive считается отключённым
+    // (плейнтекст-fallback с тем же именем файла убран — он оставлял OAuth-токен в открытом виде).
+    private val prefs: SecurePrefs = SecurePrefs(context.applicationContext, "gdrive").apply {
+        migrateKeysFrom(
+            listOf(
+                // Файл исторически писался и ESP, и plaintext-fallback под одним именем:
+                // для каждого ключа берём первого читателя, который его отдаёт
+                SecurePrefs.LegacyFile(PREFS_FILE, encrypted = true),
+                SecurePrefs.LegacyFile(PREFS_FILE, encrypted = false)
+            ),
+            keys = listOf(KEY_ACCESS_TOKEN, KEY_EXPIRES_AT, KEY_ACCOUNT_EMAIL, KEY_FOLDER_ID)
+        )
+    }
 
     private val _isConnectedFlow = MutableStateFlow(hasValidConnection())
     val isConnectedFlow: StateFlow<Boolean> = _isConnectedFlow.asStateFlow()
-
-    private fun createSecurePreferences(): SharedPreferences {
-        return try {
-            val masterKey = MasterKey.Builder(context)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                context,
-                PREFS_FILE,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to initialize EncryptedSharedPreferences for Google Drive, using fallback: ${e.message}")
-            context.getSharedPreferences(PREFS_FILE, Context.MODE_PRIVATE)
-        }
-    }
 
     fun getAuthorizationClient(): AuthorizationClient {
         return Identity.getAuthorizationClient(context)
@@ -118,7 +110,7 @@ class GoogleDriveAuthManager(
     }
 
     fun setCachedFolderId(folderId: String) {
-        prefs.edit().putString(KEY_FOLDER_ID, folderId).apply()
+        prefs.putString(KEY_FOLDER_ID, folderId)
     }
 
     private fun hasValidConnection(): Boolean {
@@ -140,16 +132,13 @@ class GoogleDriveAuthManager(
             val expiresIn = 3600_000L // 1 hour default
             val expiresAt = System.currentTimeMillis() + expiresIn - 60_000L
 
-            val editor = prefs.edit()
-                .putString(KEY_ACCESS_TOKEN, validToken)
-                .putLong(KEY_EXPIRES_AT, expiresAt)
+            prefs.putString(KEY_ACCESS_TOKEN, validToken)
+            prefs.putLong(KEY_EXPIRES_AT, expiresAt)
 
             val email = fetchUserEmail(validToken)
             if (!email.isNullOrBlank()) {
-                editor.putString(KEY_ACCOUNT_EMAIL, email)
+                prefs.putString(KEY_ACCOUNT_EMAIL, email)
             }
-
-            editor.apply()
 
             _isConnectedFlow.value = true
             Log.i(TAG, "Google Drive connected successfully via AuthorizationClient")
@@ -198,10 +187,8 @@ class GoogleDriveAuthManager(
                 val expiresIn = 3600_000L
                 val newExpiresAt = System.currentTimeMillis() + expiresIn - 60_000L
 
-                prefs.edit()
-                    .putString(KEY_ACCESS_TOKEN, newToken)
-                    .putLong(KEY_EXPIRES_AT, newExpiresAt)
-                    .apply()
+                prefs.putString(KEY_ACCESS_TOKEN, newToken)
+                prefs.putLong(KEY_EXPIRES_AT, newExpiresAt)
 
                 _isConnectedFlow.value = true
                 newToken
@@ -223,12 +210,10 @@ class GoogleDriveAuthManager(
                     GoogleAuthUtil.clearToken(context, cachedToken)
                 } catch (_: Exception) {}
             }
-            prefs.edit()
-                .remove(KEY_ACCESS_TOKEN)
-                .remove(KEY_EXPIRES_AT)
-                .remove(KEY_ACCOUNT_EMAIL)
-                .remove(KEY_FOLDER_ID)
-                .apply()
+            prefs.remove(KEY_ACCESS_TOKEN)
+            prefs.remove(KEY_EXPIRES_AT)
+            prefs.remove(KEY_ACCOUNT_EMAIL)
+            prefs.remove(KEY_FOLDER_ID)
 
             try {
                 Identity.getSignInClient(context).signOut()

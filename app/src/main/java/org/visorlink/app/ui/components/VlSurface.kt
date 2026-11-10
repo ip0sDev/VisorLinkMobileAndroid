@@ -27,6 +27,7 @@ import org.visorlink.app.ui.theme.VlPressStyle
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.motionSpec
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlStructure
 
 /**
@@ -129,7 +130,7 @@ fun VlSurface(
             .scale(scale)
             .vlStructure(tokens.structure, depth, shape)
             .clip(shape)
-            .background(bg, shape)
+            .vlKeycapBackground(tokens.structure, bg, shape, depth)
             .then(hairlineModifier)
             .then(clickModifier)
             .padding(contentPadding),

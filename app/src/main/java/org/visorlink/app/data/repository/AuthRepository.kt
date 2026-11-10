@@ -343,8 +343,15 @@ class AuthRepository(
 
     suspend fun getAuthTime(): String? {
         val user = auth.currentUser ?: return null
-        val result: GetTokenResult = user.getIdToken(false).await()
-        return result.claims["auth_time"]?.toString()
+        return try {
+            val result: GetTokenResult = user.getIdToken(false).await()
+            result.claims["auth_time"]?.toString()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (BuildConfig.DEBUG) Log.w("AuthRepository", "getAuthTime failed: ${e.message}")
+            null
+        }
     }
 
     // ── Invite-Only Registration ─────────────────────────────────────────────
@@ -382,7 +389,7 @@ class AuthRepository(
             .call(mapOf("status" to status))
             .await()
         val data = res.data as? Map<*, *> ?: return emptyList()
-        val list = data["requests"] as? List<Map<String, Any?>> ?: return emptyList()
+        val list = (data["requests"] as? List<*>)?.filterIsInstance<Map<String, Any?>>() ?: return emptyList()
         return list.map { item ->
             org.visorlink.app.data.model.AccessRequest(
                 requestId = item["requestId"] as? String ?: "",

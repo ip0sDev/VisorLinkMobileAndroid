@@ -138,6 +138,16 @@ internal fun skinErrorText(error: Throwable, cost: Int = IdSkinRules.ROLL_COST_B
         "no-trade" -> R.string.idskin_err_no_trade
         "outdated" -> R.string.idskin_err_outdated
         "no-card" -> R.string.idskin_picker_no_card
+        "single" -> R.string.idskin_err_single
+        "pro-card" -> R.string.idskin_err_pro_card
+        "peer-not-ready" -> R.string.idskin_err_peer_not_ready
+        "pro-required" -> R.string.idskin_err_pro_required
+        "pro-claimed" -> R.string.idskin_err_pro_claimed
+        "trust-age" -> return stringResource(R.string.idskin_err_trust_age, formatWait(idError?.waitMs ?: 0))
+        "trust-activity" -> return stringResource(R.string.idskin_err_trust_activity, idError?.daysLeft ?: 0)
+        "skin-hold" -> return stringResource(R.string.idskin_err_skin_hold, formatWait(idError?.waitMs ?: 0))
+        "trade-limit" -> return stringResource(R.string.idskin_err_trade_limit, formatWait(idError?.waitMs ?: 0))
+        "invite-link" -> return stringResource(R.string.idskin_err_invite_link, formatWait(idError?.waitMs ?: 0))
         else -> null
     }
     return res?.let { stringResource(it) }
@@ -316,7 +326,7 @@ internal fun sparkCount(edition: IdEdition): Int = when (edition) {
     IdEdition.UNCOMMON -> 18
     IdEdition.RARE -> 26
     IdEdition.EPIC -> 36
-    IdEdition.LEGENDARY -> 56
+    IdEdition.LEGENDARY, IdEdition.UNIQUE -> 56
 }
 
 private class Spark(val tx: Float, val ty: Float, val scale: Float, val dur: Float, val delay: Float, val bar: Boolean)

@@ -22,9 +22,11 @@ fun NavGraphBuilder.settingsNavGraph(
     composable(Screen.Settings.route) {
         SettingsScreen(
             onNavigateBack = { navController.popBackStack() },
+            onOpenProfile = { navController.navigate(Screen.Profile.route) },
             onOpenCacheSettings = { navController.navigate(Screen.CacheSettings.route) },
             onOpenStorageManager = { navController.navigate(Screen.StorageManager.route) },
             onOpenSessions = { navController.navigate(Screen.Sessions.route) },
+            onOpenBots = { navController.navigate(Screen.Bots.route) },
             onOpenStatus = { navController.navigate(Screen.Status.route) },
             onOpenCustomization = { navController.navigate(Screen.Customization.route) },
             onOpenIdCard = { navController.navigate(Screen.IdCardSettings.route) },
@@ -32,10 +34,41 @@ fun NavGraphBuilder.settingsNavGraph(
             onOpenFlagFlipper = { navController.navigate(Screen.FlagFlipper.route) },
             onOpenAnimationTest = { navController.navigate(Screen.AnimationTest.route) },
             onNavigateToAppCheckDiagnostic = { navController.navigate(Screen.AppCheckDiagnostic.route) },
+            onOpenPro = { navController.navigate(Screen.Pro.route) },
+            onOpenSignal = { navController.navigate(Screen.Signal.route) },
+            onOpenFolders = { navController.navigate(Screen.ChatFolders.route) },
             themeViewModel = themeViewModel
         )
     }
 
+    composable(Screen.Pro.route) {
+        org.visorlink.app.ui.screens.settings.ProScreen(
+            onNavigateBack = { navController.popBackStack() },
+            onOpenSignal = { navController.navigate(Screen.Signal.route) }
+        )
+    }
+
+    composable(Screen.Signal.route) {
+        org.visorlink.app.ui.screens.signal.SignalScreen(
+            onNavigateBack = { navController.popBackStack() },
+            onOpenSteps = { navController.navigate(Screen.SignalSteps.route) }
+        )
+    }
+
+    composable(Screen.SignalSteps.route) {
+        org.visorlink.app.ui.screens.signal.SignalStepsScreen(
+            onNavigateBack = { navController.popBackStack() }
+        )
+    }
+
+    composable(Screen.ChatFolders.route) {
+        org.visorlink.app.ui.screens.folders.ChatFoldersScreen(
+            onBack = { navController.popBackStack() },
+            onOpenPro = { navController.navigate(Screen.Pro.route) }
+        )
+    }
+
+    // Диагностика App Check и системный журнал
     composable(Screen.AppCheckDiagnostic.route) {
         AppCheckDiagnosticScreen(onNavigateBack = { navController.popBackStack() })
     }
@@ -75,6 +108,10 @@ fun NavGraphBuilder.settingsNavGraph(
 
     composable(Screen.Sessions.route) {
         org.visorlink.app.ui.screens.settings.SessionsScreen(onNavigateBack = { navController.popBackStack() })
+    }
+
+    composable(Screen.Bots.route) {
+        org.visorlink.app.ui.screens.settings.BotsScreen(onBack = { navController.popBackStack() })
     }
 
     composable(Screen.Status.route) {

@@ -1,8 +1,13 @@
 package org.visorlink.app.ui.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,14 +22,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.ui.theme.vlHardShadow
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlSignalBorder
 import org.visorlink.app.ui.theme.vlSignalGlow
+import org.visorlink.app.ui.theme.vlStructure
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 
@@ -106,37 +115,60 @@ fun VlFab(
     val haptic = rememberHaptic()
     val tokens = VlTheme.tokens
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
 
     val fabShape: Shape = shape ?: if (tokens.structure.enabled) tokens.shapes.fab else VlTheme.tokens.shapes.adapt(RoundedCornerShape(16.dp))
 
     // Постоянное слабое свечение в покое, усиленное на время нажатия.
     val glowAlpha = if (isPressed) tokens.signal.glowAlpha else tokens.signal.fabRestAlpha
-    // Жёсткий блок: FAB стоит на плите второго цвета и вдавливается при нажатии, свечения нет
-    val hardAlt = tokens.structure.hardShadowAlt
-    val hardPx = with(androidx.compose.ui.platform.LocalDensity.current) { tokens.structure.hardOffset.roundToPx() }
+    val keycap = tokens.structure.keycap
+    val depth = if (isPressed && keycap) VlDepth.Inset else if (tokens.structure.enabled) VlDepth.Raised else VlDepth.Flat
 
-    Box(
-        modifier = modifier
-            .height(size)
-            .widthIn(min = size)
-            .then(if (hardAlt != null) Modifier.vlHardShadow(hardAlt, fabShape, tokens.structure.hardOffset) else Modifier)
-            .offset { if (hardAlt != null && isPressed) androidx.compose.ui.unit.IntOffset(hardPx, hardPx) else androidx.compose.ui.unit.IntOffset.Zero }
-            .vlSignalGlow(
-                tokens = tokens.signal,
-                color = containerColor,
-                shape = fabShape,
-                active = glowActive && hardAlt == null,
-                alphaOverride = glowAlpha,
-            )
-            .then(if (tokens.structure.enabled && hardAlt == null) Modifier.vlRaised(tokens.structure, fabShape) else Modifier)
-            .clip(fabShape)
-            .background(containerColor, fabShape)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-            ) { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
-        contentAlignment = Alignment.Center,
-    ) {
-        content()
+    // FAB пружинисто сжимается при нажатии (F vl_chrome.dart:263-266: 0.9, 110/520 мс)
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.9f else 1f,
+        animationSpec = if (isPressed) {
+            tween(durationMillis = 110, easing = FastOutSlowInEasing)
+        } else {
+            spring(dampingRatio = 0.55f, stiffness = 220f)
+        },
+        label = "vlfab_scale",
+    )
+
+    // FAB въезжает снизу с задержкой 150 мс (F vl_chrome.dart:286)
+    VlEntrance(offsetDp = 40.dp, delayMs = 150) {
+        Box(
+            modifier = Modifier
+                .height(size)
+                .widthIn(min = size)
+                .vlSignalGlow(
+                    tokens = tokens.signal,
+                    color = containerColor,
+                    shape = fabShape,
+                    active = glowActive,
+                    alphaOverride = glowAlpha,
+                )
+                // Фокус-контур цвета onPrimary (F vl_chrome.dart:277)
+                .vlSignalBorder(
+                    tokens = tokens.signal,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    shape = fabShape,
+                    active = isFocused,
+                )
+                .then(
+                    if (tokens.structure.enabled) Modifier.vlStructure(tokens.structure, depth, fabShape)
+                    else Modifier
+                )
+                .clip(fabShape)
+                .vlKeycapBackground(tokens.structure, containerColor, fabShape, depth)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                ) { haptic.perform(HapticType.CLICK, hapticEnabled); onClick() },
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
     }
 }

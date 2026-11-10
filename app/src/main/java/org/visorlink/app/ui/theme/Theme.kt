@@ -1,7 +1,6 @@
 package org.visorlink.app.ui.theme
 
 import android.app.Activity
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.ContextWrapper
 import android.os.Build
 import android.provider.Settings
@@ -12,12 +11,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import org.visorlink.app.BuildConfig
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.data.idcard.IdMode
 import org.visorlink.app.data.idcard.ModeStyle
 import org.visorlink.app.data.idcard.ModeTheme
@@ -26,7 +25,6 @@ import org.visorlink.app.data.model.ColorPreset
 import org.visorlink.app.data.model.ProfileAppearance
 import org.visorlink.app.data.model.ThemeMode
 import org.visorlink.app.data.model.UserProfile
-import org.koin.compose.viewmodel.koinViewModel
 import java.util.concurrent.atomic.AtomicInteger
 
 // ── M3 Expressive ─────────────────────────────────────────────────────────────
@@ -98,11 +96,11 @@ private val BiolumeShapeScale = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
-/** Forge v2: малые скругления и для M3-компонентов со своей шкалой форм. */
+/** Forge: скруглённые приборные клавиши и панели (12 · 16 · 24 · 26 dp). */
 private fun forgeV2ShapeScale(f: ForgeV2.Flavor) = Shapes(
-    extraSmall = RoundedCornerShape(2.dp),
-    small = RoundedCornerShape(4.dp),
-    medium = RoundedCornerShape(f.radiusLg),
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
     large = RoundedCornerShape(f.radiusLg),
     extraLarge = RoundedCornerShape(f.radius2xl),
 )
@@ -117,13 +115,12 @@ private fun forgeV2Flavor(theme: AppTheme): ForgeV2.Flavor? = when (theme) {
 
 /**
  * Тема, которую зритель видит сейчас: после входа её решает режим ID-карты
- * (Biolume / Forge v2), а не выбор в настройках. Задаёт MainActivity; обёртки профиля
- * и чата накладывают оформление владельца поверх неё, а не поверх настроек.
+ * (Biolume / Forge), а при выключенных ID-картах — выбор в настройках. Задаёт MainActivity;
+ * обёртки профиля и чата накладывают оформление владельца поверх неё.
  *
  * @property modeDriven тему решает режим ID-карты — `customization.theme` владельца не читается.
  * @property proAccent цвет профиля PRO — акцент всего интерфейса ([ProAccent]): в Biolume, пока
- *   на устройстве выбран акцент «По умолчанию», в Forge v2 — всегда (заменяет оттенок режима,
- *   [ForgeV2.Flavor.tintedBy]); `null` — без PRO или без цвета.
+ *   на устройстве выбран акцент «По умолчанию», в Forge — заменяет оттенок клавиш ([ForgeV2.Flavor.tintedBy]).
  */
 @Immutable
 data class ViewerTheme(
@@ -174,11 +171,11 @@ fun UserProfileTheme(
         ProfileAppearanceTheme(appearance = appearance, proAccent = ownerProAccent, content = content)
         return
     }
-    val viewer = LocalViewerTheme.current ?: ViewerTheme(AppTheme.BIOLUME, ThemeMode.DARK, ColorPreset.DEFAULT)
+    val viewer = LocalViewerTheme.current ?: ViewerTheme(AppTheme.BIOLUME, ThemeMode.SYSTEM, ColorPreset.DEFAULT)
     CompositionLocalProvider(
-        // В гамме владельца — его акцент, а не акцент смотрящего
+        // В гамме владельца — его акцент и стиль, но светлая/тёмная тема остаётся за зрителем
         LocalViewerTheme provides viewer.copy(
-            appTheme = ownerModeTheme.toAppTheme(), themeMode = ThemeMode.DARK, modeDriven = true, proAccent = ownerProAccent,
+            appTheme = ownerModeTheme.toAppTheme(), modeDriven = true, proAccent = ownerProAccent,
         ),
     ) {
         ProfileAppearanceTheme(appearance = appearance, proAccent = ownerProAccent, content = content)
@@ -270,31 +267,34 @@ fun VisorLinkTheme(
     appTheme: AppTheme = AppTheme.MATERIAL3_EXPRESSIVE,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     colorPreset: ColorPreset = ColorPreset.DEFAULT,
+    dynamicColor: Boolean = true,
     /** Произвольный цвет акцента поверх пресета (HEX из оформления профиля). */
     accentOverride: androidx.compose.ui.graphics.Color? = null,
     showDebugIds: Boolean = LocalShowDebugIds.current,
     setStatusBarColor: Boolean = true,
     /** Подмена гарнитур для PRO-кастомизации; шкала кеглей при этом сохраняется. */
     typographyOverride: androidx.compose.material3.Typography? = null,
-    /** Плавная смена палитры (~200 мс) — когда тема меняется по режиму (вход в чат и выход). */
+    /** Устарел и игнорируется: палитру не анимируем, переход делает ThemeCrossfade. */
+    @Suppress("unused")
     animateColors: Boolean = false,
     /**
      * Цвет профиля PRO — акцент всего интерфейса ([ProAccent], веб `ProfileAccentSync`).
      * Biolume: действует, пока [colorPreset] — «По умолчанию» и нет [accentOverride] (явный выбор
-     * важнее). Forge v2: всегда, заменяет оттенок режима ([ForgeV2.Flavor.tintedBy]). M3E не читает.
+     * важнее). Forge: заменяет оттенок клавиш ([ForgeV2.Flavor.tintedBy]), оставляя поверхности и LED.
      */
     proAccent: Color? = null,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
-    val forgeV2 = remember(appTheme, proAccent) {
-        forgeV2Flavor(appTheme)?.let { f -> if (proAccent != null) f.tintedBy(proAccent) else f }
+    val seed = accentOverride ?: colorPreset.seedColor
+    val effectiveForgeAccent = proAccent ?: seed
+    val forgeV2 = remember(appTheme, effectiveForgeAccent) {
+        forgeV2Flavor(appTheme)?.let { f -> if (effectiveForgeAccent != null) f.tintedBy(effectiveForgeAccent) else f }
     }
     // Biolume: явно выбранный пресет (или акцент чата / профиля) важнее цвета профиля
-    val biolumePro = appTheme == AppTheme.BIOLUME && proAccent != null &&
-        colorPreset == ColorPreset.DEFAULT && accentOverride == null
-    // Forge v2 — только тёмная, светлой версии нет
-    val darkTheme = forgeV2 != null || when (themeMode) {
+    val biolumePro = appTheme == AppTheme.BIOLUME && proAccent != null && accentOverride == null
+    // Forge: Clean Room (светлая) и Blackout LED (тёмная)
+    val darkTheme = when (themeMode) {
         ThemeMode.DARK   -> true
         ThemeMode.LIGHT  -> false
         ThemeMode.SYSTEM -> systemDark
@@ -312,7 +312,6 @@ fun VisorLinkTheme(
         ) == 0f
     }
 
-    val seed = accentOverride ?: colorPreset.seedColor
     val targetScheme = when (appTheme) {
         AppTheme.BIOLUME -> {
             val base = if (darkTheme) AbyssColorScheme else TidepoolColorScheme
@@ -320,20 +319,20 @@ fun VisorLinkTheme(
         }
 
         AppTheme.MATERIAL3_EXPRESSIVE -> when {
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT && accentOverride == null ->
+            proAccent != null && accentOverride == null -> (if (darkTheme) DarkM3 else LightM3).withMaterialAccent(proAccent, darkTheme)
+            dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && colorPreset == ColorPreset.DEFAULT && accentOverride == null ->
                 if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             else -> (if (darkTheme) DarkM3 else LightM3).withMaterialAccent(seed, darkTheme)
         }
 
-        // Пресеты акцента — только в Biolume: палитра режима фиксирована
-        AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!)
+        AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ColorScheme(forgeV2!!, darkTheme)
     }
-    // Цвета перетекают только внутри одного стиля (акцент и т. п.). При смене самой темы
-    // (Biolume ↔ Forge, светлая ↔ тёмная) — сразу целевые: переход делает растворение снимка
-    // (ThemeCrossfade), а анимация поверх давала кадры «формы Biolume, цвета Forge».
-    val colorScheme = if (animateColors) key(appTheme, darkTheme) { animateColorScheme(targetScheme) } else targetScheme
+    // Палитра всегда целевая: переход делает растворение снимка (ThemeCrossfade 420 мс),
+    // а анимация цветов поверх давала кадры «формы Biolume, цвета Forge» — во Flutter палитру
+    // не анимируют вовсе (F vl_tokens.dart:354).
+    val colorScheme = targetScheme
 
-    val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme, biolumePro) {
+    val tokens = remember(appTheme, darkTheme, reduceMotion, colorScheme, biolumePro, forgeV2, proAccent) {
         when (appTheme) {
             AppTheme.BIOLUME -> VlTokens(
                 style = VlStyle.BIOLUME,
@@ -347,22 +346,26 @@ fun VisorLinkTheme(
                 bubbles = biolumeBubbles(darkTheme, colorScheme.primary),
                 data = BiolumeDataTypography,
                 reduceMotion = reduceMotion,
+                // Во Flutter у Biolume/M3E led == null всегда: LED-точки в Biolume
+                // при PRO-акценте лишние (F visorlink_theme.dart)
+                led = null,
             )
 
             AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> VlTokens(
                 style = VlStyle.FORGE_V2,
-                isDark = true,
-                structure = forgeV2Structure(forgeV2!!),
-                signal = forgeV2Signal(forgeV2),
+                isDark = darkTheme,
+                structure = forgeV2Structure(forgeV2!!, darkTheme),
+                signal = forgeV2Signal(forgeV2, darkTheme),
                 shapes = forgeV2Shapes(forgeV2),
                 motion = ForgeV2Motion,
-                status = forgeV2Status(forgeV2),
-                selectionFill = ForgeV2.mix(colorScheme.primary, 0.16f, colorScheme.surfaceContainer),
-                bubbles = forgeV2Bubbles(forgeV2),
+                status = forgeV2Status(forgeV2, darkTheme),
+                selectionFill = forgeSelectionFill(colorScheme.primary, darkTheme),
+                bubbles = forgeV2Bubbles(forgeV2, darkTheme),
                 data = ForgeDataTypography,
                 reduceMotion = reduceMotion,
-                terminal = forgeV2Terminal(forgeV2),
-                switch = ForgeV2Switch,
+                terminal = forgeV2Terminal(forgeV2, darkTheme),
+                switch = forgeV2Switch(forgeV2, darkTheme),
+                led = forgeV2Led(forgeV2, darkTheme),
             )
 
             AppTheme.MATERIAL3_EXPRESSIVE -> VlTokens(
@@ -380,7 +383,7 @@ fun VisorLinkTheme(
                 ),
                 // M3E: непрозрачный secondaryContainer — штатный цвет active
                 // indicator в M3 Navigation Bar, ничего изобретать не нужно.
-                selectionFill = colorScheme.secondaryContainer,
+                selectionFill = if (proAccent != null) colorScheme.primaryContainer else colorScheme.secondaryContainer,
                 bubbles = VlBubbleTokens(
                     mineBg = colorScheme.primaryContainer,
                     mineFg = colorScheme.onSurface,
@@ -389,6 +392,7 @@ fun VisorLinkTheme(
                 ),
                 data = Material3DataTypography,
                 reduceMotion = reduceMotion,
+                led = null,
             )
         }
     }
@@ -424,10 +428,7 @@ fun VisorLinkTheme(
                 AppTheme.FORGE_PROTOGEN, AppTheme.FORGE_BEAST -> forgeV2ShapeScale(forgeV2!!)
                 AppTheme.MATERIAL3_EXPRESSIVE -> Material3ShapeScale
             },
-            // Свечение заголовков Forge v2 — цвета подкрашенного неона
-            typography = typographyOverride
-                ?: if (forgeV2 != null && proAccent != null) remember(forgeV2) { forgeV2Typography(forgeV2) }
-                else baseTypography(appTheme),
+            typography = typographyOverride ?: baseTypography(appTheme),
             content = content
         )
     }
@@ -435,33 +436,5 @@ fun VisorLinkTheme(
 
 // ── Плавная смена палитры ────────────────────────────────────────────────────
 
-/**
- * Палитра, перетекающая к [target] за 200 мс (веб: view-transition 200 ms при смене
- * Biolume ↔ Forge у входа в чат). Анимируются все роли ColorScheme.
- */
-@Composable
-private fun animateColorScheme(target: ColorScheme): ColorScheme {
-    @Composable
-    fun a(c: Color): Color = animateColorAsState(c, tween(200), label = "scheme").value
-    return target.copy(
-        primary = a(target.primary), onPrimary = a(target.onPrimary),
-        primaryContainer = a(target.primaryContainer), onPrimaryContainer = a(target.onPrimaryContainer),
-        inversePrimary = a(target.inversePrimary),
-        secondary = a(target.secondary), onSecondary = a(target.onSecondary),
-        secondaryContainer = a(target.secondaryContainer), onSecondaryContainer = a(target.onSecondaryContainer),
-        tertiary = a(target.tertiary), onTertiary = a(target.onTertiary),
-        tertiaryContainer = a(target.tertiaryContainer), onTertiaryContainer = a(target.onTertiaryContainer),
-        background = a(target.background), onBackground = a(target.onBackground),
-        surface = a(target.surface), onSurface = a(target.onSurface),
-        surfaceVariant = a(target.surfaceVariant), onSurfaceVariant = a(target.onSurfaceVariant),
-        surfaceTint = a(target.surfaceTint),
-        inverseSurface = a(target.inverseSurface), inverseOnSurface = a(target.inverseOnSurface),
-        error = a(target.error), onError = a(target.onError),
-        errorContainer = a(target.errorContainer), onErrorContainer = a(target.onErrorContainer),
-        outline = a(target.outline), outlineVariant = a(target.outlineVariant), scrim = a(target.scrim),
-        surfaceBright = a(target.surfaceBright), surfaceDim = a(target.surfaceDim),
-        surfaceContainer = a(target.surfaceContainer), surfaceContainerHigh = a(target.surfaceContainerHigh),
-        surfaceContainerHighest = a(target.surfaceContainerHighest), surfaceContainerLow = a(target.surfaceContainerLow),
-        surfaceContainerLowest = a(target.surfaceContainerLowest),
-    )
-}
+// Анимация палитры удалена: во Flutter палитру не анимируют вовсе (F vl_tokens.dart:354) —
+// переход темы целиком делает растворение снимка (ThemeCrossfade 420 мс).

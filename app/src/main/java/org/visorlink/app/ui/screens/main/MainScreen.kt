@@ -1,5 +1,7 @@
 package org.visorlink.app.ui.screens.main
 
+import org.visorlink.app.ui.screens.signal.AchievementToastHost
+
 import android.app.Activity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.BackHandler
@@ -38,6 +40,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.NAV_TAB_PROFILE
+import org.visorlink.app.ui.components.NAV_TAB_SIGNAL
+import org.visorlink.app.ui.components.led.VlLedFace
+import org.visorlink.app.ui.components.led.VlLedExpression
+import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.components.VlNavigationBar
 import org.visorlink.app.ui.components.VlSurface
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
@@ -48,7 +54,6 @@ import org.visorlink.app.ui.screens.music.MusicViewModel
 import org.visorlink.app.ui.screens.profile.ProfileScreen
 import org.visorlink.app.data.repository.FlagsRepository
 import org.visorlink.app.ui.components.music.FullscreenPlayerDialog
-import org.visorlink.app.ui.components.music.MusicOnboardingDialog
 import org.visorlink.app.ui.components.chat.AudioPlaybackDockBar
 import org.visorlink.app.ui.components.chat.DockAnchor
 import org.visorlink.app.ui.theme.ThemeViewModel
@@ -74,6 +79,9 @@ fun MainScreen(
     onEditDiaryEntry: (String) -> Unit,
     onLoggedOut: () -> Unit = {},
     onOpenStickers: () -> Unit = {},
+    onOpenSignal: () -> Unit = {},
+    onOpenSignalSteps: () -> Unit = {},
+    onOpenFolders: () -> Unit = {},
     mainViewModel: MainViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
 ) {
@@ -100,26 +108,20 @@ fun MainScreen(
     val diaryEnabled = userProfile?.diaryEnabled ?: false
     val discoverEnabled by themeViewModel.discoverEnabled.collectAsStateWithLifecycle()
     val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
-    val showMusicOnboarding by themeViewModel.showMusicOnboarding.collectAsStateWithLifecycle()
 
     val musicPlayerManager: MusicPlayerManager = koinInject()
     val musicRepository: MusicRepository = koinInject()
     val showFullscreenPlayer by musicPlayerManager.showFullscreenPlayer.collectAsStateWithLifecycle()
 
-    // Профиль — вкладкой навбара вместо кнопки-аватара в шапке чатов (флаг enable_profile_navbar)
+    // Профиль — вкладкой навбара вместо кнопки-аватара в шапке чатов (флаг enable_profile_navbar).
+    // Вкладка «Сигнал» (enable_signal_tab) забирает слот у профиля: профиль возвращается к аватару в шапке.
     val flagsRepository: FlagsRepository = koinInject()
     val flags by flagsRepository.flags.collectAsStateWithLifecycle()
-    val profileTabEnabled = flags.profileNavbar
+    val signalTabEnabled = flags.signalNavbar
+    val profileTabEnabled = flags.profileNavbar && !flags.signalNavbar
 
-    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled
+    val showNavbar = diaryEnabled || discoverEnabled || musicEnabled || profileTabEnabled || signalTabEnabled
     val isOnline by mainViewModel.isOnline.collectAsStateWithLifecycle()
-
-    if (showMusicOnboarding) {
-        MusicOnboardingDialog(
-            onEnable = { themeViewModel.completeMusicOnboarding(true) },
-            onDisable = { themeViewModel.completeMusicOnboarding(false) }
-        )
-    }
 
     if (showFullscreenPlayer) {
         FullscreenPlayerDialog(
@@ -152,11 +154,20 @@ fun MainScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.WifiOff,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        if (VlTheme.tokens.led != null) {
+                            VlLedFace(
+                                expression = VlLedExpression.SLEEPY,
+                                dot = 1.5.dp,
+                                gap = 0.5.dp,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.WifiOff,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                         Spacer(Modifier.width(8.dp))
                         Text(
                             text = "Offline Mode",
@@ -189,6 +200,7 @@ fun MainScreen(
                         onFindChannel = onFindChannel,
                         onOpenNotifications = onOpenNotifications,
                         onOpenFeed = { if (discoverEnabled) selectedTab = 1 },
+                        onOpenFolders = onOpenFolders,
                         isActive = selectedTab == 0
                     )
                 }
@@ -241,6 +253,15 @@ fun MainScreen(
                             } else {
                                 selectedTab = 0
                             }
+                            NAV_TAB_SIGNAL -> if (signalTabEnabled) {
+                                org.visorlink.app.ui.screens.signal.SignalScreen(
+                                    onNavigateBack = { selectedTab = 0 },
+                                    onOpenSteps = onOpenSignalSteps,
+                                    asTab = true
+                                )
+                            } else {
+                                selectedTab = 0
+                            }
                         }
                     }
                 }
@@ -255,14 +276,15 @@ fun MainScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Мини-плеер сам наливается из-за навбара и выливается обратно,
-                        // поэтому внешний AnimatedVisibility ему не нужен
+                        // поэтому внешний AnimatedVisibility ему не нужен.
+                        // Как во Flutter: док виден на любой вкладке (main_screen.dart:214-215),
+                        // компонент сам скрывается, когда трека нет
                         AudioPlaybackDockBar(
                             musicPlayback = musicPlayback,
                             onTogglePlayPause = { musicPlayerManager.togglePlayPause() },
                             onClose = { musicPlayerManager.dismiss() },
                             onOpenFullscreen = { musicPlayerManager.openFullscreenPlayer() },
                             anchor = DockAnchor.Bottom,
-                            visible = selectedTab == 3,
                             onSeek = { musicPlayerManager.seekTo(it) },
                             onNext = { musicPlayerManager.playNext() }
                         )
@@ -275,10 +297,19 @@ fun MainScreen(
                             musicEnabled = musicEnabled,
                             onOpenDiary = onOpenDiaryTab,
                             onOpenMusic = onOpenMusicTab,
-                            profileEnabled = profileTabEnabled
+                            profileEnabled = profileTabEnabled,
+                            signalEnabled = signalTabEnabled
                         )
                     }
                 }
+
+                // Тост достижения открывает «Сигнал»: вкладкой, если она включена, иначе маршрутом настроек
+                val openSignal: () -> Unit = remember(signalTabEnabled) {
+                    {
+                        if (signalTabEnabled) selectedTab = NAV_TAB_SIGNAL else onOpenSignal()
+                    }
+                }
+                AchievementToastHost(onOpenSignal = openSignal)
             }
         }
     }

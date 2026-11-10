@@ -4,8 +4,6 @@ import org.visorlink.app.ui.components.VlDialogButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlAlertDialog
 import android.app.Activity
-import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -91,56 +89,6 @@ fun StorageManagerScreen(
         )
     }
 
-    var showTokenDialog by remember { mutableStateOf(false) }
-    var tokenInput by remember(uiState.yandexRelayCustomToken) { mutableStateOf(uiState.yandexRelayCustomToken ?: "") }
-    var clientIdInput by remember(uiState.yandexClientId) { mutableStateOf(uiState.yandexClientId) }
-
-    if (showTokenDialog) {
-        VlAlertDialog(
-            onDismissRequest = { showTokenDialog = false },
-            title = { Text(stringResource(R.string.storage_yandex_relay_token_dialog_title)) },
-            text = {
-                Column {
-                    Text(
-                        stringResource(R.string.storage_yandex_relay_token_dialog_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = tokenInput,
-                        onValueChange = { tokenInput = it },
-                        label = { Text("OAuth / App Password") },
-                        placeholder = { Text("y0_AgAAAA...") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = clientIdInput,
-                        onValueChange = { clientIdInput = it },
-                        label = { Text(stringResource(R.string.storage_yandex_relay_client_id_label)) },
-                        placeholder = { Text("Client ID (для OAuth)") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                VlDialogButton(
-                    onClick = {
-                        viewModel.setYandexCustomToken(tokenInput.ifBlank { null })
-                        viewModel.setYandexClientId(clientIdInput.ifBlank { null })
-                        showTokenDialog = false
-                    }
-                ) { Text(stringResource(R.string.action_save)) }
-            },
-            dismissButton = {
-                VlDialogButton(onClick = { showTokenDialog = false }) { Text(stringResource(R.string.action_cancel)) }
-            }
-        )
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -156,7 +104,7 @@ fun StorageManagerScreen(
                     modifier = Modifier.liquidJelly(topBarJelly),
                     title = { Text(stringResource(R.string.storage_title), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             topBarJelly.press(0.06f)
                             onNavigateBack()
@@ -165,7 +113,7 @@ fun StorageManagerScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = {
+                        org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             topBarJelly.press(0.06f)
                             viewModel.refresh()
@@ -212,47 +160,6 @@ fun StorageManagerScreen(
                     FirebaseStorageCloudCard(
                         modifier = Modifier.liquidPillCardSlideOut(index = 1)
                     )
-                }
-
-                // ── Yandex Disk Relay Card (Alternative Outbox) ───────────────
-                if (uiState.isYandexRelayAvailable) {
-                    item {
-                        Spacer(Modifier.height(16.dp))
-                    }
-                    item {
-                        val context = LocalContext.current
-                        YandexDiskRelayCard(
-                            isEnabled = uiState.isYandexRelayEnabled,
-                            hasToken = uiState.yandexRelayHasActiveToken,
-                            hasCustomToken = !uiState.yandexRelayCustomToken.isNullOrBlank(),
-                            modifier = Modifier.liquidPillCardSlideOut(index = 2),
-                            onToggle = { enabled ->
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                viewModel.toggleYandexRelay(enabled)
-                            },
-                            onLoginYandex = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                try {
-                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uiState.yandexOAuthUrl))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    tokenInput = uiState.yandexRelayCustomToken ?: ""
-                                    clientIdInput = uiState.yandexClientId
-                                    showTokenDialog = true
-                                }
-                            },
-                            onDisconnectYandex = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                viewModel.disconnectYandex()
-                            },
-                            onConfigureToken = {
-                                haptic.perform(HapticType.CLICK, hapticEnabled)
-                                tokenInput = uiState.yandexRelayCustomToken ?: ""
-                                clientIdInput = uiState.yandexClientId
-                                showTokenDialog = true
-                            }
-                        )
-                    }
                 }
 
                 if (!uiState.error.isNullOrBlank()) {
@@ -486,127 +393,6 @@ private fun FirebaseStorageCloudCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
             )
-        }
-    }
-}
-
-@Composable
-private fun YandexDiskRelayCard(
-    isEnabled: Boolean,
-    hasToken: Boolean,
-    hasCustomToken: Boolean,
-    modifier: Modifier = Modifier,
-    onToggle: (Boolean) -> Unit,
-    onLoginYandex: () -> Unit,
-    onDisconnectYandex: () -> Unit,
-    onConfigureToken: () -> Unit
-) {
-    VlSurface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        customRadius = 32.dp,
-        contentPadding = PaddingValues(20.dp)
-    ) {
-        Column {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(VlTheme.tokens.shapes.chip)
-                        .background(if (isEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sync,
-                        contentDescription = null,
-                        tint = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.storage_yandex_relay_title),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = when {
-                            !isEnabled -> stringResource(R.string.storage_yandex_relay_disabled)
-                            hasCustomToken -> stringResource(R.string.storage_yandex_relay_custom_connected)
-                            hasToken -> stringResource(R.string.storage_yandex_relay_ready)
-                            else -> "Требуется авторизация"
-                        },
-                        fontSize = 14.sp,
-                        color = if (isEnabled && hasToken) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error
-                    )
-                }
-                VlSwitch(
-                    checked = isEnabled,
-                    onCheckedChange = onToggle
-                )
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            Text(
-                text = stringResource(R.string.storage_yandex_relay_desc),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 18.sp
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            if (hasCustomToken) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = onDisconnectYandex,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text(stringResource(R.string.storage_yandex_relay_disconnect_btn))
-                    }
-                    OutlinedButton(
-                        onClick = onConfigureToken,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(stringResource(R.string.storage_yandex_relay_manual_btn))
-                    }
-                }
-            } else {
-                VlButton(
-                    onClick = onLoginYandex,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(Icons.Default.CloudQueue, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(stringResource(R.string.storage_yandex_relay_login_btn))
-                    }
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    TextButton(onClick = onConfigureToken) {
-                        Text(
-                            text = stringResource(R.string.storage_yandex_relay_manual_btn),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
         }
     }
 }

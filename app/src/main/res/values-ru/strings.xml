@@ -14,6 +14,11 @@
     <string name="appcheck_insecure_desc">Проверка не пройдена. Возможные причины: Root-права, разблокированный загрузчик, эмулятор, или неофициальная сборка приложения.</string>
     <string name="appcheck_checking">Проверка...</string>
     <string name="appcheck_technical_details">Технические детали</string>
+        <string name="appcheck_precheck_title">Проверка безопасности клиента</string>
+    <string name="appcheck_precheck_desc">Проверка целостности устройства и подлинности приложения…</string>
+    <string name="appcheck_precheck_failed_title">Предупреждение безопасности</string>
+    <string name="appcheck_precheck_failed_desc">Сборка не прошла проверку Firebase App Check. Возможно, вы используете неофициальную сборку или несертифицированное устройство.</string>
+    <string name="appcheck_action_continue_anyway">Продолжить на свой риск</string>
     <string name="appcheck_retry">Повторить проверку</string>
     <string name="action_back">Назад</string>
     <string name="action_save">Сохранить</string>
@@ -837,10 +842,6 @@
     <string name="music_grant_permission">Предоставить доступ</string>
     <string name="music_settings_title">Музыка</string>
     <string name="music_settings_desc">Отображать вкладку Музыка в нижней панели и встроенный плеер</string>
-    <string name="music_onboarding_title">Встречайте Музыку в VisorLink!</string>
-    <string name="music_onboarding_desc">Слушайте треки прямо в чатах, сохраняйте любимую музыку в плейлист «Понравившиеся» и импортируйте треки с устройства.</string>
-    <string name="music_onboarding_enable">Включить музыку</string>
-    <string name="music_onboarding_disable">Не сейчас</string>
     <string name="music_send_audio">Аудиозапись</string>
     <string name="music_edit_metadata">Редактировать аудио</string>
     <string name="music_save_to_library">Сохранить в медиатеку</string>
@@ -976,21 +977,7 @@
     <string name="storage_firebase_cloud_desc">Аватарки, обложки профиля и стикеры хранятся в защищённом облаке VisorLink и не расходуют место на вашем Google Диске.</string>
     <string name="storage_gdrive_required_title">Требуется Google Drive</string>
     <string name="storage_gdrive_required_desc">Для отправки медиа подключите ваш Google Диск в настройках хранилища.</string>
-    <string name="storage_yandex_relay_title">Аварийный транспорт (Яндекс.Диск)</string>
-    <string name="storage_yandex_relay_desc">Автономная доставка сообщений через Яндекс.Диск (WebDAV/REST) при блокировках и сбоях основных серверов. Сообщения защищены сквозным шифрованием (E2EE).</string>
-    <string name="storage_yandex_relay_ready">Транспорт готов к работе</string>
-    <string name="storage_yandex_relay_disabled">Транспорт отключен</string>
-    <string name="storage_yandex_relay_token_btn">Персональный токен</string>
-    <string name="storage_yandex_relay_token_dialog_title">OAuth-токен Яндекс.Диска</string>
-    <string name="storage_yandex_relay_token_dialog_desc">По умолчанию используется сервисный токен. Вы можете указать собственный OAuth-токен или пароль приложений для Яндекс.Диска.</string>
-    <string name="emergency_chat_title">Аварийный чат (Яндекс.Диск)</string>
-    <string name="emergency_chat_badge">Аварийный</string>
     <string name="emergency_sync_vault_success">Аварийный архив сохранён</string>
-    <string name="storage_yandex_relay_login_btn">Войти с Яндекс ID</string>
-    <string name="storage_yandex_relay_disconnect_btn">Отвязать Яндекс ID</string>
-    <string name="storage_yandex_relay_manual_btn">Настроить вручную</string>
-    <string name="storage_yandex_relay_custom_connected">Подключен персональный Яндекс ID</string>
-    <string name="storage_yandex_relay_client_id_label">Client ID приложения Яндекс</string>
 
     <!-- ID-карты (ANDROID_ID_CARDS_SPEC.md) -->
     <string name="idcard_title">ID-карта</string>
@@ -1020,9 +1007,55 @@
     <string name="idcard_edition_rare">Редкий</string>
     <string name="idcard_edition_epic">Эпический</string>
     <string name="idcard_edition_legendary">Легендарный</string>
+    <string name="idcard_edition_unique">Уникальный</string>
     <string name="idcard_finish_base">Стандартный пластик</string>
     <string name="idcard_finish_pearl">Перламутр</string>
     <string name="idcard_finish_metallic">Металлик</string>
+
+    <!-- Мои боты -->
+    <string name="bots_title">Мои боты</string>
+    <string name="bots_subtitle">Управление API-ботами</string>
+    <string name="bots_create">Создать бота</string>
+    <string name="bots_empty">У вас пока нет ботов</string>
+    <string name="bots_error_generic">Не удалось выполнить. Попробуйте позже</string>
+    <string name="bots_token_title_new">Бот создан</string>
+    <string name="bots_token_title_regenerated">Новый токен</string>
+    <string name="bots_token_warning">Сохраните токен сейчас: больше он показан не будет. Не передавайте его никому.</string>
+    <string name="bots_copy">Копировать</string>
+    <string name="bots_copied">Скопировано</string>
+    <string name="bots_done">Готово</string>
+    <string name="bots_regenerate">Перевыпустить токен</string>
+    <string name="bots_delete">Удалить</string>
+    <string name="bots_confirm_regenerate_title">Перевыпустить токен?</string>
+    <string name="bots_confirm_regenerate_body">Старый токен перестанет работать сразу.</string>
+    <string name="bots_confirm_delete_title">Удалить бота?</string>
+    <string name="bots_confirm_delete_body">Бот @%1$s будет удалён навсегда, его ник освободится.</string>
+    <string name="bots_confirm_reset_title">Сбросить верификацию?</string>
+    <string name="bots_confirm_reset_body">После изменения профиля бот снова станет неверифицированным.</string>
+    <string name="bots_continue">Продолжить</string>
+    <string name="bots_form_title_new">Новый бот</string>
+    <string name="bots_form_title_edit">Бот @%1$s</string>
+    <string name="bots_form_name">Имя бота</string>
+    <string name="bots_form_username">Ник (без @)</string>
+    <string name="bots_form_change_avatar">Сменить аватар</string>
+    <string name="bots_form_avatar_file">Аватар: %1$s</string>
+    <string name="bots_form_receive">Принимать сообщения</string>
+    <string name="bots_form_receive_sub">Текст пользователей уходит на вебхук</string>
+    <string name="bots_form_webhook">Webhook URL</string>
+    <string name="bots_form_secret">Секрет вебхука (HMAC)</string>
+    <string name="bots_form_secret_keep">Оставьте пустым, чтобы не менять</string>
+    <string name="bots_form_secret_optional">необязательно</string>
+    <string name="bots_form_save">Сохранить</string>
+    <string name="bots_form_error">Не удалось сохранить</string>
+    <string name="bots_cancel">Отмена</string>
+    <string name="bots_username_error_length">Ник — от 3 до 24 символов</string>
+    <string name="bots_username_error_chars">Только латиница, цифры и _</string>
+    <string name="bots_tag_receiving">📥 ПРИЁМ СООБЩЕНИЙ</string>
+    <string name="bots_tag_send_only">📤 ТОЛЬКО ОТПРАВКА</string>
+    <string name="bots_tag_banned">ЗАБАНЕН</string>
+    <string name="bots_uid_label">UID: %1$s</string>
+    <string name="bots_webhook_error">⚠️ Ошибка вебхука: %1$s</string>
+    <string name="bots_edit">Изменить</string>
     <string name="idcard_finish_obsidian">Обсидиан</string>
     <string name="idcard_finish_gold">Золото</string>
     <string name="idcard_foil_none">Без голограммы</string>
@@ -1074,7 +1107,11 @@
     <string name="idcard_position_after_header">Под именем</string>
     <string name="idcard_position_bottom">Внизу</string>
     <string name="idcard_theme_by_mode">Тему задаёт режим ID-карты</string>
-    <string name="idcard_dark_locked">У Forge нет светлой версии — в особом режиме тёмная тема включена всегда.</string>
+    <string name="idcard_dark_locked">Для светлой темы используется Forge Clean Room, для тёмной — Blackout LED.</string>
+    <string name="theme_forge_clean_room">Forge Clean Room</string>
+    <string name="theme_forge_blackout">Forge Blackout LED</string>
+    <string name="led_sticker_boop">LED-стикер, буп</string>
+    <string name="led_face_desc">LED-мордочка</string>
     <string name="idcard_group_title">ID группы</string>
     <string name="idcard_group_toggle">Включить ID группы</string>
     <string name="idcard_group_desc">У группы появится своя карта, а участникам с особым ID включится тема Forge.</string>
@@ -1116,6 +1153,8 @@
     <string name="idskin_origin_issue">При выдаче</string>
     <string name="idskin_origin_roll">Прокрутка</string>
     <string name="idskin_origin_trade">Обмен</string>
+    <string name="idskin_origin_gift">Подарок</string>
+    <string name="idskin_origin_pro">PRO</string>
     <string name="idskin_wear_0">Как новая</string>
     <string name="idskin_wear_1">Лёгкие следы</string>
     <string name="idskin_wear_2">Потёртая</string>
@@ -1435,4 +1474,123 @@
     <string name="settings_surprise_demo_title">Демо сюрприза</string>
     <string name="settings_surprise_demo_subtitle">Весь показ на встроенных данных, подарок не выдаётся</string>
 
+    <!-- Signal -->
+    <string name="signal_title">Сигнал</string>
+    <string name="signal_back">Назад</string>
+
+    <!-- Шаги (этап 1 активностей) -->
+    <string name="step_card_title">Шаги</string>
+    <string name="step_card_desc">Bits за шаги дня со встроенным счётчиком телефона. Без фоновых служб.</string>
+    <string name="step_enable">Включить</string>
+    <string name="step_disable">Отключить</string>
+    <string name="step_disable_title">Отключить подсчёт шагов?</string>
+    <string name="step_disable_body">История шагов удалится с сервера, подсчёт остановится.</string>
+    <string name="step_disable_confirm">Отключить и удалить</string>
+    <string name="step_consent_title">Считать шаги?</string>
+    <string name="step_consent_body">VisorLink будет читать дневной итог встроенного счётчика шагов телефона и начислять Bits за пороги дня. Хранится только общее число шагов за день — без геолокации и маршрутов. В соревнованиях шаги видны только участникам. Отключить и удалить данные можно в любой момент в «Сигнале».</string>
+    <string name="step_consent_allow">Продолжить</string>
+    <string name="step_today">шагов сегодня</string>
+    <string name="step_to_next">Ещё %1$s шагов до +%2$d Bits</string>
+    <string name="step_all_reached">Все пороги дня пройдены</string>
+    <string name="step_earned">Заработано сегодня: %1$d Bits</string>
+    <string name="step_boost_hint">+%1$d за порог: сегодня продлён стрик</string>
+    <string name="step_trust_pending">Заработок с шагов откроется через %1$d дн. (порог доверия)</string>
+    <string name="step_trust_pending_short">Заработок с шагов откроется с доверием к аккаунту</string>
+    <string name="step_error_rebind">Новое устройство можно привязать позже</string>
+    <string name="step_error_device">Не получилось подтвердить устройство. Откройте приложение и повторите.</string>
+    <string name="step_error_generic">Не удалось отправить отчёт</string>
+    <string name="step_sensor_missing">Счётчик шагов недоступен на этом устройстве</string>
+    <string name="step_reboot_note">Шаги считаются, пока телефон включён</string>
+    <string name="step_entry_subtitle">Линк и счётчик шагов на посту</string>
+    <string name="step_entry_trailing">%1$s шагов</string>
+
+    <!-- Линк на странице шагов -->
+    <string name="link_step_name">Линк</string>
+    <string name="link_step_invite">Привет! Я Линк. Включи шаги — будем зарабатывать Bits на ходу. Вижу только дневной итог, честно.</string>
+    <string name="link_step_start">Пошли! Первые 1 000 шагов — первые Bits.</string>
+    <string name="link_step_go">Ещё %1$s шагов — и +%2$d Bits! Верю в нас.</string>
+    <string name="link_step_done">Все пороги дня взяты! Ты — ходячая легенда.</string>
+    <string name="link_step_counting">Считаю… темп держи!</string>
+    <string name="link_step_boost">Стрик сегодня продлён — каждый порог платит вдвое!</string>
+    <string name="link_step_trust">Пока аккаунт молодой, я считаю шаги, но не плачу — порог доверия. Скоро!</string>
+    <string name="link_step_error">На сервере что-то сломалось. Попробуем позже.</string>
+    <string name="link_step_device">Не узнаю это устройство — открой приложение снова, я перепроверю.</string>
+    <string name="link_step_rebind">Новое устройство можно привязать чуть позже. Я подожду!</string>
+    <string name="link_step_sensor">На этом устройстве нет счётчика шагов… я расстроен не меньше тебя.</string>
+    <string name="link_step_boop1">Эй, это щекотно!</string>
+    <string name="link_step_boop2">Буп принят. Обрабатываю… готово: ты молодец!</string>
+    <string name="link_step_boop3">Осторожнее с визором, он новенький!</string>
+    <string name="link_step_pet">*визор показывает сердечки* Ходи больше — и гладь почаще!</string>
+
+    <!-- Phase 2: Gifts & ID-Cards -->
+    <string name="gift_user_title">Подарок</string>
+    <string name="gift_action_send">Подарить</string>
+    <string name="gift_attach">Подарок</string>
+    <string name="gift_picker_kicker">ПОДАРОК</string>
+    <string name="gift_picker_title">Подарок для %1$s</string>
+    <string name="gift_pro_week">PRO на 7 дней</string>
+    <string name="gift_pro_month">PRO на 30 дней</string>
+    <string name="gift_postcard">Открытка</string>
+    <string name="gift_skin">ID-карта</string>
+    <string name="gift_note_label">Подпись (необязательно)</string>
+    <string name="gift_note_placeholder">Пара слов к подарку</string>
+    <string name="gift_send_action">Подарить за %1$d Bits</string>
+    <string name="gift_sent_status">Отправлено</string>
+    <string name="gift_sending_status">Отправка…</string>
+    <string name="gift_not_enough_bits">Не хватает Bits.</string>
+    <string name="gift_pro_eternal_hint">У %1$s бесконечный PRO — подарите открытку или ID-карту.</string>
+    <string name="gift_postcard_hint">Открытка — просто приятность: получателю ничего не начисляется.</string>
+    <string name="gift_skin_hint">Подарите скин из своего инвентаря. Надетый, выставленный на обмен и полученный меньше 14 дней назад подарить нельзя.</string>
+    <string name="gift_choose_skin">Выбрать скин</string>
+    <string name="gift_revoke_hint">Пока подарок не открыт, его можно отозвать — Bits вернутся.</string>
+    <string name="gift_your_gift">Ваш подарок</string>
+    <string name="gift_from_user">Подарок от @%1$s</string>
+    <string name="gift_opened_by">Открыл(а) @%1$s</string>
+    <string name="gift_cancelled">Подарок отозван</string>
+    <string name="gift_waiting">Ждёт, пока откроют</string>
+    <string name="gift_action_cancel">Отозвать</string>
+    <string name="gift_action_open_gift">Открыть подарок</string>
+    <string name="gift_action_opening_gift">Активация…</string>
+    <string name="gift_bits_title">100 Bits</string>
+    <string name="gift_bits_hint">Бонус на баланс</string>
+    <string name="gift_bits_received">+100 BITS!</string>
+    <string name="gift_pro_received">ВЫ ПОЛУЧИЛИ PRO!</string>
+
+    <!-- Postcard designs -->
+    <string name="postcard_spark">Искры</string>
+    <string name="postcard_aurora">Сияние</string>
+    <string name="postcard_supernova">Сверхновая</string>
+
+    <!-- Ion Gift -->
+    <string name="idcard_ion_title">Подарок: VL Ion</string>
+    <string name="idcard_ion_banner_hint">Нажмите, чтобы открыть подарок</string>
+    <string name="idcard_ion_opening">Открываем подарок…</string>
+    <string name="idcard_ion_claim">Забрать</string>
+    <string name="idcard_ion_desc">Новая карта в стиле Forge: фарфор и тёплый оранжевый LED. Один раз на человека, падает в инвентарь.</string>
+    <string name="idcard_ion_done">VL Ion в инвентаре — наденьте его из списка ниже.</string>
+
+    <!-- Additional ID Skin Anti-Farm Error Strings -->
+    <string name="idskin_err_trust_age">Обмен откроется через %1$s: аккаунту нужно 30 дней.</string>
+    <string name="idskin_err_trust_activity">Обмен откроется после ещё %1$s дн. общения.</string>
+    <string name="idskin_err_skin_hold">Этот скин можно будет передать через %1$s.</string>
+    <string name="idskin_err_trade_limit">Не больше 5 обменов за 30 дней. Следующий — через %1$s.</string>
+    <string name="idskin_err_invite_link">Между тем, кого вы пригласили (или кто пригласил вас), обмен откроется через %1$s.</string>
+    <string name="idskin_err_peer_not_ready">Собеседнику пока недоступен обмен.</string>
+    <string name="idskin_err_pro_card">PRO-карту нельзя продать, обменять или подарить.</string>
+    <string name="idskin_err_single">Эта карта существует в одном экземпляре и не передаётся.</string>
+    <string name="idskin_err_pro_required">Нужен активный PRO.</string>
+    <string name="idskin_err_pro_claimed">PRO-карты уже в инвентаре.</string>
+
+<!-- Chat Folders -->
+    <string name="settings_chat_folders_title">Папки чатов</string>
+    <string name="settings_chat_folders_desc">Вкладки и правила фильтрации диалогов</string>
+
+    <!-- Legendary Roll & PRO Cards -->
+    <string name="idskin_premium_title">Легендарная прокрутка</string>
+    <string name="idskin_premium_desc">Тираж «редкий» и выше. Без недельного лимита, обычную прокрутку не сбивает.</string>
+    <string name="idskin_premium_confirm_title">Крутить легендарную?</string>
+    <string name="idskin_premium_confirm_text">Спишется %1$d Bits. Выпадет скин тиража «редкий» или выше, он займёт слот.</string>
+    <string name="idskin_pro_title">PRO-карты</string>
+    <string name="idskin_pro_desc">Две карты в стиле PRO — Aurum и Noir. Бесплатно, слотов не занимают; носятся, пока активен PRO.</string>
+    <string name="idskin_pro_claim">Забрать</string>
 </resources>

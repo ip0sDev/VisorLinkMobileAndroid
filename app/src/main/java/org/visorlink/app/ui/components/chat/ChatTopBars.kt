@@ -1,8 +1,6 @@
 package org.visorlink.app.ui.components.chat
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,7 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -28,15 +25,60 @@ import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.TopbarStatus
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.VlTopAppBarButton
+import org.visorlink.app.ui.components.chatlist.GroupChannelAvatar
+import org.visorlink.app.ui.components.led.VlLedMarquee
+import org.visorlink.app.ui.components.led.VlLedScreen
+import org.visorlink.app.ui.components.led.VlLedTyping
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.screens.chat.ChatUiState
-import org.visorlink.app.ui.components.chatlist.GroupChannelAvatar
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import java.text.SimpleDateFormat
 import java.util.*
+
+/**
+ * Статус под именем в шапке чата: в Forge (`tokens.led != null`) выводится на LED-табло
+ * бегущей строкой (порт Flutter `_ledStatus` в `chat_app_bar.dart`).
+ */
+@Composable
+private fun ChatStatusLine(
+    text: String,
+    color: Color,
+) {
+    if (text.isEmpty()) {
+        Text("", style = MaterialTheme.typography.labelSmall)
+        return
+    }
+    val tokens = VlTheme.tokens
+    if (tokens.led != null) {
+        VlLedScreen(
+            radius = 8.dp,
+            padding = PaddingValues(horizontal = 6.dp, vertical = 3.dp),
+        ) {
+            VlLedMarquee(
+                text = text,
+                dot = 1.5.dp,
+                gap = 0.75.dp,
+                fallbackStyle = MaterialTheme.typography.labelSmall.copy(
+                    color = color,
+                    fontSize = 11.sp,
+                ),
+            )
+        }
+    } else {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = color,
+            fontSize = 11.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,18 +100,23 @@ fun ChatTopBar(
     onOpenTopicList: (() -> Unit)? = null
 ) {
     val haptic = rememberHaptic()
+    val tokens = VlTheme.tokens
 
     val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
 
     VlTopAppBar(
         modifier = Modifier.liquidJelly(topBarJelly),
         navigationIcon = {
-            IconButton(onClick = {
+            VlTopAppBarButton(onClick = {
                 haptic.perform(HapticType.CLICK, hapticEnabled)
                 topBarJelly.press(0.06f)
                 onNavigateBack()
             }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.action_back))
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    stringResource(R.string.action_back),
+                    modifier = Modifier.size(20.dp)
+                )
             }
         },
         title = {
@@ -89,7 +136,9 @@ fun ChatTopBar(
                     ?: ""
                 // Заблокировавший меня: аватарка скрыта, остаётся инициал
                 val directAvatarUrl = if (uiState.blockedByPeer) null
-                else uiState.otherUser?.avatarUrl ?: uiState.chat?.avatarUrl
+                else uiState.otherUser?.avatarUrl
+                    ?: uiState.chat?.otherAvatarUrl(currentUid)
+                    ?: uiState.chat?.avatarUrl
 
                 when (uiState.chatType) {
                     ChatType.DIRECT, ChatType.EMERGENCY -> {
@@ -115,18 +164,16 @@ fun ChatTopBar(
                     if (uiState.currentTopic != null) {
                         Text(
                             text = "${uiState.currentTopic.displayIcon} ${uiState.currentTopic.title}",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                            ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
+                        ChatStatusLine(
                             text = uiState.chat?.name ?: "",
-                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
                         )
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -136,8 +183,10 @@ fun ChatTopBar(
                                     ChatType.DIRECT -> directName
                                     else -> uiState.chat?.name ?: ""
                                 },
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                ),
                                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
@@ -173,66 +222,89 @@ fun ChatTopBar(
                             label = "topbar_status",
                         ) { status ->
                             when (status) {
-                                is TopbarStatus.WaitingForNetwork -> Text(stringResource(R.string.status_waiting_for_network),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
-                                is TopbarStatus.Connecting -> Text(stringResource(R.string.status_connecting),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
-                                is TopbarStatus.Updating -> Text(stringResource(R.string.status_updating),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
-                                is TopbarStatus.Typing  -> TypingDots()
-                                is TopbarStatus.Online  -> Text(stringResource(R.string.chat_status_online),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = VlTheme.tokens.status.success, fontSize = 11.sp)
-                                is TopbarStatus.LastSeenLongAgo -> Text(
-                                    stringResource(R.string.chat_last_seen_long_ago),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                                is TopbarStatus.LastSeen -> Text(
-                                    status.ts?.let { ts ->
-                                        stringResource(R.string.last_seen_topbar,
-                                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ts)))
+                                is TopbarStatus.WaitingForNetwork -> ChatStatusLine(
+                                    text = stringResource(R.string.status_waiting_for_network),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                is TopbarStatus.Connecting -> ChatStatusLine(
+                                    text = stringResource(R.string.status_connecting),
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                is TopbarStatus.Updating -> ChatStatusLine(
+                                    text = stringResource(R.string.status_updating),
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                is TopbarStatus.Typing -> {
+                                    if (tokens.led != null) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            VlLedTyping()
+                                            ChatStatusLine(
+                                                text = stringResource(R.string.chat_typing),
+                                                color = tokens.led.color,
+                                            )
+                                        }
+                                    } else {
+                                        TypingDots()
+                                    }
+                                }
+                                is TopbarStatus.Online -> ChatStatusLine(
+                                    text = stringResource(R.string.chat_status_online),
+                                    color = VlTheme.tokens.status.success,
+                                )
+                                is TopbarStatus.LastSeenLongAgo -> ChatStatusLine(
+                                    text = stringResource(R.string.chat_last_seen_long_ago),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                is TopbarStatus.LastSeen -> ChatStatusLine(
+                                    text = status.ts?.let { ts ->
+                                        stringResource(
+                                            R.string.last_seen_topbar,
+                                            SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ts))
+                                        )
                                     } ?: "",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                                 else -> Text("", style = MaterialTheme.typography.labelSmall)
                             }
                         }
                         ChatType.GROUP -> {
                             if (uiState.topbarStatus is TopbarStatus.WaitingForNetwork) {
-                                Text(stringResource(R.string.status_waiting_for_network),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                ChatStatusLine(
+                                    text = stringResource(R.string.status_waiting_for_network),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                             } else {
                                 val memberCount = uiState.chat?.memberCount ?: uiState.members.size
                                 val online = uiState.onlineCount
-                                Text(buildString {
-                                    append(stringResource(R.string.members_topbar, memberCount))
-                                    if (online > 0) append(stringResource(R.string.online_topbar, online))
-                                }, style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                ChatStatusLine(
+                                    text = buildString {
+                                        append(stringResource(R.string.members_topbar, memberCount))
+                                        if (online > 0) append(stringResource(R.string.online_topbar, online))
+                                    },
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                         ChatType.CHANNEL -> {
                             if (uiState.topbarStatus is TopbarStatus.WaitingForNetwork) {
-                                Text(stringResource(R.string.status_waiting_for_network),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                                ChatStatusLine(
+                                    text = stringResource(R.string.status_waiting_for_network),
+                                    color = MaterialTheme.colorScheme.error,
+                                )
                             } else {
-                                Text(
-                                    stringResource(R.string.subscribers_topbar, uiState.chat?.memberCount ?: 0),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                                ChatStatusLine(
+                                    text = stringResource(R.string.subscribers_topbar, uiState.chat?.memberCount ?: 0),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
                         }
                         ChatType.EMERGENCY -> {
-                            Text(
+                            ChatStatusLine(
                                 text = "🛡️ Аварийный канал связи",
-                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontSize = 11.sp
                             )
                         }
                     }
@@ -241,34 +313,42 @@ fun ChatTopBar(
         },
         actions = {
             if (isAegisEnabled) {
-                IconButton(onClick = { 
+                VlTopAppBarButton(onClick = {
                     haptic.perform(HapticType.REACTION, hapticEnabled)
-                    onAegisClick() 
+                    onAegisClick()
                 }) {
-                    Icon(Icons.Default.SmartToy, null)
+                    Icon(Icons.Default.SmartToy, null, modifier = Modifier.size(20.dp))
                 }
             }
             if (canSetWallpaper) {
-                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onWallpaperClick() }) {
-                    Icon(Icons.Default.Wallpaper, contentDescription = stringResource(R.string.wallpaper),
+                VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onWallpaperClick() }) {
+                    Icon(
+                        Icons.Default.Wallpaper,
+                        contentDescription = stringResource(R.string.wallpaper),
                         tint = if (uiState.wallpaperMode != "none") MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurface)
+                        else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
             if (uiState.chat?.isForumActive == true && onOpenTopicList != null) {
-                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenTopicList() }) {
-                    Icon(Icons.Default.Forum, contentDescription = stringResource(R.string.topics_title))
+                VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenTopicList() }) {
+                    Icon(Icons.Default.Forum, contentDescription = stringResource(R.string.topics_title), modifier = Modifier.size(20.dp))
                 }
             }
             if (uiState.chatType != ChatType.DIRECT && isAdmin) {
-                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenChatSettings(chatId) }) {
-                    Icon(Icons.Default.Settings, stringResource(R.string.settings))
+                VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenChatSettings(chatId) }) {
+                    Icon(Icons.Default.Settings, stringResource(R.string.settings), modifier = Modifier.size(20.dp))
                 }
             }
             if (uiState.chatType != ChatType.DIRECT && !isOwner && (uiState.chatType != ChatType.CHANNEL || uiState.isChannelMember)) {
-                IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLeaveClick() }) {
-                    Icon(Icons.Default.ExitToApp, stringResource(R.string.leave),
-                        tint = MaterialTheme.colorScheme.error)
+                VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onLeaveClick() }) {
+                    Icon(
+                        Icons.Default.ExitToApp,
+                        stringResource(R.string.leave),
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
             }
         }

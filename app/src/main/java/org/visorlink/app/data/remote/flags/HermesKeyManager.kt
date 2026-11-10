@@ -11,7 +11,7 @@ import java.security.PrivateKey
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 
-class AegisKeyManager {
+class HermesKeyManager {
 
     companion object {
         private const val ALIAS = "hermes_key"
@@ -31,7 +31,7 @@ class AegisKeyManager {
     fun generatePublicKeyPem(): String {
         try {
             if (!keyStore.containsAlias(ALIAS)) {
-                if (BuildConfig.DEBUG) Log.d("AegisKey", "Alias $ALIAS not found, generating new key pair...")
+                if (BuildConfig.DEBUG) Log.d("HermesKey", "Alias $ALIAS not found, generating new key pair...")
                 val kpg = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, ANDROID_KEYSTORE)
                 val parameterSpec = KeyGenParameterSpec.Builder(
                     ALIAS, KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
@@ -41,7 +41,7 @@ class AegisKeyManager {
 
                 kpg.initialize(parameterSpec)
                 kpg.generateKeyPair()
-                if (BuildConfig.DEBUG) Log.d("AegisKey", "Key pair generated successfully.")
+                if (BuildConfig.DEBUG) Log.d("HermesKey", "Key pair generated successfully.")
             }
 
             val publicKey = keyStore.getCertificate(ALIAS).publicKey
@@ -52,18 +52,24 @@ class AegisKeyManager {
                 append("-----END PUBLIC KEY-----\n")
             }
         } catch (e: Exception) {
-            if (BuildConfig.DEBUG) Log.e("AegisKey", "Error generating/obtaining public key", e)
+            if (BuildConfig.DEBUG) Log.e("HermesKey", "Error generating/obtaining public key", e)
             throw e
         }
     }
 
-    fun signPayload(deviceId: String, timestamp: Long, nonce: String): String {
-        val payloadString = "$deviceId$timestamp$nonce"
+    fun signPayload(deviceId: String, timestamp: Long, nonce: String): String =
+        signString("$deviceId$timestamp$nonce")
+
+    /**
+     * Подпись произвольной канонической строки ключом устройства (SHA256withECDSA, DER).
+     * Используется отчётами об активности: тот же ключ, что и для /api/v1/config.
+     */
+    fun signString(payload: String): String {
         val privateKey = keyStore.getKey(ALIAS, null) as PrivateKey
 
         val signature = Signature.getInstance("SHA256withECDSA")
         signature.initSign(privateKey)
-        signature.update(payloadString.toByteArray(Charsets.UTF_8))
+        signature.update(payload.toByteArray(Charsets.UTF_8))
         val sigBytes = signature.sign()
 
         return Base64.encodeToString(sigBytes, Base64.NO_WRAP)

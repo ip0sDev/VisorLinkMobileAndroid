@@ -48,11 +48,13 @@ fun ProfileIdCard(profile: UserProfile, isMe: Boolean, slot: IdCardPosition, vie
 
     // Лёгкие признаки из кастомизации (акцент — линия, эмодзи — наклейка) — по правилам PRO
     val appearance = ProfileAppearance.resolve(owner = profile, viewer = viewer ?: profile)
-    Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp), contentAlignment = Alignment.Center) {
+        // Ширина карты: clamp(240…340) от доступного места (F profile_id_card.dart:42)
+        val cardWidth = (maxWidth - 24.dp).coerceIn(240.dp, 340.dp)
         VlIdCard(
             card = card,
             person = IdCardPerson(profile.displayName, profile.username, profile.avatarUrl),
-            width = 296.dp,
+            width = cardWidth,
             accent = appearance.accentHexColor ?: appearance.accent?.seedColor,
             emojis = appearance.emojis.orEmpty(),
         )

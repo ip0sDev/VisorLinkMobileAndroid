@@ -89,7 +89,7 @@ fun RegisterScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.register_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.action_back)

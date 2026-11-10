@@ -14,6 +14,11 @@
     <string name="appcheck_insecure_desc">Verification failed. Possible reasons: Root, unlocked bootloader, emulator, or unofficial app build.</string>
     <string name="appcheck_checking">Checking...</string>
     <string name="appcheck_technical_details">Technical details</string>
+        <string name="appcheck_precheck_title">Client Security Check</string>
+    <string name="appcheck_precheck_desc">Checking device integrity and verifying official client…</string>
+    <string name="appcheck_precheck_failed_title">Security Check Warning</string>
+    <string name="appcheck_precheck_failed_desc">This build could not be verified by Firebase App Check. You may be running an unofficial client or an uncertified device.</string>
+    <string name="appcheck_action_continue_anyway">Continue at Own Risk</string>
     <string name="appcheck_retry">Retry Check</string>
     <string name="action_back">Back</string>
     <string name="action_save">Save</string>
@@ -835,10 +840,6 @@
     <string name="music_grant_permission">Grant access</string>
     <string name="music_settings_title">Music</string>
     <string name="music_settings_desc">Show Music tab in bottom navigation and integrated music player</string>
-    <string name="music_onboarding_title">Introducing Music in VisorLink!</string>
-    <string name="music_onboarding_desc">Listen to tracks right in chats, save your favorite music into the Favorites playlist, and play tracks from your device.</string>
-    <string name="music_onboarding_enable">Enable Music</string>
-    <string name="music_onboarding_disable">Not now</string>
     <string name="music_send_audio">Audio track</string>
     <string name="music_edit_metadata">Edit audio info</string>
     <string name="music_save_to_library">Save to library</string>
@@ -974,21 +975,7 @@
     <string name="storage_firebase_cloud_desc">Avatars, profile covers, and stickers are stored in the secure VisorLink cloud and do not consume space on your Google Drive.</string>
     <string name="storage_gdrive_required_title">Google Drive Required</string>
     <string name="storage_gdrive_required_desc">To send media, please connect your Google Drive in Storage Settings.</string>
-    <string name="storage_yandex_relay_title">Emergency Relay (Yandex Disk)</string>
-    <string name="storage_yandex_relay_desc">Autonomous message delivery via Yandex Disk (WebDAV/REST) during severe network blocks and backend outages. Messages are protected with end-to-end encryption (E2EE).</string>
-    <string name="storage_yandex_relay_ready">Relay ready</string>
-    <string name="storage_yandex_relay_disabled">Relay disabled</string>
-    <string name="storage_yandex_relay_token_btn">Custom Token</string>
-    <string name="storage_yandex_relay_token_dialog_title">Yandex Disk OAuth Token</string>
-    <string name="storage_yandex_relay_token_dialog_desc">By default, the server relay token is used. You can optionally specify your own OAuth token or App Password for Yandex Disk.</string>
-    <string name="emergency_chat_title">Emergency Chat (Yandex Disk)</string>
-    <string name="emergency_chat_badge">Emergency</string>
     <string name="emergency_sync_vault_success">Emergency vault synced</string>
-    <string name="storage_yandex_relay_login_btn">Sign in with Yandex ID</string>
-    <string name="storage_yandex_relay_disconnect_btn">Disconnect Yandex ID</string>
-    <string name="storage_yandex_relay_manual_btn">Configure manually</string>
-    <string name="storage_yandex_relay_custom_connected">Personal Yandex ID connected</string>
-    <string name="storage_yandex_relay_client_id_label">Yandex Client ID</string>
 
     <!-- ID-карты (ANDROID_ID_CARDS_SPEC.md) -->
     <string name="idcard_title">ID card</string>
@@ -1018,9 +1005,55 @@
     <string name="idcard_edition_rare">Rare</string>
     <string name="idcard_edition_epic">Epic</string>
     <string name="idcard_edition_legendary">Legendary</string>
+    <string name="idcard_edition_unique">Unique</string>
     <string name="idcard_finish_base">Standard plastic</string>
     <string name="idcard_finish_pearl">Pearl</string>
     <string name="idcard_finish_metallic">Metallic</string>
+
+    <!-- My bots -->
+    <string name="bots_title">My bots</string>
+    <string name="bots_subtitle">Manage API bots</string>
+    <string name="bots_create">Create bot</string>
+    <string name="bots_empty">You have no bots yet</string>
+    <string name="bots_error_generic">Something failed. Try again later</string>
+    <string name="bots_token_title_new">Bot created</string>
+    <string name="bots_token_title_regenerated">New token</string>
+    <string name="bots_token_warning">Save the token now: it will never be shown again. Do not share it with anyone.</string>
+    <string name="bots_copy">Copy</string>
+    <string name="bots_copied">Copied</string>
+    <string name="bots_done">Done</string>
+    <string name="bots_regenerate">Regenerate token</string>
+    <string name="bots_delete">Delete</string>
+    <string name="bots_confirm_regenerate_title">Regenerate token?</string>
+    <string name="bots_confirm_regenerate_body">The old token will stop working immediately.</string>
+    <string name="bots_confirm_delete_title">Delete bot?</string>
+    <string name="bots_confirm_delete_body">Bot @%1$s will be deleted forever, its username will become available.</string>
+    <string name="bots_confirm_reset_title">Reset verification?</string>
+    <string name="bots_confirm_reset_body">After editing the profile the bot will become unverified again.</string>
+    <string name="bots_continue">Continue</string>
+    <string name="bots_form_title_new">New bot</string>
+    <string name="bots_form_title_edit">Bot @%1$s</string>
+    <string name="bots_form_name">Bot name</string>
+    <string name="bots_form_username">Username (no @)</string>
+    <string name="bots_form_change_avatar">Change avatar</string>
+    <string name="bots_form_avatar_file">Avatar: %1$s</string>
+    <string name="bots_form_receive">Receive messages</string>
+    <string name="bots_form_receive_sub">User text goes to the webhook</string>
+    <string name="bots_form_webhook">Webhook URL</string>
+    <string name="bots_form_secret">Webhook secret (HMAC)</string>
+    <string name="bots_form_secret_keep">Leave empty to keep the current one</string>
+    <string name="bots_form_secret_optional">optional</string>
+    <string name="bots_form_save">Save</string>
+    <string name="bots_form_error">Failed to save</string>
+    <string name="bots_cancel">Cancel</string>
+    <string name="bots_username_error_length">Username must be 3–24 characters</string>
+    <string name="bots_username_error_chars">Only letters, digits and _</string>
+    <string name="bots_tag_receiving">📥 RECEIVING</string>
+    <string name="bots_tag_send_only">📤 SEND ONLY</string>
+    <string name="bots_tag_banned">BANNED</string>
+    <string name="bots_uid_label">UID: %1$s</string>
+    <string name="bots_webhook_error">⚠️ Webhook error: %1$s</string>
+    <string name="bots_edit">Edit</string>
     <string name="idcard_finish_obsidian">Obsidian</string>
     <string name="idcard_finish_gold">Gold</string>
     <string name="idcard_foil_none">No hologram</string>
@@ -1072,7 +1105,11 @@
     <string name="idcard_position_after_header">Below the name</string>
     <string name="idcard_position_bottom">At the bottom</string>
     <string name="idcard_theme_by_mode">The theme is set by your ID card mode</string>
-    <string name="idcard_dark_locked">Forge has no light version — the dark theme stays on in a special mode.</string>
+    <string name="idcard_dark_locked">Forge Clean Room is used for light theme, Blackout LED for dark theme.</string>
+    <string name="theme_forge_clean_room">Forge Clean Room</string>
+    <string name="theme_forge_blackout">Forge Blackout LED</string>
+    <string name="led_sticker_boop">LED sticker, boop</string>
+    <string name="led_face_desc">LED face</string>
     <string name="idcard_group_title">Group ID</string>
     <string name="idcard_group_toggle">Enable Group ID</string>
     <string name="idcard_group_desc">The group gets its own card, and members with a special ID get the Forge theme.</string>
@@ -1114,6 +1151,8 @@
     <string name="idskin_origin_issue">On issue</string>
     <string name="idskin_origin_roll">Roll</string>
     <string name="idskin_origin_trade">Trade</string>
+    <string name="idskin_origin_gift">Gift</string>
+    <string name="idskin_origin_pro">PRO</string>
     <string name="idskin_wear_0">Mint</string>
     <string name="idskin_wear_1">Light wear</string>
     <string name="idskin_wear_2">Worn</string>
@@ -1429,4 +1468,123 @@
     <string name="settings_surprise_demo_title">Surprise demo</string>
     <string name="settings_surprise_demo_subtitle">The whole show on built-in data, no gift is granted</string>
 
+    <!-- Signal -->
+    <string name="signal_title">Signal</string>
+    <string name="signal_back">Back</string>
+
+    <!-- Steps (activity stage 1) -->
+    <string name="step_card_title">Steps</string>
+    <string name="step_card_desc">Earn Bits for daily steps with the phone\'s built-in step counter. No background services.</string>
+    <string name="step_enable">Enable</string>
+    <string name="step_disable">Disable</string>
+    <string name="step_disable_title">Disable step tracking?</string>
+    <string name="step_disable_body">Your step history will be deleted from the server and step counting will stop.</string>
+    <string name="step_disable_confirm">Disable &amp; delete</string>
+    <string name="step_consent_title">Count your steps?</string>
+    <string name="step_consent_body">VisorLink will read the daily total from your phone\'s built-in step counter and award Bits for daily thresholds. Only the daily total is stored — no location, no routes. In challenges your steps are visible to participants only. You can disable and delete the data at any time in Signal.</string>
+    <string name="step_consent_allow">Continue</string>
+    <string name="step_today">steps today</string>
+    <string name="step_to_next">Another %1$s steps to +%2$d Bits</string>
+    <string name="step_all_reached">All daily thresholds reached</string>
+    <string name="step_earned">Earned today: %1$d Bits</string>
+    <string name="step_boost_hint">+%1$d per threshold: your streak was renewed today</string>
+    <string name="step_trust_pending">Step earnings unlock in %1$d days (trust threshold)</string>
+    <string name="step_trust_pending_short">Step earnings unlock with account trust</string>
+    <string name="step_error_rebind">A new device can be linked later</string>
+    <string name="step_error_device">Device verification failed. Open the app and try again.</string>
+    <string name="step_error_generic">Failed to submit the report</string>
+    <string name="step_sensor_missing">A step counter is not available on this device</string>
+    <string name="step_reboot_note">Steps are counted while the phone is on</string>
+    <string name="step_entry_subtitle">Link and the step counter are on duty</string>
+    <string name="step_entry_trailing">%1$s steps</string>
+
+    <!-- Link on the steps page -->
+    <string name="link_step_name">Link</string>
+    <string name="link_step_invite">Hi! I\'m Link. Enable step tracking — we\'ll earn Bits on the move. I only see the daily total, promise.</string>
+    <string name="link_step_start">Let\'s go! The first 1000 steps — the first Bits.</string>
+    <string name="link_step_go">Another %1$s steps — and +%2$d Bits! I believe in us.</string>
+    <string name="link_step_done">All daily thresholds are taken! You are a walking legend.</string>
+    <string name="link_step_counting">Counting… pace yourself!</string>
+    <string name="link_step_boost">Your streak is renewed today — each threshold pays double!</string>
+    <string name="link_step_trust">While the account is young, I count steps but don\'t pay out — the trust threshold. Soon!</string>
+    <string name="link_step_error">Something broke on the server. We\'ll try again later.</string>
+    <string name="link_step_device">I don\'t recognize this device — open the app again and I\'ll recheck.</string>
+    <string name="link_step_rebind">A new device can be linked a bit later. I\'ll wait!</string>
+    <string name="link_step_sensor">There\'s no step counter on this device… I\'m as upset as you are.</string>
+    <string name="link_step_boop1">Hey, that tickles!</string>
+    <string name="link_step_boop2">Boop received. Processing… done: you\'re great!</string>
+    <string name="link_step_boop3">Careful with the visor, it\'s brand new!</string>
+    <string name="link_step_pet">*visor shows hearts* Keep walking — and pet me more often!</string>
+
+    <!-- Phase 2: Gifts & ID-Cards -->
+    <string name="gift_user_title">Gift</string>
+    <string name="gift_action_send">Send</string>
+    <string name="gift_attach">Gift</string>
+    <string name="gift_picker_kicker">GIFT</string>
+    <string name="gift_picker_title">Gift for %1$s</string>
+    <string name="gift_pro_week">PRO for 7 days</string>
+    <string name="gift_pro_month">PRO for 30 days</string>
+    <string name="gift_postcard">Postcard</string>
+    <string name="gift_skin">ID Card</string>
+    <string name="gift_note_label">Note (optional)</string>
+    <string name="gift_note_placeholder">A few words for the gift</string>
+    <string name="gift_send_action">Send for %1$d Bits</string>
+    <string name="gift_sent_status">Sent</string>
+    <string name="gift_sending_status">Sending…</string>
+    <string name="gift_not_enough_bits">Not enough Bits.</string>
+    <string name="gift_pro_eternal_hint">%1$s has lifetime PRO — send a postcard or an ID card.</string>
+    <string name="gift_postcard_hint">A postcard is just a nice gesture: the recipient receives no Bits.</string>
+    <string name="gift_skin_hint">Send a skin from your inventory. Equipped, listed for trade or obtained less than 14 days ago cannot be gifted.</string>
+    <string name="gift_choose_skin">Choose skin</string>
+    <string name="gift_revoke_hint">While the gift is unopened, you can cancel it — Bits will be refunded.</string>
+    <string name="gift_your_gift">Your gift</string>
+    <string name="gift_from_user">Gift from @%1$s</string>
+    <string name="gift_opened_by">Opened by @%1$s</string>
+    <string name="gift_cancelled">Gift cancelled</string>
+    <string name="gift_waiting">Waiting to be opened</string>
+    <string name="gift_action_cancel">Cancel</string>
+    <string name="gift_action_open_gift">Open gift</string>
+    <string name="gift_action_opening_gift">Activating…</string>
+    <string name="gift_bits_title">100 Bits</string>
+    <string name="gift_bits_hint">Balance bonus</string>
+    <string name="gift_bits_received">+100 BITS!</string>
+    <string name="gift_pro_received">YOU GOT PRO!</string>
+
+    <!-- Postcard designs -->
+    <string name="postcard_spark">Sparks</string>
+    <string name="postcard_aurora">Aurora</string>
+    <string name="postcard_supernova">Supernova</string>
+
+    <!-- Ion Gift -->
+    <string name="idcard_ion_title">Gift: VL Ion</string>
+    <string name="idcard_ion_banner_hint">Tap to open your gift</string>
+    <string name="idcard_ion_opening">Opening gift…</string>
+    <string name="idcard_ion_claim">Claim</string>
+    <string name="idcard_ion_desc">A new Forge-style card: porcelain and a warm orange LED. One per person, lands in your inventory.</string>
+    <string name="idcard_ion_done">VL Ion is in your inventory — equip it from the list below.</string>
+
+    <!-- Additional ID Skin Anti-Farm Error Strings -->
+    <string name="idskin_err_trust_age">Trading unlocks in %1$s: the account must be 30 days old.</string>
+    <string name="idskin_err_trust_activity">Trading unlocks after %1$s more days of chatting.</string>
+    <string name="idskin_err_skin_hold">This skin can be passed on in %1$s.</string>
+    <string name="idskin_err_trade_limit">Up to 5 trades per 30 days. Next one in %1$s.</string>
+    <string name="idskin_err_invite_link">Trading with the person you invited (or who invited you) unlocks in %1$s.</string>
+    <string name="idskin_err_peer_not_ready">Trading isn\'t available to the other person yet.</string>
+    <string name="idskin_err_pro_card">A PRO card can\'t be sold, traded or gifted.</string>
+    <string name="idskin_err_single">This card exists in a single copy and cannot be transferred.</string>
+    <string name="idskin_err_pro_required">An active PRO is required.</string>
+    <string name="idskin_err_pro_claimed">PRO cards are already in your inventory.</string>
+
+<!-- Chat Folders -->
+    <string name="settings_chat_folders_title">Chat folders</string>
+    <string name="settings_chat_folders_desc">Tabs and filter rules for conversations</string>
+
+    <!-- Legendary Roll & PRO Cards -->
+    <string name="idskin_premium_title">Legendary roll</string>
+    <string name="idskin_premium_desc">Rare edition or better. No weekly limit and doesn\'t reset your regular roll.</string>
+    <string name="idskin_premium_confirm_title">Do a legendary roll?</string>
+    <string name="idskin_premium_confirm_text">%1$d Bits will be charged. You\'ll get a rare or better skin; it takes a slot.</string>
+    <string name="idskin_pro_title">PRO cards</string>
+    <string name="idskin_pro_desc">Two PRO-style cards — Aurum and Noir. Free, take no slots; wearable while PRO is active.</string>
+    <string name="idskin_pro_claim">Claim</string>
 </resources>

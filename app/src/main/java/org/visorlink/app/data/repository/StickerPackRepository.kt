@@ -31,11 +31,36 @@ class StickerPackRepository(
         const val PREF_STICKER_CACHE_VERSION = "official_curated_v6"
         private const val PREFS_NAME = "sticker_prefs"
         private const val KEY_CACHE_VERSION = "sticker_cache_version"
+
+        val forgeLedStickers = listOf(
+            StickerItem(id = "led_happy", url = "led:happy", emoji = "😊", format = "led", sortOrder = 0),
+            StickerItem(id = "led_boop", url = "led:boop", emoji = "✨", format = "led", sortOrder = 1),
+            StickerItem(id = "led_heart", url = "led:heart", emoji = "❤️", format = "led", sortOrder = 2),
+            StickerItem(id = "led_cat", url = "led:cat", emoji = "🐱", format = "led", sortOrder = 3),
+            StickerItem(id = "led_cool", url = "led:cool", emoji = "😎", format = "led", sortOrder = 4),
+            StickerItem(id = "led_wide", url = "led:wide", emoji = "😳", format = "led", sortOrder = 5),
+            StickerItem(id = "led_sleepy", url = "led:sleepy", emoji = "💤", format = "led", sortOrder = 6),
+            StickerItem(id = "led_glitch", url = "led:glitch", emoji = "⚡", format = "led", sortOrder = 7),
+            StickerItem(id = "led_cry", url = "led:cry", emoji = "🥺", format = "led", sortOrder = 8),
+            StickerItem(id = "led_angry", url = "led:angry", emoji = "💢", format = "led", sortOrder = 9),
+            StickerItem(id = "led_scan", url = "led:scan", emoji = "🤖", format = "led", sortOrder = 10),
+        )
+
+        val builtinForgeLedPack = StickerPack(
+            id = "forge_led_faces",
+            name = "Forge LED",
+            emoji = "🤖",
+            authorId = "official",
+            authorName = "VisorLink Forge",
+            stickerCount = 11,
+            isOfficial = true,
+            stickers = forgeLedStickers,
+        )
     }
 
     private val currentUid get() = auth.currentUser?.uid ?: ""
     private val _storePacksFlow = MutableStateFlow<List<StickerPack>>(emptyList())
-    private val _userPacksFlow = MutableStateFlow<List<StickerPack>>(emptyList())
+    private val _userPacksFlow = MutableStateFlow<List<StickerPack>>(listOf(builtinForgeLedPack))
     private var listenerRegistration: com.google.firebase.firestore.ListenerRegistration? = null
 
     init {
@@ -47,7 +72,8 @@ class StickerPackRepository(
                 if (cached.isNotEmpty()) {
                     _storePacksFlow.value = cached.filter { it.isOfficial }
                     val userPackIds = ChatDataCache.loadProfile(context, uid)?.stickerPackIds ?: emptyList()
-                    _userPacksFlow.value = cached.filter { it.id in userPackIds || (it.authorId == uid && !it.isOfficial) }.toMutableList()
+                    val loaded = cached.filter { it.id in userPackIds || (it.authorId == uid && !it.isOfficial) }
+                    _userPacksFlow.value = (listOf(builtinForgeLedPack) + loaded).distinctBy { it.id }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to preload stickers from cache", e)
@@ -161,7 +187,7 @@ class StickerPackRepository(
                 async { fetchPackDetails(pId) }
             }.awaitAll().filterNotNull()
 
-            val updatedUserPacks = (officialOrAuthorPacks + existingUserPacks + extraPacks).distinctBy { it.id }
+            val updatedUserPacks = (listOf(builtinForgeLedPack) + officialOrAuthorPacks + existingUserPacks + extraPacks).distinctBy { it.id }
             _userPacksFlow.value = updatedUserPacks
 
             val allKnownPacks = (packs + updatedUserPacks).distinctBy { it.id }
@@ -188,6 +214,14 @@ class StickerPackRepository(
         try {
             purgeLegacyCacheIfNeeded()
             val query = firestore.collection("stickerPacks").whereEqualTo("isOfficial", true)
+            // 1. Мгновенная выдача из кэша
+            try {
+                val cachedSnap = query.get(Source.CACHE).await()
+                if (!cachedSnap.isEmpty) {
+                    processSnapshot(cachedSnap)
+                }
+            } catch (_: Exception) {}
+            // 2. Сетевое обновление в фоне
             val snapshot = try {
                 if (forceServer) {
                     query.get(Source.SERVER).await()

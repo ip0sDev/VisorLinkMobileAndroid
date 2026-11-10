@@ -52,12 +52,19 @@ class MainActivity : AppCompatActivity() {
     private val authViewModel: AuthViewModel by inject()
     private val fcmManager: org.visorlink.app.utils.FcmManager by inject()
     private val musicPlayerManager: org.visorlink.app.utils.MusicPlayerManager by inject()
-    private val yandexRelayConfigManager: org.visorlink.app.data.remote.yandex.YandexRelayConfigManager by inject()
     private val maskModeManager: org.visorlink.app.utils.MaskModeManager by inject()
     private val chatThemeController: org.visorlink.app.ui.idcard.ChatThemeController by inject()
+    private val stealthManager: org.visorlink.app.utils.StealthManager by inject()
+    private val contentKeyManager: org.visorlink.app.utils.ContentKeyManager by inject()
+    private val ckHandshakeManager: org.visorlink.app.utils.CkHandshakeManager by inject()
 
     private val pendingOpenChatId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val pendingOpenSenderUid = androidx.compose.runtime.mutableStateOf<String?>(null)
+
+    // E2EE-хендшейк (TODO §14.3–14.4): заявка на выдачу ключа контента новому браузеру —
+    // из пуша ck_handshake (extra ck_request_id) → Compose-диалог одобрения
+    private val pendingCkRequestId = androidx.compose.runtime.mutableStateOf<String?>(null)
+    private val pendingCkClient = androidx.compose.runtime.mutableStateOf<String?>(null)
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -70,8 +77,8 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
 
         extractOpenChatId(intent)
+        extractCkRequestId(intent)
         extractInviteCode(intent)
-        extractYandexAuthToken(intent)
         if (intent?.getBooleanExtra("open_music_player", false) == true) {
             musicPlayerManager.openFullscreenPlayer()
         }
@@ -87,12 +94,13 @@ class MainActivity : AppCompatActivity() {
         
         requestNotificationPermissionIfNeeded()
 
-        // Вызываем нашу проверку официального клиента
-        verifyAppCheckStatus()
 
         setContent {
             val themeViewModel: ThemeViewModel = koinViewModel()
             val authViewModel: AuthViewModel   = koinViewModel()
+
+            // Общая сессия backdrop-блюра шапок/панелей (HazeInput.Sources на Android < 37.2)
+            val vlHazeSession = androidx.compose.runtime.remember { org.visorlink.app.ui.components.VlHazeSession() }
 
             val appTheme    by themeViewModel.appTheme.collectAsState()
             val themeMode   by themeViewModel.themeMode.collectAsState()
@@ -102,7 +110,7 @@ class MainActivity : AppCompatActivity() {
             // Тема по режиму ID-карты (веб: ModeThemeSync): после входа её решает режим
             // (Biolume / Forge v2), а не выбор в настройках
             val authState by authViewModel.authState.collectAsState()
-            val myUid = (authState as? org.visorlink.app.data.repository.AuthState.Verified)?.user?.uid
+            val myUid = (authState as? org.visorlink.app.data.repository.AuthState.Verified)?.user?.uid ?: firebaseAuth.currentUser?.uid
             val myProfile by remember(myUid) {
                 if (myUid == null) kotlinx.coroutines.flow.flowOf(null) else userRepository.userProfileFlow(myUid)
             }.collectAsState(initial = null)
@@ -122,6 +130,7 @@ class MainActivity : AppCompatActivity() {
                 myUid?.let { themePrefs.getString(KEY_LAST_PRO_ACCENT + it, null) }?.takeIf { it.length == 7 }
                     ?.let { androidx.compose.ui.graphics.Color(it.substring(1).toLong(16) or 0xFF000000) }
             }
+            val effectiveProAccent = if (myProfile != null) myProfile?.proAccent() else cachedProAccent
             val maskState by maskModeManager.state.collectAsState()
             val chatThemeContext by chatThemeController.context.collectAsState()
             val modeTheme = org.visorlink.app.data.idcard.ModeThemeRules.resolve(
@@ -140,14 +149,15 @@ class MainActivity : AppCompatActivity() {
             val viewerTheme = if (idModeState.enabled) {
                 org.visorlink.app.ui.theme.ViewerTheme(
                     appTheme = modeTheme.toAppTheme(),
-                    themeMode = if (modeTheme.forceDark) org.visorlink.app.data.model.ThemeMode.DARK else themeMode,
+                    // Forge теперь есть и светлая (Clean Room): особый режим больше не держит тёмную тему принудительно
+                    themeMode = themeMode,
                     colorPreset = colorPreset,
                     modeDriven = true,
                     // Цвет профиля PRO — акцент всего интерфейса (Biolume и Forge v2)
-                    proAccent = if (myProfile != null) myProfile?.proAccent() else cachedProAccent,
+                    proAccent = effectiveProAccent,
                 )
             } else {
-                org.visorlink.app.ui.theme.ViewerTheme(appTheme, themeMode, colorPreset)
+                org.visorlink.app.ui.theme.ViewerTheme(appTheme, themeMode, colorPreset, proAccent = effectiveProAccent)
             }
 
             LaunchedEffect(Unit) {
@@ -164,7 +174,7 @@ class MainActivity : AppCompatActivity() {
             // Смена темы целиком (Biolume ↔ Forge, светлая ↔ тёмная) — растворением снимка
             org.visorlink.app.ui.theme.ThemeCrossfade(
                 value = viewerTheme,
-                key = { it.appTheme to it.themeMode },
+                key = { Triple(it.appTheme, it.themeMode, it.proAccent) },
             ) { shownTheme ->
             VisorLinkTheme(
                 appTheme = shownTheme.appTheme,
@@ -177,6 +187,7 @@ class MainActivity : AppCompatActivity() {
               androidx.compose.runtime.CompositionLocalProvider(
                   org.visorlink.app.ui.theme.LocalViewerTheme provides shownTheme,
                   org.visorlink.app.ui.idcard.LocalIdModeState provides idModeState,
+                  org.visorlink.app.ui.components.LocalVlHazeSession provides vlHazeSession,
               ) {
                 ServiceModeGuard(authViewModel = authViewModel) {
                     AppCheckGuard {
@@ -212,6 +223,27 @@ class MainActivity : AppCompatActivity() {
                                             pendingOpenSenderUid.value = null
                                         }
                                     )
+                                    // E2EE-хендшейк (TODO §14.3–14.4): диалог одобрения выдачи
+                                    // ключа контента новому браузеру — сверка кода с браузером
+                                    pendingCkRequestId.value?.let { ckRequestId ->
+                                        val ckUid = FirebaseAuth.getInstance().currentUser?.uid
+                                        if (ckUid == null) {
+                                            pendingCkRequestId.value = null
+                                            pendingCkClient.value = null
+                                        } else {
+                                            org.visorlink.app.ui.components.saved.CkHandshakeDialog(
+                                                uid = ckUid,
+                                                requestId = ckRequestId,
+                                                pushClient = pendingCkClient.value,
+                                                handshake = ckHandshakeManager,
+                                                contentKeyManager = contentKeyManager,
+                                                onDone = {
+                                                    pendingCkRequestId.value = null
+                                                    pendingCkClient.value = null
+                                                }
+                                            )
+                                        }
+                                    }
                                     // Личный сюрприз (surprises/{uid}) — под выдачей карты: сначала карта
                                     org.visorlink.app.ui.surprise.SurpriseGate()
                                     // Выдача ID-карты: без карты в приложение не пускаем (спека §5)
@@ -237,32 +269,10 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         extractOpenChatId(intent)
+        extractCkRequestId(intent)
         extractInviteCode(intent)
-        extractYandexAuthToken(intent)
         if (intent.getBooleanExtra("open_music_player", false)) {
             musicPlayerManager.openFullscreenPlayer()
-        }
-    }
-
-    private fun extractYandexAuthToken(intent: android.content.Intent?) {
-        val data = intent?.data ?: return
-        if (data.scheme == "visorlink" && data.host == "yandex-auth") {
-            var token: String? = data.getQueryParameter("access_token")
-            if (token.isNullOrBlank()) {
-                val fragment = data.fragment
-                if (!fragment.isNullOrBlank()) {
-                    val params = fragment.split("&").associate { param ->
-                        val parts = param.split("=", limit = 2)
-                        if (parts.size == 2) parts[0] to parts[1] else parts[0] to ""
-                    }
-                    token = params["access_token"]
-                }
-            }
-            if (!token.isNullOrBlank()) {
-                yandexRelayConfigManager.setCustomToken(token)
-                yandexRelayConfigManager.setRelayEnabled(true)
-                android.widget.Toast.makeText(this, "Яндекс.Диск подключен!", android.widget.Toast.LENGTH_SHORT).show()
-            }
         }
     }
 
@@ -283,6 +293,19 @@ class MainActivity : AppCompatActivity() {
             pendingOpenChatId.value = chatId
             pendingOpenSenderUid.value = senderUid
         }
+    }
+
+    /**
+     * Заявка хендшейка из хедс-ап уведомления (data-пуш ck_handshake, TODO §14.3–14.4):
+     * поднимаем диалог одобрения. Стелс активен — молча не показываем (уведомление
+     * FcmService уже подавил, здесь страхуемся на случай присланного intent).
+     */
+    private fun extractCkRequestId(intent: android.content.Intent?) {
+        val requestId = intent?.getStringExtra("ck_request_id")
+        if (requestId.isNullOrBlank()) return
+        if (stealthManager.isStealthActive()) return
+        pendingCkRequestId.value = requestId
+        pendingCkClient.value = intent.getStringExtra("ck_client")
     }
 
     private fun requestNotificationPermissionIfNeeded() {
@@ -311,27 +334,6 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         org.visorlink.app.utils.ActiveChatTracker.isAppInForeground = false
-    }
-
-    // --- НОВАЯ ФУНКЦИЯ ДЛЯ APP CHECK ---
-    private fun verifyAppCheckStatus() {
-        // Если юзер не авторизован, функцию дергать бессмысленно (она всё равно требует auth)
-        if (FirebaseAuth.getInstance().currentUser == null) return
-
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                Log.d("VisorLink", "Verifying official client status via Cloud Functions...")
-
-                functions.getHttpsCallable("verifyOfficialClient")
-                    .call()
-                    .await()
-
-                Log.d("VisorLink", "Official client status verified successfully!")
-            } catch (e: Exception) {
-                // Если AppCheck не пропустит или функция упадет, логируем ошибку
-                Log.e("VisorLink", "App Check verification failed: ${e.message}", e)
-            }
-        }
     }
 
     private companion object {

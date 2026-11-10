@@ -75,7 +75,7 @@ fun IdCardSettingsScreen(
         topBar = {
             VlTopAppBar(
                 title = { Text(stringResource(R.string.idcard_title), style = MaterialTheme.typography.titleLarge) },
-                navigationIcon = { IconButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
+                navigationIcon = { org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null) } },
             )
         },
     ) { padding ->

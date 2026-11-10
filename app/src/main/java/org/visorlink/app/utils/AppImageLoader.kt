@@ -67,12 +67,18 @@ object AppImageLoader {
         val okhttp = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
             // Принудительно кешируем даже ответы без Cache-Control (Firebase Storage)
-            .addNetworkInterceptor { chain ->
+            .addInterceptor { chain ->
                 val response = chain.proceed(chain.request())
-                response.newBuilder()
-                    .header("Cache-Control", "public, max-age=2592000") // 30 дней
-                    .build()
+                if (response.isSuccessful) {
+                    response.newBuilder()
+                        .header("Cache-Control", "public, max-age=2592000") // 30 дней
+                        .build()
+                } else {
+                    response
+                }
             }
             .build()
 
@@ -104,6 +110,8 @@ object AppImageLoader {
             .diskCachePolicy(CachePolicy.ENABLED)
             .memoryCachePolicy(CachePolicy.ENABLED)
             .networkCachePolicy(CachePolicy.ENABLED)
+            // Игнорируем строгие HTTP-заголовки запрета кэша от Firebase Storage / CDN, чтобы аватарки всегда оставались в DiskCache
+            .respectCacheHeaders(false)
             // Crossfade по умолчанию для всех изображений
             .crossfade(true)
             .crossfade(300)

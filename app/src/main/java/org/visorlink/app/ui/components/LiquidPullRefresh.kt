@@ -6,13 +6,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.StrokeCap
-import org.visorlink.app.ui.theme.vlRaised
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -40,7 +40,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import org.visorlink.app.ui.components.led.VlLedExpression
+import org.visorlink.app.ui.components.led.VlLedFace
+import org.visorlink.app.ui.components.led.VlLedScreen
+import org.visorlink.app.ui.components.led.VlLedSpinner
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlRaised
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import kotlin.math.roundToInt
@@ -74,6 +79,8 @@ fun LiquidPullRefreshLayout(
     val pullAnim = remember { Animatable(0f) }
     var rawPullPx by remember { mutableFloatStateOf(0f) }
     var hasTriggeredHaptic by remember { mutableStateOf(false) }
+    // Ступень натяжения 0..3 для ступенчатых хаптиков (F vl_led_meters.dart:369-370)
+    var hapticStep by remember { mutableStateOf(0) }
 
     LaunchedEffect(isRefreshing) {
         if (isRefreshing) {
@@ -88,6 +95,7 @@ fun LiquidPullRefreshLayout(
             )
             rawPullPx = 0f
             hasTriggeredHaptic = false
+            hapticStep = 0
         }
     }
 
@@ -118,9 +126,18 @@ fun LiquidPullRefreshLayout(
                     val newTarget = rubberBand(rawPullPx, thresholdPx, maxOverflowPx, tension = 0.50f)
                     scope.launch { pullAnim.snapTo(newTarget) }
 
-                    if (rawPullPx >= thresholdPx && !hasTriggeredHaptic) {
-                        hasTriggeredHaptic = true
-                        haptic.perform(HapticType.SELECTION, hapticEnabled)
+                    // Ступенчатые хаптики натяжения (F vl_led_meters.dart:372-382):
+                    // тик на каждой ступени 0..3, «порог» — когда ступень 3 достигнута
+                    val step = ((rawPullPx / thresholdPx) * 3).toInt().coerceIn(0, 3)
+                    if (step != hapticStep) {
+                        val up = step > hapticStep
+                        hapticStep = step
+                        if (step == 3 && up) {
+                            haptic.perform(HapticType.THRESHOLD, hapticEnabled)
+                            hasTriggeredHaptic = true
+                        } else if (step > 0 || !up) {
+                            haptic.perform(HapticType.SELECTION, hapticEnabled)
+                        }
                     } else if (rawPullPx < thresholdPx && hasTriggeredHaptic) {
                         hasTriggeredHaptic = false
                     }
@@ -136,6 +153,7 @@ fun LiquidPullRefreshLayout(
                 } else {
                     rawPullPx = 0f
                     hasTriggeredHaptic = false
+                    hapticStep = 0
                     pullAnim.animateTo(
                         targetValue = 0f,
                         animationSpec = spring(dampingRatio = 0.55f, stiffness = 320f)
@@ -172,7 +190,7 @@ fun LiquidPullRefreshLayout(
 /**
  * Круглая «таблетка» по центру промежутка между верхней панелью и списком: пока тянем —
  * кольцо прогресса со стрелкой, при достижении порога кольцо замкнуто, при обновлении —
- * бесконечный спиннер. Поверхность и форма — из токенов темы (в Forge квадратная).
+ * бесконечный спиннер. В Forge (`tokens.led != null`) — LED-экран со спиннером `VlLedSpinner`.
  */
 @Composable
 private fun PullRefreshIndicator(
@@ -195,6 +213,37 @@ private fun PullRefreshIndicator(
     val centerY = with(density) { topPadding.toPx() } + pullOffsetPx / 2f
 
     Box(modifier = modifier) {
+        if (tokens.led != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .offset { IntOffset(0, (centerY - sizePx / 2f).roundToInt()) }
+                    .graphicsLayer {
+                        alpha = reveal
+                        scaleX = 0.6f + 0.4f * reveal
+                        scaleY = 0.6f + 0.4f * reveal
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                VlLedScreen(
+                    radius = 20.dp,
+                    padding = PaddingValues(10.dp),
+                ) {
+                    if (isRefreshing) {
+                        VlLedSpinner(size = 24.dp, value = null)
+                    } else {
+                        // Мордочка «смотрит» вниз по мере натяжения (F vl_led_meters.dart:445)
+                        VlLedFace(
+                            expression = VlLedExpression.SCAN,
+                            gaze = Offset(0f, progress * 2f - 1f),
+                            autoBlink = false,
+                        )
+                    }
+                }
+            }
+            return
+        }
+
         Box(
             modifier = Modifier
                 .align(Alignment.TopCenter)

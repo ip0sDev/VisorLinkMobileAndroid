@@ -38,8 +38,8 @@ import androidx.compose.ui.platform.LocalContext
 fun <T> ThemeCrossfade(
     value: T,
     key: (T) -> Any?,
-    /** Как переход навигации (300 мс): смена темы при входе в чат — одно движение с ним. */
-    durationMs: Int = 320,
+    /** 420 мс — как у Flutter VlThemeCrossfade (vl_motion.dart:403). */
+    durationMs: Int = 420,
     content: @Composable (T) -> Unit,
 ) {
     val context = LocalContext.current

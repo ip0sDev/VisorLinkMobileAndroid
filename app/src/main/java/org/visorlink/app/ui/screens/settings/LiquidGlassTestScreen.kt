@@ -432,7 +432,7 @@ fun LiquidGlassTestScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onBack) {
                         Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Назад")
                     }
                 }

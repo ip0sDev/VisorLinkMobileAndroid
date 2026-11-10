@@ -8,7 +8,7 @@ import org.visorlink.app.BuildConfig
 import org.visorlink.app.data.model.flags.AppFlags
 import org.visorlink.app.data.model.flags.ConfigRequest
 import org.visorlink.app.data.model.flags.PairRequest
-import org.visorlink.app.data.remote.flags.AegisKeyManager
+import org.visorlink.app.data.remote.flags.HermesKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
 import com.auth0.android.jwt.JWT
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,7 +26,7 @@ import java.util.UUID
 class FlagsRepository(
     private val context: Context,
     private val api: FlagsApi,
-    private val keyManager: AegisKeyManager
+    private val keyManager: HermesKeyManager
 ) {
     private val prefs = context.getSharedPreferences("visorlink_flags_prefs", Context.MODE_PRIVATE)
     private val _flags = MutableStateFlow(AppFlags())
@@ -220,7 +220,7 @@ class FlagsRepository(
             request = ConfigRequest(deviceId, timestamp, nonce)
         )
 
-        if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Config response received. Token: ${response.token}")
+        if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Config response received. Token length: ${response.token.length}")
         val applied = parseAndApplyFlags(response.token)
         if (applied) lastFetchAt = SystemClock.elapsedRealtime()
         return applied
@@ -228,7 +228,6 @@ class FlagsRepository(
 
     private fun parseAndApplyFlags(token: String): Boolean {
         return try {
-            if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Parsing JWT Token: $token")
             val jwt = JWT(token)
 
             val allClaimsMap = mutableMapOf<String, Any?>()
@@ -243,7 +242,8 @@ class FlagsRepository(
                     }
                     allClaimsMap[key] = value
                     claimsJson.put(key, value)
-                    if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Claim: $key = $value")
+                    // Значения claims не логируем: среди них бывают секреты (токены)
+                    if (BuildConfig.DEBUG) Log.d("FlagsRepo", "Claim present: $key")
                 }
             }
             // Кэшируем claims для offline-first работы

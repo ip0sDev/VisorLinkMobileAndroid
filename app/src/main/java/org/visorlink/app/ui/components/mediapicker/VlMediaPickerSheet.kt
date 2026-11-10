@@ -87,6 +87,8 @@ fun VlMediaPickerSheet(
     onVideoRecorded: (Uri) -> Unit,
     /** «ID-карта на обмен» — только в ЛС и группах, не с ботом. */
     onOpenIdTrade: (() -> Unit)? = null,
+    /** «Подарок» — только в прямом диалоге, не с ботом. */
+    onOpenGiftPicker: (() -> Unit)? = null,
     viewModel: MediaPickerViewModel = koinViewModel()
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -140,7 +142,7 @@ fun VlMediaPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)),
-        containerColor = if (tokens.isBiolume) cs.surfaceContainerLow else cs.surface,
+        containerColor = cs.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -171,6 +173,7 @@ fun VlMediaPickerSheet(
             onPhotoTaken = onPhotoTaken,
             onVideoRecorded = onVideoRecorded,
             onOpenIdTrade = onOpenIdTrade,
+            onOpenGiftPicker = onOpenGiftPicker,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(animatedHeight)
@@ -194,6 +197,7 @@ fun VlMediaPickerViewContent(
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
     onOpenIdTrade: (() -> Unit)? = null,
+    onOpenGiftPicker: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var currentTab by remember { mutableStateOf(MediaPickerTab.ALL) }
@@ -419,6 +423,7 @@ fun VlMediaPickerViewContent(
                                 }
                             }
                             if (onOpenIdTrade != null) IdTradeAttachRow(onOpenIdTrade)
+                            if (onOpenGiftPicker != null) GiftAttachRow(onOpenGiftPicker)
                         }
                     }
                 }
@@ -791,6 +796,30 @@ private fun IdTradeAttachRow(onClick: () -> Unit) {
             org.visorlink.app.ui.components.VlIconTray(icon = Icons.Default.SwapHoriz, iconColor = cs.primary)
             Text(
                 text = stringResource(R.string.idskin_attach),
+                style = MaterialTheme.typography.titleSmall,
+                color = cs.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = cs.onSurfaceVariant)
+        }
+    }
+}
+
+/** Пункт вложений «Подарок»: открывает шторку выбора подарка (PRO, открытка, ID-карта). */
+@Composable
+private fun GiftAttachRow(onClick: () -> Unit) {
+    val cs = MaterialTheme.colorScheme
+    VlCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("🎁", fontSize = 24.sp)
+            Text(
+                text = stringResource(R.string.gift_attach),
                 style = MaterialTheme.typography.titleSmall,
                 color = cs.onSurface,
                 modifier = Modifier.weight(1f)

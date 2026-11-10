@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"
         tools:ignore="SelectedPhotoAccess" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -61,16 +62,6 @@
                 <data
                     android:scheme="visorlink"
                     android:host="invite" />
-            </intent-filter>
-
-            <!-- Deep link for Yandex OAuth 2.0 Authorization -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="visorlink"
-                    android:host="yandex-auth" />
             </intent-filter>
         </activity>
         <service

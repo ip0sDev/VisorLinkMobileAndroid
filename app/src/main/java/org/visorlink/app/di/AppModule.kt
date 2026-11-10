@@ -2,7 +2,7 @@
 package org.visorlink.app.di
 
 import org.visorlink.app.data.aegis.*
-import org.visorlink.app.data.remote.flags.AegisKeyManager
+import org.visorlink.app.data.remote.flags.HermesKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
 import org.visorlink.app.data.repository.*
 import org.visorlink.app.ui.aegis.AegisLifeViewModel
@@ -41,6 +41,7 @@ import org.visorlink.app.utils.OutboxManager
 import org.visorlink.app.utils.VoicePlayerManager
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import com.google.firebase.firestore.PersistentCacheSettings
 import com.google.firebase.firestore.FirebaseFirestoreSettings
 import com.google.firebase.firestore.firestoreSettings
 import com.google.firebase.firestore.firestore
@@ -58,8 +59,11 @@ val appModule = module {
     single {
         Firebase.firestore.also { db ->
             db.firestoreSettings = firestoreSettings {
-                isPersistenceEnabled = true
-                cacheSizeBytes = FirebaseFirestoreSettings.CACHE_SIZE_UNLIMITED
+                setLocalCacheSettings(
+                    PersistentCacheSettings.newBuilder()
+                        .setSizeBytes(100L * 1024 * 1024)
+                        .build()
+                )
             }
         }
     }
@@ -78,21 +82,25 @@ val appModule = module {
             .build()
             .create(FlagsApi::class.java)
     }
-    single { AegisKeyManager() }
+    single { HermesKeyManager() }
     single { FlagsRepository(androidContext(), get(), get()) }
+
+    // --- Активности: шагомер (этап 1, enable_step_activities) ---
+    single { org.visorlink.app.data.activity.StepPrefs(androidContext()) }
+    single { org.visorlink.app.data.activity.ActivityRepository(get(), get(), get()) }
+    single { org.visorlink.app.data.activity.StepSampler(androidContext(), get(), get(), get()) }
 
     // --- Google Drive Storage ---
     single { org.visorlink.app.data.repository.GoogleDriveConfigRepository(get()) }
     single { org.visorlink.app.utils.GoogleDriveAuthManager(androidContext()) }
     single { org.visorlink.app.data.remote.GoogleDriveMediaService(get()) }
 
-    // --- Yandex Disk Emergency Relay (enable_alternative_outbox) ---
-    single { org.visorlink.app.data.remote.yandex.YandexRelayConfigManager(androidContext(), get()) }
-    single { org.visorlink.app.data.remote.yandex.YandexDiskTransportService() }
-    single { org.visorlink.app.data.remote.yandex.YandexDeadDropManager(androidContext(), get(), get()) }
-
     single { SessionRepository(get(), get(), get()) }
     single { AuthRepository(get(), get(), get(), get()) }
+    // Ключи контента (CK) + обёртки PIN/биометрии/recovery (TODO §14.3)
+    single { org.visorlink.app.utils.ContentKeyManager(androidContext(), get()) }
+    // E2EE-хендшейк «ключ контента на новый браузер по одобрению с телефона» (TODO §14.3–14.4)
+    single { org.visorlink.app.utils.CkHandshakeManager() }
     single {
         ChatRepository(
             auth = get(),
@@ -102,12 +110,14 @@ val appModule = module {
             networkMonitor = get(),
             googleDriveAuthManager = get(),
             googleDriveMediaService = get(),
-            yandexDeadDropManager = get()
+            contentKeyManager = get()
         )
     }
     single { UserRepository(get(), get(), get(), androidContext()) }
     // Блокировки пользователь→пользователь: blocks / blockedBy + setUserBlock
     single { BlockRepository(get(), get(), androidContext()) }
+    single { SignalRepository(get(), androidContext()) }
+    single { org.visorlink.app.data.repository.UserGiftRepository() }
     // ID-карты: карта и callables, Mask Mode (только на устройстве), контекст темы открытого чата
     single { org.visorlink.app.data.repository.IdCardRepository(get(), get()) }
     single { org.visorlink.app.data.repository.SurpriseRepository(get(), get(), androidContext()) }
@@ -115,8 +125,11 @@ val appModule = module {
     single { org.visorlink.app.ui.idcard.ChatThemeController(org.visorlink.app.ui.idcard.PrefsChatThemeMemory(androidContext())) }
     single { TopicsRepository(get(), get()) }
     single { StickerPackRepository(get(), androidContext()) }
+    single { org.visorlink.app.utils.StickerFrequentStore(androidContext()) }
     single { BotRepository(get()) }
     single { LegalRepository(get(), androidContext(), get()) }
+    single { org.visorlink.app.data.repository.ChatFoldersRepository(get()) }
+    single { org.visorlink.app.data.repository.ScheduledRepository(get()) }
 
     single { CacheManager(androidContext()) }
     single { TfaManager(androidContext()) }
@@ -137,19 +150,18 @@ val appModule = module {
             functions = get(),
             networkMonitor = get(),
             googleDriveAuthManager = get(),
-            googleDriveMediaService = get(),
-            yandexDeadDropManager = get()
+            googleDriveMediaService = get()
         )
     }
     single { DraftManager(androidContext()) }
     single { DiaryReminderManager(androidContext()) }
     single { SettingsRepository(androidContext()) }
-    single { org.visorlink.app.utils.FcmManager(androidContext(), get(), get()) }
+    single { org.visorlink.app.utils.FcmManager(androidContext(), get(), get(), get()) }
     single { org.visorlink.app.utils.UsageRankManager(androidContext()) }
 
-    viewModel { AppCheckViewModel() }
+    viewModel { AppCheckViewModel(androidApplication()) }
 
-    viewModel { AuthViewModel(get(), get(), get(), get(), get()) }
+    viewModel { AuthViewModel(get(), get(), get(), get(), get(), androidApplication(), get()) }
     viewModel {
         org.visorlink.app.ui.screens.auth.TfaLockViewModel(
             get(), get(), get(), get(), get(), get(),
@@ -169,7 +181,8 @@ val appModule = module {
             context = androidApplication(),
             sidebarTypingManager = get(),
             networkMonitor = get(),
-            blockRepository = get()
+            blockRepository = get(),
+            chatFoldersRepository = get()
         )
     }
     viewModel { MusicViewModel(get(), get()) }
@@ -191,7 +204,8 @@ val appModule = module {
             networkMonitor = get(),
             usageRankManager = get(),
             driveAuth = get(),
-            blockRepository = get()
+            blockRepository = get(),
+            scheduledRepository = get()
         )
     }
 
@@ -231,7 +245,7 @@ val appModule = module {
     }
 
     viewModel { SearchViewModel(get(), get(), get()) }
-    viewModel { ProfileViewModel(get(), get(), get()) }
+    viewModel { ProfileViewModel(get(), get(), get(), get(), androidApplication(), get()) }
     viewModel { parameters -> OtherProfileViewModel(get(), get(), get(), get(), parameters.get()) }
 
     viewModel { StickerPackViewModel(get(), get(), get()) }
@@ -248,19 +262,26 @@ val appModule = module {
     }
 
     viewModel { CacheViewModel(get(), androidApplication()) }
-    viewModel { StorageViewModel(get(), get(), get()) }
+    viewModel { StorageViewModel(get(), get()) }
     viewModel { StatusViewModel(get(), get()) }
 
-    single { SavedMessagesRepository(get(), androidContext()) }
+    single { SavedMessagesRepository(get(), androidContext(), get()) }
     single { FeedRepository(get(), get()) }
     single { ForwardRepository(get(), get()) }
     single { org.visorlink.app.utils.BiometricPinManager(androidContext()) }
 
-    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get()) }
-    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get(), get()) }
+    viewModel { SavedMessagesViewModel(get(), get(), get(), get(), androidApplication(), get(), get(), get(), get()) }
+    viewModel { DiaryViewModel(get(), get(), get(), androidApplication(), get(), get(), get()) }
     viewModel { FeedViewModel(get(), get(), get()) }
 
     viewModel { ProViewModel(get()) }
+    viewModel { org.visorlink.app.ui.screens.signal.SignalViewModel(get(), get(), get(), get()) }
+    viewModel {
+        org.visorlink.app.ui.screens.signal.StepsViewModel(
+            androidContext(),
+            get(), get(), get(), get()
+        )
+    }
     viewModel { CustomizationViewModel(get()) }
     viewModel { org.visorlink.app.ui.screens.settings.IdCardSettingsViewModel(get(), get()) }
     viewModel { FlagFlipperViewModel(get()) }

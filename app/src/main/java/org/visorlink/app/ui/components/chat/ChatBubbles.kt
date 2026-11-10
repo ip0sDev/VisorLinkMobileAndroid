@@ -1,6 +1,7 @@
 package org.visorlink.app.ui.components.chat
 
 import org.visorlink.app.ui.components.VlSticker
+import org.visorlink.app.ui.components.led.VlLedExpression
 import android.net.Uri
 import android.util.Log
 import android.util.Patterns
@@ -787,7 +788,6 @@ internal fun TextBubble(
                                     fontSize = 10.sp,
                                 )
                             }
-                            TerminalSeqTag(message.seq, textColor.copy(alpha = 0.4f))
                             Text(
                                 message.createdAt?.toDate()?.let { SimpleDateFormat("HH:mm", Locale.getDefault()).format(it) } ?: "",
                                 style = MaterialTheme.typography.labelSmall.terminalData(), color = textColor.copy(alpha = 0.6f), fontSize = 10.sp,
@@ -996,7 +996,18 @@ internal fun StickerBubble(
             ),
             contentAlignment = Alignment.Center
         ) {
-            if (isLegacySticker || message.url.isNullOrBlank()) {
+            val isLedSticker = message.url?.startsWith("led:") == true ||
+                message.url?.startsWith("led_") == true ||
+                message.stickerId?.startsWith("led_") == true
+
+            if (isLedSticker) {
+                val expr = VlLedExpression.fromUrl(message.url ?: message.stickerId)
+                InteractiveLedSticker(
+                    expression = expr,
+                    size = 150.dp,
+                    interactive = true,
+                )
+            } else if (isLegacySticker || message.url.isNullOrBlank()) {
                 Surface(
                     shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(8.dp)),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

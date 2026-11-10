@@ -1,9 +1,15 @@
-﻿package org.visorlink.app.utils
+package org.visorlink.app.utils
 
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class DiagnosticLogBufferTest {
+
+    @Before
+    fun setUp() {
+        DiagnosticLogBuffer.clear()
+    }
 
     @Test
     fun testRecordAndRetrieveLogs() {
@@ -14,7 +20,7 @@ class DiagnosticLogBufferTest {
         assertTrue(logs.contains("Testing info log message"))
         assertTrue(logs.contains("Testing error log message"))
         assertTrue(logs.contains("Crash simulation"))
-        assertTrue(logs.length <= 5000)
+        assertTrue(logs.length <= DiagnosticLogBuffer.MAX_OUTPUT_CHARS)
     }
 
     @Test
@@ -24,7 +30,7 @@ class DiagnosticLogBufferTest {
         }
 
         val logs = DiagnosticLogBuffer.getFormattedLogs()
-        assertTrue(logs.length <= 5000)
+        assertTrue(logs.length <= DiagnosticLogBuffer.MAX_OUTPUT_CHARS)
         assertTrue(logs.contains("Message #150"))
     }
 }

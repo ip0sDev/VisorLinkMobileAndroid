@@ -1,59 +1,62 @@
 [versions]
-agp = "9.4.1"
+agp = "9.5.1"
 biometric = "1.2.0-alpha05"
 coilVideo = "2.7.0"
-kotlin = "2.4.20"
+json = "20260814"
+kotlin = "2.4.21"
 coreKtx = "1.19.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.11.0"
 lifecycleProcess = "2.11.0"
+workRuntime = "2.12.0"
 profileinstaller = "1.4.1"
 benchmark = "1.5.0"
 baselineprofile = "1.5.0"
-uiautomator = "2.3.0"
+uiautomator = "2.4.1"
 activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 media3Exoplayer = "1.11.1"
 media3Ui = "1.11.1"
 navigationCompose = "2.10.2"
 mediaVersion = "1.8.0"
-composeUi = "1.13.0-alpha03"
-animation = "1.13.0-alpha03"
-foundationLayout = "1.13.0-alpha03"
+composeUi = "1.13.0-rc01"
+animation = "1.13.0-rc01"
+foundationLayout = "1.13.0-rc01"
 materialIconsExtended = "1.7.8"
-sentry-sdk = "8.59.0"
-sentry-plugin = "6.23.0"
+sentry-sdk = "8.63.0"
+sentry-plugin = "6.26.0"
 securityCrypto = "1.1.0"
 
 koin = "4.2.2"
 coil = "2.7.0"
-datastore = "1.2.1"
+haze = "2.1.0"
+datastore = "1.3.0"
 accompanist = "0.37.3"
 retrofit = "3.0.0"
-okhttp = "5.5.0"
+okhttp = "5.5.1"
 jwtDecode = "2.1.0"
-serializationJson = "1.11.0"
+serializationJson = "1.12.0"
 lottie = "6.7.1"
 
 # Оставляем только одну версию Firebase
-firebaseBom = "34.19.0"
+firebaseBom = "35.1.0"
 playServicesAuth = "22.0.0"
 credentials = "1.6.0"
-googleId = "1.2.0"
+googleId = "1.2.1"
 playAppUpdate = "2.1.0"
 
 # ── Test ──────────────────────────────────────────────────────────────────────
 coroutinesTest = "1.11.0"
 mockitoKotlin = "6.4.0"
 mockitoCore = "5.24.0"
-uiText = "1.13.0-alpha03"
-foundation = "1.13.0-alpha03"
-uiGeometry = "1.13.0-alpha03"
+uiText = "1.13.0-rc01"
+foundation = "1.13.0-rc01"
+uiGeometry = "1.13.0-rc01"
 cameraX = "1.6.2"
 robolectric = "4.17"
-roborazzi = "1.76.0"
+roborazzi = "1.78.0"
 
 [libraries]
 # --- AndroidX ---
@@ -71,6 +74,7 @@ androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchm
 androidx-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
 androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleProcess" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntime" }
 
 # --- Compose ---
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -89,8 +93,13 @@ androidx-media3-exoplayer = { module = "androidx.media3:media3-exoplayer", versi
 androidx-media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3Ui" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
+# --- Haze (backdrop blur) ---
+haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
+haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
+
 # --- Koin ---
 coil-video = { module = "io.coil-kt:coil-video", version.ref = "coilVideo" }
+json = { module = "org.json:json", version.ref = "json" }
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin" }
 koin-compose-viewmodel = { group = "io.insert-koin", name = "koin-androidx-compose-navigation", version.ref = "koin" }

@@ -17,6 +17,7 @@ import java.io.IOException
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 
+import org.visorlink.app.utils.DiagnosticLogBuffer
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
@@ -80,8 +81,7 @@ class OutboxManager(
     private val outboxDataSource: OutboxDataSource = ChatDataOutboxSource(),
     coroutineContext: CoroutineContext = Dispatchers.IO,
     private val googleDriveAuthManager: GoogleDriveAuthManager? = null,
-    private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null,
-    private val yandexDeadDropManager: org.visorlink.app.data.remote.yandex.YandexDeadDropManager? = null
+    private val googleDriveMediaService: org.visorlink.app.data.remote.GoogleDriveMediaService? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + coroutineContext)
     private var processingJob: Job? = null
@@ -90,6 +90,7 @@ class OutboxManager(
     private val inFlightChatIds = ConcurrentHashMap.newKeySet<String>()
     private val lastProgressUpdate = ConcurrentHashMap<String, Long>()
     private val mediaSemaphore = Semaphore(MEDIA_CONCURRENCY)
+    private val wakeUpChannel = kotlinx.coroutines.channels.Channel<Unit>(kotlinx.coroutines.channels.Channel.CONFLATED)
     @Volatile
     private var lastHealthCheckTimestamp: Long = 0L
 
@@ -107,6 +108,18 @@ class OutboxManager(
         fun retry(actionId: String) {
             instance?.let { mgr ->
                 mgr.scope.launch { mgr.retryAction(actionId) }
+            }
+        }
+
+        fun triggerProcessing() {
+            instance?.let { mgr ->
+                DiagnosticLogBuffer.i(TAG, "triggerProcessing requested")
+                if (mgr.networkMonitor.isOnline.value) {
+                    mgr.startProcessing()
+                    mgr.wakeUpChannel.trySend(Unit)
+                }
+            } ?: run {
+                DiagnosticLogBuffer.w(TAG, "triggerProcessing: OutboxManager instance is null")
             }
         }
     }
@@ -130,6 +143,7 @@ class OutboxManager(
         scope.launch {
             networkMonitor.isOnline.collectLatest { online ->
                 if (online) {
+                    DiagnosticLogBuffer.i(TAG, "Network became online -> starting processing")
                     startProcessing()
                 } else {
                     stopProcessing()
@@ -138,17 +152,33 @@ class OutboxManager(
         }
         scope.launch {
             ChatDataCache.outboxSignal.collect {
-                if (networkMonitor.isOnline.value) startProcessing()
+                DiagnosticLogBuffer.i(TAG, "Outbox signal received -> starting processing")
+                if (networkMonitor.isOnline.value) {
+                    startProcessing()
+                    wakeUpChannel.trySend(Unit)
+                }
             }
+        }
+        if (networkMonitor.isOnline.value) {
+            startProcessing()
         }
     }
 
-    private fun startProcessing() {
-        if (processingJob?.isActive == true) return
+    internal fun startProcessing() {
+        if (processingJob?.isActive == true) {
+            wakeUpChannel.trySend(Unit)
+            return
+        }
         processingJob = scope.launch {
-            while (isActive) {
+            DiagnosticLogBuffer.i(TAG, "processing loop started")
+            while (isActive && networkMonitor.isOnline.value) {
                 val now = System.currentTimeMillis()
-                val allQueued = outboxDataSource.loadPending(context)
+                val allQueued = try {
+                    outboxDataSource.loadPending(context)
+                } catch (e: Exception) {
+                    DiagnosticLogBuffer.e(TAG, "loadPending failed: ${e.message}", e)
+                    emptyList()
+                }
                 
                 val toProcess = allQueued.filter { action ->
                     action.status == 0 &&
@@ -159,11 +189,17 @@ class OutboxManager(
 
                 if (toProcess.isEmpty()) {
                     if (inFlightIds.isEmpty() && inFlightChatIds.isEmpty()) {
-                        break
+                        // Ожидаем пробуждения по сигналу или опрашиваем через 2.5 сек (спека §7.5)
+                        withTimeoutOrNull(2500L) {
+                            wakeUpChannel.receive()
+                        }
+                        continue
                     }
                     delay(1500)
                     continue
                 }
+
+                DiagnosticLogBuffer.i(TAG, "Found ${toProcess.size} pending action(s) to process")
 
                 // Группируем по чатам для строго последовательной отправки внутри каждого чата
                 val groups = toProcess.groupBy { it.chatId }
@@ -174,51 +210,82 @@ class OutboxManager(
 
                     launch {
                         try {
-                            for (action in actions) {
-                                if (!networkMonitor.isOnline.value || !isActive) break
-                                if (inFlightIds.contains(action.id)) continue
+                            var currentBatch = actions
+                            while (currentBatch.isNotEmpty() && networkMonitor.isOnline.value && isActive) {
+                                var batchAborted = false
+                                for (action in currentBatch) {
+                                    if (!networkMonitor.isOnline.value || !isActive) {
+                                        batchAborted = true
+                                        break
+                                    }
+                                    if (inFlightIds.contains(action.id)) continue
 
-                                inFlightIds.add(action.id)
-                                val job = coroutineContext[Job]
-                                if (job != null) inFlightJobs[action.id] = job
-                                try {
-                                    if (action.type == "image" || action.type == "voice" || action.type == "video") {
-                                        mediaSemaphore.withPermit {
-                                            withTimeout(120_000) {
+                                    inFlightIds.add(action.id)
+                                    val job = coroutineContext[Job]
+                                    if (job != null) inFlightJobs[action.id] = job
+                                    DiagnosticLogBuffer.i(TAG, "Outbox starting action: id=${action.id}, type=${action.type}, chatId=${action.chatId}, retry=${action.retryCount}")
+                                    try {
+                                        if (action.type == "image" || action.type == "voice" || action.type == "video") {
+                                            mediaSemaphore.withPermit {
+                                                withTimeout(120_000) {
+                                                    processAction(action)
+                                                }
+                                            }
+                                        } else {
+                                            withTimeout(60_000) {
                                                 processAction(action)
                                             }
                                         }
-                                    } else {
-                                        withTimeout(60_000) {
-                                            processAction(action)
+                                        DiagnosticLogBuffer.i(TAG, "Outbox action completed: id=${action.id}")
+                                        outboxDataSource.updateStatus(context, action.id, 1)
+                                    } catch (e: Exception) {
+                                        // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
+                                        // Таймаут — тоже CancellationException, но он считается обычной неудачей.
+                                        if (e is CancellationException && e !is TimeoutCancellationException) throw e
+                                        DiagnosticLogBuffer.e(TAG, "Outbox action failed: id=${action.id}, retry=${action.retryCount}, error=${e.message}", e)
+                                        val nextRetry = action.retryCount + 1
+                                        outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
+                                        // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
+                                        // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут (даём 2 попытки на случай гонки кулдауна)
+                                        if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || (isPermissionDenied(e) && nextRetry >= 2)) {
+                                            outboxDataSource.updateStatus(context, action.id, 2)
                                         }
+                                        // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
+                                        batchAborted = true
+                                        break
+                                    } finally {
+                                        inFlightJobs.remove(action.id)
+                                        inFlightIds.remove(action.id)
                                     }
-                                    outboxDataSource.updateStatus(context, action.id, 1)
-                                } catch (e: Exception) {
-                                    // Отмена (пользователь, смена сети) — не ошибка отправки: не жжём попытки.
-                                    // Таймаут — тоже CancellationException, но он считается обычной неудачей.
-                                    if (e is CancellationException && e !is TimeoutCancellationException) throw e
-                                    val nextRetry = action.retryCount + 1
-                                    outboxDataSource.updateRetry(context, action.id, nextRetry, e.message)
-                                    // Диск не подключён — повторы не помогут: сразу «не отправлено», без вечного спиннера
-                                    // Блокировка (пользователем или сервисом) — отказ правил: повторы не помогут
-                                    if (nextRetry >= MAX_RETRIES || e is DriveNotConnectedException || isPermissionDenied(e)) {
-                                        outboxDataSource.updateStatus(context, action.id, 2)
-                                    }
-                                    // Прекращаем обработку очереди этого чата при ошибке, чтобы сохранить строгий порядок сообщений (FIFO)
-                                    break
-                                } finally {
-                                    inFlightJobs.remove(action.id)
-                                    inFlightIds.remove(action.id)
+                                }
+                                if (batchAborted || !networkMonitor.isOnline.value || !isActive) break
+
+                                // Перепроверяем очередь этого чата: пока шла отправка, могли поступить новые сообщения
+                                val refreshedNow = System.currentTimeMillis()
+                                val refreshed = try {
+                                    outboxDataSource.loadPending(context)
+                                } catch (_: Exception) {
+                                    emptyList()
+                                }
+                                currentBatch = refreshed.filter { action ->
+                                    action.chatId == chatId &&
+                                        action.status == 0 &&
+                                        !inFlightIds.contains(action.id) &&
+                                        action.retryCount < MAX_RETRIES &&
+                                        (refreshedNow - action.lastAttempt) >= (action.retryCount * 5000L)
                                 }
                             }
                         } finally {
                             inFlightChatIds.remove(chatId)
+                            wakeUpChannel.trySend(Unit)
                         }
                     }
                 }
-                delay(1500)
+                withTimeoutOrNull(1000L) {
+                    wakeUpChannel.receive()
+                }
             }
+            DiagnosticLogBuffer.i(TAG, "processing loop ended")
         }
     }
 
@@ -273,29 +340,26 @@ class OutboxManager(
                 }
             }
 
-            val isEmergencyChat = action.chatId.startsWith("emer_") || data.optBoolean("isEmergency", false)
+            // Аварийный dead-drop-транспорт (Яндекс.Диск) удалён (TODO §14.2): остатки очереди
+            // от старых версий помечаются «не отправлено» без бессмысленных повторов
+            if (action.chatId.startsWith("emer_") || data.optBoolean("isEmergency", false)) {
+                throw DriveNotConnectedException()
+            }
 
             when (action.type) {
                 "text" -> {
-                    if (isEmergencyChat) {
-                        val recipient = otherUserId?.takeIf { it.isNotBlank() }
-                            ?: action.chatId.removePrefix("emer_").split("_").find { it != chatRepository.currentUid }
-                        if (recipient.isNullOrBlank()) throw IllegalStateException("Unknown recipient for emergency chat ${action.chatId}")
-                        sendTextViaDeadDrop(action, recipient, replyTo, nextSeq)
-                    } else {
-                        withTimeout(20_000) {
-                            chatRepository.sendTextNow(
-                                id = action.id,
-                                chatId = action.chatId,
-                                text = data.getString("text"),
-                                senderUsername = data.getString("senderUsername"),
-                                replyTo = replyTo,
-                                topicId = topicId,
-                                nextSeq = nextSeq,
-                                isDirect = isDirect,
-                                otherUserId = otherUserId
-                            )
-                        }
+                    withTimeout(20_000) {
+                        chatRepository.sendTextNow(
+                            id = action.id,
+                            chatId = action.chatId,
+                            text = data.getString("text"),
+                            senderUsername = data.getString("senderUsername"),
+                            replyTo = replyTo,
+                            topicId = topicId,
+                            nextSeq = nextSeq,
+                            isDirect = isDirect,
+                            otherUserId = otherUserId
+                        )
                     }
                 }
                 "image" -> {
@@ -525,14 +589,8 @@ class OutboxManager(
                     }
                 }
                 "sticker" -> {
-                    if (isEmergencyChat) {
-                        val recipient = otherUserId?.takeIf { it.isNotBlank() }
-                            ?: action.chatId.removePrefix("emer_").split("_").find { it != chatRepository.currentUid }
-                        if (recipient.isNullOrBlank()) throw IllegalStateException("Unknown recipient for emergency chat ${action.chatId}")
-                        sendStickerViaDeadDrop(action, recipient, replyTo, nextSeq)
-                    } else {
-                        withTimeout(20_000) {
-                            chatRepository.sendStickerNow(
+                    withTimeout(20_000) {
+                        chatRepository.sendStickerNow(
                                 id = action.id,
                                 chatId = action.chatId,
                                 stickerId = data.getString("stickerId"),
@@ -549,7 +607,6 @@ class OutboxManager(
                                 isDirect = isDirect,
                                 otherUserId = otherUserId
                             )
-                        }
                     }
                 }
                 // Лайки ленты старых версий (сейчас лента зовёт toggleLike напрямую). Сервер
@@ -567,88 +624,6 @@ class OutboxManager(
         } catch (e: Exception) {
             Log.e(TAG, "Error processing action ${action.id} of type ${action.type}", e)
             throw e
-        }
-    }
-
-    private suspend fun sendTextViaDeadDrop(
-        action: ChatDataCache.QueuedAction,
-        recipientUid: String,
-        replyTo: ReplyData?,
-        nextSeq: Long?
-    ) {
-        val manager = yandexDeadDropManager ?: throw IllegalStateException("Dead drop manager is unavailable")
-        val data = action.data
-        val nowSec = System.currentTimeMillis() / 1000L
-        val text = data.getString("text")
-        val messageJson = JSONObject().apply {
-            put("id", action.id)
-            put("seq", nextSeq ?: JSONObject.NULL)
-            put("senderId", data.optString("senderId").ifBlank { chatRepository.currentUid })
-            put("senderUsername", data.getString("senderUsername"))
-            put("type", "text")
-            put("text", text)
-            put("createdAt", nowSec)
-            put("deleted", false)
-            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
-        }
-        val sent = manager.sendViaDeadDrop(action.chatId, recipientUid, messageJson)
-        if (sent) {
-            val localMsg = ChatDataCache.jsonToMessage(messageJson)
-            ChatDataCache.saveMessages(context, action.chatId, listOf(localMsg))
-            ChatDataCache.updateChatLastMessage(
-                context = context,
-                uid = chatRepository.currentUid,
-                chatId = action.chatId,
-                text = text,
-                senderId = chatRepository.currentUid,
-                tsSeconds = nowSec
-            )
-        } else {
-            throw IOException("Failed to deliver message via Yandex Dead-Drop")
-        }
-    }
-
-    private suspend fun sendStickerViaDeadDrop(
-        action: ChatDataCache.QueuedAction,
-        recipientUid: String,
-        replyTo: ReplyData?,
-        nextSeq: Long?
-    ) {
-        val manager = yandexDeadDropManager ?: throw IllegalStateException("Dead drop manager is unavailable")
-        val data = action.data
-        val nowSec = System.currentTimeMillis() / 1000L
-        val emoji = data.optString("packEmoji", "🎨")
-        val messageJson = JSONObject().apply {
-            put("id", action.id)
-            put("seq", nextSeq ?: JSONObject.NULL)
-            put("senderId", data.optString("senderId").ifBlank { chatRepository.currentUid })
-            put("senderUsername", data.getString("senderUsername"))
-            put("type", "sticker")
-            put("stickerId", data.getString("stickerId"))
-            put("url", data.getString("url"))
-            put("packId", data.getString("packId"))
-            put("packName", data.getString("packName"))
-            put("packEmoji", emoji)
-            put("stickerFormat", data.optString("stickerFormat").ifBlank { null } ?: JSONObject.NULL)
-            put("stickerPreviewUrl", data.optString("stickerPreviewUrl").ifBlank { null } ?: JSONObject.NULL)
-            put("createdAt", nowSec)
-            put("deleted", false)
-            replyTo?.let { put("replyTo", JSONObject(it.toMap())) }
-        }
-        val sent = manager.sendViaDeadDrop(action.chatId, recipientUid, messageJson)
-        if (sent) {
-            val localMsg = ChatDataCache.jsonToMessage(messageJson)
-            ChatDataCache.saveMessages(context, action.chatId, listOf(localMsg))
-            ChatDataCache.updateChatLastMessage(
-                context = context,
-                uid = chatRepository.currentUid,
-                chatId = action.chatId,
-                text = "Стикер $emoji",
-                senderId = chatRepository.currentUid,
-                tsSeconds = nowSec
-            )
-        } else {
-            throw IOException("Failed to deliver sticker via Yandex Dead-Drop")
         }
     }
 }

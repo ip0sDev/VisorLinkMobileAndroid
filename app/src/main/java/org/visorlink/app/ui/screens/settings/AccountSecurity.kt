@@ -4,15 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Mail
-import androidx.compose.material.icons.filled.Password
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -64,7 +57,7 @@ fun SignInMethodsItems(
     LaunchedEffect(Unit) { vm.refreshMethods() }
 
     VlSettingsItem(
-        icon = Icons.Default.Mail,
+        icon = Icons.Rounded.Mail,
         iconColor = VlCategoryTint.Slate,
         title = stringResource(R.string.signin_password),
         subtitle = when {
@@ -81,7 +74,7 @@ fun SignInMethodsItems(
     )
     if (methods.hasPassword) {
         VlSettingsItem(
-            icon = Icons.Default.Password,
+            icon = Icons.Rounded.LockReset,
             iconColor = VlCategoryTint.Rose,
             title = stringResource(R.string.settings_password_change),
             onClick = { vm.clearSignInError(); onChangePassword() },
@@ -89,7 +82,7 @@ fun SignInMethodsItems(
     }
     val google = methods.google
     VlSettingsItem(
-        icon = ImageVector.vectorResource(R.drawable.ic_google),
+        icon = org.visorlink.app.ui.components.IcGoogle,
         iconColor = VlCategoryTint.Blue,
         title = stringResource(R.string.signin_google),
         subtitle = when {
@@ -191,7 +184,7 @@ fun TwoFactorItems(profile: UserProfile?, vm: AccountSecurityViewModel) {
     val telegramOn = profile?.telegramCodesReady() == true
 
     VlSettingsItem(
-        icon = Icons.Default.Security,
+        icon = Icons.Rounded.Security,
         iconColor = VlCategoryTint.Emerald,
         title = stringResource(R.string.settings_tfa_title),
         subtitle = stringResource(if (enabled) R.string.settings_tfa_sub_on else R.string.settings_tfa_sub_off),
@@ -211,7 +204,7 @@ fun TwoFactorItems(profile: UserProfile?, vm: AccountSecurityViewModel) {
         }
     }
     VlSettingsItem(
-        icon = Icons.AutoMirrored.Filled.Send,
+        icon = org.visorlink.app.ui.components.IcTelegram,
         iconColor = VlCategoryTint.Telegram,
         title = stringResource(R.string.tfa_tg_title),
         subtitle = when {
@@ -265,7 +258,7 @@ private fun TfaManageDialog(tfa: TfaManageState, telegramOn: Boolean, vm: Accoun
                     if (tfa.sending) TfaStatusRow(null, cs.primary, stringResource(sendingRes(tfa.method)))
                 } else if (info != null) {
                     TfaStatusRow(
-                        icon = if (expiresIn > 0) Icons.Default.Check else Icons.Default.Warning,
+                        icon = if (expiresIn > 0) Icons.Rounded.Check else Icons.Rounded.Warning,
                         tint = if (expiresIn > 0) VlTheme.tokens.status.success else VlTheme.tokens.status.warning,
                         title = stringResource(if (info.alreadySent) R.string.tfa_lock_already_sent else R.string.tfa_lock_sent),
                         text = whereText(info),
@@ -283,7 +276,7 @@ private fun TfaManageDialog(tfa: TfaManageState, telegramOn: Boolean, vm: Accoun
                     )
                     val waitResend = resendIn > 0 && expiresIn > 0
                     VlDialogButton(onClick = { vm.sendTfaCode(tfa.method) }, enabled = !busy && !waitResend) {
-                        Icon(Icons.Default.Refresh, null, Modifier.size(16.dp))
+                        Icon(Icons.Rounded.Refresh, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(
                             if (waitResend) stringResource(R.string.tfa_lock_resend_in, TfaTexts.mmss(resendIn))
@@ -308,16 +301,17 @@ private fun TfaManageDialog(tfa: TfaManageState, telegramOn: Boolean, vm: Accoun
 @Composable
 private fun EnabledMark() {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(end = 8.dp)) {
-        Icon(Icons.Default.Check, null, tint = VlTheme.tokens.status.success, modifier = Modifier.size(16.dp))
+        Icon(Icons.Rounded.Check, null, tint = VlTheme.tokens.status.success, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(4.dp))
         Text(stringResource(R.string.signin_on), style = MaterialTheme.typography.labelLarge, color = VlTheme.tokens.status.success)
     }
 }
 
+@Composable
 private fun methodIcon(m: TfaMethod): ImageVector = when (m) {
-    TfaMethod.BOT -> Icons.Default.SmartToy
-    TfaMethod.EMAIL -> Icons.Default.Email
-    TfaMethod.TELEGRAM -> Icons.AutoMirrored.Filled.Send
+    TfaMethod.BOT -> Icons.Rounded.SmartToy
+    TfaMethod.EMAIL -> Icons.Rounded.AlternateEmail
+    TfaMethod.TELEGRAM -> org.visorlink.app.ui.components.IcTelegram
 }
 
 private fun manageMethodRes(m: TfaMethod): Int = when (m) {

@@ -33,13 +33,17 @@ import org.visorlink.app.R
 import org.visorlink.app.data.model.SelectedMediaItem
 import org.visorlink.app.data.model.StickerItem
 import org.visorlink.app.ui.components.liquidJelly
+import org.visorlink.app.ui.components.isVlMatte
+import org.visorlink.app.ui.components.vlBackdropBlur
 import org.visorlink.app.ui.components.mediapicker.VlMediaPickerViewContent
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.screens.chat.ChatUiState
 import org.visorlink.app.ui.screens.stickers.StickerPackViewModel
 import org.visorlink.app.ui.components.stickers.StickerPickerContent
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
@@ -93,6 +97,8 @@ fun LiquidMorphingChatBottomBar(
     onPhotoTaken: (Uri) -> Unit,
     onVideoRecorded: (Uri) -> Unit,
     onOpenIdTrade: (() -> Unit)? = null,
+    onOpenGiftPicker: (() -> Unit)? = null,
+    onSchedule: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val tokens = VlTheme.tokens
@@ -140,6 +146,9 @@ fun LiquidMorphingChatBottomBar(
     }
 
     val panelShape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(topStart = cornerRadius, topEnd = cornerRadius))
+    // Чистая поверхность по дизайн-системе: cs.surface во всех темах является целевым цветом
+    // поверхностей (белый фарфор в светлой теме, глубокий графит в тёмной) без грязного серого тона Monet
+    val panelColor = cs.surface
 
     Box(
         modifier = modifier
@@ -149,16 +158,13 @@ fun LiquidMorphingChatBottomBar(
             .then(
                 if (isExpanded) {
                     Modifier
-                        .clip(panelShape)
-                        .background(cs.surfaceContainerLow)
                         .then(
                             if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, panelShape)
                             else Modifier
                         )
-                        .then(
-                            if (tokens.structure.enabled) Modifier.vlHairline(cs.outlineVariant.copy(alpha = 0.5f), panelShape)
-                            else Modifier
-                        )
+                        .clip(panelShape)
+                        .vlKeycapBackground(tokens.structure, panelColor, panelShape, VlDepth.Raised)
+                        .vlHairline(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.25f else 0.35f), panelShape)
                 } else Modifier
             )
     ) {
@@ -211,7 +217,8 @@ fun LiquidMorphingChatBottomBar(
                         onSendRecord = onSendRecord,
                         onClearReply = onClearReply,
                         onCancelEdit = onCancelEdit,
-                        onJoinChannel = onJoinChannel
+                        onJoinChannel = onJoinChannel,
+                        onSchedule = onSchedule
                     )
                 }
 
@@ -273,6 +280,7 @@ fun LiquidMorphingChatBottomBar(
                                 onCloseMediaPicker()
                             },
                             onOpenIdTrade = onOpenIdTrade,
+                            onOpenGiftPicker = onOpenGiftPicker,
                             modifier = Modifier.fillMaxSize()
                         )
                     }

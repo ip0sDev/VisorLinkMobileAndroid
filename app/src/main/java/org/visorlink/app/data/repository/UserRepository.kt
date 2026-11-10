@@ -7,9 +7,11 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.Source
 import com.google.firebase.functions.FirebaseFunctions
 import org.visorlink.app.data.model.Sticker
 import org.visorlink.app.data.model.UserProfile
+import org.visorlink.app.data.model.toUserProfileOrNull
 import org.visorlink.app.utils.ChatDataCache
 import org.visorlink.app.utils.ImageCompressor
 import org.visorlink.app.data.repository.FlagsRepository
@@ -42,6 +44,7 @@ class UserRepository(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val memoryProfiles = java.util.concurrent.ConcurrentHashMap<String, MutableStateFlow<UserProfile?>>()
+    private val sharedProfileFlows = java.util.concurrent.ConcurrentHashMap<String, SharedFlow<UserProfile?>>()
     private val _deniedUids = MutableStateFlow<Set<String>>(emptySet())
     /**
      * Профили, которые сервер закрыл правилами (`PERMISSION_DENIED`: этот пользователь заблокировал
@@ -50,6 +53,8 @@ class UserRepository(
     val deniedUids: StateFlow<Set<String>> = _deniedUids.asStateFlow()
 
     private val lastFetchTimes = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    fun getMemoryCachedProfile(uid: String): UserProfile? = memoryProfiles[uid]?.value
 
     fun updateCachedProfile(uid: String, update: (UserProfile) -> UserProfile) {
         val current = memoryProfiles[uid]?.value
@@ -84,17 +89,38 @@ class UserRepository(
 
     fun currentUserFlow(): Flow<UserProfile?> = userProfileFlow(auth.currentUser?.uid ?: "")
 
-    fun userProfileFlow(uid: String): Flow<UserProfile?> = channelFlow {
-        if (uid.isEmpty()) { send(null); close(); return@channelFlow }
+    fun userProfileFlow(uid: String): Flow<UserProfile?> {
+        if (uid.isEmpty()) return flowOf(null)
+        return sharedProfileFlows.getOrPut(uid) {
+            createUserProfileFlow(uid).shareIn(
+                scope = scope,
+                started = SharingStarted.WhileSubscribed(stopTimeoutMillis = 60_000L, replayExpirationMillis = Long.MAX_VALUE),
+                replay = 1
+            )
+        }
+    }
 
+    private fun createUserProfileFlow(uid: String): Flow<UserProfile?> = channelFlow {
         val stateFlow = memoryProfiles.getOrPut(uid) {
             MutableStateFlow(null)
         }
 
+        // 1. Мгновенно отдаём профиль из RAM-кэша, если он уже загружен
+        stateFlow.value?.let { trySend(it) }
+
+        // 2. Загружаем профиль из локального SQLite-кэша на старте (до ответа сети)
         launch(Dispatchers.IO) {
             val cached = stateFlow.value ?: ChatDataCache.loadProfile(context, uid)
-            if (cached != null) {
+            if (cached != null && stateFlow.value == null) {
                 stateFlow.value = cached
+                trySend(cached)
+            }
+        }
+
+        // 3. Транслируем локальные обновления из stateFlow (например, updateCachedProfile)
+        launch {
+            stateFlow.filterNotNull().collect { profile ->
+                trySend(profile)
             }
         }
 
@@ -107,11 +133,16 @@ class UserRepository(
                 } else if (snap != null) {
                     _deniedUids.update { if (uid in it) it - uid else it }
                 }
-                val net = snap?.toObject(UserProfile::class.java)
-                trySend(net)
+                val net = snap?.toUserProfileOrNull()
                 if (net != null) {
+                    val prev = stateFlow.value
                     stateFlow.value = net
-                    launch(Dispatchers.IO) { ChatDataCache.saveProfile(context, net) }
+                    trySend(net)
+                    if (prev != net) {
+                        launch(Dispatchers.IO) { ChatDataCache.saveProfile(context, net) }
+                    }
+                } else if (stateFlow.value == null) {
+                    trySend(null)
                 }
             }
         awaitClose { reg.remove() }
@@ -137,15 +168,42 @@ class UserRepository(
         if (cached != null) {
             launch {
                 try {
-                    val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
-                    if (net != null) ChatDataCache.saveProfile(context, net)
+                    val net = db.collection("users").document(uid).get().await().toUserProfileOrNull()
+                    if (net != null) {
+                        memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
+                        ChatDataCache.saveProfile(context, net)
+                    }
                 } catch (_: Exception) {}
             }
             return@withContext cached
         }
+        
+        // Попытка взять из оффлайн-кэша Firestore до похода в сеть
+        val cachedDoc = try {
+            db.collection("users").document(uid).get(Source.CACHE).await()
+        } catch (_: Exception) { null }
+        val fromCache = cachedDoc?.toUserProfileOrNull()
+        if (fromCache != null) {
+            memoryProfiles.getOrPut(uid) { MutableStateFlow(fromCache) }.value = fromCache
+            ChatDataCache.saveProfile(context, fromCache)
+            launch {
+                try {
+                    val net = db.collection("users").document(uid).get().await().toUserProfileOrNull()
+                    if (net != null) {
+                        memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
+                        ChatDataCache.saveProfile(context, net)
+                    }
+                } catch (_: Exception) {}
+            }
+            return@withContext fromCache
+        }
+
         try {
-            val net = db.collection("users").document(uid).get().await().toObject(UserProfile::class.java)
-            if (net != null) ChatDataCache.saveProfile(context, net)
+            val net = db.collection("users").document(uid).get().await().toUserProfileOrNull()
+            if (net != null) {
+                memoryProfiles.getOrPut(uid) { MutableStateFlow(net) }.value = net
+                ChatDataCache.saveProfile(context, net)
+            }
             return@withContext net
         } catch (e: Exception) {
             null
@@ -322,10 +380,42 @@ class UserRepository(
         awaitClose { ref.removeEventListener(listener) }
     }
 
-    suspend fun buyPro(useTrial: Boolean) {
+    suspend fun buyPro(useTrial: Boolean, plan: String = "month") {
+        val data = mutableMapOf<String, Any?>("useTrial" to useTrial)
+        if (!useTrial) data["plan"] = plan
         functions.getHttpsCallable("buyProSubscription")
-            .call(mapOf("useTrial" to useTrial))
+            .call(data)
             .await()
+    }
+
+    suspend fun updateUserField(uid: String, field: String, value: Any) {
+        db.collection("users").document(uid).update(field, value).await()
+        updateCachedProfile(uid) { current ->
+            when (field) {
+                "settings.hideOnline" -> {
+                    val newSettings = current.settings.toMutableMap().apply { put("hideOnline", value) }
+                    current.copy(settings = newSettings, hideOnline = value as? Boolean ?: false)
+                }
+                "settings.hideReads" -> {
+                    val newSettings = current.settings.toMutableMap().apply { put("hideReads", value) }
+                    current.copy(settings = newSettings, hideReads = value as? Boolean ?: false)
+                }
+                "showStreak" -> current.copy(showStreak = value as? Boolean ?: true)
+                "timeZone" -> current.copy(timeZone = value as? String)
+                else -> current
+            }
+        }
+    }
+
+    suspend fun syncTimeZone(uid: String, saved: String?) {
+        val tz = try {
+            java.util.TimeZone.getDefault().id
+        } catch (_: Exception) { return }
+        if (tz.isNullOrBlank() || tz.length > 64 || tz == saved) return
+        try {
+            db.collection("users").document(uid).update("timeZone", tz).await()
+            updateCachedProfile(uid) { it.copy(timeZone = tz) }
+        } catch (_: Exception) {}
     }
 
     suspend fun updateShowStreak(show: Boolean) {

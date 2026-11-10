@@ -31,8 +31,11 @@ import org.visorlink.app.data.model.AppNotification
 import org.visorlink.app.data.model.ChatType
 import org.visorlink.app.data.model.SyncState
 import org.visorlink.app.ui.components.VlAmbientGlow
+import org.visorlink.app.ui.components.vlHazeSource
+import org.visorlink.app.ui.components.isVlMatte
 import org.visorlink.app.ui.components.VlBarBrandText
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.VlTopAppBarButton
 import org.visorlink.app.ui.components.progressiveEdgeBlur
 import org.visorlink.app.ui.components.chatlist.*
 import org.visorlink.app.ui.theme.*
@@ -44,7 +47,6 @@ import org.visorlink.app.ui.components.LaunchedEffectAfterFirst
 import org.koin.compose.viewmodel.koinViewModel
 import org.visorlink.app.ui.components.calculateJellyScale
 import org.visorlink.app.ui.components.liquidJelly
-import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.components.LiquidPullRefreshLayout
 import androidx.compose.ui.graphics.graphicsLayer
@@ -63,6 +65,7 @@ fun ChatListScreen(
     onFindChannel: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenFeed: () -> Unit,
+    onOpenFolders: () -> Unit = {},
     isActive: Boolean = true,
     viewModel: ChatListViewModel = koinViewModel(),
     themeViewModel: ThemeViewModel = koinViewModel()
@@ -78,19 +81,39 @@ fun ChatListScreen(
     val typingMap by viewModel.typingMap.collectAsStateWithLifecycle()
     val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val activeFolderId by viewModel.activeFolderId.collectAsStateWithLifecycle()
+    val unreadByFolder by viewModel.unreadByFolder.collectAsStateWithLifecycle()
+    val totalFolderUnread by viewModel.totalUnread.collectAsStateWithLifecycle()
 
     val hapticEnabled by themeViewModel.hapticEnabled.collectAsStateWithLifecycle()
-    val compactList by themeViewModel.compactChatList.collectAsStateWithLifecycle()
 
     val haptic = rememberHaptic()
     val context = LocalContext.current
 
     var showFabMenu by remember { mutableStateOf(false) }
+    var showIonReveal by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     val isScrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
     val triggerKey = remember(isActive, chats.isEmpty()) { "${isActive}_${chats.isNotEmpty()}" }
+
+    val isLed = VlTheme.tokens.led != null
+    val totalUnread = remember(chats, viewModel.currentUid) {
+        chats.sumOf { it.unreadCountFor(viewModel.currentUid) }
+    }
+    val isOnline = syncState != SyncState.WAITING_FOR_NETWORK
+
+    val idCardRepo: org.visorlink.app.data.repository.IdCardRepository = org.koin.compose.koinInject()
+    var ionGiftAvailable by remember { mutableStateOf(false) }
+    LaunchedEffect(viewModel.currentUid) {
+        try {
+            ionGiftAvailable = idCardRepo.ionGiftAvailable()
+        } catch (_: Exception) {
+            ionGiftAvailable = false
+        }
+    }
 
     LaunchedEffect(chats) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -107,16 +130,24 @@ fun ChatListScreen(
         containerColor = Color.Transparent,
         topBar = {
             val topBarJelly = rememberLiquidJellyState(softness = 0.08f, damping = 0.70f)
+            // Жидкие пульсы деформируют бар — с активным backdrop-блюром размытый фон
+            // под ним «плывёт» и шапка выглядит прыгающей, поэтому при матовом режиме
+            // бар стабилен; пульсы остаются в темах без блюра
+            val matte = isVlMatte()
             LaunchedEffect(triggerKey) {
-                if (isActive) {
+                if (isActive && !matte) {
                     topBarJelly.pulse(0.08f)
                 }
             }
             LaunchedEffectAfterFirst(syncState) {
-                topBarJelly.pulse(0.06f)
+                if (!matte) {
+                    topBarJelly.pulse(0.06f)
+                }
             }
             LaunchedEffectAfterFirst(isScrolled) {
-                topBarJelly.pulse(0.07f)
+                if (!matte) {
+                    topBarJelly.pulse(0.07f)
+                }
             }
 
             VlTopAppBar(
@@ -166,12 +197,12 @@ fun ChatListScreen(
                     // Mask Mode: маска до выключения / индикатор «Маска до 18:30» (спека §8)
                     org.visorlink.app.ui.idcard.MaskToolbarButton()
 
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSearch() }) {
-                        Icon(Icons.Default.Search, stringResource(R.string.action_search))
+                    VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSearch() }) {
+                        Icon(Icons.Default.Search, stringResource(R.string.action_search), modifier = Modifier.size(20.dp))
                     }
 
-                    IconButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
-                        Icon(Icons.Outlined.Settings, stringResource(R.string.settings_title))
+                    VlTopAppBarButton(onClick = { haptic.perform(HapticType.CLICK, hapticEnabled); onOpenSettings() }) {
+                        Icon(Icons.Outlined.Settings, stringResource(R.string.settings_title), modifier = Modifier.size(20.dp))
                     }
 
                     if (showProfileButton) {
@@ -181,10 +212,7 @@ fun ChatListScreen(
                             hapticEnabled = hapticEnabled,
                             onClick = { onOpenProfile() }
                         )
-                        // Без отступа аватар упирался в край экрана (в шапке без рамки — Forge, M3E)
-                        Spacer(Modifier.width(8.dp))
                     }
-                    Spacer(Modifier.width(8.dp))
                 }
             )
         },
@@ -205,6 +233,8 @@ fun ChatListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
+                // Источник backdrop-блюра шапки: фон + свечение + список, заезжающий под бар
+                .vlHazeSource()
         ) {
             VlAmbientGlow()
 
@@ -221,9 +251,108 @@ fun ChatListScreen(
                             .fillMaxSize()
                             .padding(top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding())
                     ) {
-                        ChatListEmptyState(
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        if (isLed) {
+                            ChatBoard(
+                                unread = 0,
+                                online = isOnline,
+                                sync = syncState,
+                                compact = false,
+                                gift = ionGiftAvailable,
+                                onGift = { showIonReveal = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            org.visorlink.app.ui.idcard.IonGiftBanner(
+                                uid = viewModel.currentUid,
+                                onOpenReveal = { showIonReveal = true }
+                            )
+                        }
+                        if (currentUser?.isPro == true && (folders.isNotEmpty() || activeFolderId != null)) {
+                            org.visorlink.app.ui.components.chatlist.FolderTabs(
+                                folders = folders,
+                                activeFolderId = activeFolderId,
+                                unreadByFolder = unreadByFolder,
+                                totalUnread = totalFolderUnread,
+                                onSelect = { viewModel.selectFolder(it) },
+                                onManage = onOpenFolders,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            ChatListEmptyState(
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        val diagInfo by viewModel.diagInfo.collectAsStateWithLifecycle()
+                        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+                        val ctx = LocalContext.current
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 12.dp)
+                                .clickable {
+                                    val full = "VisorLink Diag (Chats Empty):\n" +
+                                            "UID: ${diagInfo.uid}\n" +
+                                            "Direct: ${diagInfo.directCount} (err: ${diagInfo.lastDirectError})\n" +
+                                            "Group: ${diagInfo.groupCount} (err: ${diagInfo.lastGroupError})\n" +
+                                            "Emer: ${diagInfo.emerCount}\n" +
+                                            "SyncTs: ${diagInfo.lastSyncTs}\n\n" +
+                                            "Recent Logs:\n" +
+                                            org.visorlink.app.utils.DiagnosticLogBuffer.getFormattedLogs()
+                                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(full))
+                                    android.widget.Toast.makeText(ctx, "Диагностические логи скопированы!", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f)
+                            ),
+                            shape = VlTheme.tokens.shapes.card
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Диагностика Firestore",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "Нажмите, чтобы скопировать",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "UID: ${diagInfo.uid.ifBlank { "нет (auth listener пустой)" }}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                )
+                                Text(
+                                    text = "Прямые: ${diagInfo.directCount}${if (diagInfo.lastDirectError != null) " [ERR: ${diagInfo.lastDirectError}]" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (diagInfo.lastDirectError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Групповые: ${diagInfo.groupCount}${if (diagInfo.lastGroupError != null) " [ERR: ${diagInfo.lastGroupError}]" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (diagInfo.lastGroupError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -240,109 +369,48 @@ fun ChatListScreen(
                             bottom = padding.calculateBottomPadding() + 88.dp
                         )
                     ) {
-                        if (compactList) {
-                            // ── КОМПАКТНЫЙ РЕЖИМ (Единая карточка: Избранное + все чаты) ─────────────
-                            item(key = "compact_chats_card") {
-                                val cs = MaterialTheme.colorScheme
-                                val shape = VlTheme.tokens.shapes.adapt(RoundedCornerShape(24.dp))
-
-                                Column(
+                        if (isLed) {
+                            item(key = "forge_chat_board") {
+                                ChatBoard(
+                                    unread = totalUnread,
+                                    online = isOnline,
+                                    sync = syncState,
+                                    compact = false,
+                                    gift = ionGiftAvailable,
+                                    onGift = { showIonReveal = true },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .liquidPillCardSlideOut(
-                                            index = 0,
-                                            triggerKey = triggerKey
-                                        )
-                                        .padding(horizontal = 12.dp)
-                                        .padding(bottom = 12.dp)
-                                        .background(cs.surfaceContainerLow, shape)
-                                        .clip(shape)
-                                ) {
-                                    // 📌 SAVED MESSAGES (первая строка компактного блока)
-                                    val savedChat = viewModel.savedMessagesEntry
-                                    ChatListItemCompact(
-                                        chat = savedChat,
-                                        chatType = ChatType.DIRECT,
-                                        currentUid = viewModel.currentUid,
-                                        otherProfile = null,
-                                        draftText = drafts[savedChat.id],
-                                        isSavedMessages = true,
-                                        onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
-                                    )
-
-                                    if (entries.isNotEmpty()) {
-                                        HorizontalDivider(
-                                            modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                            thickness = 0.5.dp,
-                                            color = cs.outlineVariant.copy(alpha = 0.4f)
-                                        )
-                                    }
-
-                                    // 📌 ВСЕ ОСТАЛЬНЫЕ ЧАТЫ (и строка «Приглашения» по дате)
-                                    entries.forEachIndexed { index, chat ->
-                                        if (viewModel.isInvitesEntry(chat)) {
-                                            ChatListItemCompact(
-                                                chat = chat,
-                                                chatType = ChatType.DIRECT,
-                                                currentUid = viewModel.currentUid,
-                                                otherProfile = null,
-                                                draftText = null,
-                                                unreadCount = invites.size,
-                                                isInvites = true,
-                                                previewOverride = invitesPreview,
-                                                onClick = onOpenNotifications
-                                            )
-                                            if (index < entries.size - 1) {
-                                                HorizontalDivider(
-                                                    modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                                    thickness = 0.5.dp,
-                                                    color = cs.outlineVariant.copy(alpha = 0.4f)
-                                                )
-                                            }
-                                            return@forEachIndexed
-                                        }
-                                        val chatType = chat.chatType()
-                                        val otherUid = when (chatType) {
-                                            ChatType.DIRECT, ChatType.EMERGENCY -> chat.otherParticipantId(viewModel.currentUid)
-                                            else -> chat.id
-                                        }
-
-                                        ChatListItemCompact(
-                                            chat = chat,
-                                            chatType = chatType,
-                                            currentUid = viewModel.currentUid,
-                                            otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
-                                            draftText = drafts[chat.id],
-                                            unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
-                                            isTyping = typingMap[chat.id] == true,
-                                            onClick = {
-                                                if (chat.isForumActive) onOpenTopicList(chat.id)
-                                                else onOpenChat(chat.id, otherUid)
-                                            }
-                                        )
-
-                                        if (index < entries.size - 1) {
-                                            HorizontalDivider(
-                                                modifier = Modifier.padding(start = 76.dp, end = 16.dp),
-                                                thickness = 0.5.dp,
-                                                color = cs.outlineVariant.copy(alpha = 0.4f)
-                                            )
-                                        }
-                                    }
-                                }
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
                             }
                         } else {
-                            // ── ОБЫЧНЫЙ РЕЖИМ (Отдельные карточки с отступами) ────────────────────────
+                            item(key = "ion_gift_banner") {
+                                org.visorlink.app.ui.idcard.IonGiftBanner(
+                                    uid = viewModel.currentUid,
+                                    onOpenReveal = { showIonReveal = true }
+                                )
+                            }
+                        }
+                        if (currentUser?.isPro == true && (folders.isNotEmpty() || activeFolderId != null)) {
+                            item(key = "chat_folder_tabs") {
+                                org.visorlink.app.ui.components.chatlist.FolderTabs(
+                                    folders = folders,
+                                    activeFolderId = activeFolderId,
+                                    unreadByFolder = unreadByFolder,
+                                    totalUnread = totalFolderUnread,
+                                    onSelect = { viewModel.selectFolder(it) },
+                                    onManage = onOpenFolders,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                )
+                            }
+                        }
                             // 📌 SAVED MESSAGES
                             item(key = "saved_messages") {
                                 val savedChat = viewModel.savedMessagesEntry
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .liquidPillCardSlideOut(
-                                            index = 0,
-                                            triggerKey = triggerKey
-                                        )
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     ChatListItem(
                                         chat = savedChat,
@@ -352,7 +420,6 @@ fun ChatListScreen(
                                         draftText = drafts[savedChat.id],
                                         unreadCount = 0,
                                         isSavedMessages = true,
-                                        isCompactList = false,
                                         isTyping = false,
                                         onClick = { onOpenChat(savedChat.id, viewModel.currentUid) }
                                     )
@@ -366,12 +433,7 @@ fun ChatListScreen(
                             ) { index, chat ->
                                 if (viewModel.isInvitesEntry(chat)) {
                                     Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .liquidPillCardSlideOut(
-                                                index = index + 1,
-                                                triggerKey = triggerKey
-                                            )
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
                                         ChatListItem(
                                             chat = chat,
@@ -380,7 +442,6 @@ fun ChatListScreen(
                                             otherProfile = null,
                                             draftText = null,
                                             unreadCount = invites.size,
-                                            isCompactList = compactList,
                                             isInvites = true,
                                             previewOverride = invitesPreview,
                                             onClick = onOpenNotifications
@@ -395,12 +456,7 @@ fun ChatListScreen(
                                 }
 
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .liquidPillCardSlideOut(
-                                            index = index + 1,
-                                            triggerKey = triggerKey
-                                        )
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     ChatListItem(
                                         chat = chat,
@@ -409,7 +465,6 @@ fun ChatListScreen(
                                         otherProfile = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) profileCache[otherUid] else null,
                                         draftText = drafts[chat.id],
                                         unreadCount = maxOf(chat.unreadCountFor(viewModel.currentUid), NotificationHelper.getUnreadCount(context, chat.id)),
-                                        isCompactList = compactList,
                                         isTyping = typingMap[chat.id] == true,
                                         onClick = {
                                             if (chat.isForumActive) onOpenTopicList(chat.id)
@@ -418,7 +473,6 @@ fun ChatListScreen(
                                     )
                                 }
                             }
-                        }
                     }
                 }
             }
@@ -439,6 +493,13 @@ fun ChatListScreen(
                 )
             }
         }
+    }
+
+    if (showIonReveal) {
+        org.visorlink.app.ui.idcard.IonGiftReveal(
+            uid = viewModel.currentUid,
+            onDismiss = { showIonReveal = false }
+        )
     }
 }
 

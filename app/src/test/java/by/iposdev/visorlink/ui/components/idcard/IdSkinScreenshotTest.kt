@@ -129,6 +129,7 @@ class IdSkinScreenshotTest {
     private val flagsRepository = mock<FlagsRepository> { on { flags } doReturn MutableStateFlow(AppFlags()) }
     private val users = mock<UserRepository> { on { userProfileFlow(any()) } doReturn flowOf(me) }
     private var cardForRepo = card()
+    private val giftRepo = mock<org.visorlink.app.data.repository.UserGiftRepository>()
     private val repo = mock<IdCardRepository> {
         on { cardFlow(any()) } doReturn flowOf(IdCardState.Ready(cardForRepo))
         on { skinsFlow(any()) } doReturn flowOf(IdSkinsState.Ready(skins))
@@ -149,7 +150,7 @@ class IdSkinScreenshotTest {
 
     @Before
     fun startDi() {
-        startKoin { modules(module { single { flagsRepository }; single { users }; single { repo } }) }
+        startKoin { modules(module { single { flagsRepository }; single { users }; single { repo }; single { giftRepo } }) }
     }
 
     @After

@@ -87,6 +87,26 @@ class AppFlagsTest {
     }
 
     @Test
+    fun `signal tab and step activities follow the server flags with release semantics`() {
+        assertFalse(flags().signalNavbar)
+        assertFalse(flags().stepActivities)
+        assertTrue(flags(mapOf(AppFlags.SIGNAL_TAB to true)).signalNavbar)
+        assertTrue(flags(mapOf(AppFlags.STEP_ACTIVITIES to true)).stepActivities)
+        // В релизе локально флаг можно только выключить
+        assertFalse(flags(mapOf(AppFlags.SIGNAL_TAB to true), mapOf(AppFlags.SIGNAL_TAB to false)).signalNavbar)
+        assertFalse(flags(overrides = mapOf(AppFlags.STEP_ACTIVITIES to true)).stepActivities)
+    }
+
+    @Test
+    fun `signal and step flags are known and flippable in debug`() {
+        val f = flags(claims = emptyMap(), isDebug = true)
+        assertTrue(f.flippableKeys.containsAll(listOf(AppFlags.SIGNAL_TAB, AppFlags.STEP_ACTIVITIES)))
+        // Debug-оверрайды включают фичи и без сервера — так тестируется вкладка до роллаута
+        assertTrue(flags(overrides = mapOf(AppFlags.SIGNAL_TAB to true), isDebug = true).signalNavbar)
+        assertTrue(flags(overrides = mapOf(AppFlags.STEP_ACTIVITIES to true), isDebug = true).stepActivities)
+    }
+
+    @Test
     fun `string claims are read as config, not flags`() {
         val f = flags(mapOf("heuristic_dict_url" to "https://example.org/dict.json"))
         assertEquals("https://example.org/dict.json", f.heuristicDictUrl)

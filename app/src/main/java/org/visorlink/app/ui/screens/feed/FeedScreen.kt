@@ -42,6 +42,7 @@ import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.VlSegmentedControl
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.vlHazeSource
 import org.visorlink.app.ui.components.chat.ReportContentDialog
 import org.visorlink.app.ui.components.feed.CuratedChannelCard
 import org.visorlink.app.ui.components.feed.FeedPostAction
@@ -121,14 +122,15 @@ fun FeedScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.feed_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                     }
                 },
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // Источник backdrop-блюра нижней панели навигации
+        Box(Modifier.fillMaxSize().padding(padding).vlHazeSource()) {
             VlAmbientGlow()
 
             Column(Modifier.fillMaxSize()) {

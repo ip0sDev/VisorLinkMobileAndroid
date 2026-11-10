@@ -17,7 +17,8 @@ import kotlinx.coroutines.withContext
 class FcmManager(
     private val context: Context,
     private val auth: FirebaseAuth,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val tfaManager: TfaManager? = null
 ) {
     /**
      * Регистрирует токен в облаке.
@@ -30,6 +31,25 @@ class FcmManager(
                 Log.d(TAG, "No authenticated user, skipping FCM setup")
             }
             return@withContext
+        }
+
+        // TODO §14.6: инвариант «FCM-токен только после 2FA». Для аккаунта со включённой 2FA
+        // регистрируем токен только если 2FA-гейт пройден в ТЕКУЩЕЙ сессии (auth_time);
+        // иначе токен остаётся несинхронизированным до прохождения 2FA
+        if (tfaManager != null) {
+            val authTime = runCatching {
+                auth.currentUser?.getIdToken(false)?.await()?.claims?.get("auth_time")?.toString()
+            }.getOrNull()
+            val profileTfaEnabled = runCatching {
+                userRepository.getUserProfile(uid)?.tfaEnabled == true
+            }.getOrDefault(false)
+            val passed = authTime != null && tfaManager.isTfaPassed(authTime)
+            if (profileTfaEnabled && !passed) {
+                if (org.visorlink.app.BuildConfig.DEBUG) {
+                    Log.d(TAG, "2FA not passed in this session, skipping FCM token sync")
+                }
+                return@withContext
+            }
         }
 
         try {

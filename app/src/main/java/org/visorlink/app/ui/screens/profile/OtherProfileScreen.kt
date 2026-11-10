@@ -105,7 +105,7 @@ fun OtherProfileScreen(
                         modifier = Modifier.liquidJelly(topBarJelly),
                         title = { Text(stringResource(R.string.profile_title), fontWeight = FontWeight.Bold) },
                         navigationIcon = {
-                            IconButton(onClick = {
+                            org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 topBarJelly.press(0.06f)
                                 onNavigateBack()
@@ -114,7 +114,7 @@ fun OtherProfileScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = {
+                            org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                                 haptic.perform(HapticType.CLICK, hapticEnabled)
                                 topBarJelly.press(0.06f)
                                 showMenu = true
@@ -133,23 +133,6 @@ fun OtherProfileScreen(
                                         showReportDialog = true
                                     }
                                 )
-                                if (flags.isEnabled("enable_alternative_outbox")) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.emergency_chat_title)) },
-                                        leadingIcon = { Icon(Icons.Default.Shield, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-                                        onClick = {
-                                            showMenu = false
-                                            scope.launch {
-                                                try {
-                                                    val emerChatId = viewModel.openOrCreateEmergencyChat()
-                                                    onOpenChat(emerChatId, viewModel.targetUid)
-                                                } catch (e: Exception) {
-                                                    Toast.makeText(context, e.message ?: "Failed to open emergency chat", Toast.LENGTH_SHORT).show()
-                                                }
-                                            }
-                                        }
-                                    )
-                                }
                                 if (isBlocked) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.action_unblock_user)) },

@@ -22,6 +22,7 @@ import coil.ImageLoaderFactory
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
 import com.google.firebase.Firebase
+import com.google.firebase.firestore.firestore
 import com.google.firebase.appcheck.appCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
 import com.google.firebase.auth.FirebaseAuth
@@ -40,6 +41,7 @@ import org.koin.core.context.startKoin
 class VisorLinkApp : Application(), ImageLoaderFactory {
 
     private var presenceManager: PresenceManager? = null
+    private var profileSyncJob: kotlinx.coroutines.Job? = null
 
     override fun newImageLoader(): ImageLoader {
         return AppImageLoader.get(this)
@@ -58,11 +60,36 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
         }
 
         NotificationHelper.createChannels(this)
-        org.visorlink.app.utils.DiagnosticLogBuffer.install()
+        org.visorlink.app.utils.DiagnosticLogBuffer.install(this)
 
-        startKoin {
+        // Разовая зачистка удалённой фичи Яндекс-релея (TODO §14.2): в этих префах у старых
+        // версий лежал OAuth-токен Диска в открытом виде
+        try {
+            getSharedPreferences("visorlink_yandex_relay", MODE_PRIVATE).edit().clear().apply()
+        } catch (_: Exception) {}
+
+                startKoin {
             androidContext(this@VisorLinkApp)
             modules(appModule)
+        }
+
+        // ─── Разовая полная зачистка устаревшего/разросшегося кэша при переходе на v1.5.0 ───
+        try {
+            val updatePrefs = getSharedPreferences("visorlink_settings", MODE_PRIVATE)
+            if (!updatePrefs.getBoolean("cache_purged_v150", false)) {
+                val cacheManager: CacheManager = GlobalContext.get().get()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        cacheManager.clearAll()
+                        updatePrefs.edit().putBoolean("cache_purged_v150", true).apply()
+                        Log.i("VisorLinkApp", "All legacy app caches purged successfully for v1.5.0")
+                    } catch (e: Exception) {
+                        Log.w("VisorLinkApp", "Failed to clear legacy cache", e)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("VisorLinkApp", "Cache purge check error", e)
         }
 
         // ─── Firebase App Check — ОБЯЗАТЕЛЬНО до любых Firestore-запросов ───
@@ -118,6 +145,15 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
             } catch (e: Exception) {
                 Log.e("VisorLinkApp", "Failed to fetch flags", e)
             }
+
+            // 3.1 Шагомер: воркер переживает перезагрузку сам; KEEP — идемпотентно.
+            // Согласие локальное (StepPrefs.enabled), флаг сервера проверяет сэмплер.
+            try {
+                val stepPrefs: org.visorlink.app.data.activity.StepPrefs = GlobalContext.get().get()
+                if (stepPrefs.enabled) {
+                    org.visorlink.app.data.activity.StepReportWorker.ensureScheduled(this@VisorLinkApp)
+                }
+            } catch (_: Exception) {}
         }
 
         // ─── Diary Reminders Observer ───
@@ -180,7 +216,13 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                     runCatching { GlobalContext.get().get<org.visorlink.app.data.repository.BlockRepository>().start(uid) }
                     val sessions = GlobalContext.get().get<org.visorlink.app.data.repository.SessionRepository>()
                     sessions.watchRevocation(uid)
-                    MainScope().launch { sessions.ensureRegistered() }
+                    MainScope().launch {
+                        try {
+                            sessions.ensureRegistered()
+                        } catch (e: Exception) {
+                            Log.w("VisorLinkApp", "ensureRegistered failed: ${e.message}")
+                        }
+                    }
                 }
                 MainScope().launch {
                     try {
@@ -189,11 +231,24 @@ class VisorLinkApp : Application(), ImageLoaderFactory {
                         Log.e("VisorLinkApp", "FCM token sync failed on auth state change", e)
                     }
                 }
+                profileSyncJob?.cancel()
+                profileSyncJob = MainScope().launch {
+                    val userRepo = GlobalContext.getOrNull()?.get<UserRepository>() ?: return@launch
+                    userRepo.userProfileFlow(uid).collect { profile ->
+                        if (profile != null) {
+                            presenceManager?.setHidden(profile.hidesOnline)
+                            userRepo.syncTimeZone(uid, profile.timeZone)
+                        }
+                    }
+                }
             } else {
+                profileSyncJob?.cancel()
+                profileSyncJob = null
                 GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.SessionRepository>()?.stopWatching()
                 GlobalContext.getOrNull()?.get<org.visorlink.app.data.repository.BlockRepository>()?.stop()
                 presenceManager?.detach()
                 presenceManager = null
+                try { org.visorlink.app.utils.AppCheckManager.onLogout(this@VisorLinkApp) } catch (_: Exception) {}
             }
         }
     }

@@ -28,8 +28,8 @@ android {
         applicationId = "org.visorlink.app"
         minSdk = 30
         targetSdk = 37
-        versionCode = 187
-        versionName = "4.3.12"
+        versionCode = 225
+        versionName = "5.1.10"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("long", "BUILD_TIMESTAMP", "${System.currentTimeMillis()}L")
         buildConfigField("String", "CHANNEL", "\"RELEASE\"")
@@ -127,6 +127,9 @@ dependencies {
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.foundation.layout)
     implementation(libs.androidx.compose.ui.text)
+    // Backdrop blur для шапок (Compose 1.13 даёт только surface-блюр, backdrop — Haze)
+    implementation(libs.haze)
+    implementation(libs.haze.blur)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
@@ -162,6 +165,7 @@ dependencies {
     debugImplementation(libs.firebase.appcheck.debug)
 
     // ── Other ────────────────────────────────────────────────────────────────
+    implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.play.services.auth)
     // Вход через Google: Credential Manager + Sign in with Google
@@ -189,7 +193,7 @@ dependencies {
 
     // ── Tests ────────────────────────────────────────────────────────────────
     testImplementation(libs.junit)
-    testImplementation("org.json:json:20240303")
+    testImplementation(libs.json)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

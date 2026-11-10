@@ -1,32 +1,22 @@
 package org.visorlink.app.utils
 
 import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 
 /**
- * Manages 2FA session status using EncryptedSharedPreferences.
+ * Manages 2FA session status using SecurePrefs (TODO §14.5 — замена deprecated
+ * EncryptedSharedPreferences, fail-closed: без плейнтекст-fallback).
  * We cache the status of 2FA for the current session (auth_time).
  */
 class TfaManager(context: Context) {
 
-    private val masterKey by lazy {
-        MasterKey.Builder(context.applicationContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-    }
-
     private val sharedPreferences by lazy {
-        try {
-            EncryptedSharedPreferences.create(
-                context.applicationContext,
-                "visorlink_tfa_prefs",
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        SecurePrefs(context.applicationContext, "tfa").apply {
+            migrateAllFrom(
+                listOf(
+                    SecurePrefs.LegacyFile("visorlink_tfa_prefs", encrypted = true),
+                    SecurePrefs.LegacyFile("visorlink_tfa_prefs_fallback", encrypted = false)
+                )
             )
-        } catch (_: Exception) {
-            context.applicationContext.getSharedPreferences("visorlink_tfa_prefs_fallback", Context.MODE_PRIVATE)
         }
     }
 
@@ -34,11 +24,12 @@ class TfaManager(context: Context) {
      * Mark 2FA as passed for the given [authTime].
      */
     fun setTfaPassed(authTime: String) {
-        sharedPreferences.edit().putBoolean("tfa_$authTime", true).apply()
+        sharedPreferences.putBoolean("tfa_$authTime", true)
     }
 
     /**
      * Check if 2FA was already passed for the given [authTime].
+     * Fail-closed: сбой Keystore → false (пользователь пройдёт 2FA заново).
      */
     fun isTfaPassed(authTime: String): Boolean {
         return sharedPreferences.getBoolean("tfa_$authTime", false)
@@ -48,6 +39,6 @@ class TfaManager(context: Context) {
      * Clear all 2FA session cache (e.g. on logout or for security).
      */
     fun clearCache() {
-        sharedPreferences.edit().clear().apply()
+        sharedPreferences.clear()
     }
 }

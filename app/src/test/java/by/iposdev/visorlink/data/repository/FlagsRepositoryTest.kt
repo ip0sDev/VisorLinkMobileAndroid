@@ -22,7 +22,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.visorlink.app.data.model.flags.ConfigResponse
 import org.visorlink.app.data.model.flags.PairResponse
-import org.visorlink.app.data.remote.flags.AegisKeyManager
+import org.visorlink.app.data.remote.flags.HermesKeyManager
 import org.visorlink.app.data.remote.flags.FlagsApi
 import retrofit2.HttpException
 import retrofit2.Response
@@ -33,7 +33,7 @@ import java.util.Base64
 class FlagsRepositoryTest {
 
     private lateinit var context: Context
-    private val keyManager = mock<AegisKeyManager> {
+    private val keyManager = mock<HermesKeyManager> {
         on { hasKey() } doReturn true
         on { generatePublicKeyPem() } doReturn "PEM"
         on { signPayload(any(), any(), any()) } doReturn "sig"

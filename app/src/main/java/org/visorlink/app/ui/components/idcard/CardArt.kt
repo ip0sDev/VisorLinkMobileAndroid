@@ -497,7 +497,11 @@ private fun android.graphics.Canvas.fitText(text: String, cx: Float, y: Float, w
     paint.textScaleX = 1f
 }
 
-/** Текст по пути с `textLength` + `lengthAdjust="spacing"`: трекинг подгоняет длину. */
+/**
+ * Текст по пути с `textLength` + `lengthAdjust="spacing"`: трекинг подгоняет длину.
+ * drawTextOnPath даёт правильную ориентацию глифов по касательной (проверено —
+ * per-glyph раскладка из Flutter давала смещение на устройствах).
+ */
 private fun android.graphics.Canvas.ringText(text: String, path: android.graphics.Path, length: Float, paint: Paint) {
     paint.textAlign = Paint.Align.LEFT
     paint.letterSpacing = 0.06f

@@ -466,7 +466,14 @@ class MusicRepository(private val context: Context) {
                         val redirectLocation = c.getHeaderField("Location")
                         c.disconnect()
                         if (!redirectLocation.isNullOrBlank()) {
-                            currentUrl = if (redirectLocation.startsWith("http")) redirectLocation else URL(urlObj, redirectLocation).toString()
+                            // TODO §14.6: редиректы только на https — MITM не должен уводить загрузку на http
+                            currentUrl = if (redirectLocation.startsWith("https://")) {
+                                redirectLocation
+                            } else if (redirectLocation.startsWith("http://")) {
+                                redirectLocation.replaceFirst("http://", "https://")
+                            } else {
+                                URL(urlObj, redirectLocation).toString()
+                            }
                             redirectCount++
                             continue
                         }

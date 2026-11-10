@@ -1,8 +1,13 @@
 package org.visorlink.app.ui.screens.chat
 
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+
 import org.visorlink.app.ui.components.VlDialogButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.visorlink.app.ui.components.VlAlertDialog
+import org.visorlink.app.ui.components.vlHazeSource
 import android.Manifest
 import android.net.Uri
 import android.widget.Toast
@@ -151,6 +156,10 @@ fun ChatScreen(
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showWallpaperSheet by remember { mutableStateOf(false) }
     var showIdTradePicker by remember { mutableStateOf(false) }
+    var showGiftPicker by remember { mutableStateOf(false) }
+    var showGiftSkinPicker by remember { mutableStateOf(false) }
+    var showScheduleDialog by remember { mutableStateOf(false) }
+    var showScheduledSheet by remember { mutableStateOf(false) }
     var editorUri by remember { mutableStateOf<Uri?>(null) }
 
     // Автоматическое закрытие меню стикеров и вложений при начале листания чата
@@ -248,6 +257,16 @@ fun ChatScreen(
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
             showIdTradePicker = true
+        }
+    } else null
+
+    val canGift = canSendMessage && uiState.otherUser?.isBot != true && uiState.chatType == ChatType.DIRECT
+    val openGift: (() -> Unit)? = if (canGift) {
+        {
+            showMediaPicker = false
+            keyboardController?.hide()
+            focusManager.clearFocus(force = true)
+            showGiftPicker = true
         }
     } else null
 
@@ -355,11 +374,13 @@ fun ChatScreen(
         Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             if (chatBgUrl != null) {
                 AsyncImage(
-                    model = chatBgUrl, contentDescription = null, modifier = Modifier.fillMaxSize(),
+                    model = chatBgUrl, contentDescription = null,
+                    // Источник backdrop-блюра шапки: обои под баром
+                    modifier = Modifier.fillMaxSize().vlHazeSource(),
                     contentScale = ContentScale.Crop, alpha = if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) 0.6f else 0.8f
                 )
             } else {
-                VlAmbientGlow()
+                VlAmbientGlow(modifier = Modifier.fillMaxSize().vlHazeSource())
             }
             Scaffold(
                 containerColor = Color.Transparent,
@@ -389,7 +410,46 @@ fun ChatScreen(
                     }
                 },
                 bottomBar = {
-                    LiquidMorphingChatBottomBar(
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        val scheduledList = uiState.scheduledMessages
+                        if (scheduledList.isNotEmpty()) {
+                            val failedCount = scheduledList.count { it.failed }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(if (failedCount > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer)
+                                        .clickable { showScheduledSheet = true }
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            if (failedCount > 0) Icons.Default.Warning else Icons.Default.AccessTime,
+                                            contentDescription = null,
+                                            tint = if (failedCount > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Text(
+                                            if (failedCount > 0) "Не отправлено: $failedCount" else "Запланировано: ${scheduledList.size}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (failedCount > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        LiquidMorphingChatBottomBar(
                         uiState = uiState,
                         inputText = inputText,
                         canSendMessage = canSendMessage,
@@ -474,9 +534,14 @@ fun ChatScreen(
                             showMediaPicker = false
                             viewModel.sendVideo(uri)
                         },
-                        onOpenIdTrade = openIdTrade
+                        onOpenIdTrade = openIdTrade,
+                        onOpenGiftPicker = openGift,
+                        onSchedule = if (uiState.currentUser?.isPro == true && inputText.isNotBlank()) {
+                            { showScheduleDialog = true }
+                        } else null
                     )
                 }
+            }
             ) { innerPadding ->
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (uiState.messageListItems.isEmpty() && !uiState.isLoadingMore) {
@@ -494,6 +559,8 @@ fun ChatScreen(
                             userScrollEnabled = contextMenuData == null,
                             modifier = Modifier
                                 .fillMaxSize()
+                                // Сообщения заезжают под бар — источник его backdrop-блюра
+                                .vlHazeSource()
                                 .progressiveEdgeBlur(
                                     topBlur = 10.dp,
                                     bottomBlur = 10.dp,
@@ -819,6 +886,57 @@ fun ChatScreen(
         org.visorlink.app.ui.idcard.IdSkinPicker(
             purpose = org.visorlink.app.ui.idcard.SkinPickPurpose.Post(chatId),
             onClose = { showIdTradePicker = false },
+        )
+    }
+
+    if (showGiftPicker) {
+        val recipient = uiState.otherUser
+        val recipientName = recipient?.displayName?.takeIf { it.isNotBlank() } ?: recipient?.username ?: "User"
+        val isEternalPro = recipient?.isEternalPro == true
+        GiftPickerBottomSheet(
+            chatId = chatId,
+            recipientName = recipientName,
+            isEternalPro = isEternalPro,
+            onDismiss = { showGiftPicker = false },
+            onOpenSkinPicker = {
+                showGiftPicker = false
+                showGiftSkinPicker = true
+            }
+        )
+    }
+
+    if (showGiftSkinPicker) {
+        val recipient = uiState.otherUser
+        val recipientName = recipient?.displayName?.takeIf { it.isNotBlank() } ?: recipient?.username ?: "User"
+        org.visorlink.app.ui.idcard.IdSkinPicker(
+            purpose = org.visorlink.app.ui.idcard.SkinPickPurpose.Gift(chatId, recipientName),
+            onClose = { showGiftSkinPicker = false },
+        )
+    }
+
+    if (showScheduleDialog) {
+        org.visorlink.app.ui.components.chat.ScheduleMessageDialog(
+            textPreview = inputText,
+            onDismiss = { showScheduleDialog = false },
+            onConfirm = { sendAtMs ->
+                val t = inputText
+                inputText = ""
+                showScheduleDialog = false
+                viewModel.scheduleMessage(
+                    text = t,
+                    sendAt = sendAtMs,
+                    replyTo = uiState.replyingTo
+                )
+            }
+        )
+    }
+
+    if (showScheduledSheet) {
+        org.visorlink.app.ui.components.chat.ScheduledMessagesSheet(
+            messages = uiState.scheduledMessages,
+            onDismiss = { showScheduledSheet = false },
+            onSendNow = { id -> viewModel.sendScheduledMessageNow(id) },
+            onCancel = { id -> viewModel.cancelScheduledMessage(id) }
         )
     }
     }

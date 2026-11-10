@@ -55,12 +55,36 @@ fun VlSticker(
     previewUrl: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
+    animate: Boolean = true,
 ) {
     if (url.isNullOrBlank()) return
     var failed by remember(url) { mutableStateOf(false) }
     val failedText = stringResource(R.string.sticker_load_failed)
     val semanticsModifier = modifier.semantics {
         (if (failed) failedText else contentDescription)?.let { this.contentDescription = it }
+    }
+
+    if (format == StickerFormat.LED || url.startsWith("led:") || url.startsWith("led_")) {
+        val expr = org.visorlink.app.ui.components.led.VlLedExpression.fromUrl(url)
+        org.visorlink.app.ui.components.chat.InteractiveLedSticker(
+            expression = expr,
+            modifier = semanticsModifier,
+            interactive = false,
+        )
+        return
+    }
+
+    // В сетке меню выбора или при выключенной анимации показываем легковесный постер/превью
+    if (!animate) {
+        val model = previewUrl?.takeIf { it.isNotBlank() } ?: url
+        CachedImage(
+            model = model,
+            contentDescription = contentDescription,
+            modifier = semanticsModifier,
+            contentScale = ContentScale.Fit,
+            decodeSize = 180
+        )
+        return
     }
 
     if (format == StickerFormat.STATIC) {

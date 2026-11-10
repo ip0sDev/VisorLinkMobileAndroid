@@ -40,8 +40,7 @@ enum class VlStyle {
     BIOLUME,
 
     /**
-     * Forge v2: терминал особых режимов ID-карты (Protogen / Beast). Только тёмная,
-     * контур вместо теней, малые скругления — см. ForgeV2Palette.kt.
+     * Forge: приборные клавиши со светом сверху и LED-экраном (Clean Room светлая / Blackout LED тёмная).
      */
     FORGE_V2,
 }
@@ -59,14 +58,15 @@ enum class VlDepth {
     /** Текстовые поля, трек тумблера, нажатая кнопка, выбранный чип. */
     Inset,
 
-    /** Без рельефа (заливка сама несёт смысл: filled-кнопка, аватар). */
+    /** Без рельефа (заливка сама несёт смысл: filled-кнопка в Biolume, аватар). */
     Flat,
 }
 
 // ── Слой структуры ───────────────────────────────────────────────────────────
 
 /**
- * Мягкий двойной свет/тень от одного невидимого источника сверху-слева.
+ * Мягкий двойной свет/тень от одного невидимого источника сверху-слева (Biolume)
+ * или направленный свет сверху для приборных клавиш (Forge, `keycapSheen > 0`).
  * Значения — из таблицы гайдлайна §4.1; alpha уже вложена в цвета.
  */
 @Immutable
@@ -84,20 +84,25 @@ data class VlStructureTokens(
     val insetLightOffset: Dp = 3.dp,
     val insetLightBlur: Dp = 6.dp,
     /**
-     * Не null — плоская панель с контуром этого цвета вместо неоморфного рельефа
-     * (Forge v2): raised = контур + короткая мягкая тень вниз, inset = контур +
-     * внутренняя тень сверху.
+     * Не null — плоская панель с контуром этого цвета вместо неоморфного рельефа.
      */
     val outline: Color? = null,
     /**
-     * Не null — «жёсткая» тень Forge v2: плотная копия формы, сдвинутая на [hardOffset] без
-     * размытия. Панель стоит на собственной плите, а не парит. Цвет непрозрачный (смесь с фоном).
+     * Не null — «жёсткая» тень со сдвигом [hardOffset] без размытия (оставлено для совместимости).
      */
     val hardShadow: Color? = null,
     /** Цвет жёсткой тени у кнопок и акцентных элементов (второй цвет темы). */
     val hardShadowAlt: Color? = null,
     val hardOffset: Dp = 4.dp,
+    /**
+     * Сила вертикального градиента клавиши: верх светлее на эту долю к белому (`0` — плоская
+     * заливка Biolume/M3E). Включает геометрию клавиши: тень строго вниз, контактная тень и
+     * блик верхней кромки.
+     */
+    val keycapSheen: Float = 0f,
 ) {
+    val keycap: Boolean get() = keycapSheen > 0f
+
     companion object {
         /** M3E рельефом не пользуется — elevation остаётся за Material. */
         val Disabled = VlStructureTokens(
@@ -112,7 +117,7 @@ data class VlStructureTokens(
 
 /**
  * Цветное свечение поверх структуры. Гайдлайн §4.2 + §10: в покое НЕ светится
- * ничего, кроме FAB, и на экране одновременно активен максимум один glow.
+ * ничего, кроме FAB (и основной клавиши в Forge), и на экране одновременно активен максимум один glow.
  */
 @Immutable
 data class VlSignalTokens(
@@ -128,7 +133,7 @@ data class VlSignalTokens(
     /** Период «биопульса» в мс (§6). */
     val pulsePeriodMs: Int = 2400,
     /**
-     * Постоянное свечение основной кнопки (Forge v2: неон горит и в покое).
+     * Постоянное свечение основной кнопки (Forge: клавиша с тихой подсветкой в покое).
      * 0 — кнопка светится только при нажатии, как требует §10 Biolume.
      */
     val buttonRestAlpha: Float = 0f,
@@ -143,12 +148,7 @@ data class VlSignalTokens(
 /**
  * Формы берутся из M3/M3E буквально (гайдлайн §2), Biolume меняет только то,
  * что спецификация допускает: stadium-кнопки и асимметричный FAB из shape-набора
- * M3 Expressive. Forge заменяет всё на прямые углы.
- *
- * [bar], [pill], [indicator] и [avatar] существуют потому, что раньше эти формы
- * были зашиты в компонентах константами (`CircleShape`,
- * `RoundedCornerShape(percent = 50)`) — и тема с прямыми углами не могла их
- * переопределить.
+ * M3 Expressive. Forge использует скруглённые приборные клавиши 16/24/26 dp.
  */
 @Immutable
 data class VlShapeTokens(
@@ -168,27 +168,24 @@ data class VlShapeTokens(
     val pill: Shape,
     /** Мелкие круглые элементы: точки статуса, бегунок тумблера, кружки акцентов. */
     val indicator: Shape,
-    /** Аватары. Квадратные аватары — сильный индустриальный сигнал. */
+    /** Аватары. */
     val avatar: Shape,
     /** Радиус, от которого считается рельеф и сигнальный контур. */
     val cardRadius: Dp,
     val buttonRadius: Dp,
     /**
      * Контейнер группы настроек ([VlSettingsSection]). Отдельно от [card]: у
-     * Biolume карточка 16dp, а секция исторически 24dp — раньше это было
-     * зашито в компонент, и Forge получал скругления вопреки своей шкале.
+     * Biolume карточка 16dp, а секция исторически 24dp.
      */
     val section: Shape = RoundedCornerShape(24.dp),
     /** Строка выбора ([VlOptionRow]) — подсветка выбранного варианта. */
     val row: Shape = RoundedCornerShape(12.dp),
     /**
-     * Потолок любого скругления (Forge v2: 8–10 dp). Произвольные формы экранов
-     * ([adapt], [rounded]) зажимаются до него — иначе «жидкие» 32 dp в терминале.
+     * Потолок любого скругления. Произвольные формы экранов ([adapt], [rounded]) зажимаются до него.
      */
     val maxRadius: Dp? = null,
     /**
-     * Срез углов (Forge v2): любая скруглённая форма через [adapt] / [rounded] становится
-     * [ChamferShape] с этим срезом — иначе рядом стояли бы срезанные токены и скруглённые экраны.
+     * Срез углов (оставлено для обратной совместимости).
      */
     val chamfer: Dp? = null,
 ) {
@@ -196,13 +193,7 @@ data class VlShapeTokens(
     val isSquare: Boolean get() = cardRadius == 0.dp
 
     /**
-     * Любая форма, кроме формы шкалы без скруглений: там — прямой угол.
-     *
-     * Компоненты и экраны рисуют много своих форм (`RoundedCornerShape(12.dp)`,
-     * `CircleShape`), и раньше Forge получал их как есть — «ни одного
-     * скругления» нарушалось в каждом листе, плеере и диалоге. Все такие формы
-     * в `ui/components` и `ui/screens` проходят через [adapt]; для скруглённых
-     * тем он возвращает форму без изменений.
+     * Адаптирует произвольную форму под шкалу темы.
      */
     fun adapt(shape: Shape): Shape = when {
         isSquare -> RectangleShape
@@ -238,7 +229,7 @@ enum class VlPressStyle {
     /** M3E: лёгкое сжатие. */
     SCALE,
 
-    /** Biolume: raised → inset, рельеф сам сообщает нажатие (гайдлайн §4.1). */
+    /** Biolume / Forge: raised → inset, рельеф сам сообщает нажатие (гайдлайн §4.1). */
     INSET,
 }
 
@@ -257,12 +248,10 @@ data class VlMotionTokens(
     val useSpring: Boolean,
     val dampingRatio: Float,
     val stiffness: Float,
-    /** Длительность для линейных переходов (когда [useSpring] == false). */
+    /** Длительность для переходов без пружины (когда [useSpring] == false). */
     val durationMs: Int,
     /**
-     * Терминальный характер движения (Forge v2): вместо жидких эффектов — ступенчатые
-     * переходы без пружин и перелётов, «глитч»-дрожание вместо желе, раскрытие заголовков
-     * курсором. См. `ui/components/TerminalMotion.kt`.
+     * Терминальный характер движения (оставлен для обратной совместимости).
      */
     val glitch: Boolean = false,
 )
@@ -315,19 +304,15 @@ data class VlBubbleTokens(
     val mineFg: Color,
     val otherBg: Color,
     val otherFg: Color,
-    /** Контур пузыря (Forge v2: жёсткий блок), null — без контура. */
+    /** Контур пузыря, null — без контура. */
     val mineBorder: Color? = null,
     val otherBorder: Color? = null,
 )
 
 // ── Корневой контракт ────────────────────────────────────────────────────────
 
-// ── Терминальная типографика (Forge v2) ──────────────────────────────────────
-
 /**
- * Терминал Forge v2: заголовки разделов — моноширинная капитель в цвете primary с линией до
- * края (у Protogen — префикс `> `), неоновая линия под верхней панелью и фон поверх
- * интерфейса ([vlTerminalBackdrop]): дымка и сканлайны. `null` в остальных темах.
+ * Дополнительные токены режима Forge (оставлены для совместимости).
  */
 @Immutable
 data class VlTerminalTokens(
@@ -346,9 +331,24 @@ data class VlTerminalTokens(
 }
 
 /**
- * Тумблер ([org.visorlink.app.ui.components.VlSwitch]): формы и размер бегунка. По умолчанию —
- * трек [VlShapeTokens.pill] и круглый бегунок 24 dp, как было всегда; Forge v2 вписывает
- * бегунок в свой трек со скруглением 6–8 dp.
+ * LED-слой Forge: всё, что «экран», — светящиеся точки на тёмном/светлом стекле (индикаторы, тумблеры,
+ * мордочки, счётчики). Кнопки и клавиши при этом остаются цвета primary.
+ */
+@Immutable
+data class VlLedTokens(
+    /** Цвет горящего светодиода (Protogen — голубой 0xFF3DF2FF, Beast — янтарный 0xFFFFB020, в светлой теме — оранжевый). */
+    val color: Color,
+    /** Стекло «экрана», на котором горят точки. */
+    val screen: Color,
+    /** Непрозрачность погашенной точки. */
+    val offAlpha: Float = 0.08f,
+    val glowBlur: Dp = 6.dp,
+) {
+    val off: Color get() = color.copy(alpha = offAlpha)
+}
+
+/**
+ * Тумблер ([org.visorlink.app.ui.components.VlSwitch]): формы, размеры и цвета бегунка и дорожки.
  */
 @Immutable
 data class VlSwitchTokens(
@@ -362,6 +362,12 @@ data class VlSwitchTokens(
     val thumbGlow: Float = 0f,
     /** Во включённом состоянии трек подсвечен: контур `primary` и более яркая заливка. */
     val litTrack: Boolean = false,
+    /** Горящие LED-точки внутри дорожки активного тумблера (Blackout LED). */
+    val ledDots: Boolean = false,
+    /** Цвет бегунка (`null` — `primary` когда включён, `onSurfaceVariant` когда выключен). */
+    val thumbColor: Color? = null,
+    /** Цвет включённого трека (`null` — `primaryContainer`). */
+    val trackOnColor: Color? = null,
 )
 
 @Immutable
@@ -385,16 +391,18 @@ data class VlTokens(
     val reduceMotion: Boolean,
     val terminal: VlTerminalTokens? = null,
     val switch: VlSwitchTokens = VlSwitchTokens(),
+    val led: VlLedTokens? = null,
 ) {
     val isBiolume: Boolean get() = style == VlStyle.BIOLUME
+    val isForge: Boolean get() = style == VlStyle.FORGE_V2
 
-    /** Терминальная анимация вместо жидкой (Forge v2), если система не просит убрать анимации. */
+    /** Терминальная анимация вместо жидкой (если включён флаг glitch и система не просит убрать анимации). */
     val glitchMotion: Boolean get() = motion.glitch && !reduceMotion
 }
 
 /**
- * Анимационный спек темы. Пружина для M3E/Biolume, линейный переход для Forge —
- * механика не пружинит.
+ * Анимационный спек темы. Пружина для M3E/Biolume, ход клавиши без перелёта для Forge —
+ * механика точно доводит элемент на место.
  */
 fun <T> VlMotionTokens.motionSpec(): androidx.compose.animation.core.FiniteAnimationSpec<T> =
     if (useSpring) {
@@ -405,9 +413,69 @@ fun <T> VlMotionTokens.motionSpec(): androidx.compose.animation.core.FiniteAnima
     } else {
         androidx.compose.animation.core.tween(
             durationMillis = durationMs,
-            easing = androidx.compose.animation.core.LinearEasing,
+            easing = VlCurves.Key,
         )
     }
+
+/** Кривая появления темы: пружина Biolume с перелётом ≈3 % или ход клавиши Forge. */
+val VlMotionTokens.enterEasing: androidx.compose.animation.core.Easing
+    get() = if (useSpring) VlCurves.Spring else VlCurves.Key
+
+// ── Шкала длительностей и кривых (порт Flutter `VlDurations`/`VlCurves`, vl_tokens.dart:173-220) ──
+
+/**
+ * Шкала длительностей — общая с вебом (visorlink TODO §13.3): выбор владельца, темп ×1.2.
+ */
+object VlDurations {
+    /** Отклик: цвет, мелкие индикаторы. */
+    const val D1 = 108
+
+    /** Уходы, смена значков и цифр. */
+    const val D2 = 192
+
+    /** Мелкие появления: пузырь, плашка, чип. */
+    const val D3 = 264
+
+    /** Окна, шторки, экраны. */
+    const val D4 = 360
+
+    /** Крупные сцены. */
+    const val D5 = 504
+
+    /** Ход клавиши Forge — темп не масштабирует. */
+    const val Key = 160
+}
+
+/**
+ * Кривые движения: появление — пружина ([Spring]) или клавиша ([Key]), уход — с ускорением ([Exit]).
+ */
+object VlCurves {
+    /** Пружина Biolume §6.2 (damping 0.75, stiffness 400, масса 1) как кривая: перелёт ≈2.8 %. */
+    val Spring = VlSpringEasing
+
+    /** Уход: разгон и обрыв — быстрее входа и без торможения в конце. */
+    val Exit = androidx.compose.animation.core.CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
+
+    /** Перемещение уже видимого: смена позиции, размера. */
+    val Standard = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0f, 0f, 1f)
+
+    /** Ход клавиши: мгновенный старт, долгое торможение. */
+    val Key = androidx.compose.animation.core.CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
+}
+
+/** Пружина Biolume §6.2 (damping 0.75, stiffness 400) как Easing: 0.4 с физики ужаты в [0, 1]. */
+object VlSpringEasing : androidx.compose.animation.core.Easing {
+    private const val ZETA = 0.75f
+    private const val OMEGA = 20f
+    private const val SPAN = 0.4f
+
+    override fun transform(t: Float): Float {
+        val wd = OMEGA * kotlin.math.sqrt(1f - ZETA * ZETA)
+        val s = t * SPAN
+        return 1f - kotlin.math.exp(-ZETA * OMEGA * s) *
+            (kotlin.math.cos(wd * s) + ZETA * OMEGA / wd * kotlin.math.sin(wd * s))
+    }
+}
 
 private val FallbackShapes = VlShapeTokens(
     button = RoundedCornerShape(16.dp),

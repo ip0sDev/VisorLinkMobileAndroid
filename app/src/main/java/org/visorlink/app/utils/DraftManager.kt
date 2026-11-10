@@ -87,4 +87,13 @@ class DraftManager(private val context: Context) {
             } catch (_: Exception) {}
         }
     }
+
+    /** Полная очистка всех черновиков (logout / смена аккаунта, TODO §14.6). */
+    fun clearAllDrafts() {
+        debounceJobs.values.forEach { it.cancel() }
+        debounceJobs.clear()
+        memoryCache.clear()
+        _draftsFlow.value = emptyMap()
+        prefs.edit().clear().apply()
+    }
 }

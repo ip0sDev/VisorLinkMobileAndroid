@@ -42,7 +42,7 @@ fun FlagFlipperScreen(
             VlTopAppBar(
                 title = { Text(stringResource(R.string.flag_flipper_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 }

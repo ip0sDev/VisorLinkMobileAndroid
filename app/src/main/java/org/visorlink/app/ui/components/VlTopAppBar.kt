@@ -1,117 +1,230 @@
 package org.visorlink.app.ui.components
 
+import android.graphics.BlurMaskFilter
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
-import org.visorlink.app.ui.theme.VlTheme
-import org.visorlink.app.ui.theme.vlHairline
-import org.visorlink.app.ui.theme.vlNeonRule
-
-import androidx.compose.ui.draw.clip
-import org.visorlink.app.ui.theme.vlRaised
-
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.border
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import org.visorlink.app.ui.theme.VlDepth
+import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.vlKeycapBackground
+import org.visorlink.app.ui.theme.vlStructure
 
 /**
- * Тематический TopAppBar.
- *
- *  - BIOLUME: парящая приподнятая панель (vlRaised) со скруглением inputPanel,
- *    нейтральной биолюминесцентной гранью (vlHairline) и мягким фоном surfaceContainerLow.
- *  - FORGE: прямоугольный solid-фон surfaceContainerHigh с нижней гранью.
- *  - MATERIAL3: стандартный плоский M3E.
+ * Кнопка верхней панели (Flutter `wrapButton` в `VlTopAppBar`):
+ * приподнятая плитка 12dp со скруглением, световым градиентом клавиши, гранью outlineVariant и отступом 8dp.
+ */
+@Composable
+fun VlTopAppBarButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(8.dp),
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    content: @Composable () -> Unit,
+) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val dark = tokens.isDark
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val shape = tokens.shapes.rounded(12.dp)
+    val depth = if (tokens.structure.enabled) {
+        if (isPressed && enabled) VlDepth.Inset else VlDepth.Raised
+    } else VlDepth.Flat
+    // Плавное сжатие при нажатии
+    val press by animateFloatAsState(
+        targetValue = if (isPressed && enabled) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.7f, stiffness = 480f),
+        label = "vltopbarbtn_press",
+    )
+    // Кнопки полупрозрачные: сквозь них читается матовый бар (F vl_chrome.dart:146-148)
+    val color = if (tokens.structure.enabled) {
+        if (dark) cs.surfaceContainer.copy(alpha = 0.8f) else cs.surfaceContainerLow.copy(alpha = 0.9f)
+    } else cs.surfaceContainerHighest.copy(alpha = 0.50f)
+    val borderColor = cs.outlineVariant.copy(alpha = if (dark) 0.15f else 0.30f)
+
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = 36.dp, minHeight = 36.dp)
+            .graphicsLayer {
+                val s = 1f - 0.05f * press
+                scaleX = s; scaleY = s
+            }
+            .then(
+                if (tokens.structure.enabled) Modifier.vlStructure(tokens.structure, depth, shape)
+                else Modifier
+            )
+            .clip(shape)
+            .vlKeycapBackground(tokens.structure, color, shape, depth)
+            .border(1.dp, borderColor, shape)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+            )
+            .padding(contentPadding),
+        contentAlignment = Alignment.Center,
+    ) {
+        CompositionLocalProvider(
+            LocalContentColor provides if (enabled) cs.onSurface else cs.onSurface.copy(alpha = 0.38f),
+        ) {
+            content()
+        }
+    }
+}
+
+/**
+ * Верхняя панель (порт Flutter `VlTopAppBar`).
+ * Полноширинный бар с высотой 56dp, тонким LED-свечением снизу и единым стилем плиточных кнопок.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VlTopAppBar(
     title: @Composable () -> Unit,
     modifier: Modifier = Modifier,
-    navigationIcon: @Composable () -> Unit = {},
+    navigationIcon: (@Composable () -> Unit)? = null,
     actions: @Composable RowScope.() -> Unit = {},
     colors: TopAppBarColors? = null,
-    scrollBehavior: TopAppBarScrollBehavior? = null
+    scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
+    // Матовый бар (F vl_chrome.dart:197-230): в Biolume/Forge — настоящий backdrop blur
+    // поверх него — полупрозрачный tint alpha(surface, 0.70/0.85). При «убрать анимации»
+    // и в M3E — сплошная поверхность.
+    val matte = isVlMatte()
+    val bgColor = if (matte) cs.surface.copy(alpha = if (tokens.isDark) 0.70f else 0.85f) else cs.surface
 
-    if (tokens.isBiolume) {
-        val isDark = cs.surface.luminance() < 0.5f
-        val barShape = tokens.shapes.inputPanel
-        val barBrush = remember(isDark, cs) {
-            val topColor = if (isDark) cs.surfaceContainer.copy(alpha = 0.95f) else cs.surfaceContainerLow.copy(alpha = 0.98f)
-            val bottomColor = if (isDark) cs.surfaceContainerLow.copy(alpha = 0.90f) else cs.surfaceContainer.copy(alpha = 0.92f)
-            Brush.verticalGradient(listOf(topColor, bottomColor))
-        }
-        val barBorder = remember(isDark, cs) {
-            val topHighlight = if (isDark) cs.outlineVariant.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.50f)
-            val bottomShadow = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.12f)
-            BorderStroke(1.dp, Brush.verticalGradient(listOf(topHighlight, bottomShadow)))
-        }
+    val titleStyle = if (tokens.isForge) {
+        MaterialTheme.typography.titleLarge.copy(
+            fontWeight = FontWeight.Light,
+            color = cs.onSurface,
+            letterSpacing = 0.sp,
+        )
+    } else {
+        MaterialTheme.typography.titleLarge.copy(
+            fontWeight = FontWeight.ExtraBold,
+            color = cs.onSurface,
+            letterSpacing = (-0.2).sp,
+        )
+    }
 
-        Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 4.dp)
-        ) {
-            Box(
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .vlBackdropBlur()
+            .background(bgColor)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (tokens.structure.enabled) Modifier.vlRaised(tokens.structure, barShape)
-                        else Modifier
-                    )
-                    .clip(barShape)
-                    .background(barBrush, barShape)
-                    .border(barBorder, barShape)
+                    .height(56.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                TopAppBar(
-                    title = title,
-                    navigationIcon = navigationIcon,
-                    actions = actions,
-                    windowInsets = WindowInsets(0.dp),
-                    colors = colors ?: TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent,
-                        scrolledContainerColor = Color.Transparent,
-                        titleContentColor = cs.onSurface,
-                        navigationIconContentColor = cs.onSurface,
-                        actionIconContentColor = cs.onSurfaceVariant
-                    ),
-                    scrollBehavior = scrollBehavior
+                if (navigationIcon != null) {
+                    Box(
+                        modifier = Modifier.padding(start = 12.dp, end = 4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        navigationIcon()
+                    }
+                } else {
+                    Spacer(Modifier.width(16.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    CompositionLocalProvider(
+                        LocalTextStyle provides titleStyle,
+                        LocalContentColor provides cs.onSurface,
+                    ) {
+                        title()
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.padding(end = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
                 )
             }
         }
-    } else {
-        val defaultColors = TopAppBarDefaults.topAppBarColors(
-            containerColor = cs.surface,
-            scrolledContainerColor = cs.surface.copy(alpha = 0.85f)
-        )
+        VlBottomLedHairline(modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
 
-        TopAppBar(
-            // Forge v2: заголовок печатается за блочным курсором с RGB-расслоением; в M3E — как есть
-            title = {
-                if (tokens.terminal != null) {
-                    Column {
-                        TerminalStatusStrip()
-                        Box(Modifier.terminalTitleReveal()) { title() }
+/**
+ * Тонкая нижняя LED-линия со свечением для шапок и панелей (Forge / Biolume с LED).
+ */
+@Composable
+fun VlBottomLedHairline(modifier: Modifier = Modifier) {
+    val tokens = VlTheme.tokens
+    val cs = MaterialTheme.colorScheme
+    val ledColor = tokens.led?.color ?: cs.primary
+    val hasLed = tokens.led != null || tokens.isForge
+
+    if (hasLed && !tokens.reduceMotion) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(1.5.dp)
+                .drawBehind {
+                    val blurPx = 6.dp.toPx()
+                    val dy = 1.dp.toPx()
+                    drawIntoCanvas { canvas ->
+                        val paint = android.graphics.Paint().apply {
+                            isAntiAlias = true
+                            color = ledColor.copy(alpha = 0.35f).toArgb()
+                            maskFilter = BlurMaskFilter(blurPx * 0.57735f + 0.5f, BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawRect(0f, dy, size.width, size.height + dy, paint)
                     }
-                } else {
-                    Box(Modifier.terminalTitleReveal()) { title() }
                 }
-            },
-            // Forge v2: неоновая линия под панелью; в M3E — no-op
-            modifier = modifier.vlNeonRule(tokens),
-            navigationIcon = navigationIcon,
-            actions = actions,
-            colors = colors ?: defaultColors,
-            scrollBehavior = scrollBehavior
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            cs.outlineVariant.copy(alpha = 0.08f),
+                            ledColor.copy(alpha = 0.75f),
+                            cs.outlineVariant.copy(alpha = 0.08f),
+                        )
+                    )
+                )
+        )
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(cs.outlineVariant.copy(alpha = if (tokens.isDark) 0.20f else 0.35f))
         )
     }
 }

@@ -34,9 +34,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.ui.components.led.VlLedDigits
+import org.visorlink.app.ui.components.led.VlLedScreen
+import org.visorlink.app.ui.components.led.VlLedTyping
+import org.visorlink.app.ui.theme.VlDepth
 import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.theme.vlHairline
+import org.visorlink.app.ui.theme.vlKeycapBackground
 import org.visorlink.app.ui.theme.vlRaised
+import org.visorlink.app.ui.theme.vlStructure
 import org.visorlink.app.ui.theme.vlTableRow
 import org.visorlink.app.data.model.Chat
 import org.visorlink.app.data.model.ChatType
@@ -44,7 +50,6 @@ import org.visorlink.app.data.model.UserProfile
 import org.visorlink.app.data.model.isLastMessageRead
 import org.visorlink.app.ui.components.AvatarWithPresence
 import org.visorlink.app.ui.components.CachedImage
-import org.visorlink.app.ui.components.TerminalSeqTag
 import org.visorlink.app.ui.components.terminalData
 import java.text.SimpleDateFormat
 import java.util.*
@@ -54,12 +59,13 @@ fun MessageStatusIcon(
     isRead: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val tokens = VlTheme.tokens
     if (isRead) {
         // Двойная галочка (✓✓)
         Icon(
             painter = painterResource(id = R.drawable.ic_check_double),
             contentDescription = "Прочитано",
-            tint = MaterialTheme.colorScheme.primary, // Акцентный цвет
+            tint = tokens.led?.color ?: MaterialTheme.colorScheme.primary,
             modifier = modifier.size(16.dp, 11.dp)
         )
     } else {
@@ -82,7 +88,6 @@ fun ChatListItem(
     draftText: String?,
     unreadCount: Int = 0,
     isSavedMessages: Boolean = false,
-    isCompactList: Boolean = false,
     isTyping: Boolean = false,
     /** Строка «Приглашения»: своя иконка и заголовок, вместо последнего сообщения — [previewOverride]. */
     isInvites: Boolean = false,
@@ -92,19 +97,17 @@ fun ChatListItem(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
+    val cs = MaterialTheme.colorScheme
+    val tokens = VlTheme.tokens
+    val shape = tokens.shapes.card
+    val isDark = cs.surface.luminance() < 0.5f
+
+    val pressTarget = if (tokens.structure.keycap) tokens.motion.pressScale else 0.97f
     val itemScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed) pressTarget else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
         label = "item_press"
     )
-
-    val cs = MaterialTheme.colorScheme
-    val tokens = VlTheme.tokens
-    // Forge v2: список — таблица, а не стопка карточек: коробка у каждой строки превращала
-    // экран в шум из рамок. Разделитель снизу, непрочитанное — полоса слева
-    val tableRow = tokens.structure.hardShadow != null
-    val shape = if (tableRow) androidx.compose.ui.graphics.RectangleShape else tokens.shapes.card
-    val isDark = cs.surface.luminance() < 0.5f
 
     val titleColor = cs.onSurface
     val subColor = cs.onSurfaceVariant
@@ -115,17 +118,22 @@ fun ChatListItem(
         isLastMessageRead(chat, currentUid)
     }
 
-    val cardColor = remember(tokens.isBiolume, isDark, cs) {
-        if (tokens.isBiolume) {
-            if (isDark) cs.surfaceContainer.copy(alpha = 0.70f)
-            else cs.surfaceContainerLow.copy(alpha = 0.90f)
+    val depth = when {
+        !tokens.structure.enabled -> VlDepth.Flat
+        tokens.structure.keycap && isPressed -> VlDepth.Inset
+        else -> VlDepth.Raised
+    }
+
+    val cardColor = remember(tokens.structure.enabled, isDark, cs) {
+        if (tokens.structure.enabled) {
+            if (isDark) cs.surfaceContainer else cs.surfaceContainerLow
         } else {
             if (isDark) cs.surfaceVariant.copy(alpha = 0.45f) else cs.surface
         }
     }
 
-    val cardBorder = remember(tokens.isBiolume, isDark, cs) {
-        if (tokens.isBiolume) {
+    val cardBorder = remember(tokens.structure.enabled, isDark, cs) {
+        if (tokens.structure.enabled) {
             val topColor = if (isDark) cs.outlineVariant.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.45f)
             val bottomColor = if (isDark) cs.outlineVariant.copy(alpha = 0.04f) else cs.outlineVariant.copy(alpha = 0.10f)
             BorderStroke(1.dp, Brush.verticalGradient(listOf(topColor, bottomColor)))
@@ -137,45 +145,37 @@ fun ChatListItem(
         }
     }
 
-    Surface(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = if (tableRow) 0.dp else 12.dp)
-            .padding(vertical = if (!isCompactList && !tableRow) 6.dp else 0.dp)
-            .scale(if (tableRow) 1f else itemScale)
+            .padding(horizontal = 12.dp)
+            .padding(vertical = 6.dp)
+            .scale(itemScale)
             .then(
-                if (tableRow) {
-                    Modifier.vlTableRow(
-                        divider = tokens.structure.outline?.copy(alpha = 0.18f) ?: cs.outlineVariant,
-                        accent = if (unreadCount > 0) cs.primary else null,
-                        pressed = isPressed,
-                        pressFill = cs.primary.copy(alpha = 0.08f),
-                        dividerStart = 82.dp,
-                    )
-                } else if (tokens.structure.enabled && !isCompactList) {
-                    Modifier.vlRaised(tokens.structure, shape)
+                if (tokens.structure.enabled) {
+                    Modifier.vlStructure(tokens.structure, depth, shape)
                 } else if (tokens.structure.enabled) {
                     Modifier.vlHairline(cs.outlineVariant, shape)
                 } else {
                     Modifier
                 }
             )
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        shape = shape,
-        color = if (tableRow) Color.Transparent else cardColor,
-        border = if (tableRow) null else cardBorder
+            .clip(shape)
+            .vlKeycapBackground(tokens.structure, cardColor, shape, depth)
+            .border(cardBorder, shape)
+            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(
-                    if (tokens.isBiolume) {
+                    if (tokens.structure.enabled && !tokens.structure.keycap) {
                         val gTop = if (isDark) cs.surfaceContainerHigh.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.18f)
                         val gBottom = Color.Transparent
                         Modifier.background(Brush.verticalGradient(listOf(gTop, gBottom)))
                     } else Modifier
                 )
-                .padding(horizontal = if (tableRow) 16.dp else 14.dp, vertical = if (!isCompactList) 12.dp else 10.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(modifier = Modifier.size(52.dp)) {
@@ -188,8 +188,11 @@ fun ChatListItem(
                         ChatType.DIRECT, ChatType.EMERGENCY -> {
                             val otherUsername = chat.otherUsername(currentUid)
                             val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
+                            val resolvedAvatarUrl = otherProfile?.avatarUrl?.takeIf { it.isNotBlank() }
+                                ?: chat.otherAvatarUrl(currentUid)?.takeIf { it.isNotBlank() }
+                                ?: chat.avatarUrl?.takeIf { it.isNotBlank() }
                             AvatarWithPresence(
-                                avatarUrl = otherProfile?.avatarUrl,
+                                avatarUrl = resolvedAvatarUrl,
                                 displayName = chat.otherDisplayName(currentUid),
                                 isOnline = otherProfile?.online ?: false,
                                 size = 52.dp,
@@ -197,7 +200,7 @@ fun ChatListItem(
                             )
                         }
                         ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
-                            avatarUrl = chat.avatarUrl,
+                            avatarUrl = chat.avatarUrl?.takeIf { it.isNotBlank() },
                             name = chat.name,
                             isChannel = chatType == ChatType.CHANNEL,
                             size = 52.dp
@@ -258,8 +261,6 @@ fun ChatListItem(
                     }
                     chat.lastMessageAt?.let {
                         Spacer(Modifier.width(8.dp))
-                        // В компактном списке код съедал бы имя
-                        if (!isCompactList) TerminalSeqTag(chat.lastSeq, subColor.copy(alpha = 0.55f), Modifier.padding(end = 6.dp))
                         Text(
                             formatTime(it.toDate()),
                             style = MaterialTheme.typography.labelSmall.terminalData(),
@@ -277,13 +278,17 @@ fun ChatListItem(
                         if (isTyping) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(if (tokens.led != null) 8.dp else 4.dp)
                             ) {
-                                Text(text = "✍️", fontSize = 12.sp)
+                                if (tokens.led != null) {
+                                    VlLedTyping()
+                                } else {
+                                    Text(text = "✍️", fontSize = 12.sp)
+                                }
                                 Text(
                                     text = stringResource(R.string.chat_typing),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = cs.primary,
+                                    color = tokens.led?.color ?: cs.primary,
                                     fontWeight = FontWeight.Medium
                                 )
                             }
@@ -340,218 +345,38 @@ fun ChatListItem(
 }
 
 @Composable
-fun ChatListItemCompact(
-    chat: Chat,
-    chatType: ChatType,
-    currentUid: String,
-    otherProfile: UserProfile?,
-    draftText: String?,
-    unreadCount: Int = 0,
-    isSavedMessages: Boolean = false,
-    isTyping: Boolean = false,
-    /** Строка «Приглашения» — см. [ChatListItem]. */
-    isInvites: Boolean = false,
-    previewOverride: String? = null,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val bgHighlight = if (isPressed) MaterialTheme.colorScheme.onSurface.copy(0.05f) else Color.Transparent
-
-    val titleColor = MaterialTheme.colorScheme.onSurface
-    val subColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val cs = MaterialTheme.colorScheme
-
-    val isOwnLast = !isSavedMessages && !isInvites && (chat.lastMessageSenderId == currentUid ||
-            chat.lastMessageInfo()?.senderId == currentUid)
-    val isRead = remember(chat, currentUid) {
-        isLastMessageRead(chat, currentUid)
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(bgHighlight)
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.size(54.dp)) {
-            if (isInvites) {
-                InvitesIcon(size = 54.dp)
-            } else if (isSavedMessages) {
-                SavedMessagesIcon(size = 54.dp)
-            } else {
-                when (chatType) {
-                    ChatType.DIRECT, ChatType.EMERGENCY -> {
-                        val otherUsername = chat.otherUsername(currentUid)
-                        val isFaulty = otherProfile?.uid == "bot_faultywire" || otherUsername == "faultywire"
-                        AvatarWithPresence(
-                            avatarUrl = otherProfile?.avatarUrl,
-                            displayName = chat.otherDisplayName(currentUid),
-                            isOnline = otherProfile?.online ?: false,
-                            size = 54.dp,
-                            isFaultyWireBot = isFaulty
-                        )
-                    }
-                    ChatType.GROUP, ChatType.CHANNEL -> GroupChannelAvatar(
-                        avatarUrl = chat.avatarUrl,
-                        name = chat.name,
-                        isChannel = chatType == ChatType.CHANNEL,
-                        size = 54.dp
-                    )
-                }
-            }
-        }
-
-        Spacer(Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    if (chatType == ChatType.EMERGENCY) {
-                        Text("🛡️", fontSize = 12.sp)
-                    } else if (chatType != ChatType.DIRECT && !isSavedMessages) {
-                        Text(if (chatType == ChatType.CHANNEL) "📢" else if (chat.isForumActive) "💬" else "👥", fontSize = 11.sp)
-                    }
-                    val otherUsername = if (chatType == ChatType.DIRECT || chatType == ChatType.EMERGENCY) chat.otherUsername(currentUid) else ""
-                    val isOfficial = chatType == ChatType.DIRECT && (
-                        otherProfile?.botBadge == "official" ||
-                        otherProfile?.uid == "bot_faultywire" ||
-                        otherUsername == "faultywire"
-                    )
-                    Text(
-                        text = when {
-                            isInvites -> stringResource(R.string.notifications_title)
-                            isSavedMessages -> stringResource(R.string.saved_messages_title)
-                            chatType == ChatType.EMERGENCY -> {
-                                val name = chat.otherDisplayName(currentUid).ifEmpty { chat.name }
-                                "$name [SOS]"
-                            }
-                            chatType == ChatType.DIRECT -> chat.otherDisplayName(currentUid).ifEmpty { "@$otherUsername" }
-                            else -> chat.name
-                        },
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = titleColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-                    if (isOfficial) {
-                        Icon(
-                            imageVector = Icons.Default.Verified,
-                            contentDescription = "Official Bot",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                    }
-                }
-                chat.lastMessageAt?.let {
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        formatTime(it.toDate()),
-                        style = MaterialTheme.typography.labelSmall.terminalData(),
-                        color = subColor,
-                        fontSize = 11.sp
-                    )
-                }
-            }
-            Spacer(Modifier.height(4.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    if (isTyping) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(text = "✍️", fontSize = 12.sp)
-                            Text(
-                                text = stringResource(R.string.chat_typing),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = cs.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    } else if (!draftText.isNullOrEmpty()) {
-                        Row {
-                            Text(
-                                stringResource(R.string.chatlist_draft_prefix),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = draftText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = subColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (isOwnLast) {
-                                MessageStatusIcon(isRead = isRead)
-                                Spacer(Modifier.width(5.dp))
-                            }
-                            val tradePreview = stringResource(R.string.preview_id_trade)
-                            val messageText = remember(chat.lastMessage, tradePreview) {
-                                if (org.visorlink.app.data.model.isIdTradePreview(chat.lastMessage)) tradePreview
-                                else org.visorlink.app.utils.MarkdownTextParser.stripMarkdown(chat.lastMessageText())
-                            }
-                            Text(
-                                text = previewOverride
-                                    ?: if (messageText.isNotEmpty()) messageText else stringResource(R.string.chatlist_no_messages),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = subColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                        }
-                    }
-                }
-                if (unreadCount > 0) {
-                    Spacer(Modifier.width(8.dp))
-                    ChatUnreadBadge(count = unreadCount)
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun ChatUnreadBadge(
     count: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    muted: Boolean = false,
 ) {
     if (count <= 0) return
     val tokens = VlTheme.tokens
     val cs = MaterialTheme.colorScheme
     val text = if (count > 99) "99+" else count.toString()
 
+    // В Forge непрочитанные показываем как LED-счетчик на темном стекле (порт Flutter `_UnreadBadge`)
+    if (tokens.led != null) {
+        VlLedScreen(
+            modifier = modifier,
+            radius = 7.dp,
+            padding = PaddingValues(horizontal = 5.dp, vertical = 3.dp),
+        ) {
+            VlLedDigits(
+                text = text,
+                color = if (muted) cs.onSurfaceVariant else tokens.led.color,
+            )
+        }
+        return
+    }
+
     Surface(
         modifier = modifier
             .height(20.dp)
             .widthIn(min = 20.dp),
         shape = tokens.shapes.pill,
-        color = cs.primary,
-        contentColor = cs.onPrimary
+        color = if (muted) cs.surfaceContainerHighest else cs.primary,
+        contentColor = if (muted) cs.onSurfaceVariant else cs.onPrimary
     ) {
         Box(
             modifier = Modifier.padding(horizontal = 6.dp),
@@ -563,7 +388,7 @@ fun ChatUnreadBadge(
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp
                 ),
-                color = cs.onPrimary,
+                color = if (muted) cs.onSurfaceVariant else cs.onPrimary,
                 maxLines = 1
             )
         }

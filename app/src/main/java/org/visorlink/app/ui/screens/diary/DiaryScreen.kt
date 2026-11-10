@@ -19,11 +19,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.fragment.app.FragmentActivity
 import org.visorlink.app.R
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.VlTopAppBar
+import org.visorlink.app.ui.components.vlHazeSource
 import org.visorlink.app.ui.components.diary.*
 import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
@@ -79,18 +81,37 @@ fun DiaryScreen(
         }
     }
 
+    // Полноэкранный флоу миграции шифрования (TODO §14.4)
+    if (uiState.migrationActive) {
+        org.visorlink.app.ui.screens.saved.CryptoMigrationScreen(
+            rollback = uiState.migrationRollback,
+            rotate = uiState.migrationRotate,
+            stage = uiState.migrationStage,
+            textsDone = uiState.migrationTexts,
+            textsTotal = uiState.migrationTextsTotal,
+            mediaDone = uiState.migrationMedia,
+            mediaTotal = uiState.migrationMediaTotal,
+            finished = uiState.migrationFinished,
+            failed = uiState.migrationFailed,
+            recoveryCode = uiState.recoveryCode,
+            onDone = { viewModel.finishMigration() }
+        )
+        return
+    }
+
     if (uiState.showPinInput) {
         DiaryPinDialog(
             pinError              = uiState.pinError,
             hasBiometric          = viewModel.hasBiometricPinSaved(),
             keystoreSecurityLevel = viewModel.getKeystoreSecurityLevel(),
-            onPinEntered          = { pin, saveBio -> viewModel.onPinEntered(pin, saveBio) },
+            onPinEntered          = { pin, saveBio -> viewModel.onPinEntered(pin, saveBio, context as? FragmentActivity) },
             onBiometric           = { (context as? FragmentActivity)?.let { viewModel.launchBiometricUnlock(it) } },
             onDismiss             = onNavigateBack,
             clearError            = { viewModel.clearPinError() }
         )
         return
     }
+
 
     val exportChooserTitle = stringResource(R.string.diary_export_chooser)
 
@@ -101,7 +122,7 @@ fun DiaryScreen(
                 modifier = Modifier.liquidJelly(topBarJelly),
                 title = { Text(stringResource(R.string.diary_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = {
+                    org.visorlink.app.ui.components.VlTopAppBarButton(onClick = {
                         haptic.perform(HapticType.CLICK, hapticEnabled)
                         topBarJelly.press(0.06f)
                         onNavigateBack()
@@ -111,7 +132,7 @@ fun DiaryScreen(
                 },
                 actions = {
                     val exportJelly = rememberLiquidJellyState()
-                    IconButton(
+                    org.visorlink.app.ui.components.VlTopAppBarButton(
                         onClick = {
                             haptic.perform(HapticType.CLICK, hapticEnabled)
                             exportJelly.pulse(0.12f)
@@ -149,7 +170,8 @@ fun DiaryScreen(
             }
         }
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        // Источник backdrop-блюра нижней панели навигации
+        Box(Modifier.fillMaxSize().padding(padding).vlHazeSource()) {
             VlAmbientGlow()
 
             val filteredEntries = remember(uiState.entries, uiState.selectedDate) {

@@ -225,6 +225,7 @@ fun AppearancePage(themeViewModel: ThemeViewModel) {
 fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: FirebaseFirestore) {
     val appTheme by themeViewModel.appTheme.collectAsStateWithLifecycle()
     val discoverEnabled by themeViewModel.discoverEnabled.collectAsStateWithLifecycle()
+    val musicEnabled by themeViewModel.musicEnabled.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val uid = auth.currentUser?.uid
 
@@ -256,7 +257,7 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                 iconColor = MaterialTheme.colorScheme.primary,
                 title = stringResource(R.string.feed_title),
                 subtitle = "Лента новостей и каналов",
-                index = 0, total = 2,
+                index = 0, total = 3,
                 trailing = {
                     VlSwitch(
                         checked = discoverEnabled,
@@ -269,7 +270,7 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                 iconColor = Color(0xFF10B981),
                 title = stringResource(R.string.diary_title),
                 subtitle = "Личные ежедневные заметки",
-                index = 1, total = 2,
+                index = 1, total = 3,
                 trailing = {
                     VlSwitch(
                         checked = diaryEnabledLocal,
@@ -281,6 +282,19 @@ fun FeaturesPage(themeViewModel: ThemeViewModel, auth: FirebaseAuth, db: Firebas
                                 }
                             }
                         }
+                    )
+                }
+            )
+            VlSettingsItem(
+                icon = Icons.Default.MusicNote,
+                iconColor = Color(0xFFFFB020),
+                title = stringResource(R.string.nav_tab_music),
+                subtitle = "Плеер с медиатекой и импортом треков",
+                index = 2, total = 3,
+                trailing = {
+                    VlSwitch(
+                        checked = musicEnabled,
+                        onCheckedChange = { themeViewModel.setMusicEnabled(it) }
                     )
                 }
             )

@@ -28,6 +28,11 @@ enum class HapticType {
     SELECTION,      // выбор в списке
     TAB_SWITCH,     // переключение вкладки навбара
     THRESHOLD,      // жест дошёл до порога срабатывания (свайп-ответ)
+    BOOP,           // LED-мордочка: буп / касание
+    HEARTBEAT,      // LED-мордочка: биение сердца
+    POP,            // LED-мордочка: удивление / поп
+    SIGH,           // LED-мордочка: вздох / сон
+    THUD,           // LED-мордочка: сбой / удар
 }
 
 /** Общий вход к вибромотору: один способ получить его и один способ запустить эффект. */
@@ -128,6 +133,28 @@ class HapticHelper internal constructor(
                 Triple(PRIMITIVE_CLICK, 0.4f, 0),
                 Triple(PRIMITIVE_TICK, 0.5f, 40),
             )
+            HapticType.BOOP -> rich(
+                HapticFeedbackConstants.VIRTUAL_KEY,
+                Triple(PRIMITIVE_CLICK, 0.5f, 0),
+                Triple(PRIMITIVE_TICK, 0.7f, 40),
+            )
+            HapticType.HEARTBEAT -> rich(
+                HapticFeedbackConstants.VIRTUAL_KEY,
+                Triple(PRIMITIVE_CLICK, 0.7f, 0),
+                Triple(PRIMITIVE_CLICK, 0.4f, 100),
+            )
+            HapticType.POP -> rich(
+                HapticFeedbackConstants.CONTEXT_CLICK,
+                Triple(PRIMITIVE_CLICK, 0.8f, 0),
+            )
+            HapticType.SIGH -> rich(
+                HapticFeedbackConstants.CLOCK_TICK,
+                Triple(PRIMITIVE_TICK, 0.4f, 0),
+            )
+            HapticType.THUD -> rich(
+                HapticFeedbackConstants.REJECT,
+                Triple(PRIMITIVE_CLICK, 0.9f, 0),
+            )
         }
     }
 
@@ -141,6 +168,11 @@ class HapticHelper internal constructor(
             HapticType.THRESHOLD -> HapticEngine.composition(
                 v, Triple(PRIMITIVE_CLICK, 0.85f, 0), Triple(PRIMITIVE_TICK, 0.4f, 35),
             )
+            HapticType.BOOP -> HapticEngine.composition(v, Triple(PRIMITIVE_CLICK, 0.6f, 0), Triple(PRIMITIVE_TICK, 0.6f, 40))
+            HapticType.HEARTBEAT -> HapticEngine.composition(v, Triple(PRIMITIVE_CLICK, 0.7f, 0), Triple(PRIMITIVE_CLICK, 0.45f, 100))
+            HapticType.POP -> HapticEngine.composition(v, Triple(PRIMITIVE_CLICK, 0.85f, 0))
+            HapticType.SIGH -> HapticEngine.composition(v, Triple(PRIMITIVE_TICK, 0.45f, 0))
+            HapticType.THUD -> HapticEngine.composition(v, Triple(thud, 0.9f, 0))
             HapticType.LONG_PRESS -> HapticEngine.composition(
                 v, Triple(thud, 0.8f, 0), Triple(PRIMITIVE_CLICK, 0.5f, 30),
             )
