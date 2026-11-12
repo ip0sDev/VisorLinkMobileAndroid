@@ -1,5 +1,6 @@
 package org.visorlink.app.ui.screens.chatlist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.animation.core.*
@@ -92,6 +93,7 @@ fun ChatListScreen(
     val context = LocalContext.current
 
     var showFabMenu by remember { mutableStateOf(false) }
+    BackHandler(enabled = showFabMenu) { showFabMenu = false }
     var showIonReveal by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
@@ -355,6 +357,7 @@ fun ChatListScreen(
                         }
                     }
                 } else {
+                    val listTokens = VlTheme.tokens
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -410,7 +413,13 @@ fun ChatListScreen(
                             item(key = "saved_messages") {
                                 val savedChat = viewModel.savedMessagesEntry
                                 Box(
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .animateItem(
+                                            fadeInSpec = listTokens.itemFadeSpec(),
+                                            placementSpec = listTokens.itemPlacementSpec(),
+                                            fadeOutSpec = listTokens.itemFadeSpec(),
+                                        )
+                                        .fillMaxWidth()
                                 ) {
                                     ChatListItem(
                                         chat = savedChat,
@@ -433,7 +442,13 @@ fun ChatListScreen(
                             ) { index, chat ->
                                 if (viewModel.isInvitesEntry(chat)) {
                                     Box(
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .animateItem(
+                                                fadeInSpec = listTokens.itemFadeSpec(),
+                                                placementSpec = listTokens.itemPlacementSpec(),
+                                                fadeOutSpec = listTokens.itemFadeSpec(),
+                                            )
+                                            .fillMaxWidth()
                                     ) {
                                         ChatListItem(
                                             chat = chat,
@@ -456,7 +471,13 @@ fun ChatListScreen(
                                 }
 
                                 Box(
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .animateItem(
+                                            fadeInSpec = listTokens.itemFadeSpec(),
+                                            placementSpec = listTokens.itemPlacementSpec(),
+                                            fadeOutSpec = listTokens.itemFadeSpec(),
+                                        )
+                                        .fillMaxWidth()
                                 ) {
                                     ChatListItem(
                                         chat = chat,
@@ -478,7 +499,11 @@ fun ChatListScreen(
             }
 
             // FAB Menu Overlay
-            if (showFabMenu) {
+            AnimatedVisibility(
+                visible = showFabMenu,
+                enter = fadeIn(tween(VlDurations.D1)),
+                exit = fadeOut(tween(VlDurations.D1)),
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

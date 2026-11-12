@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,6 +39,7 @@ import org.visorlink.app.data.model.FeedMedia
 import org.visorlink.app.data.model.FeedPost
 import org.visorlink.app.data.model.ForwardableMessage
 import org.visorlink.app.ui.components.LiquidPullRefreshLayout
+import org.visorlink.app.ui.components.TerminalMotion
 import org.visorlink.app.ui.components.VlAmbientGlow
 import org.visorlink.app.ui.components.VlFab
 import org.visorlink.app.ui.components.VlSegmentedControl
@@ -50,7 +52,11 @@ import org.visorlink.app.ui.components.feed.FeedPostCard
 import org.visorlink.app.ui.screens.chat.ForwardPickerDialog
 import org.visorlink.app.ui.screens.chatlist.ChatListViewModel
 import org.visorlink.app.ui.theme.ThemeViewModel
+import org.visorlink.app.ui.theme.VlCurves
+import org.visorlink.app.ui.theme.VlDurations
 import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.itemFadeSpec
+import org.visorlink.app.ui.theme.itemPlacementSpec
 import org.visorlink.app.utils.ImageCache
 
 /** Пост засчитывается просмотренным, когда хотя бы половина его пробыла на экране столько. */
@@ -148,27 +154,51 @@ fun FeedScreen(
                     hapticEnabled = hapticEnabled,
                     modifier = Modifier.fillMaxSize(),
                 ) {
-                    when (uiState.tab) {
-                        FeedTab.SUBSCRIPTIONS -> SubscriptionsList(
-                            state = uiState,
-                            listState = postsListState,
-                            currentUid = viewModel.currentUid,
-                            hapticEnabled = hapticEnabled,
-                            onLike = viewModel::toggleLike,
-                            onComments = { onOpenComments(it.channel.id, it.message.id) },
-                            onOpenChannel = { onOpenChannel(it.channel.id) },
-                            onOpenImage = { url -> onOpenImageViewer(url, "image") },
-                            onAction = ::handle,
-                            onRetry = viewModel::retry,
-                            onBrowseCurated = { viewModel.selectTab(FeedTab.CURATED) },
-                        )
-                        FeedTab.CURATED -> CuratedList(
-                            state = uiState,
-                            listState = curatedListState,
-                            onSubscribe = viewModel::join,
-                            onOpen = { onOpenChannel(it.id) },
-                            onRetry = viewModel::retry,
-                        )
+                    val feedTokens = VlTheme.tokens
+                    AnimatedContent(
+                        targetState = uiState.tab,
+                        transitionSpec = {
+                            when {
+                                feedTokens.reduceMotion -> EnterTransition.None togetherWith ExitTransition.None
+                                feedTokens.glitchMotion -> {
+                                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                                    (fadeIn(TerminalMotion.tween(200)) + slideInHorizontally(TerminalMotion.tween(220)) { dir * it / 10 }) togetherWith
+                                        (fadeOut(TerminalMotion.tween(140)) + slideOutHorizontally(TerminalMotion.tween(160)) { -dir * it / 10 })
+                                }
+                                else -> {
+                                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                                    (slideInHorizontally(tween(VlDurations.D3, easing = VlCurves.Key)) { dir * it / 3 } +
+                                        fadeIn(tween(VlDurations.D2, easing = VlCurves.Standard))) togetherWith
+                                        (slideOutHorizontally(tween(VlDurations.D3, easing = VlCurves.Exit)) { -dir * it / 4 } +
+                                            fadeOut(tween(VlDurations.D2, easing = VlCurves.Exit)))
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        label = "feed_tab_content",
+                    ) { tab ->
+                        when (tab) {
+                            FeedTab.SUBSCRIPTIONS -> SubscriptionsList(
+                                state = uiState,
+                                listState = postsListState,
+                                currentUid = viewModel.currentUid,
+                                hapticEnabled = hapticEnabled,
+                                onLike = viewModel::toggleLike,
+                                onComments = { onOpenComments(it.channel.id, it.message.id) },
+                                onOpenChannel = { onOpenChannel(it.channel.id) },
+                                onOpenImage = { url -> onOpenImageViewer(url, "image") },
+                                onAction = ::handle,
+                                onRetry = viewModel::retry,
+                                onBrowseCurated = { viewModel.selectTab(FeedTab.CURATED) },
+                            )
+                            FeedTab.CURATED -> CuratedList(
+                                state = uiState,
+                                listState = curatedListState,
+                                onSubscribe = viewModel::join,
+                                onOpen = { onOpenChannel(it.id) },
+                                onRetry = viewModel::retry,
+                            )
+                        }
                     }
                 }
             }
@@ -185,6 +215,7 @@ fun FeedScreen(
                     contentDescription = stringResource(R.string.feed_scroll_to_top),
                     size = 50.dp,
                     hapticEnabled = hapticEnabled,
+                    animateEntrance = false,
                 )
             }
         }
@@ -233,6 +264,7 @@ private fun SubscriptionsList(
     onRetry: () -> Unit,
     onBrowseCurated: () -> Unit,
 ) {
+    val feedTokens = VlTheme.tokens
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -241,16 +273,24 @@ private fun SubscriptionsList(
     ) {
         when {
             state.posts.isNotEmpty() -> items(state.posts, key = { it.key }) { post ->
-                FeedPostCard(
-                    post = post,
-                    currentUid = currentUid,
-                    hapticEnabled = hapticEnabled,
-                    onLike = { onLike(post) },
-                    onComments = { onComments(post) },
-                    onOpenChannel = { onOpenChannel(post) },
-                    onOpenImage = onOpenImage,
-                    onAction = { onAction(post, it) },
-                )
+                Box(
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = feedTokens.itemFadeSpec(),
+                        placementSpec = feedTokens.itemPlacementSpec(),
+                        fadeOutSpec = feedTokens.itemFadeSpec(),
+                    )
+                ) {
+                    FeedPostCard(
+                        post = post,
+                        currentUid = currentUid,
+                        hapticEnabled = hapticEnabled,
+                        onLike = { onLike(post) },
+                        onComments = { onComments(post) },
+                        onOpenChannel = { onOpenChannel(post) },
+                        onOpenImage = onOpenImage,
+                        onAction = { onAction(post, it) },
+                    )
+                }
             }
             state.postsLoading -> item(key = "loading") { LoadingState() }
             state.postsError -> item(key = "error") {
@@ -275,6 +315,7 @@ private fun CuratedList(
     onOpen: (CuratedChannel) -> Unit,
     onRetry: () -> Unit,
 ) {
+    val feedTokens = VlTheme.tokens
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -292,13 +333,21 @@ private fun CuratedList(
                     )
                 }
                 items(state.curated, key = { it.id }) { channel ->
-                    CuratedChannelCard(
-                        channel = channel,
-                        subscribed = channel.id in state.subscribedIds,
-                        joining = channel.id in state.joining,
-                        onSubscribe = { onSubscribe(channel) },
-                        onOpen = { onOpen(channel) },
-                    )
+                    Box(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = feedTokens.itemFadeSpec(),
+                            placementSpec = feedTokens.itemPlacementSpec(),
+                            fadeOutSpec = feedTokens.itemFadeSpec(),
+                        )
+                    ) {
+                        CuratedChannelCard(
+                            channel = channel,
+                            subscribed = channel.id in state.subscribedIds,
+                            joining = channel.id in state.joining,
+                            onSubscribe = { onSubscribe(channel) },
+                            onOpen = { onOpen(channel) },
+                        )
+                    }
                 }
             }
             state.curatedLoading -> item(key = "loading") { LoadingState() }

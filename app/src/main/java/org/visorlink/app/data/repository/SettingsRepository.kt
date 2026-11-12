@@ -29,8 +29,8 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _appTheme = MutableStateFlow(
-        try { AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)!!).takeIf { it.selectable } ?: AppTheme.MATERIAL3_EXPRESSIVE }
-        catch (e: Exception) { AppTheme.MATERIAL3_EXPRESSIVE }
+        try { AppTheme.valueOf(prefs.getString(KEY_THEME, AppTheme.BIOLUME.name)!!).takeIf { it.selectable } ?: AppTheme.BIOLUME }
+        catch (e: Exception) { AppTheme.BIOLUME }
     )
     val appTheme: StateFlow<AppTheme> = _appTheme.asStateFlow()
 
@@ -74,8 +74,8 @@ class SettingsRepository(private val context: Context) : SharedPreferences.OnSha
         if (sharedPreferences == null || key == null) return
         when (key) {
             KEY_THEME -> {
-                val themeStr = sharedPreferences.getString(KEY_THEME, AppTheme.MATERIAL3_EXPRESSIVE.name)
-                _appTheme.value = try { AppTheme.valueOf(themeStr!!).takeIf { it.selectable } ?: AppTheme.MATERIAL3_EXPRESSIVE } catch (e: Exception) { AppTheme.MATERIAL3_EXPRESSIVE }
+                val themeStr = sharedPreferences.getString(KEY_THEME, AppTheme.BIOLUME.name)
+                _appTheme.value = try { AppTheme.valueOf(themeStr!!).takeIf { it.selectable } ?: AppTheme.BIOLUME } catch (e: Exception) { AppTheme.BIOLUME }
             }
             KEY_THEME_MODE -> _themeMode.value = ThemeMode.valueOf(sharedPreferences.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.name)!!)
             KEY_COLOR_PRESET -> _colorPreset.value = ColorPreset.valueOf(sharedPreferences.getString(KEY_COLOR_PRESET, ColorPreset.DEFAULT.name)!!)

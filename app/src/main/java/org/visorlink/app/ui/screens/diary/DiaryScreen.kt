@@ -31,6 +31,9 @@ import org.visorlink.app.ui.components.liquidJelly
 import org.visorlink.app.ui.components.liquidPillCardSlideOut
 import org.visorlink.app.ui.components.rememberLiquidJellyState
 import org.visorlink.app.ui.theme.ThemeViewModel
+import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.theme.itemFadeSpec
+import org.visorlink.app.ui.theme.itemPlacementSpec
 import org.visorlink.app.utils.HapticType
 import org.visorlink.app.utils.rememberHaptic
 import org.koin.compose.viewmodel.koinViewModel
@@ -252,9 +255,15 @@ fun DiaryScreen(
                         items = filteredEntries,
                         key = { _, entry -> entry.id }
                     ) { index, entry ->
+                        val diaryTokens = VlTheme.tokens
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .animateItem(
+                                    fadeInSpec = diaryTokens.itemFadeSpec(),
+                                    placementSpec = diaryTokens.itemPlacementSpec(),
+                                    fadeOutSpec = diaryTokens.itemFadeSpec(),
+                                )
                                 .liquidPillCardSlideOut(
                                     index = index + 2,
                                     triggerKey = triggerKey

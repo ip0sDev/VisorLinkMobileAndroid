@@ -332,25 +332,30 @@ fun AuthCard(
                                 },
                                 enabled = !uiState.isLoading && loginEmail.isNotBlank() && loginPassword.isNotBlank()
                             ) {
-                                if (uiState.isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = cs.onPrimary
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    if (uiState.isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = cs.onPrimary
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Login,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                    }
+                                    Text(
+                                        text = stringResource(R.string.login_button),
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(Modifier.width(8.dp))
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Login,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
                                 }
-                                Text(
-                                    text = stringResource(R.string.login_button),
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
 
                             GoogleAuthButton(
@@ -549,25 +554,30 @@ fun AuthCard(
                                 },
                                 enabled = !uiState.isLoading && regUsername.length >= 3 && regEmail.isNotBlank() && regPassword.isNotBlank()
                             ) {
-                                if (uiState.isLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp,
-                                        color = cs.onPrimary
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    if (uiState.isLoading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = cs.onPrimary
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.PersonAdd,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                    }
+                                    Text(
+                                        text = "Создать аккаунт",
+                                        fontWeight = FontWeight.Bold
                                     )
-                                    Spacer(Modifier.width(8.dp))
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.PersonAdd,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(Modifier.width(8.dp))
                                 }
-                                Text(
-                                    text = "Создать аккаунт",
-                                    fontWeight = FontWeight.Bold
-                                )
                             }
 
                             GoogleAuthButton(

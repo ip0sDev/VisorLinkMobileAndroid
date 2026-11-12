@@ -11,8 +11,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.animation.*
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import org.visorlink.app.ui.theme.VlCurves
+import org.visorlink.app.ui.theme.VlDurations
+import org.visorlink.app.ui.theme.VlTheme
 import androidx.navigation.*
 import androidx.navigation.compose.*
 import org.visorlink.app.ui.components.TerminalMotion
@@ -173,51 +175,76 @@ fun VisorLinkNavGraph(
         else                              -> Screen.Login.route
     }
 
-    val glitchNav = org.visorlink.app.ui.theme.VlTheme.tokens.glitchMotion
+    val vlTokens = VlTheme.tokens
+    val glitchNav = vlTokens.glitchMotion
+    val reduceMotion = vlTokens.reduceMotion
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = start,
         contentAlignment = Alignment.TopStart,
-        // Forge v2 — терминал: короткий ровный сдвиг с проявлением вместо въезда на весь экран
+        // Переходы учитывают reduceMotion, терминальный стиль Forge и кривые Biolume/M3E
         enterTransition = {
-            if (glitchNav) fadeIn(TerminalMotion.tween(280)) + slideInHorizontally(TerminalMotion.tween(280)) { it / 10 }
-            else slideInHorizontally(
-                initialOffsetX = { fullWidth -> fullWidth },
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            when {
+                reduceMotion -> EnterTransition.None
+                glitchNav -> fadeIn(TerminalMotion.tween(280)) + slideInHorizontally(TerminalMotion.tween(280)) { it / 10 }
+                else -> slideInHorizontally(
+                    initialOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Key)
+                ) + fadeIn(tween(durationMillis = VlDurations.D2, easing = VlCurves.Standard))
+            }
         },
         exitTransition = {
-            if (glitchNav) fadeOut(TerminalMotion.tween(180))
-            else slideOutHorizontally(
-                targetOffsetX = { fullWidth -> -fullWidth / 4 },
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            when {
+                reduceMotion -> ExitTransition.None
+                glitchNav -> fadeOut(TerminalMotion.tween(180))
+                else -> slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> -fullWidth / 4 },
+                    animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Key)
+                ) + scaleOut(
+                    targetScale = 0.95f,
+                    animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Standard)
+                ) + fadeOut(tween(durationMillis = VlDurations.D3, easing = VlCurves.Exit))
+            }
         },
         popEnterTransition = {
-            if (glitchNav) fadeIn(TerminalMotion.tween(280)) + slideInHorizontally(TerminalMotion.tween(280)) { -it / 10 }
-            else slideInHorizontally(
-                initialOffsetX = { fullWidth -> -fullWidth / 4 },
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            when {
+                reduceMotion -> EnterTransition.None
+                glitchNav -> fadeIn(TerminalMotion.tween(280)) + slideInHorizontally(TerminalMotion.tween(280)) { -it / 10 }
+                else -> slideInHorizontally(
+                    initialOffsetX = { fullWidth -> -fullWidth / 4 },
+                    animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Key)
+                ) + scaleIn(
+                    initialScale = 0.95f,
+                    animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Standard)
+                ) + fadeIn(tween(durationMillis = VlDurations.D2, easing = VlCurves.Standard))
+            }
         },
         popExitTransition = {
-            if (glitchNav) fadeOut(TerminalMotion.tween(180)) + slideOutHorizontally(TerminalMotion.tween(180)) { it / 10 }
-            else slideOutHorizontally(
-                targetOffsetX = { fullWidth -> fullWidth },
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            )
+            when {
+                reduceMotion -> ExitTransition.None
+                glitchNav -> fadeOut(TerminalMotion.tween(180)) + slideOutHorizontally(TerminalMotion.tween(180)) { it / 10 }
+                else -> slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> fullWidth },
+                    animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Key)
+                ) + fadeOut(tween(durationMillis = VlDurations.D2, easing = VlCurves.Exit))
+            }
         },
         predictivePopEnterTransition = {
-            slideInHorizontally(
+            if (reduceMotion) EnterTransition.None
+            else slideInHorizontally(
                 initialOffsetX = { fullWidth -> -fullWidth / 4 },
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Key)
+            ) + scaleIn(
+                initialScale = 0.95f,
+                animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Standard)
             )
         },
         predictivePopExitTransition = {
-            slideOutHorizontally(
+            if (reduceMotion) ExitTransition.None
+            else slideOutHorizontally(
                 targetOffsetX = { fullWidth -> fullWidth },
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
+                animationSpec = tween(durationMillis = VlDurations.D4, easing = VlCurves.Key)
             )
         }
     ) {
@@ -399,10 +426,34 @@ fun VisorLinkNavGraph(
                     defaultValue = "image"
                 }
             ),
-            enterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)) },
-            exitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) },
-            popEnterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)) },
-            popExitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) }
+            enterTransition = {
+                if (reduceMotion) EnterTransition.None
+                else scaleIn(
+                    initialScale = 0.90f,
+                    animationSpec = tween(durationMillis = VlDurations.D3, easing = VlCurves.Key)
+                ) + fadeIn(animationSpec = tween(durationMillis = VlDurations.D2, easing = VlCurves.Standard))
+            },
+            exitTransition = {
+                if (reduceMotion) ExitTransition.None
+                else scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = tween(durationMillis = VlDurations.D2, easing = VlCurves.Exit)
+                ) + fadeOut(animationSpec = tween(durationMillis = VlDurations.D2))
+            },
+            popEnterTransition = {
+                if (reduceMotion) EnterTransition.None
+                else scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = tween(durationMillis = VlDurations.D3, easing = VlCurves.Key)
+                ) + fadeIn(animationSpec = tween(durationMillis = VlDurations.D2))
+            },
+            popExitTransition = {
+                if (reduceMotion) ExitTransition.None
+                else scaleOut(
+                    targetScale = 0.90f,
+                    animationSpec = tween(durationMillis = VlDurations.D2, easing = VlCurves.Exit)
+                ) + fadeOut(animationSpec = tween(durationMillis = VlDurations.D2))
+            }
         ) { backStackEntry ->
             val url = backStackEntry.arguments?.getString("url") ?: return@composable
             val type = backStackEntry.arguments?.getString("type") ?: "image"

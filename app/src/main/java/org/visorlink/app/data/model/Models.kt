@@ -1399,7 +1399,7 @@ enum class AppTheme(
     FORGE_BEAST("forge_beast", selectable = false);
 
     companion object {
-        val Default = MATERIAL3_EXPRESSIVE
+        val Default = BIOLUME
 
         /** Темы для селекторов: Forge v2 пользователь не выбирает. */
         val selectableEntries: List<AppTheme> get() = entries.filter { it.selectable }
