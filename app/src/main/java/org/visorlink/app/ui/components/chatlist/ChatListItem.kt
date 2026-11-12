@@ -1,8 +1,10 @@
 package org.visorlink.app.ui.components.chatlist
 
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,9 +23,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.visorlink.app.R
+import org.visorlink.app.ui.components.VlMorphShape
 import org.visorlink.app.ui.components.led.VlLedDigits
 import org.visorlink.app.ui.components.led.VlLedScreen
 import org.visorlink.app.ui.components.led.VlLedTyping
@@ -99,15 +103,26 @@ fun ChatListItem(
 
     val cs = MaterialTheme.colorScheme
     val tokens = VlTheme.tokens
-    val shape = tokens.shapes.card
     val isDark = cs.surface.luminance() < 0.5f
 
-    val pressTarget = if (tokens.structure.keycap) tokens.motion.pressScale else 0.97f
-    val itemScale by animateFloatAsState(
-        targetValue = if (isPressed) pressTarget else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessHigh),
+    // Плавный прогресс нажатия: читаемое вжатие (100 мс) + мягкий упругий возврат вместо 2-кадрового рывка
+    val press by animateFloatAsState(
+        targetValue = if (isPressed) 1f else 0f,
+        animationSpec = when {
+            tokens.reduceMotion -> snap()
+            isPressed -> tween(durationMillis = 100, easing = FastOutSlowInEasing)
+            else -> spring(dampingRatio = 0.65f, stiffness = 320f)
+        },
         label = "item_press"
     )
+    val pressClamped = press.coerceIn(0f, 1f)
+    val pressTarget = if (tokens.structure.keycap) tokens.motion.pressScale else 0.968f
+    val itemScale = if (tokens.reduceMotion) 1f else 1f - (1f - pressTarget) * press
+
+    val pressedCardShape = remember(tokens.isForge) {
+        RoundedCornerShape(if (tokens.isForge) 18.dp else 12.dp)
+    }
+    val shape = VlMorphShape(tokens.shapes.card, pressedCardShape, pressClamped)
 
     val titleColor = cs.onSurface
     val subColor = cs.onSurfaceVariant
@@ -120,17 +135,22 @@ fun ChatListItem(
 
     val depth = when {
         !tokens.structure.enabled -> VlDepth.Flat
-        tokens.structure.keycap && isPressed -> VlDepth.Inset
+        tokens.structure.keycap && press > 0.4f -> VlDepth.Inset
         else -> VlDepth.Raised
     }
 
-    val cardColor = remember(tokens.structure.enabled, isDark, cs) {
+    val baseCardColor = remember(tokens.structure.enabled, isDark, cs) {
         if (tokens.structure.enabled) {
             if (isDark) cs.surfaceContainer else cs.surfaceContainerLow
         } else {
             if (isDark) cs.surfaceVariant.copy(alpha = 0.45f) else cs.surface
         }
     }
+    val pressedCardColor = remember(baseCardColor, cs, isDark) {
+        val highlight = if (isDark) cs.surfaceContainerHigh else cs.surfaceContainerHighest
+        lerp(baseCardColor, lerp(highlight, cs.primary, 0.08f), 0.78f)
+    }
+    val cardColor = lerp(baseCardColor, pressedCardColor, pressClamped)
 
     val cardBorder = remember(tokens.structure.enabled, isDark, cs) {
         if (tokens.structure.enabled) {
@@ -150,12 +170,13 @@ fun ChatListItem(
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .padding(vertical = 6.dp)
-            .scale(itemScale)
+            .graphicsLayer {
+                scaleX = itemScale
+                scaleY = itemScale
+            }
             .then(
                 if (tokens.structure.enabled) {
                     Modifier.vlStructure(tokens.structure, depth, shape)
-                } else if (tokens.structure.enabled) {
-                    Modifier.vlHairline(cs.outlineVariant, shape)
                 } else {
                     Modifier
                 }

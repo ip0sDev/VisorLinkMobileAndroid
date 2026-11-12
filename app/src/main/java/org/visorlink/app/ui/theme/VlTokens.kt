@@ -421,6 +421,30 @@ fun <T> VlMotionTokens.motionSpec(): androidx.compose.animation.core.FiniteAnima
 val VlMotionTokens.enterEasing: androidx.compose.animation.core.Easing
     get() = if (useSpring) VlCurves.Spring else VlCurves.Key
 
+/** Анимация перестановки элементов списка с учётом темы и системного `reduceMotion`. */
+fun <T> VlTokens.itemPlacementSpec(): androidx.compose.animation.core.FiniteAnimationSpec<T> = when {
+    reduceMotion -> androidx.compose.animation.core.snap()
+    motion.useSpring -> androidx.compose.animation.core.spring(
+        dampingRatio = motion.dampingRatio,
+        stiffness = motion.stiffness,
+    )
+    else -> androidx.compose.animation.core.tween(
+        durationMillis = motion.durationMs,
+        easing = VlCurves.Key,
+    )
+}
+
+/** Плавное появление/исчезновение элементов списка с учётом `reduceMotion`. */
+fun VlTokens.itemFadeSpec(): androidx.compose.animation.core.FiniteAnimationSpec<Float> =
+    if (reduceMotion) {
+        androidx.compose.animation.core.snap()
+    } else {
+        androidx.compose.animation.core.tween(
+            durationMillis = VlDurations.D2,
+            easing = VlCurves.Standard,
+        )
+    }
+
 // ── Шкала длительностей и кривых (порт Flutter `VlDurations`/`VlCurves`, vl_tokens.dart:173-220) ──
 
 /**

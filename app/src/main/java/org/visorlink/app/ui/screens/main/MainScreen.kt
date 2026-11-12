@@ -43,9 +43,12 @@ import org.visorlink.app.ui.components.NAV_TAB_PROFILE
 import org.visorlink.app.ui.components.NAV_TAB_SIGNAL
 import org.visorlink.app.ui.components.led.VlLedFace
 import org.visorlink.app.ui.components.led.VlLedExpression
-import org.visorlink.app.ui.theme.VlTheme
+import org.visorlink.app.ui.components.TerminalMotion
 import org.visorlink.app.ui.components.VlNavigationBar
 import org.visorlink.app.ui.components.VlSurface
+import org.visorlink.app.ui.theme.VlCurves
+import org.visorlink.app.ui.theme.VlDurations
+import org.visorlink.app.ui.theme.VlTheme
 import org.visorlink.app.ui.screens.chatlist.ChatListScreen
 import org.visorlink.app.ui.screens.diary.DiaryScreen
 import org.visorlink.app.ui.screens.feed.FeedScreen
@@ -179,15 +182,33 @@ fun MainScreen(
             }
 
             Box(modifier = Modifier.weight(1f)) {
+                val vlTokens = VlTheme.tokens
+                val reduceMotion = vlTokens.reduceMotion
+                val glitchMotion = vlTokens.glitchMotion
+
                 // Вкладка чатов (Главная) сохраняется в дереве композиции, чтобы исключить
                 // пересоздание верстки, сброс скролла и мигание полупрозрачного стекла навбара при возврате на главную.
+                val chatTabActive = selectedTab == 0
+                val chatAlpha by animateFloatAsState(
+                    targetValue = if (chatTabActive) 1f else 0f,
+                    animationSpec = if (reduceMotion) snap() else tween(VlDurations.D2, easing = VlCurves.Standard),
+                    label = "main_chats_alpha",
+                )
+                val chatScale by animateFloatAsState(
+                    targetValue = if (chatTabActive || reduceMotion) 1f else 0.96f,
+                    animationSpec = if (reduceMotion) snap() else tween(VlDurations.D3, easing = VlCurves.Key),
+                    label = "main_chats_scale",
+                )
+
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = if (selectedTab == 0) 1f else 0f
+                            alpha = chatAlpha
+                            scaleX = chatScale
+                            scaleY = chatScale
                         }
-                        .zIndex(if (selectedTab == 0) 0f else -1f)
+                        .zIndex(if (chatTabActive) 0f else -1f)
                 ) {
                     ChatListScreen(
                         onOpenChat = onOpenChat,
@@ -201,66 +222,104 @@ fun MainScreen(
                         onOpenNotifications = onOpenNotifications,
                         onOpenFeed = { if (discoverEnabled) selectedTab = 1 },
                         onOpenFolders = onOpenFolders,
-                        isActive = selectedTab == 0
+                        isActive = chatTabActive
                     )
                 }
 
-                if (selectedTab != 0) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        when (selectedTab) {
-                            1 -> if (discoverEnabled) {
-                                FeedScreen(
-                                    onNavigateBack = { selectedTab = 0 },
-                                    onOpenChannel = onOpenChannel,
-                                    onOpenComments = onOpenComments,
-                                    onOpenImageViewer = onOpenImageViewer
-                                )
-                            } else {
-                                selectedTab = 0
+                // Направленная анимация переключения остальных вкладок в унисон с жидким бегунком VlNavigationBar
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        when {
+                            reduceMotion -> EnterTransition.None togetherWith ExitTransition.None
+                            glitchMotion -> {
+                                val dir = if (targetState > initialState) 1 else -1
+                                (fadeIn(TerminalMotion.tween(200)) + slideInHorizontally(TerminalMotion.tween(220)) { dir * it / 12 }) togetherWith
+                                    (fadeOut(TerminalMotion.tween(140)) + slideOutHorizontally(TerminalMotion.tween(160)) { -dir * it / 12 })
                             }
-                            2 -> if (diaryEnabled) {
-                                val chatListEntry = LocalViewModelStoreOwner.current
-                                val diaryVm: org.visorlink.app.ui.screens.diary.DiaryViewModel = if (chatListEntry != null) {
-                                    koinViewModel(viewModelStoreOwner = chatListEntry)
+                            targetState == 0 -> {
+                                // Возврат на вкладку чатов: текущая вкладка уезжает вправо, открывая ChatListScreen
+                                EnterTransition.None togetherWith
+                                    (slideOutHorizontally(tween(VlDurations.D3, easing = VlCurves.Exit)) { it / 3 } +
+                                        fadeOut(tween(VlDurations.D2, easing = VlCurves.Exit)))
+                            }
+                            else -> {
+                                val dir = if (targetState > initialState) 1 else -1
+                                val enter = slideInHorizontally(tween(VlDurations.D3, easing = VlCurves.Key)) { dir * it / 3 } +
+                                    scaleIn(tween(VlDurations.D3, easing = VlCurves.Standard), initialScale = 0.97f) +
+                                    fadeIn(tween(VlDurations.D2, easing = VlCurves.Standard))
+                                val exit = if (initialState == 0) {
+                                    ExitTransition.None
                                 } else {
-                                    koinViewModel()
+                                    slideOutHorizontally(tween(VlDurations.D3, easing = VlCurves.Exit)) { -dir * it / 4 } +
+                                        fadeOut(tween(VlDurations.D2, easing = VlCurves.Exit))
                                 }
-                                DiaryScreen(
-                                    onNavigateBack = { selectedTab = 0 },
-                                    onAddEntry = onAddDiaryEntry,
-                                    onEditEntry = onEditDiaryEntry,
-                                    viewModel = diaryVm
-                                )
-                            } else {
-                                selectedTab = 0
+                                enter togetherWith exit
                             }
-                            3 -> if (musicEnabled) {
-                                val musicVm: MusicViewModel = koinViewModel()
-                                MusicLibraryScreen(
-                                    viewModel = musicVm,
-                                    onNavigateBack = { selectedTab = 0 }
-                                )
-                            } else {
-                                selectedTab = 0
-                            }
-                            NAV_TAB_PROFILE -> if (profileTabEnabled) {
-                                ProfileScreen(
-                                    onNavigateBack = { selectedTab = 0 },
-                                    onLoggedOut = onLoggedOut,
-                                    onOpenStickers = onOpenStickers,
-                                    asTab = true,
-                                )
-                            } else {
-                                selectedTab = 0
-                            }
-                            NAV_TAB_SIGNAL -> if (signalTabEnabled) {
-                                org.visorlink.app.ui.screens.signal.SignalScreen(
-                                    onNavigateBack = { selectedTab = 0 },
-                                    onOpenSteps = onOpenSignalSteps,
-                                    asTab = true
-                                )
-                            } else {
-                                selectedTab = 0
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    label = "main_tab_content",
+                ) { tab ->
+                    if (tab == 0) {
+                        Spacer(Modifier)
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            when (tab) {
+                                1 -> if (discoverEnabled) {
+                                    FeedScreen(
+                                        onNavigateBack = { selectedTab = 0 },
+                                        onOpenChannel = onOpenChannel,
+                                        onOpenComments = onOpenComments,
+                                        onOpenImageViewer = onOpenImageViewer
+                                    )
+                                } else {
+                                    LaunchedEffect(Unit) { selectedTab = 0 }
+                                }
+                                2 -> if (diaryEnabled) {
+                                    val chatListEntry = LocalViewModelStoreOwner.current
+                                    val diaryVm: org.visorlink.app.ui.screens.diary.DiaryViewModel = if (chatListEntry != null) {
+                                        koinViewModel(viewModelStoreOwner = chatListEntry)
+                                    } else {
+                                        koinViewModel()
+                                    }
+                                    DiaryScreen(
+                                        onNavigateBack = { selectedTab = 0 },
+                                        onAddEntry = onAddDiaryEntry,
+                                        onEditEntry = onEditDiaryEntry,
+                                        viewModel = diaryVm
+                                    )
+                                } else {
+                                    LaunchedEffect(Unit) { selectedTab = 0 }
+                                }
+                                3 -> if (musicEnabled) {
+                                    val musicVm: MusicViewModel = koinViewModel()
+                                    MusicLibraryScreen(
+                                        viewModel = musicVm,
+                                        onNavigateBack = { selectedTab = 0 }
+                                    )
+                                } else {
+                                    LaunchedEffect(Unit) { selectedTab = 0 }
+                                }
+                                NAV_TAB_PROFILE -> if (profileTabEnabled) {
+                                    ProfileScreen(
+                                        onNavigateBack = { selectedTab = 0 },
+                                        onLoggedOut = onLoggedOut,
+                                        onOpenStickers = onOpenStickers,
+                                        asTab = true,
+                                    )
+                                } else {
+                                    LaunchedEffect(Unit) { selectedTab = 0 }
+                                }
+                                NAV_TAB_SIGNAL -> if (signalTabEnabled) {
+                                    org.visorlink.app.ui.screens.signal.SignalScreen(
+                                        onNavigateBack = { selectedTab = 0 },
+                                        onOpenSteps = onOpenSignalSteps,
+                                        asTab = true
+                                    )
+                                } else {
+                                    LaunchedEffect(Unit) { selectedTab = 0 }
+                                }
                             }
                         }
                     }

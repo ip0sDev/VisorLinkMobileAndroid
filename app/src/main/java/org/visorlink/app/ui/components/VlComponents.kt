@@ -234,8 +234,8 @@ fun VlGlassPanel(
  *
  * В MATERIAL3 поведение прежнее: скругление 16dp, без свечения и без морфинга.
  */
-/** Форма, интерполирующая скругления между двумя CornerBasedShape (морф кнопки при нажатии). */
-private class VlMorphShape(private val from: Shape, private val to: Shape, private val t: Float) : Shape {
+/** Форма, интерполирующая скругления между двумя CornerBasedShape (морф кнопки при нажатии и раскрытии). */
+internal class VlMorphShape(private val from: Shape, private val to: Shape, private val t: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         if (t <= 0.001f) return from.createOutline(size, layoutDirection, density)
         if (t >= 0.999f) return to.createOutline(size, layoutDirection, density)

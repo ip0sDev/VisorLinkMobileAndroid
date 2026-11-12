@@ -15,6 +15,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import org.visorlink.app.ui.theme.VlCurves
+import org.visorlink.app.ui.theme.VlDurations
+import org.visorlink.app.ui.theme.itemFadeSpec
+import org.visorlink.app.ui.theme.itemPlacementSpec
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -591,14 +598,22 @@ fun ChatScreen(
                                 if (index >= uiState.messageListItems.size - 5 && uiState.hasMore && !uiState.isLoadingMore) {
                                     LaunchedEffect(index) { viewModel.loadMore() }
                                 }
+                                val chatTokens = VlTheme.tokens
+                                val itemAnimMod = Modifier.animateItem(
+                                    fadeInSpec = chatTokens.itemFadeSpec(),
+                                    placementSpec = chatTokens.itemPlacementSpec(),
+                                    fadeOutSpec = chatTokens.itemFadeSpec(),
+                                )
                                 when (item) {
-                                    is MessageListItem.DateHeader -> DateSeparator(item.label)
+                                    is MessageListItem.DateHeader -> Box(modifier = itemAnimMod) {
+                                        DateSeparator(item.label)
+                                    }
                                     is MessageListItem.MessageItem -> {
                                         val isMine = item.message.senderId == viewModel.currentUid
                                         val popProgress = rememberLiquidPopProgress()
                                         SwipeableMessage(
                                             message = item.message, isMine = isMine, hapticEnabled = hapticEnabled,
-                                            modifier = Modifier.liquidPopIn(popProgress),
+                                            modifier = itemAnimMod.liquidPopIn(popProgress),
                                             onReply = {
                                                 haptic.perform(HapticType.SELECTION, hapticEnabled)
                                                 viewModel.setReplyTo(item.message)
@@ -651,19 +666,34 @@ fun ChatScreen(
                         }
                     }
 
-                    if (showScrollDown) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(
-                                    bottom = innerPadding.calculateBottomPadding() + 16.dp,
-                                    end = 16.dp
-                                )
-                        ) {
+                    val fabTokens = VlTheme.tokens
+                    AnimatedVisibility(
+                        visible = showScrollDown,
+                        enter = if (fabTokens.reduceMotion) EnterTransition.None else {
+                            scaleIn(
+                                initialScale = 0.78f,
+                                animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium),
+                            ) + slideInVertically(tween(VlDurations.D2, easing = VlCurves.Key)) { it / 2 } +
+                                fadeIn(tween(VlDurations.D1))
+                        },
+                        exit = if (fabTokens.reduceMotion) ExitTransition.None else {
+                            scaleOut(targetScale = 0.78f, animationSpec = tween(VlDurations.D1)) +
+                                slideOutVertically(tween(VlDurations.D1, easing = VlCurves.Exit)) { it / 2 } +
+                                fadeOut(tween(VlDurations.D1))
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(
+                                bottom = innerPadding.calculateBottomPadding() + 16.dp,
+                                end = 16.dp
+                            ),
+                    ) {
+                        Box {
                             VlFab(
                                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
                                 icon = Icons.Default.KeyboardArrowDown,
-                                size = 44.dp
+                                size = 44.dp,
+                                animateEntrance = false
                             )
                             if (unreadCount > 0) {
                                 Badge(modifier = Modifier.align(Alignment.TopEnd)) { Text(unreadCount.toString()) }
